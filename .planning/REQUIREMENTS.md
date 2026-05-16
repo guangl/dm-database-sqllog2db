@@ -49,25 +49,25 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CONFIG-01 | — | Pending |
-| CONFIG-02 | — | Pending |
-| CONFIG-03 | — | Pending |
-| CONFIG-04 | — | Pending |
-| CONFIG-05 | — | Pending |
-| REFACTOR-01 | — | Pending |
-| REFACTOR-02 | — | Pending |
-| REFACTOR-03 | — | Pending |
-| REFACTOR-04 | — | Pending |
-| TEST-01 | — | Pending |
-| TEST-02 | — | Pending |
-| TEST-03 | — | Pending |
-| TEST-04 | — | Pending |
+| CONFIG-01 | Phase 17 | Pending |
+| CONFIG-02 | Phase 17 | Pending |
+| CONFIG-05 | Phase 17 | Pending |
+| CONFIG-03 | Phase 18 | Pending |
+| CONFIG-04 | Phase 18 | Pending |
+| REFACTOR-01 | Phase 19 | Pending |
+| REFACTOR-02 | Phase 19 | Pending |
+| REFACTOR-03 | Phase 19 | Pending |
+| REFACTOR-04 | Phase 19 | Pending |
+| TEST-01 | Phase 20 | Pending |
+| TEST-02 | Phase 20 | Pending |
+| TEST-03 | Phase 20 | Pending |
+| TEST-04 | Phase 20 | Pending |
 
 **Coverage:**
 - v1.4 requirements: 13 total
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 13 ⚠
+- Mapped to phases: 13 (100%)
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-05-17*
-*Last updated: 2026-05-17 after v1.4 milestone start*
+*Last updated: 2026-05-17 — roadmap created, all requirements mapped*
