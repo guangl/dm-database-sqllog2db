@@ -1,14 +1,18 @@
 # sqllog2db — 达梦 SQL 日志解析工具
 
-## Current State: v1.3 已发布 ✅ (2026-05-17)
+## Current State: v1.4 进行中 🚀
 
-sqllog2db 完成四个里程碑迭代，现具备完整的 SQL 模板分析与 SVG 可视化能力。`normalize_template()` 归一化引擎、`TemplateAggregator` 流式统计（hdrhistogram）、双路统计输出（SQLite 表 + CSV 伴随文件）、四类 SVG 图表全部上线。418 项测试通过，热循环快路径无回归。
+sqllog2db 完成四个里程碑迭代，现具备完整的 SQL 模板分析与 SVG 可视化能力。v1.4 聚焦系统性重构：配置模型嵌套化、代码结构拆分、测试覆盖深化。
 
-## Next Milestone Goals (v1.4 — TBD)
+## Current Milestone: v1.4 代码重构 & 质量深化
 
-- TMPL-03/03b：独立 JSON/CSV 报告输出（DBA 可读）
-- Tech debt：补全 VERIFICATION.md（Phases 12/13/14/16）+ Nyquist 合规性
-- 可能方向：交互式过滤扩展、性能进一步提升
+**Goal:** 系统性重构代码结构与配置模型，补全测试覆盖，大幅提升项目可维护性
+
+**Target features:**
+- 配置重构：嵌套分组（[filter.include]/[filter.exclude]）+ 语义化字段名，新旧格式兼容
+- 代码结构：拆分超大文件、清晰模块边界、消除重复代码、补齐 trait 抽象
+- 测试深化：补 VERIFICATION.md（Ph12/13/14/16）、端到端集成测试、边界条件、proptest 属性测试
+- 顺带性能优化：重构时消除明显低效，不专门 profile
 
 ---
 
@@ -69,8 +73,15 @@ sqllog2db 是一个用于解析达梦数据库 SQL 日志文件并将其导出�
 
 ### Active
 
-- [ ] **TMPL-03**: 模板统计结果输出为独立 JSON 报告文件（config 指定路径）— 延后至 v1.4+
-- [ ] **TMPL-03b**: 模板统计结果输出为独立 CSV 摘要文件（DBA 可用 Excel 打开）— 延后至 v1.4+
+- [ ] **TMPL-03**: 模板统计结果输出为独立 JSON 报告文件（config 指定路径）— 延后至 v1.5+
+- [ ] **TMPL-03b**: 模板统计结果输出为独立 CSV 摘要文件（DBA 可用 Excel 打开）— 延后至 v1.5+
+- [ ] **REFACTOR-01**: 配置嵌套结构重组（[filter.include]/[filter.exclude]）+ 语义化字段名
+- [ ] **REFACTOR-02**: 拆分超大文件，每文件行数控制在合理范围
+- [ ] **REFACTOR-03**: 消除重复代码，清晰模块边界，补齐 trait 抽象
+- [ ] **TEST-01**: 补全 Phase 12/13/14/16 VERIFICATION.md
+- [ ] **TEST-02**: 端到端集成测试（log 文件 → 输出文件完整路径）
+- [ ] **TEST-03**: 边界条件测试（空文件、格式错误、超大字段等）
+- [ ] **TEST-04**: proptest 属性测试（归一化 / 过滤逻辑）
 
 ### Out of Scope
 
@@ -128,4 +139,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-17 after v1.3 milestone*
+*Last updated: 2026-05-17 — Milestone v1.4 started*
