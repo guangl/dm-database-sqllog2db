@@ -21,15 +21,6 @@ fn write_csv_escaped(buf: &mut Vec<u8>, bytes: &[u8]) {
     buf.extend_from_slice(remaining);
 }
 
-/// 根据主 CSV 路径推导伴随文件路径（D-09）：`<stem>_templates.csv`
-///
-/// 此函数保留供外部测试或未来路径推导使用；生产代码已改为显式路径传入。
-#[allow(dead_code)]
-pub(crate) fn build_companion_path(base_path: &Path) -> PathBuf {
-    let stem = base_path.file_stem().unwrap_or_default();
-    base_path.with_file_name(format!("{}_templates.csv", stem.to_string_lossy()))
-}
-
 /// 将单行模板统计序列化到 `buf`（`template_key` 含双引号包裹 + CSV 转义，数值用 itoa）
 fn format_companion_row(
     buf: &mut Vec<u8>,

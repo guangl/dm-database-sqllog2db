@@ -1009,7 +1009,7 @@ mod tests {
         let app_log = dir.path().join("app.log");
 
         let toml = format!(
-            "[sqllog]\ndirectory = \"{logdir}\"\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\ninclude_performance_metrics = false\n",
+            "[sqllog]\npath = \"{logdir}\"\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\ninclude_performance_metrics = false\n",
             logdir = dir.path().to_string_lossy().replace('\\', "/"),
             errlog = error_log.to_string_lossy().replace('\\', "/"),
             applog = app_log.to_string_lossy().replace('\\', "/"),
@@ -1065,7 +1065,7 @@ mod tests {
 
         // 故意不添加 [template]，确保走 do_template=false 路径
         let toml = format!(
-            "[sqllog]\ndirectory = \"{logdir}\"\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n",
+            "[sqllog]\npath = \"{logdir}\"\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n",
             logdir = dir.path().to_string_lossy().replace('\\', "/"),
             errlog = error_log.to_string_lossy().replace('\\', "/"),
             applog = app_log.to_string_lossy().replace('\\', "/"),
@@ -1107,7 +1107,7 @@ mod tests {
 
         let make_cfg = |csv_file: &str| {
             let toml = format!(
-                "[sqllog]\ndirectory = \"{logdir}\"\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n[template]\nenable = true\n",
+                "[sqllog]\npath = \"{logdir}\"\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n[template]\nenable = true\n",
                 logdir = dir.path().to_string_lossy().replace('\\', "/"),
                 errlog = error_log.to_string_lossy().replace('\\', "/"),
                 applog = app_log.to_string_lossy().replace('\\', "/"),
@@ -1181,7 +1181,7 @@ mod tests {
 
         // 不设置 [pipeline.template_analysis]，触发 disabled 路径（template_agg=None）
         let toml = format!(
-            "[sqllog]\ndirectory = \"{logdir}\"\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n",
+            "[sqllog]\npath = \"{logdir}\"\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n",
             logdir = dir.path().to_string_lossy().replace('\\', "/"),
             errlog = error_log.to_string_lossy().replace('\\', "/"),
             applog = app_log.to_string_lossy().replace('\\', "/"),
@@ -1227,7 +1227,7 @@ mod tests {
 
         // jobs=1 强制走顺序路径；enable=true + output_csv_path 显式指定
         let toml = format!(
-            "[sqllog]\ndirectory = \"{logdir}\"\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n[template]\nenable = true\noutput_csv_path = \"{companion}\"\n",
+            "[sqllog]\npath = \"{logdir}\"\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n[template]\nenable = true\noutput_csv_path = \"{companion}\"\n",
             logdir = dir.path().to_string_lossy().replace('\\', "/"),
             errlog = error_log.to_string_lossy().replace('\\', "/"),
             applog = app_log.to_string_lossy().replace('\\', "/"),
