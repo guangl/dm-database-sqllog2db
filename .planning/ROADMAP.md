@@ -63,7 +63,7 @@ Full details: `.planning/milestones/v1.3-ROADMAP.md`
 **Milestone Goal:** 系统性重构配置模型与代码结构，补全测试覆盖，大幅提升项目可维护性
 
 - [ ] **Phase 17: 过滤器配置嵌套化** - 将 [filter] 扁平字段重组为 [filter.include] / [filter.exclude] 子表，serde alias 向后兼容
-- [ ] **Phase 18: 模板 & 图表配置嵌套化** - 将模板与图表配置集中至 [template] / [charts] 子表
+- [x] **Phase 18: 模板 & 图表配置嵌套化** - 将模板与图表配置集中至 [template] / [charts] 子表
 - [ ] **Phase 19: 代码结构重构** - 拆分超大文件，消除重复代码，收紧可见性，统一 Exporter trait
 - [ ] **Phase 20: 测试覆盖深化** - 补全 VERIFICATION.md，添加端到端集成测试、边界测试、proptest 属性测试
 
@@ -104,7 +104,7 @@ Plans:
   4. 含旧 [pipeline] 段的配置文件在 validate() 阶段返回明确迁移错误（5 条映射）
   5. cargo clippy --all-targets -- -D warnings 零警告，cargo test 全通过
 
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans executed (Phase 18 COMPLETE)
 Plans:
 **Wave 1**
 
@@ -116,7 +116,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2)*
 
-- [ ] 18-03-PLAN.md — init 模板与集成测试：CONFIG_TEMPLATE_ZH/EN 重写为新顶层格式；tests/integration.rs 同步 [pipeline.filters.*] 断言与 cfg.pipeline.filters 字段访问；新增 init→validate 端到端测试与旧 [pipeline] 路径拒绝测试
+- [x] 18-03-PLAN.md — init 模板与集成测试：CONFIG_TEMPLATE_ZH/EN 添加 # [charts] 注释段；tests/integration.rs 新增 4 条端到端测试（init→validate 成功路径 + 旧 [pipeline.*] 拒绝路径）(commit: 4097db5)
 
 ### Phase 19: 代码结构重构
 
