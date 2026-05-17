@@ -493,17 +493,17 @@ impl CompiledMetaFilters {
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **新旧格式并存时的优先级**
    - What we know: `RawFiltersFeature` 中新格式子表和旧格式字段同时出现时需要定义合并规则
-   - What's unclear: 用户是否可能在同一 config 中同时写 `[features.filter.include]` 和 `usernames = [...]`？
-   - Recommendation: 在 `From<RawFiltersFeature>` 中**新格式优先**——有 `include` 子表则用新格式，旧字段忽略；CONTEXT.md 决策已明确用户需求，旧格式只是向后兼容，不是并存语义
+   - What's unclear: 用户是否可能在同一 config 中同时写 `[features.filters.include]` 和 `usernames = [...]`？
+   - RESOLVED: 在 `From<RawFiltersFeature>` 中**新格式优先**——有 `include` 子表则用新格式，旧字段忽略；CONTEXT.md 决策已明确用户需求，旧格式只是向后兼容，不是并存语义
 
 2. **`recompile_meta_if_needed` 中的字段路径**
    - What we know: `run.rs:recompile_meta_if_needed` 调用 `CompiledMetaFilters::try_from_meta(&filters.meta)`
    - What's unclear: 该函数签名更新后入参是两个独立 struct，调用点逻辑需相应修改
-   - Recommendation: 直接更新为 `try_from_include_exclude(&filters.include, &filters.exclude)`，没有额外复杂度
+   - RESOLVED: 直接更新为 `try_from_include_exclude(&filters.include, &filters.exclude)`，没有额外复杂度
 
 ---
 
