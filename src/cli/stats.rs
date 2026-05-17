@@ -345,7 +345,16 @@ pub fn handle_stats(
 
     let elapsed = start.elapsed();
     let elapsed_secs = elapsed.as_secs_f64();
-    let rate = total_records / elapsed.as_secs().max(1);
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss
+    )]
+    let rate = if elapsed_secs > 0.0 {
+        (total_records as f64 / elapsed_secs) as u64
+    } else {
+        0
+    };
 
     let mut slow_entries: Vec<SlowEntry> = slow_heap.into_iter().map(|Reverse(e)| e).collect();
     slow_entries.sort_by_key(|e| std::cmp::Reverse(e.exec_time_bits));
