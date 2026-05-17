@@ -409,8 +409,28 @@ impl Exporter for SqliteExporter {
     fn write_template_stats(
         &mut self,
         stats: &[crate::pipeline::TemplateStats],
-        _final_path: Option<&std::path::Path>,
+        _csv_output_path: Option<&str>,
+        sqlite_table_name: Option<&str>,
     ) -> Result<()> {
+        let Some(table_name) = sqlite_table_name else {
+            return Ok(());
+        };
+        if table_name.trim().is_empty() {
+            return Ok(());
+        }
+        // 防 SQL 注入：表名必须仅含 ASCII 字母数字或下划线
+        if table_name
+            .chars()
+            .any(|c| !c.is_ascii_alphanumeric() && c != '_')
+        {
+            return Err(Error::Config(crate::error::ConfigError::InvalidValue {
+                field: "template.output_sqlite_table".to_string(),
+                value: table_name.to_string(),
+                reason: "table name contains invalid characters; \
+                     only ASCII alphanumeric and underscore are allowed"
+                    .to_string(),
+            }));
+        }
         let conn = self
             .conn
             .as_ref()
@@ -420,35 +440,41 @@ impl Exporter for SqliteExporter {
         conn.execute_batch("BEGIN;")
             .map_err(|e| Self::db_err(format!("begin failed: {e}")))?;
         if self.overwrite {
-            conn.execute("DROP TABLE IF EXISTS sql_templates", [])
-                .map_err(|e| Self::db_err(format!("drop sql_templates failed: {e}")))?;
+            conn.execute(&format!("DROP TABLE IF EXISTS {table_name}"), [])
+                .map_err(|e| Self::db_err(format!("drop {table_name} failed: {e}")))?;
         }
         conn.execute(
-            "CREATE TABLE IF NOT EXISTS sql_templates \
-             (template_key TEXT NOT NULL PRIMARY KEY, \
-              count INTEGER NOT NULL, \
-              avg_us INTEGER NOT NULL, \
-              min_us INTEGER NOT NULL, \
-              max_us INTEGER NOT NULL, \
-              p50_us INTEGER NOT NULL, \
-              p95_us INTEGER NOT NULL, \
-              p99_us INTEGER NOT NULL, \
-              first_seen TEXT NOT NULL, \
-              last_seen TEXT NOT NULL)",
+            &format!(
+                "CREATE TABLE IF NOT EXISTS {table_name} \
+                 (template_key TEXT NOT NULL PRIMARY KEY, \
+                  count INTEGER NOT NULL, \
+                  avg_us INTEGER NOT NULL, \
+                  min_us INTEGER NOT NULL, \
+                  max_us INTEGER NOT NULL, \
+                  p50_us INTEGER NOT NULL, \
+                  p95_us INTEGER NOT NULL, \
+                  p99_us INTEGER NOT NULL, \
+                  first_seen TEXT NOT NULL, \
+                  last_seen TEXT NOT NULL)"
+            ),
             [],
         )
-        .map_err(|e| Self::db_err(format!("create sql_templates failed: {e}")))?;
+        .map_err(|e| Self::db_err(format!("create {table_name} failed: {e}")))?;
         #[allow(clippy::cast_possible_wrap)]
         for s in stats {
             #[rustfmt::skip]
             let p = rusqlite::params![s.template_key, s.count as i64, s.avg_us as i64, s.min_us as i64, s.max_us as i64, s.p50_us as i64, s.p95_us as i64, s.p99_us as i64, s.first_seen, s.last_seen];
-            conn.execute("INSERT INTO sql_templates VALUES (?,?,?,?,?,?,?,?,?,?)", p)
-                .map_err(|e| Self::db_err(format!("insert sql_templates failed: {e}")))?;
+            conn.execute(
+                &format!("INSERT INTO {table_name} VALUES (?,?,?,?,?,?,?,?,?,?)"),
+                p,
+            )
+            .map_err(|e| Self::db_err(format!("insert {table_name} failed: {e}")))?;
         }
         conn.execute_batch("COMMIT;")
-            .map_err(|e| Self::db_err(format!("commit sql_templates failed: {e}")))?;
+            .map_err(|e| Self::db_err(format!("commit {table_name} failed: {e}")))?;
         info!(
-            "sql_templates: {} rows written to {}",
+            "{}: {} rows written to {}",
+            table_name,
             stats.len(),
             self.database_url
         );
@@ -973,7 +999,9 @@ mod tests {
             );
             exporter.initialize().unwrap();
             exporter.finalize().unwrap();
-            exporter.write_template_stats(&stats, None).unwrap();
+            exporter
+                .write_template_stats(&stats, None, Some("sql_templates"))
+                .unwrap();
         } // exporter drops here, releasing EXCLUSIVE lock
 
         let conn = rusqlite::Connection::open(&dbfile).unwrap();
@@ -1014,7 +1042,11 @@ mod tests {
             exporter.initialize().unwrap();
             exporter.finalize().unwrap();
             exporter
-                .write_template_stats(&[make_template_stats_sqlite("OLD")], None)
+                .write_template_stats(
+                    &[make_template_stats_sqlite("OLD")],
+                    None,
+                    Some("sql_templates"),
+                )
                 .unwrap();
         }
 
@@ -1029,7 +1061,11 @@ mod tests {
             exporter.initialize().unwrap();
             exporter.finalize().unwrap();
             exporter
-                .write_template_stats(&[make_template_stats_sqlite("NEW")], None)
+                .write_template_stats(
+                    &[make_template_stats_sqlite("NEW")],
+                    None,
+                    Some("sql_templates"),
+                )
                 .unwrap();
         }
 
@@ -1065,7 +1101,11 @@ mod tests {
             exporter.initialize().unwrap();
             exporter.finalize().unwrap();
             exporter
-                .write_template_stats(&[make_template_stats_sqlite("A")], None)
+                .write_template_stats(
+                    &[make_template_stats_sqlite("A")],
+                    None,
+                    Some("sql_templates"),
+                )
                 .unwrap();
         }
 
@@ -1080,7 +1120,11 @@ mod tests {
             exporter.initialize().unwrap();
             exporter.finalize().unwrap();
             exporter
-                .write_template_stats(&[make_template_stats_sqlite("B")], None)
+                .write_template_stats(
+                    &[make_template_stats_sqlite("B")],
+                    None,
+                    Some("sql_templates"),
+                )
                 .unwrap();
         }
 
@@ -1103,5 +1147,127 @@ mod tests {
                 .collect()
         };
         assert_eq!(keys, vec!["A", "B"], "expected keys [A, B], got {keys:?}");
+    }
+
+    // 新增：sqlite_table_name=None 时跳过建表，sqlite_master 中无 sql_templates
+    #[test]
+    fn test_sqlite_write_template_stats_none_skips() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let dbfile = dir.path().join("none_skip.db");
+
+        let stats = vec![make_template_stats_sqlite("SELECT 1")];
+        {
+            let mut exporter = SqliteExporter::new(
+                dbfile.to_string_lossy().into(),
+                "sqllog_records".into(),
+                true,
+                false,
+            );
+            exporter.initialize().unwrap();
+            exporter.finalize().unwrap();
+            exporter.write_template_stats(&stats, None, None).unwrap();
+        }
+
+        let conn = rusqlite::Connection::open(&dbfile).unwrap();
+        let table_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='sql_templates'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(table_count, 0, "None 表名时不应创建任何模板表");
+    }
+
+    // 新增：空字符串表名时跳过建表
+    #[test]
+    fn test_sqlite_write_template_stats_empty_table_name_skips() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let dbfile = dir.path().join("empty_skip.db");
+
+        let stats = vec![make_template_stats_sqlite("SELECT 1")];
+        {
+            let mut exporter = SqliteExporter::new(
+                dbfile.to_string_lossy().into(),
+                "sqllog_records".into(),
+                true,
+                false,
+            );
+            exporter.initialize().unwrap();
+            exporter.finalize().unwrap();
+            exporter
+                .write_template_stats(&stats, None, Some(""))
+                .unwrap();
+        }
+
+        let conn = rusqlite::Connection::open(&dbfile).unwrap();
+        let table_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='sql_templates'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(table_count, 0, "空表名时不应创建任何模板表");
+    }
+
+    // 新增：自定义表名 custom_tpl，验证该表存在且行数正确
+    #[test]
+    fn test_sqlite_write_template_stats_custom_table() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let dbfile = dir.path().join("custom_tpl.db");
+
+        let stats = vec![
+            make_template_stats_sqlite("SELECT 1"),
+            make_template_stats_sqlite("SELECT 2"),
+        ];
+        {
+            let mut exporter = SqliteExporter::new(
+                dbfile.to_string_lossy().into(),
+                "sqllog_records".into(),
+                true,
+                false,
+            );
+            exporter.initialize().unwrap();
+            exporter.finalize().unwrap();
+            exporter
+                .write_template_stats(&stats, None, Some("custom_tpl"))
+                .unwrap();
+        }
+
+        let conn = rusqlite::Connection::open(&dbfile).unwrap();
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM custom_tpl", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 2, "custom_tpl 表中应有 2 行，实际 {count}");
+
+        // 确认 sql_templates 表不存在
+        let old_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='sql_templates'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(old_count, 0, "不应创建 sql_templates 表");
+    }
+
+    // 新增：非法表名（含空格和分号）应被拒绝
+    #[test]
+    fn test_sqlite_write_template_stats_invalid_name_rejected() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let dbfile = dir.path().join("invalid.db");
+
+        let stats = vec![make_template_stats_sqlite("SELECT 1")];
+        let mut exporter = SqliteExporter::new(
+            dbfile.to_string_lossy().into(),
+            "sqllog_records".into(),
+            true,
+            false,
+        );
+        exporter.initialize().unwrap();
+        exporter.finalize().unwrap();
+        let result = exporter.write_template_stats(&stats, None, Some("bad name;DROP"));
+        assert!(result.is_err(), "非法表名应返回 Err，实际: {result:?}");
     }
 }

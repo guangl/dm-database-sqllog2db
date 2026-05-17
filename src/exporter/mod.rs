@@ -45,13 +45,18 @@ pub trait Exporter {
     }
 
     /// 将 SQL 模板聚合统计写入导出目标。
+    ///
+    /// - `csv_output_path`: `None` 或空串 → 跳过 CSV 写入；否则写入到该路径（显式，不再推导）。
+    /// - `sqlite_table_name`: `None` 或空串 → 跳过 `SQLite` 建表；否则以该名称建表。
+    ///
     /// 默认实现为 no-op，向后兼容现有 exporter。
     fn write_template_stats(
         &mut self,
         stats: &[crate::pipeline::TemplateStats],
-        final_path: Option<&std::path::Path>,
+        csv_output_path: Option<&str>,
+        sqlite_table_name: Option<&str>,
     ) -> Result<()> {
-        let _ = (stats, final_path);
+        let _ = (stats, csv_output_path, sqlite_table_name);
         Ok(())
     }
 }
@@ -119,12 +124,13 @@ impl ExporterKind {
     fn write_template_stats(
         &mut self,
         stats: &[crate::pipeline::TemplateStats],
-        final_path: Option<&std::path::Path>,
+        csv_output_path: Option<&str>,
+        sqlite_table_name: Option<&str>,
     ) -> Result<()> {
         match self {
-            Self::Csv(e) => e.write_template_stats(stats, final_path),
-            Self::Sqlite(e) => e.write_template_stats(stats, final_path),
-            Self::DryRun(e) => e.write_template_stats(stats, final_path),
+            Self::Csv(e) => e.write_template_stats(stats, csv_output_path, sqlite_table_name),
+            Self::Sqlite(e) => e.write_template_stats(stats, csv_output_path, sqlite_table_name),
+            Self::DryRun(e) => e.write_template_stats(stats, csv_output_path, sqlite_table_name),
         }
     }
 
@@ -199,11 +205,14 @@ impl Exporter for DryRunExporter {
     fn write_template_stats(
         &mut self,
         stats: &[crate::pipeline::TemplateStats],
-        _final_path: Option<&std::path::Path>,
+        csv_output_path: Option<&str>,
+        sqlite_table_name: Option<&str>,
     ) -> Result<()> {
         info!(
-            "Dry-run: would write {} template stats (no file written)",
-            stats.len()
+            "Dry-run: would write {} template stats (csv={:?}, sqlite_table={:?})",
+            stats.len(),
+            csv_output_path,
+            sqlite_table_name,
         );
         Ok(())
     }
@@ -319,9 +328,11 @@ impl ExporterManager {
     pub fn write_template_stats(
         &mut self,
         stats: &[crate::pipeline::TemplateStats],
-        final_path: Option<&std::path::Path>,
+        csv_output_path: Option<&str>,
+        sqlite_table_name: Option<&str>,
     ) -> Result<()> {
-        self.exporter.write_template_stats(stats, final_path)
+        self.exporter
+            .write_template_stats(stats, csv_output_path, sqlite_table_name)
     }
 
     #[must_use]
@@ -671,7 +682,7 @@ mod tests {
 
         let mut mock = MockExporter;
         let stats = vec![make_template_stats("SELECT ?")];
-        let result = mock.write_template_stats(&stats, None);
+        let result = mock.write_template_stats(&stats, None, None);
         assert!(result.is_ok());
     }
 
@@ -686,7 +697,7 @@ mod tests {
             make_template_stats("SELECT ?"),
             make_template_stats("INSERT ?"),
         ];
-        let result = e.write_template_stats(&stats, None);
+        let result = e.write_template_stats(&stats, None, None);
         assert!(result.is_ok());
 
         // write_template_stats 不影响 exported 计数
@@ -699,7 +710,7 @@ mod tests {
     fn test_exporter_manager_write_template_stats_dry_run() {
         let mut manager = ExporterManager::dry_run();
         let stats = vec![make_template_stats("SELECT ?")];
-        let result = manager.write_template_stats(&stats, None);
+        let result = manager.write_template_stats(&stats, None, None);
         assert!(result.is_ok());
     }
 
@@ -710,16 +721,16 @@ mod tests {
 
         // DryRun variant
         let mut dry_run = ExporterKind::DryRun(DryRunExporter::default());
-        assert!(dry_run.write_template_stats(&stats, None).is_ok());
+        assert!(dry_run.write_template_stats(&stats, None, None).is_ok());
 
-        // CSV variant — 空 stats，伴随文件写入成功
+        // CSV variant — 空 stats，路径为 None → 跳过写入
         let dir = tempfile::TempDir::new().unwrap();
         let csv_path = dir.path().join("test_dispatch.csv");
         let mut csv = CsvExporter::new(&csv_path);
         csv.initialize().unwrap();
         csv.finalize().unwrap();
         let mut csv_kind = ExporterKind::Csv(csv);
-        assert!(csv_kind.write_template_stats(&stats, None).is_ok());
+        assert!(csv_kind.write_template_stats(&stats, None, None).is_ok());
 
         // SQLite variant — 需要先 initialize 建立数据库连接
         use crate::config::SqliteExporterConfig as SqliteExporterCfg;
@@ -736,7 +747,7 @@ mod tests {
         // finalize() commits the main transaction so write_template_stats can open its own
         sqlite.finalize().unwrap();
         let mut sqlite_kind = ExporterKind::Sqlite(sqlite);
-        let result = sqlite_kind.write_template_stats(&stats, None);
+        let result = sqlite_kind.write_template_stats(&stats, None, None);
         assert!(
             result.is_ok(),
             "sqlite write_template_stats failed: {result:?}"

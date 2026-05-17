@@ -22,6 +22,9 @@ fn write_csv_escaped(buf: &mut Vec<u8>, bytes: &[u8]) {
 }
 
 /// 根据主 CSV 路径推导伴随文件路径（D-09）：`<stem>_templates.csv`
+///
+/// 此函数保留供外部测试或未来路径推导使用；生产代码已改为显式路径传入。
+#[allow(dead_code)]
 pub(crate) fn build_companion_path(base_path: &Path) -> PathBuf {
     let stem = base_path.file_stem().unwrap_or_default();
     base_path.with_file_name(format!("{}_templates.csv", stem.to_string_lossy()))
@@ -569,12 +572,18 @@ impl Exporter for CsvExporter {
     fn write_template_stats(
         &mut self,
         stats: &[crate::pipeline::TemplateStats],
-        final_path: Option<&std::path::Path>,
+        csv_output_path: Option<&str>,
+        _sqlite_table_name: Option<&str>,
     ) -> Result<()> {
-        let base_path: &Path = final_path.unwrap_or(self.path.as_path());
-        let companion = build_companion_path(base_path);
-        write_companion_rows(&companion, stats)?;
-        info!("Template companion CSV written: {}", companion.display());
+        let Some(path_str) = csv_output_path else {
+            return Ok(());
+        };
+        if path_str.trim().is_empty() {
+            return Ok(());
+        }
+        let path = Path::new(path_str);
+        write_companion_rows(path, stats)?;
+        info!("Template stats CSV written: {}", path.display());
         Ok(())
     }
 }
@@ -1054,11 +1063,13 @@ mod tests {
         assert!(header.contains("exec_id"));
     }
 
-    /// TMPL-04-B：验证 `write_template_stats` 写入伴随文件，含 CSV 转义
+    /// TMPL-04-B：验证 `write_template_stats` 写入指定路径，含 CSV 转义
     #[test]
     fn test_csv_write_template_stats() {
         let dir = tempfile::TempDir::new().unwrap();
         let outfile = dir.path().join("output.csv");
+        let companion = dir.path().join("out_templates.csv");
+        let companion_str = companion.to_string_lossy().into_owned();
 
         let mut exporter = CsvExporter::new(&outfile);
         exporter.initialize().unwrap();
@@ -1092,10 +1103,11 @@ mod tests {
             },
         ];
 
-        exporter.write_template_stats(&stats, None).unwrap();
+        exporter
+            .write_template_stats(&stats, Some(&companion_str), None)
+            .unwrap();
 
-        let companion = dir.path().join("output_templates.csv");
-        assert!(companion.exists(), "伴随文件应存在");
+        assert!(companion.exists(), "指定路径伴随文件应存在");
 
         let content = std::fs::read_to_string(&companion).unwrap();
         let mut lines = content.lines();
@@ -1145,14 +1157,14 @@ mod tests {
         assert_eq!(nums[8], "\"2025-01-01 12:00:00\"");
     }
 
-    /// TMPL-04-H：验证 `final_path` 覆盖路径推导（D-09）
+    /// TMPL-04-H：验证显式路径写入（不再推导 companion 路径）
     #[test]
     fn test_parallel_csv_companion_file() {
         let dir = tempfile::TempDir::new().unwrap();
-        // self.path = output.csv（并行前的占位路径）
         let self_path = dir.path().join("output.csv");
-        // final_path = actual_output.csv（并行实际写入路径）
-        let final_path = dir.path().join("actual_output.csv");
+        // 显式指定目标路径
+        let explicit_path = dir.path().join("actual_output_templates.csv");
+        let explicit_str = explicit_path.to_string_lossy().into_owned();
 
         let mut exporter = CsvExporter::new(&self_path);
 
@@ -1170,20 +1182,88 @@ mod tests {
         }];
 
         exporter
-            .write_template_stats(&stats, Some(final_path.as_path()))
+            .write_template_stats(&stats, Some(&explicit_str), None)
             .unwrap();
 
-        // 伴随文件应在 actual_output_templates.csv，而非 output_templates.csv
-        let expected_companion = dir.path().join("actual_output_templates.csv");
-        let wrong_companion = dir.path().join("output_templates.csv");
+        // 文件应在显式指定路径
+        assert!(
+            explicit_path.exists(),
+            "文件应在 actual_output_templates.csv"
+        );
+        // 旧推导路径不存在
+        let old_companion = dir.path().join("output_templates.csv");
+        assert!(
+            !old_companion.exists(),
+            "output_templates.csv 不应存在（已改为显式路径）"
+        );
+    }
 
-        assert!(
-            expected_companion.exists(),
-            "伴随文件应在 actual_output_templates.csv"
-        );
-        assert!(
-            !wrong_companion.exists(),
-            "output_templates.csv 不应存在（应使用 final_path 推导）"
-        );
+    // 新增：csv_output_path=None 时跳过，不创建任何文件
+    #[test]
+    fn test_csv_write_template_stats_none_skips() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let outfile = dir.path().join("output.csv");
+
+        let mut exporter = CsvExporter::new(&outfile);
+        exporter.initialize().unwrap();
+        exporter.finalize().unwrap();
+
+        let stats = vec![crate::pipeline::TemplateStats {
+            template_key: "SELECT 1".to_string(),
+            count: 1,
+            avg_us: 100,
+            min_us: 10,
+            max_us: 200,
+            p50_us: 90,
+            p95_us: 180,
+            p99_us: 195,
+            first_seen: "2025-01-01 00:00:00".to_string(),
+            last_seen: "2025-01-01 01:00:00".to_string(),
+        }];
+
+        exporter.write_template_stats(&stats, None, None).unwrap();
+
+        // 目录中除 output.csv 外不应有额外文件
+        let extra: Vec<std::fs::DirEntry> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(std::result::Result::ok)
+            .filter(|e| e.path() != outfile)
+            .collect();
+        assert!(extra.is_empty(), "None 路径时不应创建任何额外文件");
+    }
+
+    // 新增：csv_output_path=Some("") 时跳过，不创建任何文件
+    #[test]
+    fn test_csv_write_template_stats_empty_path_skips() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let outfile = dir.path().join("output.csv");
+
+        let mut exporter = CsvExporter::new(&outfile);
+        exporter.initialize().unwrap();
+        exporter.finalize().unwrap();
+
+        let stats = vec![crate::pipeline::TemplateStats {
+            template_key: "SELECT 1".to_string(),
+            count: 1,
+            avg_us: 100,
+            min_us: 10,
+            max_us: 200,
+            p50_us: 90,
+            p95_us: 180,
+            p99_us: 195,
+            first_seen: "2025-01-01 00:00:00".to_string(),
+            last_seen: "2025-01-01 01:00:00".to_string(),
+        }];
+
+        exporter
+            .write_template_stats(&stats, Some(""), None)
+            .unwrap();
+
+        let extra: Vec<std::fs::DirEntry> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(std::result::Result::ok)
+            .filter(|e| e.path() != outfile)
+            .collect();
+        assert!(extra.is_empty(), "空路径时不应创建任何额外文件");
     }
 }
