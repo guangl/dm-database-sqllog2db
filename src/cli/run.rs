@@ -2,7 +2,7 @@ use crate::color;
 use crate::config::Config;
 use crate::error::ParserError;
 use crate::error::{Error, Result};
-use crate::exporter::{CsvExporter, ExporterManager};
+use crate::exporter::{CsvExporter, Exporter, ExporterManager};
 use crate::parser::SqllogParser;
 use crate::pipeline::filters::RecordMeta;
 use crate::pipeline::normalizer::ParamBuffer;
@@ -817,11 +817,28 @@ pub fn handle_run(
         let template_stats = parallel_agg.map(TemplateAggregator::finalize);
         if let Some(ref stats) = template_stats {
             info!("Template analysis: {} unique templates", stats.len());
-            if let Some(csv_cfg) = final_cfg.exporter.csv.as_ref() {
-                // 直接调用 pub(crate) 函数，无需构造未初始化的 CsvExporter + ExporterManager 壳。
-                let base_path = Path::new(&csv_cfg.file);
-                let companion = crate::exporter::csv::build_companion_path(base_path);
-                crate::exporter::csv::write_companion_rows(&companion, stats)?;
+            let csv_out_path = final_cfg
+                .template
+                .as_ref()
+                .filter(|t| !t.output_csv_path.trim().is_empty())
+                .map(|t| t.output_csv_path.as_str());
+            let sqlite_table = final_cfg
+                .template
+                .as_ref()
+                .filter(|t| !t.output_sqlite_table.trim().is_empty())
+                .map(|t| t.output_sqlite_table.as_str());
+            if let Some(path_str) = csv_out_path {
+                // 直接调用 pub(crate) 函数，无需构造完整 ExporterManager
+                crate::exporter::csv::write_companion_rows(Path::new(path_str), stats)?;
+            }
+            if let Some(table_name) = sqlite_table {
+                if let Some(sqlite_cfg) = final_cfg.exporter.sqlite.as_ref() {
+                    use crate::exporter::SqliteExporter;
+                    let mut sqlite = SqliteExporter::from_config(sqlite_cfg);
+                    sqlite.initialize()?;
+                    sqlite.finalize()?;
+                    sqlite.write_template_stats(stats, None, Some(table_name))?;
+                }
             }
         }
 
@@ -929,7 +946,17 @@ pub fn handle_run(
         let template_stats = template_agg.map(TemplateAggregator::finalize);
         if let Some(ref stats) = template_stats {
             info!("Template analysis: {} unique templates", stats.len());
-            exporter_manager.write_template_stats(stats, None)?;
+            let csv_out_path = final_cfg
+                .template
+                .as_ref()
+                .filter(|t| !t.output_csv_path.trim().is_empty())
+                .map(|t| t.output_csv_path.as_str());
+            let sqlite_table = final_cfg
+                .template
+                .as_ref()
+                .filter(|t| !t.output_sqlite_table.trim().is_empty())
+                .map(|t| t.output_sqlite_table.as_str());
+            exporter_manager.write_template_stats(stats, csv_out_path, sqlite_table)?;
         }
     }
 
@@ -1183,7 +1210,7 @@ mod tests {
         );
     }
 
-    /// TMPL-04-C 端到端 e2e：顺序路径 enabled=true 时主 CSV + 伴随文件同时存在
+    /// TMPL-04-C 端到端 e2e：顺序路径 `enabled=true` 且 `output_csv_path` 非空时写入指定路径
     #[test]
     fn test_template_stats_enabled_end_to_end_sequential() {
         let dir = tempfile::TempDir::new().unwrap();
@@ -1194,17 +1221,18 @@ mod tests {
         )
         .unwrap();
         let csv_path = dir.path().join("out.csv");
-        let companion_path = dir.path().join("out_templates.csv");
+        let companion_path = dir.path().join("explicit_templates.csv");
         let error_log = dir.path().join("errors.log");
         let app_log = dir.path().join("app.log");
 
-        // jobs=1 强制走顺序路径；enable=true 启用模板分析
+        // jobs=1 强制走顺序路径；enable=true + output_csv_path 显式指定
         let toml = format!(
-            "[sqllog]\ndirectory = \"{logdir}\"\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n[template]\nenable = true\n",
+            "[sqllog]\ndirectory = \"{logdir}\"\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n[template]\nenable = true\noutput_csv_path = \"{companion}\"\n",
             logdir = dir.path().to_string_lossy().replace('\\', "/"),
             errlog = error_log.to_string_lossy().replace('\\', "/"),
             applog = app_log.to_string_lossy().replace('\\', "/"),
             csv = csv_path.to_string_lossy().replace('\\', "/"),
+            companion = companion_path.to_string_lossy().replace('\\', "/"),
         );
         let cfg: Config = toml::from_str(&toml).unwrap();
 
@@ -1229,10 +1257,10 @@ mod tests {
             "主 CSV 文件应非空"
         );
 
-        // 伴随文件存在（间接验证 write_template_stats 在 finalize 之后被调用）
+        // 伴随文件存在于显式指定路径（间接验证 write_template_stats 在 finalize 之后被调用）
         assert!(
             companion_path.exists(),
-            "enabled=true 时应生成伴随文件 out_templates.csv"
+            "enabled=true 时应在 output_csv_path 指定位置生成伴随文件"
         );
 
         let companion_content = std::fs::read_to_string(&companion_path).unwrap();
