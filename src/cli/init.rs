@@ -141,6 +141,16 @@ enable = false
 # 排除模式列表（SQL 包含任一模式则剔除）
 # excludes = ["SELECT 1", "DUAL"]
 
+# ===================== 图表生成（可选）=====================
+# 启用图表功能需取消注释下方 [charts] 段并至少填写 output_dir
+# [charts]
+# output_dir = "charts/"   # 图表输出目录（必填）
+# top_n = 10               # Top-N 频率显示数量
+# frequency_bar = true     # 生成频率柱状图
+# latency_hist = true      # 生成延迟直方图
+# trend_line = true        # 生成时间趋势折线图
+# user_pie = true          # 生成用户占比饼图
+
 # ===================== 断点续传 =====================
 # 使用 --resume 标志时，sqllog2db 会跳过已成功处理的文件（通过文件大小和修改时间判断）。
 # [resume]
@@ -227,6 +237,16 @@ enable = false
 [filter.sql]
 # includes = ["FROM USER_TABLES", "DELETE FROM"]
 # excludes = ["SELECT 1", "DUAL"]
+
+# ===================== Chart Generation (optional) =====================
+# To enable charts, uncomment the [charts] section below and set at least output_dir
+# [charts]
+# output_dir = "charts/"   # Chart output directory (required)
+# top_n = 10               # Top-N frequency count
+# frequency_bar = true     # Generate frequency bar chart
+# latency_hist = true      # Generate latency histogram
+# trend_line = true        # Generate time-trend line chart
+# user_pie = true          # Generate user-share pie chart
 
 # ===================== Resume / Checkpoint =====================
 # With --resume, sqllog2db skips files already successfully processed

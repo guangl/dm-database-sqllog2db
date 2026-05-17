@@ -1163,6 +1163,22 @@ fn test_init_generates_new_nested_format() {
         "init template must contain [filter.sql]"
     );
     assert!(
+        content.contains("[template]"),
+        "init template must contain [template]"
+    );
+    assert!(
+        content.contains("[charts]"),
+        "init template must contain [charts]"
+    );
+    assert!(
+        content.contains("[replace_parameters]"),
+        "init template must contain [replace_parameters]"
+    );
+    assert!(
+        !content.contains("[pipeline."),
+        "init template must NOT contain legacy [pipeline.*]"
+    );
+    assert!(
         !content.contains("\nusernames = "),
         "init template must not contain active 'usernames' field"
     );
@@ -1172,4 +1188,106 @@ fn test_init_generates_new_nested_format() {
     );
     let cfg: dm_database_sqllog2db::config::Config = toml::from_str(&content).unwrap();
     cfg.validate().unwrap();
+}
+
+#[test]
+fn test_init_generated_zh_template_passes_validate() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    handle_init(path.to_str().unwrap(), true, Lang::Zh).unwrap();
+    let cfg = dm_database_sqllog2db::config::Config::from_file(&path).unwrap();
+    assert!(
+        cfg.validate().is_ok(),
+        "ZH init template must pass validate()"
+    );
+    let content = std::fs::read_to_string(&path).unwrap();
+    assert!(
+        !content.contains("pipeline."),
+        "ZH init template must not contain any 'pipeline.' substring"
+    );
+}
+
+#[test]
+fn test_init_generated_en_template_passes_validate() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    handle_init(path.to_str().unwrap(), true, Lang::En).unwrap();
+    let cfg = dm_database_sqllog2db::config::Config::from_file(&path).unwrap();
+    assert!(
+        cfg.validate().is_ok(),
+        "EN init template must pass validate()"
+    );
+    let content = std::fs::read_to_string(&path).unwrap();
+    assert!(
+        !content.contains("pipeline."),
+        "EN init template must not contain any 'pipeline.' substring"
+    );
+}
+
+#[test]
+fn test_validate_rejects_legacy_pipeline_template_analysis() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("legacy.toml");
+    std::fs::write(
+        &path,
+        "[sqllog]\npath = \"sqllogs\"\n\n[pipeline.template_analysis]\nenabled = true\n\n[exporter.csv]\nfile = \"out.csv\"\n",
+    )
+    .unwrap();
+    let cfg = dm_database_sqllog2db::config::Config::from_file(&path).unwrap();
+    let result = cfg.validate();
+    assert!(
+        result.is_err(),
+        "legacy [pipeline.template_analysis] must be rejected by validate()"
+    );
+    let err_msg = result.unwrap_err().to_string();
+    assert!(
+        err_msg.contains("[pipeline.template_analysis] → [template]"),
+        "error must contain migration hint for template_analysis; got: {err_msg}"
+    );
+    assert!(
+        err_msg.contains("[pipeline.charts] → [charts]"),
+        "error must contain migration hint for charts; got: {err_msg}"
+    );
+    assert!(
+        err_msg.contains("[pipeline.filters.*] → [filter.*]"),
+        "error must contain migration hint for filters; got: {err_msg}"
+    );
+}
+
+#[test]
+fn test_validate_rejects_legacy_pipeline_filters_section() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("legacy_filters.toml");
+    std::fs::write(
+        &path,
+        "[sqllog]\npath = \"sqllogs\"\n\n[pipeline.filters]\nenable = true\n\n[exporter.csv]\nfile = \"out.csv\"\n",
+    )
+    .unwrap();
+    let cfg = dm_database_sqllog2db::config::Config::from_file(&path).unwrap();
+    let result = cfg.validate();
+    assert!(
+        result.is_err(),
+        "legacy [pipeline.filters] must be rejected by validate()"
+    );
+    let err_msg = result.unwrap_err().to_string();
+    assert!(
+        err_msg.contains("[pipeline.template_analysis] → [template]"),
+        "error must contain migration hint for template_analysis; got: {err_msg}"
+    );
+    assert!(
+        err_msg.contains("[pipeline.charts] → [charts]"),
+        "error must contain migration hint for charts; got: {err_msg}"
+    );
+    assert!(
+        err_msg.contains("[pipeline.normalize] → [replace_parameters]"),
+        "error must contain migration hint for normalize; got: {err_msg}"
+    );
+    assert!(
+        err_msg.contains("[pipeline.filters.*] → [filter.*]"),
+        "error must contain migration hint for filters; got: {err_msg}"
+    );
+    assert!(
+        err_msg.contains("[pipeline.fields] → [output.fields]"),
+        "error must contain migration hint for fields; got: {err_msg}"
+    );
 }
