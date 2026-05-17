@@ -57,7 +57,10 @@ impl Config {
         self.sqllog.validate()?;
         if let Some(filters) = &self.features.filters {
             if filters.enable {
-                crate::features::filters::CompiledMetaFilters::try_from_meta(&filters.meta)?;
+                crate::features::filters::CompiledMetaFilters::try_from_include_exclude(
+                    &filters.include,
+                    &filters.exclude,
+                )?;
                 crate::features::filters::CompiledSqlFilters::try_from_sql_filters(
                     &filters.record_sql,
                 )?;
@@ -129,7 +132,10 @@ impl Config {
 
         let compiled = if let Some(filters) = &self.features.filters {
             if filters.enable {
-                let meta = crate::features::CompiledMetaFilters::try_from_meta(&filters.meta)?;
+                let meta = crate::features::CompiledMetaFilters::try_from_include_exclude(
+                    &filters.include,
+                    &filters.exclude,
+                )?;
                 let sql =
                     crate::features::CompiledSqlFilters::try_from_sql_filters(&filters.record_sql)?;
                 Some((meta, sql))
@@ -900,7 +906,7 @@ file = "out.csv"
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(
-            err_msg.contains("features.filters.usernames"),
+            err_msg.contains("features.filters.include.users"),
             "error should mention field name, got: {err_msg}"
         );
     }
@@ -1154,7 +1160,7 @@ file = "out.csv"
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(
-            err_msg.contains("features.filters.usernames"),
+            err_msg.contains("features.filters.include.users"),
             "error should mention field name, got: {err_msg}"
         );
     }
@@ -1397,5 +1403,42 @@ file = "out.csv"
             ..Default::default()
         };
         assert!(cfg.validate_and_compile().is_err());
+    }
+
+    #[test]
+    fn test_validate_new_nested_format_passes() {
+        let toml = r#"
+[sqllog]
+path = "sqllogs"
+[features.filters]
+enable = true
+[features.filters.include]
+users = ["admin"]
+[features.filters.exclude]
+users = ["guest"]
+[exporter.csv]
+file = "out.csv"
+"#;
+        let cfg: Config = toml::from_str(toml).unwrap();
+        assert!(cfg.validate().is_ok(), "新嵌套格式应通过 validate");
+    }
+
+    #[test]
+    fn test_validate_old_flat_format_passes() {
+        let toml = r#"
+[sqllog]
+path = "sqllogs"
+[features.filters]
+enable = true
+usernames = ["admin"]
+exclude_usernames = ["guest"]
+[exporter.csv]
+file = "out.csv"
+"#;
+        let cfg: Config = toml::from_str(toml).unwrap();
+        assert!(
+            cfg.validate().is_ok(),
+            "旧扁平格式应通过 validate（向后兼容）"
+        );
     }
 }

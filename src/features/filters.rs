@@ -192,7 +192,7 @@ impl<'de> Deserialize<'de> for FiltersFeature {
 impl From<RawFiltersFeature> for FiltersFeature {
     fn from(raw: RawFiltersFeature) -> Self {
         // 新格式优先：有 include 子表则用新格式，否则从旧扁平字段构造
-        let include = raw.include.unwrap_or_else(|| IncludeFilters {
+        let include = raw.include.unwrap_or(IncludeFilters {
             users: raw.usernames,
             ips: raw.client_ips,
             sessions: raw.sess_ids,
@@ -204,7 +204,7 @@ impl From<RawFiltersFeature> for FiltersFeature {
             end_ts: raw.end_ts,
             trxids: raw.trxids,
         });
-        let exclude = raw.exclude.unwrap_or_else(|| ExcludeFilters {
+        let exclude = raw.exclude.unwrap_or(ExcludeFilters {
             users: raw.exclude_usernames,
             ips: raw.exclude_client_ips,
             sessions: raw.exclude_sess_ids,
@@ -1172,7 +1172,7 @@ mod tests {
         let compiled =
             CompiledMetaFilters::try_from_include_exclude(&IncludeFilters::default(), &exclude)
                 .unwrap();
-        assert!(!compiled.should_keep(&m("tx", "ip", "user", Some("Select"))));
+        assert!(!compiled.should_keep(&m("tx", "ip", "user", Some("SELECT"))));
     }
 
     #[test]

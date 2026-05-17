@@ -9,7 +9,7 @@ use dm_database_sqllog2db::cli::validate::handle_validate;
 use dm_database_sqllog2db::config::{
     Config, CsvExporter, ExporterConfig, SqliteExporter, SqllogConfig,
 };
-use dm_database_sqllog2db::features::filters::MetaFilters;
+use dm_database_sqllog2db::features::filters::{ExcludeFilters, IncludeFilters};
 use dm_database_sqllog2db::features::{FeaturesConfig, FiltersFeature, ReplaceParametersConfig};
 use dm_database_sqllog2db::lang::Lang;
 use std::sync::Arc;
@@ -783,11 +783,11 @@ fn test_handle_validate_with_filters_all_fields() {
         features: FeaturesConfig {
             filters: Some(FiltersFeature {
                 enable: true,
-                meta: MetaFilters {
+                include: IncludeFilters {
                     start_ts: Some("2025-01-01".to_string()),
                     end_ts: Some("2025-12-31".to_string()),
-                    usernames: Some(vec!["admin".to_string()]),
-                    client_ips: Some(vec!["10.0.0.1".to_string()]),
+                    users: Some(vec!["admin".to_string()]),
+                    ips: Some(vec!["10.0.0.1".to_string()]),
                     trxids: Some(
                         ["tx1"]
                             .iter()
@@ -796,14 +796,15 @@ fn test_handle_validate_with_filters_all_fields() {
                     ),
                     ..Default::default()
                 },
+                exclude: ExcludeFilters::default(),
                 indicators: IndicatorFilters {
                     exec_ids: Some([42_i64].into_iter().collect()),
                     min_runtime_ms: Some(100),
                     min_row_count: Some(10),
                 },
                 sql: SqlFilters {
-                    include_patterns: Some(vec!["SELECT".to_string()]),
-                    exclude_patterns: Some(vec!["DROP".to_string()]),
+                    includes: Some(vec!["SELECT".to_string()]),
+                    excludes: Some(vec!["DROP".to_string()]),
                 },
                 record_sql: SqlFilters::default(),
             }),
@@ -821,7 +822,8 @@ fn test_handle_validate_filters_disabled() {
         features: FeaturesConfig {
             filters: Some(FiltersFeature {
                 enable: false,
-                meta: MetaFilters::default(),
+                include: IncludeFilters::default(),
+                exclude: ExcludeFilters::default(),
                 indicators: IndicatorFilters::default(),
                 ..Default::default()
             }),
@@ -870,10 +872,11 @@ fn test_handle_run_with_filters_builds_pipeline() {
     // Enable a record-level filter — exercises build_pipeline and FilterProcessor
     cfg.features.filters = Some(FiltersFeature {
         enable: true,
-        meta: MetaFilters {
-            usernames: Some(vec!["TESTUSER".to_string()]),
+        include: IncludeFilters {
+            users: Some(vec!["TESTUSER".to_string()]),
             ..Default::default()
         },
+        exclude: ExcludeFilters::default(),
         ..Default::default()
     });
     let compiled_filters = cfg.validate_and_compile().unwrap();
@@ -932,7 +935,8 @@ fn test_handle_run_with_transaction_filters_prescans() {
     // exec_ids filter triggers transaction pre-scan path
     cfg.features.filters = Some(FiltersFeature {
         enable: true,
-        meta: MetaFilters::default(),
+        include: IncludeFilters::default(),
+        exclude: ExcludeFilters::default(),
         indicators: dm_database_sqllog2db::features::filters::IndicatorFilters {
             exec_ids: Some([0_i64, 1, 2].into_iter().collect()),
             min_runtime_ms: None,
@@ -966,7 +970,8 @@ fn test_handle_run_with_min_runtime_filter() {
     let mut cfg = make_run_config(&log_dir, &csv_file);
     cfg.features.filters = Some(FiltersFeature {
         enable: true,
-        meta: MetaFilters::default(),
+        include: IncludeFilters::default(),
+        exclude: ExcludeFilters::default(),
         indicators: dm_database_sqllog2db::features::filters::IndicatorFilters {
             exec_ids: None,
             min_runtime_ms: Some(1),

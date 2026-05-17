@@ -448,22 +448,25 @@ struct ProcessFileCtx<'a> {
     pb: &'a ProgressBar,
 }
 
-// stats 子命令使用 FiltersFeature::should_keep（OR 语义）做统计过滤，
-// 与热路径导出的 AND 语义无关，此处 OR 语义是预期行为。
-#[allow(deprecated)]
 fn process_file(
     parser: &dm_database_parser_sqllog::LogParser,
     ctx: &mut ProcessFileCtx,
 ) -> (u64, u64) {
+    use crate::features::filters::CompiledMetaFilters;
     let mut file_records: u64 = 0;
     let mut file_errors: u64 = 0;
-    let filters = ctx
+    let filter_cfg = ctx
         .cfg
         .features
         .filters
         .as_ref()
         .filter(|f| f.has_filters());
-    let need_meta = filters.is_some() || !ctx.group_fields.is_empty();
+    // 预编译 meta 过滤器（若配置了过滤器）；编译失败则忽略过滤
+    let compiled_meta: Option<CompiledMetaFilters> = filter_cfg
+        .and_then(|f| CompiledMetaFilters::try_from_include_exclude(&f.include, &f.exclude).ok());
+    let start_ts = filter_cfg.and_then(|f| f.include.start_ts.as_deref());
+    let end_ts = filter_cfg.and_then(|f| f.include.end_ts.as_deref());
+    let need_meta = compiled_meta.is_some() || !ctx.group_fields.is_empty();
     let need_ind = ctx.top_n > 0 || !ctx.group_fields.is_empty() || ctx.bucket_field.is_some();
 
     for result in parser.iter() {
@@ -475,20 +478,32 @@ fn process_file(
                     None
                 };
 
-                if let (Some(f), Some(m)) = (filters, &meta) {
-                    if !f.should_keep(
-                        record.ts.as_ref(),
-                        &RecordMeta {
-                            trxid: m.trxid.as_ref(),
-                            ip: m.client_ip.as_ref(),
-                            sess: m.sess_id.as_ref(),
-                            thrd: m.thrd_id.as_ref(),
-                            user: m.username.as_ref(),
-                            stmt: m.statement.as_ref(),
-                            app: m.appname.as_ref(),
-                            tag: record.tag.as_deref(),
-                        },
-                    ) {
+                // 时间过滤
+                if let Some(start) = start_ts {
+                    let ts = record.ts.as_ref();
+                    if ts < start && !ts.starts_with(start) {
+                        continue;
+                    }
+                }
+                if let Some(end) = end_ts {
+                    let ts = record.ts.as_ref();
+                    if ts > end && !ts.starts_with(end) {
+                        continue;
+                    }
+                }
+
+                // 元数据过滤
+                if let (Some(compiled), Some(m)) = (&compiled_meta, &meta) {
+                    if !compiled.should_keep(&RecordMeta {
+                        trxid: m.trxid.as_ref(),
+                        ip: m.client_ip.as_ref(),
+                        sess: m.sess_id.as_ref(),
+                        thrd: m.thrd_id.as_ref(),
+                        user: m.username.as_ref(),
+                        stmt: m.statement.as_ref(),
+                        app: m.appname.as_ref(),
+                        tag: record.tag.as_deref(),
+                    }) {
                         continue;
                     }
                 }

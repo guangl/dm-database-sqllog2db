@@ -55,8 +55,8 @@ impl FilterProcessor {
         let has_meta_filters = compiled_meta.has_any_filters();
         Self {
             compiled_meta,
-            start_ts: filter.meta.start_ts.clone(),
-            end_ts: filter.meta.end_ts.clone(),
+            start_ts: filter.include.start_ts.clone(),
+            end_ts: filter.include.end_ts.clone(),
             has_meta_filters,
         }
     }
@@ -675,7 +675,10 @@ fn recompile_meta_if_needed(
         _ => return Ok(original),
     };
     // 重新从 final_cfg 编译，以捕获 merge_found_trxids 写入的 trxids
-    let recompiled = crate::features::CompiledMetaFilters::try_from_meta(&filters.meta)?;
+    let recompiled = crate::features::CompiledMetaFilters::try_from_include_exclude(
+        &filters.include,
+        &filters.exclude,
+    )?;
     Ok(Some(recompiled))
 }
 

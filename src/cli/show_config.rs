@@ -101,20 +101,25 @@ pub fn handle_show_config(cfg: &Config, config_path: &str, diff: bool) {
     if let Some(f) = &cfg.features.filters {
         println!("{}", color::cyan("[features.filters]"));
         kv("enable", &f.enable.to_string(), None, diff);
-        if let Some(s) = &f.meta.start_ts {
-            kv("start_ts", s, None, diff);
+        if let Some(s) = &f.include.start_ts {
+            kv("include.start_ts", s, None, diff);
         }
-        if let Some(e) = &f.meta.end_ts {
-            kv("end_ts", e, None, diff);
+        if let Some(e) = &f.include.end_ts {
+            kv("include.end_ts", e, None, diff);
         }
-        if let Some(ids) = &f.meta.trxids {
-            kv("trxids", &format!("{} entries", ids.len()), None, diff);
+        if let Some(ids) = &f.include.trxids {
+            kv(
+                "include.trxids",
+                &format!("{} entries", ids.len()),
+                None,
+                diff,
+            );
         }
-        if let Some(users) = &f.meta.usernames {
-            kv("usernames", &users.join(", "), None, diff);
+        if let Some(users) = &f.include.users {
+            kv("include.users", &users.join(", "), None, diff);
         }
-        if let Some(ips) = &f.meta.client_ips {
-            kv("client_ips", &ips.join(", "), None, diff);
+        if let Some(ips) = &f.include.ips {
+            kv("include.ips", &ips.join(", "), None, diff);
         }
         println!();
     }
