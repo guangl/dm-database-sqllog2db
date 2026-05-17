@@ -78,7 +78,10 @@ Full details: `.planning/milestones/v1.3-ROADMAP.md`
   2. 旧版扁平字段配置文件（include_users / exclude_users 等）无需修改即可被正确解析，行为不变
   3. `cargo run -- validate -c config.toml` 对新旧两种格式均通过验证，无报错
   4. `pipeline.is_empty()` 热路径快速退出逻辑在新配置结构下保持不变（clippy + 测试全通过）
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 17-01-PLAN.md — Filters struct 重构：新增 IncludeFilters / ExcludeFilters，手写 Deserialize 向后兼容旧扁平格式，重命名 CompiledMetaFilters::try_from_include_exclude，SqlFilters 字段改名加 alias
+- [ ] 17-02-PLAN.md — 调用方适配 + init 模板更新：config.rs / cli/run.rs / cli/init.rs / tests/integration.rs 切换到新 API，init 命令产出新嵌套格式
 
 ### Phase 18: 模板 & 图表配置嵌套化
 **Goal**: 用户可在 [template] 和 [charts] 子表中集中管理模板分析与图表生成配置
@@ -135,7 +138,7 @@ Full details: `.planning/milestones/v1.3-ROADMAP.md`
 | 14. Exporter 集成输出 | v1.3 | 4/4 | Complete | 2026-05-16 |
 | 15. SVG 图表基础设施 + 前两类图表 | v1.3 | 5/5 | Complete | 2026-05-17 |
 | 16. 剩余图表 | v1.3 | 5/5 | Complete | 2026-05-17 |
-| 17. 过滤器配置嵌套化 | v1.4 | 0/TBD | Not started | - |
+| 17. 过滤器配置嵌套化 | v1.4 | 0/2 | Not started | - |
 | 18. 模板 & 图表配置嵌套化 | v1.4 | 0/TBD | Not started | - |
 | 19. 代码结构重构 | v1.4 | 0/TBD | Not started | - |
 | 20. 测试覆盖深化 | v1.4 | 0/TBD | Not started | - |
