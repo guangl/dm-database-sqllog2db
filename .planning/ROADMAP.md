@@ -81,11 +81,11 @@ Full details: `.planning/milestones/v1.3-ROADMAP.md`
   3. `cargo run -- validate -c config.toml` 对新旧两种格式均通过验证，无报错
   4. `pipeline.is_empty()` 热路径快速退出逻辑在新配置结构下保持不变（clippy + 测试全通过）
 
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
 **Wave 1**
 
-- [ ] 17-01-PLAN.md — Filters struct 重构：新增 IncludeFilters / ExcludeFilters，手写 Deserialize 向后兼容旧扁平格式，重命名 CompiledMetaFilters::try_from_include_exclude，SqlFilters 字段改名加 alias
+- [x] 17-01-PLAN.md — Filters struct 重构：新增 IncludeFilters / ExcludeFilters，手写 Deserialize 向后兼容旧扁平格式，重命名 CompiledMetaFilters::try_from_include_exclude，SqlFilters 字段改名加 alias
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -155,7 +155,7 @@ Plans:
 | 14. Exporter 集成输出 | v1.3 | 4/4 | Complete | 2026-05-16 |
 | 15. SVG 图表基础设施 + 前两类图表 | v1.3 | 5/5 | Complete | 2026-05-17 |
 | 16. 剩余图表 | v1.3 | 5/5 | Complete | 2026-05-17 |
-| 17. 过滤器配置嵌套化 | v1.4 | 0/2 | Not started | - |
+| 17. 过滤器配置嵌套化 | v1.4 | 1/2 | In Progress|  |
 | 18. 模板 & 图表配置嵌套化 | v1.4 | 0/TBD | Not started | - |
 | 19. 代码结构重构 | v1.4 | 0/TBD | Not started | - |
 | 20. 测试覆盖深化 | v1.4 | 0/TBD | Not started | - |

@@ -7,11 +7,11 @@
 
 ### 配置重构（CONFIG）
 
-- [ ] **CONFIG-01**: 用户可在 `[filter.include]` 嵌套子表中配置所有包含过滤条件（users / ips / sessions / threads / statements / apps / tags），替代现有扁平字段
-- [ ] **CONFIG-02**: 用户可在 `[filter.exclude]` 嵌套子表中配置所有排除过滤条件（同上字段），替代现有扁平字段
+- [x] **CONFIG-01**: 用户可在 `[filter.include]` 嵌套子表中配置所有包含过滤条件（users / ips / sessions / threads / statements / apps / tags），替代现有扁平字段
+- [x] **CONFIG-02**: 用户可在 `[filter.exclude]` 嵌套子表中配置所有排除过滤条件（同上字段），替代现有扁平字段
 - [ ] **CONFIG-03**: 用户可在 `[template]` 子表中集中管理所有模板分析配置（enable_template_normalization / enable_template_aggregation / output_*）
 - [ ] **CONFIG-04**: 用户可在 `[charts]` 子表中集中管理所有图表配置（output_dir / top_n 等）
-- [ ] **CONFIG-05**: 旧版扁平格式配置文件仍可被正确解析（serde alias 向后兼容，不破坏现有用户配置）
+- [x] **CONFIG-05**: 旧版扁平格式配置文件仍可被正确解析（serde alias 向后兼容，不破坏现有用户配置）
 
 ### 代码重构（REFACTOR）
 
@@ -49,9 +49,9 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CONFIG-01 | Phase 17 | Pending |
-| CONFIG-02 | Phase 17 | Pending |
-| CONFIG-05 | Phase 17 | Pending |
+| CONFIG-01 | Phase 17 | Complete |
+| CONFIG-02 | Phase 17 | Complete |
+| CONFIG-05 | Phase 17 | Complete |
 | CONFIG-03 | Phase 18 | Pending |
 | CONFIG-04 | Phase 18 | Pending |
 | REFACTOR-01 | Phase 19 | Pending |
