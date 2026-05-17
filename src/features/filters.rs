@@ -1266,9 +1266,152 @@ file = "out.csv"
 "#;
         let cfg: Config = toml::from_str(toml).unwrap();
         let filters = cfg.features.filters.unwrap();
-        assert!(filters.meta.trxids.is_some());
-        assert_eq!(filters.meta.trxids.unwrap().len(), 2);
+        assert!(filters.include.trxids.is_some());
+        assert_eq!(filters.include.trxids.unwrap().len(), 2);
         assert!(filters.indicators.exec_ids.is_some());
         assert_eq!(filters.indicators.exec_ids.unwrap().len(), 3);
+    }
+
+    // ── Phase 17: 新格式嵌套解析测试（RED 阶段）────────────────────
+
+    #[test]
+    fn test_new_nested_format_include() {
+        use crate::config::Config;
+        let toml = r#"
+[sqllog]
+path = "sqllogs"
+[features.filters]
+enable = true
+[features.filters.include]
+users = ["user1"]
+ips = ["192.168.1.1"]
+sessions = ["s001"]
+threads = ["t001"]
+statements = ["SELECT", "INSERT"]
+apps = ["myapp"]
+tags = ["audit"]
+start_ts = "2024-01-01T00:00:00"
+end_ts = "2024-12-31T23:59:59"
+trxids = ["123456"]
+[exporter.csv]
+file = "out.csv"
+"#;
+        let cfg: Config = toml::from_str(toml).unwrap();
+        let filters = cfg.features.filters.unwrap();
+        assert_eq!(filters.include.users, Some(vec!["user1".to_string()]));
+        assert_eq!(filters.include.ips, Some(vec!["192.168.1.1".to_string()]));
+        assert!(filters.include.trxids.is_some());
+        assert_eq!(filters.include.trxids.unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_new_nested_format_exclude() {
+        use crate::config::Config;
+        let toml = r#"
+[sqllog]
+path = "sqllogs"
+[features.filters]
+enable = true
+[features.filters.exclude]
+users = ["admin"]
+ips = ["10.0.0.1"]
+sessions = ["s999"]
+threads = ["t999"]
+statements = ["DROP"]
+apps = ["badapp"]
+tags = ["sys"]
+[exporter.csv]
+file = "out.csv"
+"#;
+        let cfg: Config = toml::from_str(toml).unwrap();
+        let filters = cfg.features.filters.unwrap();
+        assert_eq!(filters.exclude.users, Some(vec!["admin".to_string()]));
+        assert_eq!(filters.exclude.ips, Some(vec!["10.0.0.1".to_string()]));
+    }
+
+    #[test]
+    fn test_backward_compat_flat_format() {
+        use crate::config::Config;
+        let toml = r#"
+[sqllog]
+path = "sqllogs"
+[features.filters]
+enable = true
+usernames = ["user1"]
+exclude_usernames = ["admin"]
+client_ips = ["192.168.1.1"]
+exclude_client_ips = ["10.0.0.1"]
+sess_ids = ["s001"]
+thrd_ids = ["t001"]
+exclude_sess_ids = ["s999"]
+exclude_thrd_ids = ["t999"]
+statements = ["SELECT"]
+exclude_statements = ["DROP"]
+appnames = ["myapp"]
+exclude_appnames = ["badapp"]
+tags = ["audit"]
+exclude_tags = ["sys"]
+start_ts = "2024-01-01T00:00:00"
+end_ts = "2024-12-31T23:59:59"
+trxids = ["123"]
+[exporter.csv]
+file = "out.csv"
+"#;
+        let cfg: Config = toml::from_str(toml).unwrap();
+        let filters = cfg.features.filters.unwrap();
+        // include 类字段映射到 filters.include
+        assert_eq!(filters.include.users, Some(vec!["user1".to_string()]));
+        assert_eq!(filters.include.ips, Some(vec!["192.168.1.1".to_string()]));
+        assert!(filters.include.trxids.is_some());
+        assert_eq!(filters.include.trxids.unwrap().len(), 1);
+        // exclude 类字段映射到 filters.exclude
+        assert_eq!(filters.exclude.users, Some(vec!["admin".to_string()]));
+        assert_eq!(filters.exclude.ips, Some(vec!["10.0.0.1".to_string()]));
+    }
+
+    #[test]
+    fn test_sql_filters_alias_backward_compat() {
+        use crate::config::Config;
+        let toml = r#"
+[sqllog]
+path = "sqllogs"
+[features.filters]
+enable = true
+[features.filters.sql]
+include_patterns = ["SELECT"]
+exclude_patterns = ["DROP"]
+[exporter.csv]
+file = "out.csv"
+"#;
+        let cfg: Config = toml::from_str(toml).unwrap();
+        let filters = cfg.features.filters.unwrap();
+        assert_eq!(filters.sql.includes, Some(vec!["SELECT".to_string()]));
+        assert_eq!(filters.sql.excludes, Some(vec!["DROP".to_string()]));
+    }
+
+    #[test]
+    fn test_sql_filters_new_field_names() {
+        use crate::config::Config;
+        let toml = r#"
+[sqllog]
+path = "sqllogs"
+[features.filters]
+enable = true
+[features.filters.sql]
+includes = ["FROM USER_TABLES"]
+excludes = ["SELECT 1", "DUAL"]
+[exporter.csv]
+file = "out.csv"
+"#;
+        let cfg: Config = toml::from_str(toml).unwrap();
+        let filters = cfg.features.filters.unwrap();
+        assert_eq!(
+            filters.sql.includes,
+            Some(vec!["FROM USER_TABLES".to_string()])
+        );
+        assert_eq!(
+            filters.sql.excludes,
+            Some(vec!["SELECT 1".to_string(), "DUAL".to_string()])
+        );
     }
 }
