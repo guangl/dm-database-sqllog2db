@@ -255,7 +255,10 @@ pub fn handle_stats(
         .map(crate::resume::ResumeState::load);
 
     // 在循环前一次性编译 meta 过滤器，错误直接上报并退出
-    let filter_cfg = cfg.pipeline.filters.as_ref().filter(|f| f.has_filters());
+    let filter_cfg = cfg
+        .filter
+        .as_ref()
+        .filter(|f: &&crate::pipeline::FiltersFeature| f.has_filters());
     let compiled_meta: Option<CompiledMetaFilters> = if let Some(fc) = filter_cfg {
         match CompiledMetaFilters::try_from_include_exclude(&fc.include, &fc.exclude) {
             Ok(c) => Some(c),

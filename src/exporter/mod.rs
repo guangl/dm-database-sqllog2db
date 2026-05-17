@@ -247,10 +247,16 @@ impl ExporterManager {
     pub fn from_config(config: &Config) -> Result<Self> {
         info!("Initializing exporter manager...");
 
-        let normalize = config.pipeline.normalize.as_ref().is_none_or(|r| r.enable);
+        let normalize = config.replace_parameters.as_ref().is_none_or(|r| r.enable);
 
-        let field_mask = config.pipeline.field_mask();
-        let ordered_indices = config.pipeline.ordered_field_indices();
+        let field_mask = config.output.as_ref().map_or(
+            crate::pipeline::FieldMask::ALL,
+            crate::pipeline::OutputConfig::field_mask,
+        );
+        let ordered_indices = config.output.as_ref().map_or_else(
+            || (0..crate::pipeline::FIELD_NAMES.len()).collect(),
+            crate::pipeline::OutputConfig::ordered_field_indices,
+        );
 
         if let Some(cfg) = &config.exporter.csv {
             info!("Using CSV exporter: {}", cfg.file);

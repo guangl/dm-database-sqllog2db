@@ -7,17 +7,17 @@ pub fn handle_validate(cfg: &Config) {
     info!("日志文件: {}", cfg.logging.file);
     info!("日志保留: {} 天", cfg.logging.retention_days);
 
-    match &cfg.pipeline.normalize {
+    match &cfg.replace_parameters {
         Some(rp) => info!(
-            "pipeline.normalize: enable={}, placeholders={:?}",
+            "replace_parameters: enable={}, placeholders={:?}",
             rp.enable, rp.placeholders
         ),
-        None => info!("pipeline.normalize: 未配置（默认启用，自动检测占位符）"),
+        None => info!("replace_parameters: 未配置（默认启用，自动检测占位符）"),
     }
-    match &cfg.pipeline.filters {
+    match &cfg.filter {
         Some(f) => {
             info!(
-                "features.filters: {}",
+                "filter: {}",
                 if f.enable {
                     "启用"
                 } else {
@@ -56,7 +56,7 @@ pub fn handle_validate(cfg: &Config) {
                 );
             }
         }
-        None => info!("features.filters: 未配置"),
+        None => info!("filter: 未配置"),
     }
 
     if let Some(csv) = &cfg.exporter.csv {

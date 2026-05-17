@@ -11,7 +11,7 @@ use dm_database_sqllog2db::config::{
 };
 use dm_database_sqllog2db::lang::Lang;
 use dm_database_sqllog2db::pipeline::filters::{ExcludeFilters, IncludeFilters};
-use dm_database_sqllog2db::pipeline::{FiltersFeature, NormalizeConfig, PipelineConfig};
+use dm_database_sqllog2db::pipeline::{FiltersFeature, NormalizeConfig};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
@@ -740,10 +740,7 @@ fn test_handle_validate_with_sqlite_exporter() {
 #[test]
 fn test_handle_validate_with_replace_parameters_none() {
     let cfg = Config {
-        pipeline: PipelineConfig {
-            normalize: None,
-            ..Default::default()
-        },
+        replace_parameters: None,
         ..Default::default()
     };
     handle_validate(&cfg); // hits replace_parameters None branch
@@ -752,13 +749,10 @@ fn test_handle_validate_with_replace_parameters_none() {
 #[test]
 fn test_handle_validate_with_replace_parameters_some() {
     let cfg = Config {
-        pipeline: PipelineConfig {
-            normalize: Some(NormalizeConfig {
-                enable: true,
-                placeholders: vec!["?".to_string()],
-            }),
-            ..Default::default()
-        },
+        replace_parameters: Some(NormalizeConfig {
+            enable: true,
+            placeholders: vec!["?".to_string()],
+        }),
         ..Default::default()
     };
     handle_validate(&cfg); // hits replace_parameters Some branch
@@ -767,10 +761,7 @@ fn test_handle_validate_with_replace_parameters_some() {
 #[test]
 fn test_handle_validate_with_filters_none() {
     let cfg = Config {
-        pipeline: PipelineConfig {
-            filters: None,
-            ..Default::default()
-        },
+        filter: None,
         ..Default::default()
     };
     handle_validate(&cfg); // hits filters None branch
@@ -780,36 +771,33 @@ fn test_handle_validate_with_filters_none() {
 fn test_handle_validate_with_filters_all_fields() {
     use dm_database_sqllog2db::pipeline::filters::{IndicatorFilters, SqlFilters};
     let cfg = Config {
-        pipeline: PipelineConfig {
-            filters: Some(FiltersFeature {
-                enable: true,
-                include: IncludeFilters {
-                    start_ts: Some("2025-01-01".to_string()),
-                    end_ts: Some("2025-12-31".to_string()),
-                    users: Some(vec!["admin".to_string()]),
-                    ips: Some(vec!["10.0.0.1".to_string()]),
-                    trxids: Some(
-                        ["tx1"]
-                            .iter()
-                            .map(|s| compact_str::CompactString::new(s))
-                            .collect(),
-                    ),
-                    ..Default::default()
-                },
-                exclude: ExcludeFilters::default(),
-                indicators: IndicatorFilters {
-                    exec_ids: Some([42_i64].into_iter().collect()),
-                    min_runtime_ms: Some(100),
-                    min_row_count: Some(10),
-                },
-                sql: SqlFilters {
-                    includes: Some(vec!["SELECT".to_string()]),
-                    excludes: Some(vec!["DROP".to_string()]),
-                },
-                record_sql: SqlFilters::default(),
-            }),
-            ..Default::default()
-        },
+        filter: Some(FiltersFeature {
+            enable: true,
+            include: IncludeFilters {
+                start_ts: Some("2025-01-01".to_string()),
+                end_ts: Some("2025-12-31".to_string()),
+                users: Some(vec!["admin".to_string()]),
+                ips: Some(vec!["10.0.0.1".to_string()]),
+                trxids: Some(
+                    ["tx1"]
+                        .iter()
+                        .map(|s| compact_str::CompactString::new(s))
+                        .collect(),
+                ),
+                ..Default::default()
+            },
+            exclude: ExcludeFilters::default(),
+            indicators: IndicatorFilters {
+                exec_ids: Some([42_i64].into_iter().collect()),
+                min_runtime_ms: Some(100),
+                min_row_count: Some(10),
+            },
+            sql: SqlFilters {
+                includes: Some(vec!["SELECT".to_string()]),
+                excludes: Some(vec!["DROP".to_string()]),
+            },
+            record_sql: SqlFilters::default(),
+        }),
         ..Default::default()
     };
     handle_validate(&cfg); // hits all filter sub-branches
@@ -819,16 +807,13 @@ fn test_handle_validate_with_filters_all_fields() {
 fn test_handle_validate_filters_disabled() {
     use dm_database_sqllog2db::pipeline::filters::IndicatorFilters;
     let cfg = Config {
-        pipeline: PipelineConfig {
-            filters: Some(FiltersFeature {
-                enable: false,
-                include: IncludeFilters::default(),
-                exclude: ExcludeFilters::default(),
-                indicators: IndicatorFilters::default(),
-                ..Default::default()
-            }),
+        filter: Some(FiltersFeature {
+            enable: false,
+            include: IncludeFilters::default(),
+            exclude: ExcludeFilters::default(),
+            indicators: IndicatorFilters::default(),
             ..Default::default()
-        },
+        }),
         ..Default::default()
     };
     handle_validate(&cfg); // hits "配置但未明确启用" branch
@@ -870,7 +855,7 @@ fn test_handle_run_with_filters_builds_pipeline() {
     let csv_file = dir.path().join("out.csv");
     let mut cfg = make_run_config(&log_dir, &csv_file);
     // Enable a record-level filter — exercises build_pipeline and FilterProcessor
-    cfg.pipeline.filters = Some(FiltersFeature {
+    cfg.filter = Some(FiltersFeature {
         enable: true,
         include: IncludeFilters {
             users: Some(vec!["TESTUSER".to_string()]),
@@ -933,7 +918,7 @@ fn test_handle_run_with_transaction_filters_prescans() {
     let csv_file = dir.path().join("out.csv");
     let mut cfg = make_run_config(&log_dir, &csv_file);
     // exec_ids filter triggers transaction pre-scan path
-    cfg.pipeline.filters = Some(FiltersFeature {
+    cfg.filter = Some(FiltersFeature {
         enable: true,
         include: IncludeFilters::default(),
         exclude: ExcludeFilters::default(),
@@ -968,7 +953,7 @@ fn test_handle_run_with_min_runtime_filter() {
     write_test_log(&log_dir.join("data.log"), 20);
     let csv_file = dir.path().join("out.csv");
     let mut cfg = make_run_config(&log_dir, &csv_file);
-    cfg.pipeline.filters = Some(FiltersFeature {
+    cfg.filter = Some(FiltersFeature {
         enable: true,
         include: IncludeFilters::default(),
         exclude: ExcludeFilters::default(),
@@ -1162,20 +1147,20 @@ fn test_init_generates_new_nested_format() {
     handle_init(path_str, false, Lang::Zh).unwrap();
     let content = std::fs::read_to_string(&path).unwrap();
     assert!(
-        content.contains("[pipeline.filters.include]"),
-        "init template must contain [pipeline.filters.include]"
+        content.contains("[filter.include]"),
+        "init template must contain [filter.include]"
     );
     assert!(
-        content.contains("[pipeline.filters.exclude]"),
-        "init template must contain [pipeline.filters.exclude]"
+        content.contains("[filter.exclude]"),
+        "init template must contain [filter.exclude]"
     );
     assert!(
-        content.contains("[pipeline.filters.indicators]"),
-        "init template must contain [pipeline.filters.indicators]"
+        content.contains("[filter.indicators]"),
+        "init template must contain [filter.indicators]"
     );
     assert!(
-        content.contains("[pipeline.filters.sql]"),
-        "init template must contain [pipeline.filters.sql]"
+        content.contains("[filter.sql]"),
+        "init template must contain [filter.sql]"
     );
     assert!(
         !content.contains("\nusernames = "),
