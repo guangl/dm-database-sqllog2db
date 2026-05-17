@@ -38,46 +38,190 @@ where
     Ok(v.map(|items| items.into_iter().collect()))
 }
 
-/// 过滤器配置 (重构后)
+/// 包含过滤器 (include 子表字段)
 #[derive(Debug, Deserialize, Clone, Default)]
+pub struct IncludeFilters {
+    #[serde(default)]
+    pub users: Option<Vec<String>>,
+    #[serde(default)]
+    pub ips: Option<Vec<String>>,
+    #[serde(default)]
+    pub sessions: Option<Vec<String>>,
+    #[serde(default)]
+    pub threads: Option<Vec<String>>,
+    #[serde(default)]
+    pub statements: Option<Vec<String>>,
+    #[serde(default)]
+    pub apps: Option<Vec<String>>,
+    #[serde(default)]
+    pub tags: Option<Vec<String>>,
+    #[serde(default)]
+    pub start_ts: Option<String>,
+    #[serde(default)]
+    pub end_ts: Option<String>,
+    #[serde(default, deserialize_with = "vec_to_hashset")]
+    pub trxids: Option<TrxidSet>,
+}
+
+impl IncludeFilters {
+    #[must_use]
+    pub fn has_filters(&self) -> bool {
+        self.users.as_ref().is_some_and(|v| !v.is_empty())
+            || self.ips.as_ref().is_some_and(|v| !v.is_empty())
+            || self.sessions.as_ref().is_some_and(|v| !v.is_empty())
+            || self.threads.as_ref().is_some_and(|v| !v.is_empty())
+            || self.statements.as_ref().is_some_and(|v| !v.is_empty())
+            || self.apps.as_ref().is_some_and(|v| !v.is_empty())
+            || self.tags.as_ref().is_some_and(|v| !v.is_empty())
+            || self.start_ts.is_some()
+            || self.end_ts.is_some()
+            || self.trxids.as_ref().is_some_and(|s| !s.is_empty())
+    }
+}
+
+/// 排除过滤器 (exclude 子表字段)
+#[derive(Debug, Deserialize, Clone, Default)]
+pub struct ExcludeFilters {
+    #[serde(default)]
+    pub users: Option<Vec<String>>,
+    #[serde(default)]
+    pub ips: Option<Vec<String>>,
+    #[serde(default)]
+    pub sessions: Option<Vec<String>>,
+    #[serde(default)]
+    pub threads: Option<Vec<String>>,
+    #[serde(default)]
+    pub statements: Option<Vec<String>>,
+    #[serde(default)]
+    pub apps: Option<Vec<String>>,
+    #[serde(default)]
+    pub tags: Option<Vec<String>>,
+}
+
+impl ExcludeFilters {
+    #[must_use]
+    pub fn has_filters(&self) -> bool {
+        self.users.as_ref().is_some_and(|v| !v.is_empty())
+            || self.ips.as_ref().is_some_and(|v| !v.is_empty())
+            || self.sessions.as_ref().is_some_and(|v| !v.is_empty())
+            || self.threads.as_ref().is_some_and(|v| !v.is_empty())
+            || self.statements.as_ref().is_some_and(|v| !v.is_empty())
+            || self.apps.as_ref().is_some_and(|v| !v.is_empty())
+            || self.tags.as_ref().is_some_and(|v| !v.is_empty())
+    }
+}
+
+/// 过滤器配置（手写 Deserialize，支持新格式嵌套子表和旧格式扁平字段向后兼容）
+#[derive(Debug, Clone, Default)]
 pub struct FiltersFeature {
     /// 是否启用过滤器
     pub enable: bool,
-    /// 元数据过滤器 (记录级: 只要命中其中一个就保留该记录 - OR 逻辑)
-    #[serde(flatten)]
-    pub meta: MetaFilters,
+    /// 包含过滤条件子表
+    pub include: IncludeFilters,
+    /// 排除过滤条件子表
+    pub exclude: ExcludeFilters,
     /// 指标过滤器 (事务级: 命中即保留整笔事务 - 需要预扫描)
-    #[serde(default)]
     pub indicators: IndicatorFilters,
     /// SQL 内容过滤器 (事务级: 预扫描阶段匹配 SQL，保留整笔事务)
-    #[serde(default)]
     pub sql: SqlFilters,
     /// SQL 记录级过滤器 (记录级: 在主扫描阶段对每条 DML 记录的 SQL 独立判断)
-    #[serde(default)]
     pub record_sql: SqlFilters,
 }
 
-/// 元数据过滤器 (Record-level)
-#[derive(Debug, Deserialize, Clone, Default)]
-pub struct MetaFilters {
-    pub start_ts: Option<String>,
-    pub end_ts: Option<String>,
-    pub sess_ids: Option<Vec<String>>,
-    pub thrd_ids: Option<Vec<String>>,
-    pub usernames: Option<Vec<String>>,
+/// 中间反序列化结构体（私有），同时接受新格式子表和旧格式扁平字段
+#[derive(Debug, Deserialize)]
+struct RawFiltersFeature {
+    #[serde(default)]
+    enable: bool,
+    // 新格式子表（优先）
+    #[serde(default)]
+    include: Option<IncludeFilters>,
+    #[serde(default)]
+    exclude: Option<ExcludeFilters>,
+    #[serde(default)]
+    indicators: IndicatorFilters,
+    #[serde(default)]
+    sql: SqlFilters,
+    #[serde(default)]
+    record_sql: SqlFilters,
+    // 旧格式扁平字段（向后兼容）— include 类
+    #[serde(default)]
+    usernames: Option<Vec<String>>,
+    #[serde(default)]
+    client_ips: Option<Vec<String>>,
+    #[serde(default)]
+    sess_ids: Option<Vec<String>>,
+    #[serde(default)]
+    thrd_ids: Option<Vec<String>>,
+    #[serde(default)]
+    statements: Option<Vec<String>>,
+    #[serde(default)]
+    appnames: Option<Vec<String>>,
+    #[serde(default)]
+    tags: Option<Vec<String>>,
+    #[serde(default)]
+    start_ts: Option<String>,
+    #[serde(default)]
+    end_ts: Option<String>,
     #[serde(default, deserialize_with = "vec_to_hashset")]
-    pub trxids: Option<TrxidSet>,
-    pub statements: Option<Vec<String>>,
-    pub appnames: Option<Vec<String>>,
-    pub client_ips: Option<Vec<String>>,
-    pub tags: Option<Vec<String>>,
-    pub exclude_usernames: Option<Vec<String>>,
-    pub exclude_client_ips: Option<Vec<String>>,
-    pub exclude_sess_ids: Option<Vec<String>>,
-    pub exclude_thrd_ids: Option<Vec<String>>,
-    pub exclude_statements: Option<Vec<String>>,
-    pub exclude_appnames: Option<Vec<String>>,
-    pub exclude_tags: Option<Vec<String>>,
+    trxids: Option<TrxidSet>,
+    // 旧格式扁平字段（向后兼容）— exclude 类
+    #[serde(default)]
+    exclude_usernames: Option<Vec<String>>,
+    #[serde(default)]
+    exclude_client_ips: Option<Vec<String>>,
+    #[serde(default)]
+    exclude_sess_ids: Option<Vec<String>>,
+    #[serde(default)]
+    exclude_thrd_ids: Option<Vec<String>>,
+    #[serde(default)]
+    exclude_statements: Option<Vec<String>>,
+    #[serde(default)]
+    exclude_appnames: Option<Vec<String>>,
+    #[serde(default)]
+    exclude_tags: Option<Vec<String>>,
+}
+
+impl<'de> Deserialize<'de> for FiltersFeature {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let raw = RawFiltersFeature::deserialize(d)?;
+        Ok(FiltersFeature::from(raw))
+    }
+}
+
+impl From<RawFiltersFeature> for FiltersFeature {
+    fn from(raw: RawFiltersFeature) -> Self {
+        // 新格式优先：有 include 子表则用新格式，否则从旧扁平字段构造
+        let include = raw.include.unwrap_or_else(|| IncludeFilters {
+            users: raw.usernames,
+            ips: raw.client_ips,
+            sessions: raw.sess_ids,
+            threads: raw.thrd_ids,
+            statements: raw.statements,
+            apps: raw.appnames,
+            tags: raw.tags,
+            start_ts: raw.start_ts,
+            end_ts: raw.end_ts,
+            trxids: raw.trxids,
+        });
+        let exclude = raw.exclude.unwrap_or_else(|| ExcludeFilters {
+            users: raw.exclude_usernames,
+            ips: raw.exclude_client_ips,
+            sessions: raw.exclude_sess_ids,
+            threads: raw.exclude_thrd_ids,
+            statements: raw.exclude_statements,
+            apps: raw.exclude_appnames,
+            tags: raw.exclude_tags,
+        });
+        FiltersFeature {
+            enable: raw.enable,
+            include,
+            exclude,
+            indicators: raw.indicators,
+            sql: raw.sql,
+            record_sql: raw.record_sql,
+        }
+    }
 }
 
 /// 指标过滤器 (Transaction-level)
@@ -93,8 +237,8 @@ pub struct IndicatorFilters {
 
 /// SQL 过滤器（仅用于事务级预扫描阶段的 `sql` 字段）。
 ///
-/// **注意：这里的 `include_patterns` / `exclude_patterns` 使用字面量子串匹配（`str::contains`），
-/// 不支持正则表达式。** 字段名带 `_patterns` 仅为历史遗留，请勿在配置中填写正则语法
+/// **注意：这里的 `includes` / `excludes` 使用字面量子串匹配（`str::contains`），
+/// 不支持正则表达式。** 请勿在配置中填写正则语法
 /// （如 `^SELECT`、`\bDROP\b`），否则会被当作字面字符串查找，导致静默的语义错误。
 ///
 /// 如需正则匹配，请使用记录级过滤器 `record_sql`，它由 `CompiledSqlFilters` 处理，支持正则。
@@ -102,10 +246,14 @@ pub struct IndicatorFilters {
 pub struct SqlFilters {
     /// 字面子串包含列表：SQL 必须包含其中之一才会被选中（未配置 = 全部通过）。
     /// 仅支持字面字符串，不支持正则表达式。
-    pub include_patterns: Option<Vec<String>>,
+    /// 旧字段名 `include_patterns` 通过 alias 向后兼容。
+    #[serde(default, alias = "include_patterns")]
+    pub includes: Option<Vec<String>>,
     /// 字面子串排除列表：SQL 包含其中任意一个则被过滤掉。
     /// 仅支持字面字符串，不支持正则表达式。
-    pub exclude_patterns: Option<Vec<String>>,
+    /// 旧字段名 `exclude_patterns` 通过 alias 向后兼容。
+    #[serde(default, alias = "exclude_patterns")]
+    pub excludes: Option<Vec<String>>,
 }
 
 impl FiltersFeature {
@@ -115,9 +263,8 @@ impl FiltersFeature {
         if !self.enable {
             return false;
         }
-        self.meta.start_ts.is_some()
-            || self.meta.end_ts.is_some()
-            || self.meta.has_filters()
+        self.include.has_filters()
+            || self.exclude.has_filters()
             || self.indicators.has_filters()
             || self.sql.has_filters()
             || self.record_sql.has_filters()
@@ -133,124 +280,15 @@ impl FiltersFeature {
         self.indicators.has_filters() || self.sql.has_filters()
     }
 
-    /// 检查记录是否应该被保留
-    /// 逻辑：(满足时间过滤) AND ( (没有任何其他过滤) OR (满足任一元数据过滤) OR (属于被选中的事务) )
-    ///
-    /// # Deprecated
-    ///
-    /// 元数据过滤使用 OR 语义（任意字段命中即保留），与热路径
-    /// `CompiledMetaFilters::should_keep` 的 AND 语义相反。
-    /// 直接调用此方法会得到与实际导出行为不一致的结果。
-    /// 热路径请使用 `CompiledMetaFilters::should_keep`。
-    #[must_use]
-    #[deprecated(note = "semantics differ from hot path; use CompiledMetaFilters::should_keep")]
-    #[allow(deprecated)]
-    pub fn should_keep(&self, ts: &str, meta: &RecordMeta) -> bool {
-        // 1. 时间范围过滤 (AND 逻辑: 如果配置了时间，必须通过时间检查)
-        if let Some(start) = &self.meta.start_ts {
-            if ts < start.as_str() && !ts.starts_with(start.as_str()) {
-                return false;
-            }
-        }
-        if let Some(end) = &self.meta.end_ts {
-            if ts > end.as_str() && !ts.starts_with(end.as_str()) {
-                return false;
-            }
-        }
-
-        // 2. 元数据过滤 (OR 逻辑: 在通过时间过滤的前提下，如果配置了元数据过滤，需命中其中之一)
-        // 如果 meta.has_filters() 为 false，且通过了时间过滤，则保留。
-        if !self.meta.has_filters() {
-            return true;
-        }
-
-        self.meta.should_keep(meta)
-    }
-
-    /// 合并预扫描发现的事务 ID 到 `MetaFilters` 中，以便在正式扫描时直接通过 trxid 匹配保留整笔事务
+    /// 合并预扫描发现的事务 ID 到 `IncludeFilters` 中，以便在正式扫描时直接通过 trxid 匹配保留整笔事务
     pub fn merge_found_trxids(&mut self, trxids: Vec<CompactString>) {
         if !self.enable || trxids.is_empty() {
             return;
         }
-        self.meta
+        self.include
             .trxids
             .get_or_insert_with(TrxidSet::default)
             .extend(trxids);
-    }
-}
-
-impl MetaFilters {
-    #[must_use]
-    pub fn has_filters(&self) -> bool {
-        self.trxids.as_ref().is_some_and(|v| !v.is_empty())
-            || self.client_ips.as_ref().is_some_and(|v| !v.is_empty())
-            || self.sess_ids.as_ref().is_some_and(|v| !v.is_empty())
-            || self.thrd_ids.as_ref().is_some_and(|v| !v.is_empty())
-            || self.usernames.as_ref().is_some_and(|v| !v.is_empty())
-            || self.statements.as_ref().is_some_and(|v| !v.is_empty())
-            || self.appnames.as_ref().is_some_and(|v| !v.is_empty())
-            || self.tags.as_ref().is_some_and(|v| !v.is_empty())
-            || self
-                .exclude_usernames
-                .as_ref()
-                .is_some_and(|v| !v.is_empty())
-            || self
-                .exclude_client_ips
-                .as_ref()
-                .is_some_and(|v| !v.is_empty())
-            || self
-                .exclude_sess_ids
-                .as_ref()
-                .is_some_and(|v| !v.is_empty())
-            || self
-                .exclude_thrd_ids
-                .as_ref()
-                .is_some_and(|v| !v.is_empty())
-            || self
-                .exclude_statements
-                .as_ref()
-                .is_some_and(|v| !v.is_empty())
-            || self
-                .exclude_appnames
-                .as_ref()
-                .is_some_and(|v| !v.is_empty())
-            || self.exclude_tags.as_ref().is_some_and(|v| !v.is_empty())
-    }
-
-    /// OR 语义：命中任意一个已定义的字段即保留。
-    ///
-    /// # Deprecated
-    ///
-    /// 此方法使用 OR 语义，与热路径 `CompiledMetaFilters::should_keep` 的 AND 语义相反。
-    /// 请使用 `CompiledMetaFilters::should_keep`。
-    #[must_use]
-    #[deprecated(note = "semantics differ from hot path; use CompiledMetaFilters::should_keep")]
-    pub fn should_keep(&self, meta: &RecordMeta) -> bool {
-        // OR 逻辑：命中任何一个已定义的列表即保留 (前提是已通过时间过滤)
-        // trxids 使用 HashSet<CompactString>，contains(&str) 通过 Borrow<str> 零分配查询
-        Self::match_exact(self.trxids.as_ref(), meta.trxid)
-            || Self::match_substring(self.client_ips.as_ref(), meta.ip)
-            || Self::match_substring(self.sess_ids.as_ref(), meta.sess)
-            || Self::match_substring(self.thrd_ids.as_ref(), meta.thrd)
-            || Self::match_substring(self.usernames.as_ref(), meta.user)
-            || Self::match_substring(self.statements.as_ref(), meta.stmt)
-            || Self::match_substring(self.appnames.as_ref(), meta.app)
-            || meta
-                .tag
-                .is_some_and(|t| Self::match_substring(self.tags.as_ref(), t))
-    }
-
-    /// O(1) 精确匹配，适用于高基数的 trxid 集合。
-    /// `CompactString: Borrow<str>` 允许直接用 `&str` 查询 `TrxidSet`，无需分配。
-    fn match_exact(set: Option<&TrxidSet>, val: &str) -> bool {
-        set.is_some_and(|s| !s.is_empty() && s.contains(val))
-    }
-
-    /// O(n) 子串匹配，适用于小型过滤列表
-    fn match_substring(list: Option<&Vec<String>>, val: &str) -> bool {
-        list.is_some_and(|items| {
-            !items.is_empty() && items.iter().any(|i| val.contains(i.as_str()))
-        })
     }
 }
 
@@ -310,50 +348,60 @@ pub struct CompiledMetaFilters {
 }
 
 impl CompiledMetaFilters {
-    /// 从 `MetaFilters` 编译所有正则，遇到非法 pattern 返回 `ConfigError::InvalidValue`。
-    pub fn try_from_meta(meta: &MetaFilters) -> crate::error::Result<Self> {
+    /// 从 `IncludeFilters` 和 `ExcludeFilters` 编译所有正则，
+    /// 遇到非法 pattern 返回 `ConfigError::InvalidValue`。
+    pub fn try_from_include_exclude(
+        include: &IncludeFilters,
+        exclude: &ExcludeFilters,
+    ) -> crate::error::Result<Self> {
         Ok(Self {
-            usernames: compile_patterns("features.filters.usernames", meta.usernames.as_deref())?,
-            client_ips: compile_patterns(
-                "features.filters.client_ips",
-                meta.client_ips.as_deref(),
+            usernames: compile_patterns(
+                "features.filters.include.users",
+                include.users.as_deref(),
             )?,
-            sess_ids: compile_patterns("features.filters.sess_ids", meta.sess_ids.as_deref())?,
-            thrd_ids: compile_patterns("features.filters.thrd_ids", meta.thrd_ids.as_deref())?,
+            client_ips: compile_patterns("features.filters.include.ips", include.ips.as_deref())?,
+            sess_ids: compile_patterns(
+                "features.filters.include.sessions",
+                include.sessions.as_deref(),
+            )?,
+            thrd_ids: compile_patterns(
+                "features.filters.include.threads",
+                include.threads.as_deref(),
+            )?,
             statements: compile_patterns(
-                "features.filters.statements",
-                meta.statements.as_deref(),
+                "features.filters.include.statements",
+                include.statements.as_deref(),
             )?,
-            appnames: compile_patterns("features.filters.appnames", meta.appnames.as_deref())?,
-            tags: compile_patterns("features.filters.tags", meta.tags.as_deref())?,
-            trxids: meta.trxids.clone(),
+            appnames: compile_patterns("features.filters.include.apps", include.apps.as_deref())?,
+            tags: compile_patterns("features.filters.include.tags", include.tags.as_deref())?,
+            trxids: include.trxids.clone(),
             exclude_usernames: compile_patterns(
-                "features.filters.exclude_usernames",
-                meta.exclude_usernames.as_deref(),
+                "features.filters.exclude.users",
+                exclude.users.as_deref(),
             )?,
             exclude_client_ips: compile_patterns(
-                "features.filters.exclude_client_ips",
-                meta.exclude_client_ips.as_deref(),
+                "features.filters.exclude.ips",
+                exclude.ips.as_deref(),
             )?,
             exclude_sess_ids: compile_patterns(
-                "features.filters.exclude_sess_ids",
-                meta.exclude_sess_ids.as_deref(),
+                "features.filters.exclude.sessions",
+                exclude.sessions.as_deref(),
             )?,
             exclude_thrd_ids: compile_patterns(
-                "features.filters.exclude_thrd_ids",
-                meta.exclude_thrd_ids.as_deref(),
+                "features.filters.exclude.threads",
+                exclude.threads.as_deref(),
             )?,
             exclude_statements: compile_patterns(
-                "features.filters.exclude_statements",
-                meta.exclude_statements.as_deref(),
+                "features.filters.exclude.statements",
+                exclude.statements.as_deref(),
             )?,
             exclude_appnames: compile_patterns(
-                "features.filters.exclude_appnames",
-                meta.exclude_appnames.as_deref(),
+                "features.filters.exclude.apps",
+                exclude.apps.as_deref(),
             )?,
             exclude_tags: compile_patterns(
-                "features.filters.exclude_tags",
-                meta.exclude_tags.as_deref(),
+                "features.filters.exclude.tags",
+                exclude.tags.as_deref(),
             )?,
         })
     }
@@ -493,12 +541,12 @@ impl CompiledSqlFilters {
     pub fn try_from_sql_filters(sf: &SqlFilters) -> crate::error::Result<Self> {
         Ok(Self {
             include_patterns: compile_patterns(
-                "features.filters.record_sql.include_patterns",
-                sf.include_patterns.as_deref(),
+                "features.filters.record_sql.includes",
+                sf.includes.as_deref(),
             )?,
             exclude_patterns: compile_patterns(
-                "features.filters.record_sql.exclude_patterns",
-                sf.exclude_patterns.as_deref(),
+                "features.filters.record_sql.excludes",
+                sf.excludes.as_deref(),
             )?,
         })
     }
@@ -568,13 +616,8 @@ impl IndicatorFilters {
 impl SqlFilters {
     #[must_use]
     pub fn has_filters(&self) -> bool {
-        self.include_patterns
-            .as_ref()
-            .is_some_and(|v| !v.is_empty())
-            || self
-                .exclude_patterns
-                .as_ref()
-                .is_some_and(|v| !v.is_empty())
+        self.includes.as_ref().is_some_and(|v| !v.is_empty())
+            || self.excludes.as_ref().is_some_and(|v| !v.is_empty())
     }
 
     #[must_use]
@@ -584,7 +627,7 @@ impl SqlFilters {
         }
 
         // 如果指定了包含模式，必须命中其中之一
-        let include_match = if let Some(patterns) = &self.include_patterns {
+        let include_match = if let Some(patterns) = &self.includes {
             if patterns.is_empty() {
                 true
             } else {
@@ -599,7 +642,7 @@ impl SqlFilters {
         }
 
         // 如果指定了排除模式，不能命中任何一个
-        if let Some(patterns) = &self.exclude_patterns {
+        if let Some(patterns) = &self.excludes {
             if patterns.iter().any(|p| sql.contains(p)) {
                 return false;
             }
@@ -610,14 +653,14 @@ impl SqlFilters {
 }
 
 #[cfg(test)]
-#[allow(deprecated)]
 mod tests {
     use super::*;
 
     fn make_feature(enable: bool) -> FiltersFeature {
         FiltersFeature {
             enable,
-            meta: MetaFilters::default(),
+            include: IncludeFilters::default(),
+            exclude: ExcludeFilters::default(),
             indicators: IndicatorFilters::default(),
             sql: SqlFilters::default(),
             record_sql: SqlFilters::default(),
@@ -628,7 +671,7 @@ mod tests {
     #[test]
     fn test_has_filters_disabled_returns_false() {
         let mut f = make_feature(false);
-        f.meta.usernames = Some(vec!["USER".into()]);
+        f.include.users = Some(vec!["USER".into()]);
         assert!(!f.has_filters());
     }
 
@@ -640,14 +683,14 @@ mod tests {
     #[test]
     fn test_has_filters_with_username() {
         let mut f = make_feature(true);
-        f.meta.usernames = Some(vec!["USER".into()]);
+        f.include.users = Some(vec!["USER".into()]);
         assert!(f.has_filters());
     }
 
     #[test]
     fn test_has_filters_with_start_ts() {
         let mut f = make_feature(true);
-        f.meta.start_ts = Some("2025-01-01".into());
+        f.include.start_ts = Some("2025-01-01".into());
         assert!(f.has_filters());
     }
 
@@ -669,7 +712,7 @@ mod tests {
     #[test]
     fn test_has_transaction_filters_no_indicators() {
         let mut f = make_feature(true);
-        f.meta.usernames = Some(vec!["USER".into()]);
+        f.include.users = Some(vec!["USER".into()]);
         assert!(!f.has_transaction_filters());
     }
 
@@ -700,88 +743,22 @@ mod tests {
         }
     }
 
-    // ── should_keep: time range ────────────────────────────────
-    #[test]
-    fn test_should_keep_no_filters_passes_all() {
-        let f = make_feature(true);
-        assert!(f.should_keep("2025-01-15 10:00:00", &m("tx1", "1.2.3.4", "USER", None)));
-    }
-
-    #[test]
-    fn test_should_keep_start_ts_before_record() {
-        let mut f = make_feature(true);
-        f.meta.start_ts = Some("2025-01-15 11:00:00".into());
-        // record ts is before start → reject
-        assert!(!f.should_keep("2025-01-15 10:00:00", &m("tx1", "1.2.3.4", "USER", None)));
-    }
-
-    #[test]
-    fn test_should_keep_start_ts_equal_record() {
-        let mut f = make_feature(true);
-        f.meta.start_ts = Some("2025-01-15".into());
-        // record ts starts with start → pass
-        assert!(f.should_keep("2025-01-15 10:00:00", &m("tx1", "1.2.3.4", "USER", None)));
-    }
-
-    #[test]
-    fn test_should_keep_end_ts_after_record() {
-        let mut f = make_feature(true);
-        f.meta.end_ts = Some("2025-01-15 09:00:00".into());
-        // record ts is after end → reject
-        assert!(!f.should_keep("2025-01-15 10:00:00", &m("tx1", "1.2.3.4", "USER", None)));
-    }
-
-    #[test]
-    fn test_should_keep_meta_username_match() {
-        let mut f = make_feature(true);
-        f.meta.usernames = Some(vec!["USER".into()]);
-        assert!(f.should_keep("2025-01-15 10:00:00", &m("tx1", "1.2.3.4", "USER", None)));
-        assert!(!f.should_keep("2025-01-15 10:00:00", &m("tx1", "1.2.3.4", "OTHER", None)));
-    }
-
-    #[test]
-    fn test_should_keep_meta_trxid_exact_match() {
-        let mut f = make_feature(true);
-        let mut set = TrxidSet::default();
-        set.insert(CompactString::new("TX123"));
-        f.meta.trxids = Some(set);
-        assert!(f.should_keep("ts", &m("TX123", "ip", "u", None)));
-        assert!(!f.should_keep("ts", &m("TX999", "ip", "u", None)));
-    }
-
-    #[test]
-    fn test_should_keep_meta_tag_match() {
-        let mut f = make_feature(true);
-        f.meta.tags = Some(vec!["SEL".into()]);
-        assert!(f.should_keep("ts", &m("tx", "ip", "u", Some("[SEL]"))));
-        assert!(!f.should_keep("ts", &m("tx", "ip", "u", Some("[INS]"))));
-        assert!(!f.should_keep("ts", &m("tx", "ip", "u", None)));
-    }
-
-    #[test]
-    fn test_should_keep_meta_client_ip_substring() {
-        let mut f = make_feature(true);
-        f.meta.client_ips = Some(vec!["192.168".into()]);
-        assert!(f.should_keep("ts", &m("tx", "192.168.1.1", "u", None)));
-        assert!(!f.should_keep("ts", &m("tx", "10.0.0.1", "u", None)));
-    }
-
     // ── merge_found_trxids ─────────────────────────────────────
     #[test]
     fn test_merge_found_trxids_empty_list() {
         let mut f = make_feature(true);
-        f.meta.usernames = Some(vec!["USER".into()]);
+        f.include.users = Some(vec!["USER".into()]);
         f.merge_found_trxids(vec![]);
-        assert!(f.meta.trxids.is_none());
+        assert!(f.include.trxids.is_none());
     }
 
     #[test]
     fn test_merge_found_trxids_adds_to_set() {
         let mut f = make_feature(true);
-        f.meta.usernames = Some(vec!["USER".into()]);
+        f.include.users = Some(vec!["USER".into()]);
         // "TX1".into() → CompactString (inline, no heap alloc)
         f.merge_found_trxids(vec!["TX1".into(), "TX2".into()]);
-        let trxids = f.meta.trxids.unwrap();
+        let trxids = f.include.trxids.unwrap();
         // contains(&str) works via CompactString: Borrow<str>
         assert!(trxids.contains("TX1"));
         assert!(trxids.contains("TX2"));
@@ -842,8 +819,8 @@ mod tests {
     #[test]
     fn test_sql_filters_include_pattern() {
         let f = SqlFilters {
-            include_patterns: Some(vec!["SELECT".into()]),
-            exclude_patterns: None,
+            includes: Some(vec!["SELECT".into()]),
+            excludes: None,
         };
         assert!(f.matches("SELECT * FROM t"));
         assert!(!f.matches("INSERT INTO t VALUES (1)"));
@@ -852,8 +829,8 @@ mod tests {
     #[test]
     fn test_sql_filters_exclude_pattern() {
         let f = SqlFilters {
-            include_patterns: None,
-            exclude_patterns: Some(vec!["DROP".into()]),
+            includes: None,
+            excludes: Some(vec!["DROP".into()]),
         };
         assert!(f.matches("SELECT * FROM t"));
         assert!(!f.matches("DROP TABLE t"));
@@ -862,8 +839,8 @@ mod tests {
     #[test]
     fn test_sql_filters_include_and_exclude() {
         let f = SqlFilters {
-            include_patterns: Some(vec!["FROM t".into()]),
-            exclude_patterns: Some(vec!["WHERE id=0".into()]),
+            includes: Some(vec!["FROM t".into()]),
+            excludes: Some(vec!["WHERE id=0".into()]),
         };
         assert!(f.matches("SELECT * FROM t WHERE id=1"));
         assert!(!f.matches("SELECT * FROM t WHERE id=0"));
@@ -872,11 +849,11 @@ mod tests {
 
     #[test]
     fn test_sql_filters_empty_include_patterns_with_exclude() {
-        // include_patterns is Some but empty → line 248 path ("true" branch)
-        // exclude_patterns is non-empty so has_filters() returns true
+        // includes is Some but empty → "true" branch
+        // excludes is non-empty so has_filters() returns true
         let f = SqlFilters {
-            include_patterns: Some(vec![]),
-            exclude_patterns: Some(vec!["DROP".into()]),
+            includes: Some(vec![]),
+            excludes: Some(vec!["DROP".into()]),
         };
         // SQL doesn't match exclude → passes
         assert!(f.matches("SELECT 1"));
@@ -943,15 +920,15 @@ mod tests {
 
     // ── CompiledMetaFilters ────────────────────────────────────
     fn make_compiled_meta(
-        usernames: Option<Vec<String>>,
-        client_ips: Option<Vec<String>>,
+        users: Option<Vec<String>>,
+        ips: Option<Vec<String>>,
     ) -> CompiledMetaFilters {
-        let meta = MetaFilters {
-            usernames,
-            client_ips,
-            ..MetaFilters::default()
+        let include = IncludeFilters {
+            users,
+            ips,
+            ..IncludeFilters::default()
         };
-        CompiledMetaFilters::try_from_meta(&meta).unwrap()
+        CompiledMetaFilters::try_from_include_exclude(&include, &ExcludeFilters::default()).unwrap()
     }
 
     #[test]
@@ -976,11 +953,13 @@ mod tests {
 
     #[test]
     fn test_compiled_meta_single_field_or() {
-        let meta = MetaFilters {
-            usernames: Some(vec!["^admin".to_string(), ".*_dba$".to_string()]),
-            ..MetaFilters::default()
+        let include = IncludeFilters {
+            users: Some(vec!["^admin".to_string(), ".*_dba$".to_string()]),
+            ..IncludeFilters::default()
         };
-        let compiled = CompiledMetaFilters::try_from_meta(&meta).unwrap();
+        let compiled =
+            CompiledMetaFilters::try_from_include_exclude(&include, &ExcludeFilters::default())
+                .unwrap();
         assert!(compiled.should_keep(&m("tx", "ip", "admin_user", None)));
         assert!(compiled.should_keep(&m("tx", "ip", "sys_dba", None)));
         assert!(!compiled.should_keep(&m("tx", "ip", "regular_user", None)));
@@ -988,11 +967,13 @@ mod tests {
 
     #[test]
     fn test_compiled_meta_tags_none_rejected() {
-        let meta = MetaFilters {
+        let include = IncludeFilters {
             tags: Some(vec!["^SEL".to_string()]),
-            ..MetaFilters::default()
+            ..IncludeFilters::default()
         };
-        let compiled = CompiledMetaFilters::try_from_meta(&meta).unwrap();
+        let compiled =
+            CompiledMetaFilters::try_from_include_exclude(&include, &ExcludeFilters::default())
+                .unwrap();
         // tag 为 None 时，有 tag 过滤条件，拒绝
         assert!(!compiled.should_keep(&m("tx", "ip", "user", None)));
         // tag 匹配时通过
@@ -1006,12 +987,14 @@ mod tests {
         use compact_str::CompactString;
         let mut trxid_set = TrxidSet::default();
         trxid_set.insert(CompactString::from("TX123"));
-        let meta = MetaFilters {
-            usernames: Some(vec!["^admin".to_string()]),
+        let include = IncludeFilters {
+            users: Some(vec!["^admin".to_string()]),
             trxids: Some(trxid_set),
-            ..MetaFilters::default()
+            ..IncludeFilters::default()
         };
-        let compiled = CompiledMetaFilters::try_from_meta(&meta).unwrap();
+        let compiled =
+            CompiledMetaFilters::try_from_include_exclude(&include, &ExcludeFilters::default())
+                .unwrap();
         // 两者都满足 → 通过
         assert!(compiled.should_keep(&m("TX123", "ip", "admin_user", None)));
         // trxid 不匹配 → 拒绝（AND）
@@ -1020,69 +1003,80 @@ mod tests {
         assert!(!compiled.should_keep(&m("TX123", "ip", "other_user", None)));
     }
 
-    // ── exclude filters: Task 1 RED tests ──────────────────────
+    // ── IncludeFilters / ExcludeFilters has_filters ────────────
     #[test]
     fn test_t1_meta_has_filters_with_exclude_usernames() {
-        let meta = MetaFilters {
-            exclude_usernames: Some(vec!["guest".to_string()]),
-            ..MetaFilters::default()
+        let exclude = ExcludeFilters {
+            users: Some(vec!["guest".to_string()]),
+            ..ExcludeFilters::default()
         };
-        assert!(meta.has_filters());
+        assert!(exclude.has_filters());
     }
 
     #[test]
     fn test_t1_meta_has_filters_all_none_is_false() {
-        assert!(!MetaFilters::default().has_filters());
+        assert!(!IncludeFilters::default().has_filters());
+        assert!(!ExcludeFilters::default().has_filters());
     }
 
     #[test]
     fn test_t1_compiled_from_meta_exclude_usernames() {
-        let meta = MetaFilters {
-            exclude_usernames: Some(vec!["^guest".to_string()]),
-            ..MetaFilters::default()
+        let exclude = ExcludeFilters {
+            users: Some(vec!["^guest".to_string()]),
+            ..ExcludeFilters::default()
         };
-        let compiled = CompiledMetaFilters::try_from_meta(&meta).unwrap();
+        let compiled =
+            CompiledMetaFilters::try_from_include_exclude(&IncludeFilters::default(), &exclude)
+                .unwrap();
         assert!(compiled.exclude_usernames.is_some());
     }
 
     #[test]
     fn test_t1_compiled_from_meta_exclude_none() {
-        let compiled = CompiledMetaFilters::try_from_meta(&MetaFilters::default()).unwrap();
+        let compiled = CompiledMetaFilters::try_from_include_exclude(
+            &IncludeFilters::default(),
+            &ExcludeFilters::default(),
+        )
+        .unwrap();
         assert!(compiled.exclude_usernames.is_none());
     }
 
     #[test]
     fn test_t1_has_any_filters_include_only() {
-        let meta = MetaFilters {
-            usernames: Some(vec!["admin".to_string()]),
-            ..MetaFilters::default()
+        let include = IncludeFilters {
+            users: Some(vec!["admin".to_string()]),
+            ..IncludeFilters::default()
         };
-        let compiled = CompiledMetaFilters::try_from_meta(&meta).unwrap();
+        let compiled =
+            CompiledMetaFilters::try_from_include_exclude(&include, &ExcludeFilters::default())
+                .unwrap();
         assert_eq!(compiled.has_any_filters(), compiled.has_filters());
     }
 
     #[test]
     fn test_t1_has_any_filters_exclude_only() {
-        let meta = MetaFilters {
-            exclude_usernames: Some(vec!["guest".to_string()]),
-            ..MetaFilters::default()
+        let exclude = ExcludeFilters {
+            users: Some(vec!["guest".to_string()]),
+            ..ExcludeFilters::default()
         };
-        let compiled = CompiledMetaFilters::try_from_meta(&meta).unwrap();
+        let compiled =
+            CompiledMetaFilters::try_from_include_exclude(&IncludeFilters::default(), &exclude)
+                .unwrap();
         assert!(compiled.has_any_filters());
         assert!(!compiled.has_filters()); // include-only check should be false
     }
 
     // ── exclude filters ────────────────────────────────────────
     fn make_compiled_with_exclude(
-        exclude_usernames: Option<Vec<String>>,
-        exclude_client_ips: Option<Vec<String>>,
+        exclude_users: Option<Vec<String>>,
+        exclude_ips: Option<Vec<String>>,
     ) -> CompiledMetaFilters {
-        let meta = MetaFilters {
-            exclude_usernames,
-            exclude_client_ips,
-            ..MetaFilters::default()
+        let exclude = ExcludeFilters {
+            users: exclude_users,
+            ips: exclude_ips,
+            ..ExcludeFilters::default()
         };
-        CompiledMetaFilters::try_from_meta(&meta).unwrap()
+        CompiledMetaFilters::try_from_include_exclude(&IncludeFilters::default(), &exclude).unwrap()
     }
 
     #[test]
@@ -1126,103 +1120,124 @@ mod tests {
 
     #[test]
     fn test_exclude_with_include_veto_wins() {
-        let meta = MetaFilters {
-            usernames: Some(vec!["^admin".to_string()]),
-            exclude_client_ips: Some(vec!["^10".to_string()]),
-            ..MetaFilters::default()
+        let include = IncludeFilters {
+            users: Some(vec!["^admin".to_string()]),
+            ..IncludeFilters::default()
         };
-        let compiled = CompiledMetaFilters::try_from_meta(&meta).unwrap();
+        let exclude = ExcludeFilters {
+            ips: Some(vec!["^10".to_string()]),
+            ..ExcludeFilters::default()
+        };
+        let compiled = CompiledMetaFilters::try_from_include_exclude(&include, &exclude).unwrap();
         // exclude ip 命中，veto 优先 → false
         assert!(!compiled.should_keep(&m("tx", "10.0.0.1", "admin", None)));
     }
 
     #[test]
     fn test_exclude_with_include_both_pass() {
-        let meta = MetaFilters {
-            usernames: Some(vec!["^admin".to_string()]),
-            exclude_client_ips: Some(vec!["^10".to_string()]),
-            ..MetaFilters::default()
+        let include = IncludeFilters {
+            users: Some(vec!["^admin".to_string()]),
+            ..IncludeFilters::default()
         };
-        let compiled = CompiledMetaFilters::try_from_meta(&meta).unwrap();
+        let exclude = ExcludeFilters {
+            ips: Some(vec!["^10".to_string()]),
+            ..ExcludeFilters::default()
+        };
+        let compiled = CompiledMetaFilters::try_from_include_exclude(&include, &exclude).unwrap();
         // exclude 未命中，include 满足 → true
         assert!(compiled.should_keep(&m("tx", "192.168.1.1", "admin", None)));
     }
 
     #[test]
     fn test_exclude_with_include_include_fails() {
-        let meta = MetaFilters {
-            usernames: Some(vec!["^admin".to_string()]),
-            exclude_client_ips: Some(vec!["^10".to_string()]),
-            ..MetaFilters::default()
+        let include = IncludeFilters {
+            users: Some(vec!["^admin".to_string()]),
+            ..IncludeFilters::default()
         };
-        let compiled = CompiledMetaFilters::try_from_meta(&meta).unwrap();
+        let exclude = ExcludeFilters {
+            ips: Some(vec!["^10".to_string()]),
+            ..ExcludeFilters::default()
+        };
+        let compiled = CompiledMetaFilters::try_from_include_exclude(&include, &exclude).unwrap();
         // exclude 未命中，但 include 不满足 → false
         assert!(!compiled.should_keep(&m("tx", "192.168.1.1", "sys_user", None)));
     }
 
     #[test]
     fn test_exclude_tags_drops_matching() {
-        let meta = MetaFilters {
-            exclude_tags: Some(vec!["^SEL".to_string()]),
-            ..MetaFilters::default()
+        let exclude = ExcludeFilters {
+            tags: Some(vec!["^SEL".to_string()]),
+            ..ExcludeFilters::default()
         };
-        let compiled = CompiledMetaFilters::try_from_meta(&meta).unwrap();
-        assert!(!compiled.should_keep(&m("tx", "ip", "user", Some("SELECT"))));
+        let compiled =
+            CompiledMetaFilters::try_from_include_exclude(&IncludeFilters::default(), &exclude)
+                .unwrap();
+        assert!(!compiled.should_keep(&m("tx", "ip", "user", Some("Select"))));
     }
 
     #[test]
     fn test_exclude_tags_retains_no_tag() {
-        let meta = MetaFilters {
-            exclude_tags: Some(vec!["^SEL".to_string()]),
-            ..MetaFilters::default()
+        let exclude = ExcludeFilters {
+            tags: Some(vec!["^SEL".to_string()]),
+            ..ExcludeFilters::default()
         };
-        let compiled = CompiledMetaFilters::try_from_meta(&meta).unwrap();
+        let compiled =
+            CompiledMetaFilters::try_from_include_exclude(&IncludeFilters::default(), &exclude)
+                .unwrap();
         // tag=None 时不触发 exclude，保留
         assert!(compiled.should_keep(&m("tx", "ip", "user", None)));
     }
 
     #[test]
     fn test_exclude_tags_retains_nonmatching() {
-        let meta = MetaFilters {
-            exclude_tags: Some(vec!["^SEL".to_string()]),
-            ..MetaFilters::default()
+        let exclude = ExcludeFilters {
+            tags: Some(vec!["^SEL".to_string()]),
+            ..ExcludeFilters::default()
         };
-        let compiled = CompiledMetaFilters::try_from_meta(&meta).unwrap();
+        let compiled =
+            CompiledMetaFilters::try_from_include_exclude(&IncludeFilters::default(), &exclude)
+                .unwrap();
         assert!(compiled.should_keep(&m("tx", "ip", "user", Some("INSERT"))));
     }
 
     #[test]
     fn test_has_any_filters_exclude_only() {
-        let meta = MetaFilters {
-            exclude_usernames: Some(vec!["guest".to_string()]),
-            ..MetaFilters::default()
+        let exclude = ExcludeFilters {
+            users: Some(vec!["guest".to_string()]),
+            ..ExcludeFilters::default()
         };
-        let compiled = CompiledMetaFilters::try_from_meta(&meta).unwrap();
+        let compiled =
+            CompiledMetaFilters::try_from_include_exclude(&IncludeFilters::default(), &exclude)
+                .unwrap();
         assert!(compiled.has_any_filters());
         assert!(!compiled.has_filters());
     }
 
     #[test]
     fn test_meta_has_filters_with_exclude() {
-        let meta = MetaFilters {
-            exclude_usernames: Some(vec!["x".to_string()]),
-            ..MetaFilters::default()
+        let exclude = ExcludeFilters {
+            users: Some(vec!["x".to_string()]),
+            ..ExcludeFilters::default()
         };
-        assert!(meta.has_filters());
+        assert!(exclude.has_filters());
     }
 
     #[test]
     fn test_meta_has_filters_all_none() {
-        assert!(!MetaFilters::default().has_filters());
+        assert!(!IncludeFilters::default().has_filters());
+        assert!(!ExcludeFilters::default().has_filters());
     }
 
     #[test]
     fn test_exclude_invalid_regex_validate_fails() {
-        let meta = MetaFilters {
-            exclude_usernames: Some(vec!["[invalid".to_string()]),
-            ..MetaFilters::default()
+        let exclude = ExcludeFilters {
+            users: Some(vec!["[invalid".to_string()]),
+            ..ExcludeFilters::default()
         };
-        let result = crate::features::filters::CompiledMetaFilters::try_from_meta(&meta);
+        let result = crate::features::filters::CompiledMetaFilters::try_from_include_exclude(
+            &IncludeFilters::default(),
+            &exclude,
+        );
         assert!(result.is_err());
     }
 
@@ -1230,8 +1245,8 @@ mod tests {
     #[test]
     fn test_compiled_sql_include_regex() {
         let sf = SqlFilters {
-            include_patterns: Some(vec!["^SELECT".to_string()]),
-            exclude_patterns: None,
+            includes: Some(vec!["^SELECT".to_string()]),
+            excludes: None,
         };
         let compiled = CompiledSqlFilters::try_from_sql_filters(&sf).unwrap();
         assert!(compiled.matches("SELECT * FROM t"));
@@ -1241,8 +1256,8 @@ mod tests {
     #[test]
     fn test_compiled_sql_exclude_regex() {
         let sf = SqlFilters {
-            include_patterns: None,
-            exclude_patterns: Some(vec!["DROP".to_string()]),
+            includes: None,
+            excludes: Some(vec!["DROP".to_string()]),
         };
         let compiled = CompiledSqlFilters::try_from_sql_filters(&sf).unwrap();
         assert!(compiled.matches("SELECT 1"));
