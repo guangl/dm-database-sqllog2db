@@ -108,7 +108,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 18-01-PLAN.md — Config struct 与 pipeline mod 顶层化：新增 TemplateConfig / OutputConfig；删除 PipelineConfig / TemplateAnalysisConfig；Config 顶层新增 5 个 Option 字段 + `_pipeline_deprecated` 私有字段；validate() 加旧路径检测；apply_one 切换到新键路径
+- [x] 18-01-PLAN.md — Config struct 与 pipeline mod 顶层化：新增 TemplateConfig / OutputConfig；删除 PipelineConfig / TemplateAnalysisConfig；Config 顶层新增 5 个 Option 字段 + `pipeline_deprecated` 私有字段；validate() 加旧路径检测；apply_one 切换到新键路径 (commits: c39e8cc, 7d895c4)
 
 **Wave 2** *(blocked on Wave 1)*
 
@@ -169,6 +169,6 @@ Plans:
 | 15. SVG 图表基础设施 + 前两类图表 | v1.3 | 5/5 | Complete | 2026-05-17 |
 | 16. 剩余图表 | v1.3 | 5/5 | Complete | 2026-05-17 |
 | 17. 过滤器配置嵌套化 | v1.4 | 1/2 | In Progress|  |
-| 18. 模板 & 图表配置嵌套化 | v1.4 | 0/3 | Not started | - |
+| 18. 模板 & 图表配置嵌套化 | v1.4 | 1/3 | In Progress | - |
 | 19. 代码结构重构 | v1.4 | 0/TBD | Not started | - |
 | 20. 测试覆盖深化 | v1.4 | 0/TBD | Not started | - |

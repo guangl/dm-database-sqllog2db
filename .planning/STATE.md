@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: 代码重构 & 质量深化
-status: Ready to execute
-stopped_at: Phase 18 planning complete
-last_updated: "2026-05-17T09:00:00.000Z"
-last_activity: 2026-05-17 -- Phase 18 planning complete
+status: phase-18-in-progress
+stopped_at: Phase 18 Plan 01 complete
+last_updated: "2026-05-17T15:00:00.000Z"
+last_activity: 2026-05-17 -- Phase 18 Plan 01 complete (config namespace refactor)
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 5
-  completed_plans: 2
-  percent: 25
+  completed_plans: 4
+  percent: 30
 ---
 
 # Project State
@@ -26,19 +26,19 @@ See: .planning/PROJECT.md (updated 2026-05-17 after v1.3 milestone)
 ## Current Position
 
 Phase: 18 of 20 (模板 & 图表配置嵌套化)
-Plan: —
-Status: phase-18-planned
-Last activity: 2026-05-17 -- Phase 18 planning complete
+Plan: 01 complete → 02 next
+Status: phase-18-in-progress
+Last activity: 2026-05-17 -- Phase 18 Plan 01 complete (config namespace refactor)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [███░░░░░░░] 30%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 0 (v1.4)
-- Average duration: —
-- Total execution time: —
+- Total plans completed: 1 (v1.4)
+- Average duration: ~90 min
+- Total execution time: ~90 min
 
 *Updated after each plan completion*
 
@@ -52,6 +52,9 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 17 先于 Phase 18 | 过滤器重构风险最高（破坏热路径），先交付验证 | 17 |
 | REFACTOR-01 与其他 REFACTOR 同 Phase | 文件拆分与代码质量属同一工作包，可以同时交付 | 19 |
 | TEST-01 (VERIFICATION.md) 排最后 | 纯文档，无代码依赖，不阻塞功能交付 | 20 |
+| pub + #[doc(hidden)] for pipeline_deprecated | 技术上需要 pub 供集成测试 struct update 语法，隐藏文档使其不出现在公开 API | 18 |
+| 破坏性升级无 serde alias | 符合 D-05，validate() 明确拒绝旧路径并提供完整迁移指引 | 18 |
+| TemplateConfig.enable 而非 enabled | 与 NormalizeConfig / FiltersFeature 命名对齐，符合 D-03 | 18 |
 
 ### Blockers/Concerns
 
@@ -69,6 +72,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-05-17T09:00:00.000Z
-Stopped at: Phase 18 planning complete
-Resume file: .planning/phases/18-template-chart-nesting/18-01-PLAN.md
+Last session: 2026-05-17T15:00:00.000Z
+Stopped at: Phase 18 Plan 01 complete
+Resume file: .planning/phases/18-template-chart-nesting/18-02-PLAN.md
