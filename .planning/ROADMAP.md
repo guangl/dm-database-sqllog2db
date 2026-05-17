@@ -104,7 +104,7 @@ Plans:
   4. 含旧 [pipeline] 段的配置文件在 validate() 阶段返回明确迁移错误（5 条映射）
   5. cargo clippy --all-targets -- -D warnings 零警告，cargo test 全通过
 
-**Plans:** 3 plans
+**Plans:** 2/3 plans executed
 Plans:
 **Wave 1**
 
@@ -112,7 +112,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1)*
 
-- [ ] 18-02-PLAN.md — 调用方迁移 + Exporter trait 升级：cli/run.rs / main.rs / validate.rs / show_config.rs / stats.rs / pipeline/filters.rs 切换到顶层字段；write_template_stats 签名改为 `(csv_path: Option<&str>, sqlite_table: Option<&str>)`；CsvExporter 空路径短路；SqliteExporter 空表名短路 + identifier 校验
+- [x] 18-02-PLAN.md — 调用方迁移 + Exporter trait 升级：cli/run.rs / main.rs / validate.rs / show_config.rs / stats.rs / pipeline/filters.rs 切换到顶层字段；write_template_stats 签名改为 `(csv_path: Option<&str>, sqlite_table: Option<&str>)`；CsvExporter 空路径短路；SqliteExporter 空表名短路 + identifier 校验
 
 **Wave 3** *(blocked on Wave 2)*
 
@@ -169,6 +169,6 @@ Plans:
 | 15. SVG 图表基础设施 + 前两类图表 | v1.3 | 5/5 | Complete | 2026-05-17 |
 | 16. 剩余图表 | v1.3 | 5/5 | Complete | 2026-05-17 |
 | 17. 过滤器配置嵌套化 | v1.4 | 1/2 | In Progress|  |
-| 18. 模板 & 图表配置嵌套化 | v1.4 | 1/3 | In Progress | - |
+| 18. 模板 & 图表配置嵌套化 | v1.4 | 2/3 | In Progress|  |
 | 19. 代码结构重构 | v1.4 | 0/TBD | Not started | - |
 | 20. 测试覆盖深化 | v1.4 | 0/TBD | Not started | - |
