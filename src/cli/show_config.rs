@@ -101,6 +101,28 @@ pub fn handle_show_config(cfg: &Config, config_path: &str, diff: bool) {
     if let Some(f) = &cfg.features.filters {
         println!("{}", color::cyan("[features.filters]"));
         kv("enable", &f.enable.to_string(), None, diff);
+        // include 子表
+        if let Some(users) = &f.include.users {
+            kv("include.users", &users.join(", "), None, diff);
+        }
+        if let Some(ips) = &f.include.ips {
+            kv("include.ips", &ips.join(", "), None, diff);
+        }
+        if let Some(sess) = &f.include.sessions {
+            kv("include.sessions", &sess.join(", "), None, diff);
+        }
+        if let Some(thrds) = &f.include.threads {
+            kv("include.threads", &thrds.join(", "), None, diff);
+        }
+        if let Some(stmts) = &f.include.statements {
+            kv("include.statements", &stmts.join(", "), None, diff);
+        }
+        if let Some(apps) = &f.include.apps {
+            kv("include.apps", &apps.join(", "), None, diff);
+        }
+        if let Some(tags) = &f.include.tags {
+            kv("include.tags", &tags.join(", "), None, diff);
+        }
         if let Some(s) = &f.include.start_ts {
             kv("include.start_ts", s, None, diff);
         }
@@ -115,11 +137,56 @@ pub fn handle_show_config(cfg: &Config, config_path: &str, diff: bool) {
                 diff,
             );
         }
-        if let Some(users) = &f.include.users {
-            kv("include.users", &users.join(", "), None, diff);
+        // exclude 子表
+        if let Some(users) = &f.exclude.users {
+            kv("exclude.users", &users.join(", "), None, diff);
         }
-        if let Some(ips) = &f.include.ips {
-            kv("include.ips", &ips.join(", "), None, diff);
+        if let Some(ips) = &f.exclude.ips {
+            kv("exclude.ips", &ips.join(", "), None, diff);
+        }
+        if let Some(sess) = &f.exclude.sessions {
+            kv("exclude.sessions", &sess.join(", "), None, diff);
+        }
+        if let Some(thrds) = &f.exclude.threads {
+            kv("exclude.threads", &thrds.join(", "), None, diff);
+        }
+        if let Some(stmts) = &f.exclude.statements {
+            kv("exclude.statements", &stmts.join(", "), None, diff);
+        }
+        if let Some(apps) = &f.exclude.apps {
+            kv("exclude.apps", &apps.join(", "), None, diff);
+        }
+        if let Some(tags) = &f.exclude.tags {
+            kv("exclude.tags", &tags.join(", "), None, diff);
+        }
+        // indicators
+        if let Some(ids) = &f.indicators.exec_ids {
+            kv(
+                "indicators.exec_ids",
+                &format!("{} entries", ids.len()),
+                None,
+                diff,
+            );
+        }
+        if let Some(min_rt) = f.indicators.min_runtime_ms {
+            kv("indicators.min_runtime_ms", &min_rt.to_string(), None, diff);
+        }
+        if let Some(min_rc) = f.indicators.min_row_count {
+            kv("indicators.min_row_count", &min_rc.to_string(), None, diff);
+        }
+        // sql (事务级字面量过滤)
+        if let Some(incs) = &f.sql.includes {
+            kv("sql.includes", &incs.join(", "), None, diff);
+        }
+        if let Some(excs) = &f.sql.excludes {
+            kv("sql.excludes", &excs.join(", "), None, diff);
+        }
+        // record_sql (记录级正则过滤)
+        if let Some(incs) = &f.record_sql.includes {
+            kv("record_sql.includes", &incs.join(", "), None, diff);
+        }
+        if let Some(excs) = &f.record_sql.excludes {
+            kv("record_sql.excludes", &excs.join(", "), None, diff);
         }
         println!();
     }
