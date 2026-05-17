@@ -81,7 +81,7 @@ impl GroupBy {
 
 #[derive(Debug, Default, Clone, Copy)]
 struct GroupAccumulator {
-    count: u32,
+    count: u64,
     total_exec_ms: f64,
     max_exec_ms: f32,
 }
@@ -98,13 +98,15 @@ struct GroupEntry {
 impl GroupEntry {
     fn from_acc(key: String, acc: GroupAccumulator) -> Self {
         let avg = if acc.count > 0 {
-            acc.total_exec_ms / f64::from(acc.count)
+            #[allow(clippy::cast_precision_loss)]
+            let count_f64 = acc.count as f64;
+            acc.total_exec_ms / count_f64
         } else {
             0.0
         };
         Self {
             key,
-            count: u64::from(acc.count),
+            count: acc.count,
             total_exec_ms: acc.total_exec_ms,
             avg_exec_ms: avg,
             max_exec_ms: acc.max_exec_ms,
@@ -154,7 +156,7 @@ impl Bucket {
 
 #[derive(Debug, Default)]
 struct BucketAccumulator {
-    count: u32,
+    count: u64,
     total_exec_ms: f64,
     max_exec_ms: f32,
 }
@@ -645,13 +647,15 @@ fn build_bucket_section(
         .into_iter()
         .map(|(time, acc)| {
             let avg = if acc.count > 0 {
-                acc.total_exec_ms / f64::from(acc.count)
+                #[allow(clippy::cast_precision_loss)]
+                let count_f64 = acc.count as f64;
+                acc.total_exec_ms / count_f64
             } else {
                 0.0
             };
             BucketEntry {
                 time,
-                count: u64::from(acc.count),
+                count: acc.count,
                 total_exec_ms: acc.total_exec_ms,
                 avg_exec_ms: avg,
                 max_exec_ms: acc.max_exec_ms,
