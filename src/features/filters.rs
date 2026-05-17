@@ -191,6 +191,42 @@ impl<'de> Deserialize<'de> for FiltersFeature {
 
 impl From<RawFiltersFeature> for FiltersFeature {
     fn from(raw: RawFiltersFeature) -> Self {
+        // 检测混合格式：新子表与旧扁平字段同时存在时发出警告
+        let flat_include_present = raw.usernames.is_some()
+            || raw.client_ips.is_some()
+            || raw.sess_ids.is_some()
+            || raw.thrd_ids.is_some()
+            || raw.statements.is_some()
+            || raw.appnames.is_some()
+            || raw.tags.is_some()
+            || raw.start_ts.is_some()
+            || raw.end_ts.is_some()
+            || raw.trxids.is_some();
+
+        if raw.include.is_some() && flat_include_present {
+            log::warn!(
+                "[features.filters] contains both a `[features.filters.include]` sub-table \
+                 and legacy flat fields (e.g. `usernames`). The sub-table takes priority; \
+                 flat fields are ignored. Remove the legacy keys to suppress this warning."
+            );
+        }
+
+        let flat_exclude_present = raw.exclude_usernames.is_some()
+            || raw.exclude_client_ips.is_some()
+            || raw.exclude_sess_ids.is_some()
+            || raw.exclude_thrd_ids.is_some()
+            || raw.exclude_statements.is_some()
+            || raw.exclude_appnames.is_some()
+            || raw.exclude_tags.is_some();
+
+        if raw.exclude.is_some() && flat_exclude_present {
+            log::warn!(
+                "[features.filters] contains both a `[features.filters.exclude]` sub-table \
+                 and legacy flat exclude fields (e.g. `exclude_usernames`). The sub-table takes priority; \
+                 flat fields are ignored. Remove the legacy keys to suppress this warning."
+            );
+        }
+
         // 新格式优先：有 include 子表则用新格式，否则从旧扁平字段构造
         let include = raw.include.unwrap_or(IncludeFilters {
             users: raw.usernames,
@@ -1427,6 +1463,40 @@ file = "out.csv"
         assert_eq!(
             filters.sql.excludes,
             Some(vec!["SELECT 1".to_string(), "DUAL".to_string()])
+        );
+    }
+
+    #[test]
+    fn test_mixed_format_new_format_wins_and_warns() {
+        use crate::config::Config;
+        let toml = r#"
+[sqllog]
+path = "sqllogs"
+[features.filters]
+enable = true
+usernames = ["old_user"]
+[features.filters.include]
+users = ["new_user"]
+[exporter.csv]
+file = "out.csv"
+"#;
+        let cfg: Config = toml::from_str(toml).unwrap();
+        let filters = cfg.features.filters.unwrap();
+        // 新格式子表优先
+        assert_eq!(
+            filters.include.users,
+            Some(vec!["new_user".to_string()]),
+            "new nested format should win; old flat field should be dropped"
+        );
+        // 旧扁平字段被丢弃，不应出现在结果中
+        assert!(
+            !filters
+                .include
+                .users
+                .as_ref()
+                .unwrap()
+                .contains(&"old_user".to_string()),
+            "legacy flat field must not be merged into new format result"
         );
     }
 }
