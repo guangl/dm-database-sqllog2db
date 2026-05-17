@@ -93,17 +93,30 @@ Plans:
 
 ### Phase 18: 模板 & 图表配置嵌套化
 
-**Goal**: 用户可在 [template] 和 [charts] 子表中集中管理模板分析与图表生成配置
+**Goal**: 用户可在 [template] / [charts] / [replace_parameters] / [filter] / [output] 顶层子表集中管理所有功能配置；旧 [pipeline.*] 命名空间在 validate() 阶段被显式拒绝，错误消息列出 5 条迁移映射
 **Depends on**: Phase 17
 **Requirements**: CONFIG-03, CONFIG-04
 **Success Criteria** (what must be TRUE):
 
-  1. 新格式 config 使用 [template] 子表（enable_template_normalization / enable_template_aggregation / output_*）可正常运行
-  2. 新格式 config 使用 [charts] 子表（output_dir / top_n）可正常生成 SVG 图表
-  3. `cargo run -- init -o config.toml --force` 生成的默认配置文件使用新嵌套格式
-  4. cargo clippy --all-targets -- -D warnings 零警告，cargo test 全通过
+  1. 新格式 config 使用 [template] 子表（enable / output_csv_path / output_sqlite_table）可正常运行
+  2. 新格式 config 使用 [charts] 子表（output_dir / top_n / *_bar / *_hist / *_line / *_pie）可正常生成 SVG 图表
+  3. `cargo run -- init -o config.toml --force` 生成的默认配置文件使用新顶层格式，且 `cargo run -- validate -c config.toml` 直接通过
+  4. 含旧 [pipeline] 段的配置文件在 validate() 阶段返回明确迁移错误（5 条映射）
+  5. cargo clippy --all-targets -- -D warnings 零警告，cargo test 全通过
 
-**Plans**: TBD
+**Plans:** 3 plans
+Plans:
+**Wave 1**
+
+- [ ] 18-01-PLAN.md — Config struct 与 pipeline mod 顶层化：新增 TemplateConfig / OutputConfig；删除 PipelineConfig / TemplateAnalysisConfig；Config 顶层新增 5 个 Option 字段 + `_pipeline_deprecated` 私有字段；validate() 加旧路径检测；apply_one 切换到新键路径
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 18-02-PLAN.md — 调用方迁移 + Exporter trait 升级：cli/run.rs / main.rs / validate.rs / show_config.rs / stats.rs / pipeline/filters.rs 切换到顶层字段；write_template_stats 签名改为 `(csv_path: Option<&str>, sqlite_table: Option<&str>)`；CsvExporter 空路径短路；SqliteExporter 空表名短路 + identifier 校验
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 18-03-PLAN.md — init 模板与集成测试：CONFIG_TEMPLATE_ZH/EN 重写为新顶层格式；tests/integration.rs 同步 [pipeline.filters.*] 断言与 cfg.pipeline.filters 字段访问；新增 init→validate 端到端测试与旧 [pipeline] 路径拒绝测试
 
 ### Phase 19: 代码结构重构
 
@@ -156,6 +169,6 @@ Plans:
 | 15. SVG 图表基础设施 + 前两类图表 | v1.3 | 5/5 | Complete | 2026-05-17 |
 | 16. 剩余图表 | v1.3 | 5/5 | Complete | 2026-05-17 |
 | 17. 过滤器配置嵌套化 | v1.4 | 1/2 | In Progress|  |
-| 18. 模板 & 图表配置嵌套化 | v1.4 | 0/TBD | Not started | - |
+| 18. 模板 & 图表配置嵌套化 | v1.4 | 0/3 | Not started | - |
 | 19. 代码结构重构 | v1.4 | 0/TBD | Not started | - |
 | 20. 测试覆盖深化 | v1.4 | 0/TBD | Not started | - |
