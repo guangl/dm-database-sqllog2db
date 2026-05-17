@@ -15,6 +15,11 @@ use crate::pipeline::{
 use serde::Deserialize;
 use std::path::Path;
 
+const PIPELINE_MIGRATION_HINT: &str = "配置格式已升级，请迁移以下字段：\n  [pipeline.template_analysis] → [template]\n  \
+     [pipeline.charts] → [charts]\n  [pipeline.normalize] → [replace_parameters]\n  \
+     [pipeline.filters.*] → [filter.*]\n  [pipeline.fields] → [output.fields]\n\
+     详见 .planning/phases/18-template-chart-nesting/18-CONTEXT.md";
+
 #[derive(Debug, Deserialize, Clone, Default)]
 pub struct Config {
     #[serde(default)]
@@ -60,7 +65,7 @@ impl Config {
             return Err(Error::Config(ConfigError::InvalidValue {
                 field: "[pipeline]".to_string(),
                 value: String::new(),
-                reason: "配置格式已升级，请迁移以下字段：\n  [pipeline.template_analysis] → [template]\n  [pipeline.charts] → [charts]\n  [pipeline.normalize] → [replace_parameters]\n  [pipeline.filters.*] → [filter.*]\n  [pipeline.fields] → [output.fields]\n详见 .planning/phases/18-template-chart-nesting/18-CONTEXT.md".to_string(),
+                reason: PIPELINE_MIGRATION_HINT.to_string(),
             }));
         }
         self.logging.validate()?;
@@ -69,6 +74,7 @@ impl Config {
         self.validate_filter()?;
         self.validate_output_fields()?;
         self.validate_charts()?;
+        self.validate_template()?;
         Ok(())
     }
 
@@ -91,7 +97,7 @@ impl Config {
             return Err(Error::Config(ConfigError::InvalidValue {
                 field: "[pipeline]".to_string(),
                 value: String::new(),
-                reason: "配置格式已升级，请迁移以下字段：\n  [pipeline.template_analysis] → [template]\n  [pipeline.charts] → [charts]\n  [pipeline.normalize] → [replace_parameters]\n  [pipeline.filters.*] → [filter.*]\n  [pipeline.fields] → [output.fields]\n详见 .planning/phases/18-template-chart-nesting/18-CONTEXT.md".to_string(),
+                reason: PIPELINE_MIGRATION_HINT.to_string(),
             }));
         }
         self.logging.validate()?;
@@ -116,6 +122,7 @@ impl Config {
 
         self.validate_output_fields()?;
         self.validate_charts()?;
+        self.validate_template()?;
         Ok(compiled)
     }
 
@@ -335,6 +342,29 @@ impl Config {
                             "unknown field '{name}'; valid fields: {}",
                             crate::pipeline::FIELD_NAMES.join(", ")
                         ),
+                    }));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_template(&self) -> Result<()> {
+        if let Some(tmpl) = &self.template {
+            let name = tmpl.output_sqlite_table.trim();
+            if !name.is_empty() {
+                let mut chars = name.chars();
+                let valid = chars
+                    .next()
+                    .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+                    && chars.all(|c| c.is_ascii_alphanumeric() || c == '_');
+                if !valid {
+                    return Err(Error::Config(ConfigError::InvalidValue {
+                        field: "template.output_sqlite_table".to_string(),
+                        value: name.to_string(),
+                        reason: "table name must start with a letter or underscore \
+                                 and contain only ASCII alphanumeric or underscore"
+                            .to_string(),
                     }));
                 }
             }
@@ -1316,6 +1346,51 @@ file = "out.csv"
         cfg.apply_one("charts.user_pie", "false")
             .expect("apply_one should succeed");
         assert!(!cfg.charts.as_ref().unwrap().user_pie);
+    }
+
+    // ── validate_template ─────────────────────────────────────────
+    #[test]
+    fn test_validate_template_sqlite_table_invalid_leading_digit() {
+        let mut cfg = default_config();
+        cfg.template = Some(TemplateConfig {
+            enable: true,
+            output_sqlite_table: "1bad".into(),
+            ..TemplateConfig::default()
+        });
+        assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    fn test_validate_template_sqlite_table_invalid_hyphen() {
+        let mut cfg = default_config();
+        cfg.template = Some(TemplateConfig {
+            enable: true,
+            output_sqlite_table: "my-table".into(),
+            ..TemplateConfig::default()
+        });
+        assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    fn test_validate_template_sqlite_table_valid() {
+        let mut cfg = default_config();
+        cfg.template = Some(TemplateConfig {
+            enable: true,
+            output_sqlite_table: "sql_templates".into(),
+            ..TemplateConfig::default()
+        });
+        assert!(cfg.validate().is_ok());
+    }
+
+    #[test]
+    fn test_validate_template_sqlite_table_empty_ok() {
+        let mut cfg = default_config();
+        cfg.template = Some(TemplateConfig {
+            enable: true,
+            output_sqlite_table: String::new(),
+            ..TemplateConfig::default()
+        });
+        assert!(cfg.validate().is_ok());
     }
 
     #[test]
