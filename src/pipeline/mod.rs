@@ -76,7 +76,7 @@ impl Default for FieldMask {
     }
 }
 
-/// `[pipeline.normalize]` 配置段
+/// `[replace_parameters]` 配置段
 #[derive(Debug, Deserialize, Clone)]
 pub struct NormalizeConfig {
     /// 是否在导出结果中写入 `normalized_sql` 列（默认 true）
@@ -126,15 +126,21 @@ fn default_top_n() -> usize {
     10
 }
 
-/// `[pipeline.template_analysis]` 配置段
+/// `[template]` 配置段
 #[derive(Debug, Deserialize, Clone, Default)]
-pub struct TemplateAnalysisConfig {
+pub struct TemplateConfig {
     /// 是否启用 SQL 模板归一化（默认 false）
     #[serde(default)]
-    pub enabled: bool,
+    pub enable: bool,
+    /// 模板统计 CSV 输出路径；空字符串 = 不生成
+    #[serde(default)]
+    pub output_csv_path: String,
+    /// 模板统计 `SQLite` 表名；空字符串 = 不生成
+    #[serde(default)]
+    pub output_sqlite_table: String,
 }
 
-/// `[pipeline.charts]` 配置段
+/// `[charts]` 配置段
 #[derive(Debug, Deserialize, Clone)]
 #[allow(clippy::struct_excessive_bools)]
 pub struct ChartsConfig {
@@ -170,19 +176,15 @@ impl Default for ChartsConfig {
     }
 }
 
-/// `[pipeline]` 配置段：管道处理功能开关
+/// `[output]` 配置段：字段投影
 #[derive(Debug, Deserialize, Clone, Default)]
-pub struct PipelineConfig {
-    pub filters: Option<FiltersFeature>,
-    #[serde(alias = "replace_parameters")]
-    pub normalize: Option<NormalizeConfig>,
+pub struct OutputConfig {
     /// 字段投影：仅导出指定字段，默认为全部 15 个字段
+    #[serde(default)]
     pub fields: Option<Vec<String>>,
-    pub template_analysis: Option<TemplateAnalysisConfig>,
-    pub charts: Option<ChartsConfig>,
 }
 
-impl PipelineConfig {
+impl OutputConfig {
     /// 计算字段投影掩码。字段名在 `validate()` 阶段已验证，无效名称静默退化为全量掩码。
     #[must_use]
     pub fn field_mask(&self) -> FieldMask {
@@ -313,14 +315,6 @@ mod tests {
     }
 
     #[test]
-    fn test_pipeline_config_default() {
-        let cfg = PipelineConfig::default();
-        assert!(cfg.filters.is_none());
-        assert!(cfg.normalize.is_none());
-        assert!(cfg.template_analysis.is_none());
-    }
-
-    #[test]
     fn test_charts_config_default_values() {
         let cfg = ChartsConfig::default();
         assert_eq!(cfg.output_dir, "charts/");
@@ -358,27 +352,28 @@ latency_hist = false
     }
 
     #[test]
-    fn test_pipeline_config_default_charts_is_none() {
-        let cfg = PipelineConfig::default();
-        assert!(cfg.charts.is_none());
+    fn test_template_config_default() {
+        let cfg = TemplateConfig::default();
+        assert!(!cfg.enable);
+        assert_eq!(cfg.output_csv_path, "");
+        assert_eq!(cfg.output_sqlite_table, "");
     }
 
     #[test]
-    fn test_template_analysis_config_default() {
-        let cfg = TemplateAnalysisConfig::default();
-        assert!(!cfg.enabled);
+    fn test_template_config_deserialize_full() {
+        let toml = "enable = true\noutput_csv_path = \"out.csv\"\noutput_sqlite_table = \"tpl\"";
+        let cfg: TemplateConfig = toml::from_str(toml).unwrap();
+        assert!(cfg.enable);
+        assert_eq!(cfg.output_csv_path, "out.csv");
+        assert_eq!(cfg.output_sqlite_table, "tpl");
     }
 
     #[test]
-    fn test_template_analysis_config_deserialize_enabled_true() {
-        let cfg: TemplateAnalysisConfig = toml::from_str("enabled = true").unwrap();
-        assert!(cfg.enabled);
-    }
-
-    #[test]
-    fn test_template_analysis_config_deserialize_empty_is_false() {
-        let cfg: TemplateAnalysisConfig = toml::from_str("").unwrap();
-        assert!(!cfg.enabled);
+    fn test_template_config_deserialize_empty_is_default() {
+        let cfg: TemplateConfig = toml::from_str("").unwrap();
+        assert!(!cfg.enable);
+        assert_eq!(cfg.output_csv_path, "");
+        assert_eq!(cfg.output_sqlite_table, "");
     }
 
     #[test]
@@ -389,54 +384,47 @@ latency_hist = false
     }
 
     #[test]
-    fn test_ordered_field_indices_none_returns_all() {
-        let cfg = PipelineConfig::default();
-        let indices = cfg.ordered_field_indices();
-        assert_eq!(indices, (0..15_usize).collect::<Vec<_>>());
+    fn test_output_config_field_mask_default() {
+        let cfg = OutputConfig::default();
+        assert_eq!(cfg.field_mask(), FieldMask::ALL);
     }
 
     #[test]
-    fn test_ordered_field_indices_empty_equals_all() {
-        let cfg = PipelineConfig {
-            fields: Some(vec![]),
-            ..Default::default()
+    fn test_output_config_field_mask_with_names() {
+        let cfg = OutputConfig {
+            fields: Some(vec!["sql".into(), "username".into()]),
         };
-        let indices = cfg.ordered_field_indices();
-        assert_eq!(indices.len(), 15);
-        assert_eq!(indices, (0..15_usize).collect::<Vec<_>>());
+        let mask = cfg.field_mask();
+        // sql=10, username=4
+        assert!(mask.is_active(10));
+        assert!(mask.is_active(4));
+        assert!(!mask.is_active(0)); // ts not included
     }
 
     #[test]
-    fn test_ordered_field_indices_preserves_user_order() {
-        let cfg = PipelineConfig {
+    fn test_output_config_ordered_indices_preserves_user_order() {
+        let cfg = OutputConfig {
             fields: Some(vec!["sql".into(), "username".into(), "ts".into()]),
-            ..Default::default()
         };
         let indices = cfg.ordered_field_indices();
         assert_eq!(indices, vec![10_usize, 4, 0]);
     }
 
     #[test]
-    fn test_ordered_field_indices_single_field() {
-        let cfg = PipelineConfig {
-            fields: Some(vec!["normalized_sql".into()]),
-            ..Default::default()
-        };
+    fn test_output_config_ordered_indices_none_returns_all() {
+        let cfg = OutputConfig::default();
         let indices = cfg.ordered_field_indices();
-        assert_eq!(indices, vec![14_usize]);
+        assert_eq!(indices, (0..15_usize).collect::<Vec<_>>());
     }
 
     #[test]
-    fn test_ordered_field_indices_all_fields_reversed() {
-        let reversed_names: Vec<String> =
-            FIELD_NAMES.iter().rev().map(|&s| s.to_string()).collect();
-        let cfg = PipelineConfig {
-            fields: Some(reversed_names),
-            ..Default::default()
+    fn test_output_config_ordered_indices_empty_equals_all() {
+        let cfg = OutputConfig {
+            fields: Some(vec![]),
         };
         let indices = cfg.ordered_field_indices();
-        let expected: Vec<usize> = (0..15).rev().collect();
-        assert_eq!(indices, expected);
+        assert_eq!(indices.len(), 15);
+        assert_eq!(indices, (0..15_usize).collect::<Vec<_>>());
     }
 
     #[test]
