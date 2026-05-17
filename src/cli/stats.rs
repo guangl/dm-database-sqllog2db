@@ -1,6 +1,6 @@
 use crate::color;
 use crate::config::Config;
-use crate::features::filters::RecordMeta;
+use crate::features::filters::{CompiledMetaFilters, RecordMeta};
 use crate::parser::SqllogParser;
 use dm_database_parser_sqllog::{LogParser, MetaParts};
 use indicatif::{HumanCount, ProgressBar, ProgressStyle};
@@ -254,6 +254,22 @@ pub fn handle_stats(
         .as_deref()
         .map(crate::resume::ResumeState::load);
 
+    // 在循环前一次性编译 meta 过滤器，错误直接上报并退出
+    let filter_cfg = cfg.features.filters.as_ref().filter(|f| f.has_filters());
+    let compiled_meta: Option<CompiledMetaFilters> = if let Some(fc) = filter_cfg {
+        match CompiledMetaFilters::try_from_include_exclude(&fc.include, &fc.exclude) {
+            Ok(c) => Some(c),
+            Err(e) => {
+                eprintln!("{} Filter regex error: {e}", color::red("Error:"));
+                return;
+            }
+        }
+    } else {
+        None
+    };
+    let filter_start_ts = filter_cfg.and_then(|f| f.include.start_ts.as_deref());
+    let filter_end_ts = filter_cfg.and_then(|f| f.include.end_ts.as_deref());
+
     let pb = make_progress_bar(quiet);
     let total_files = log_files.len();
     let mut total_records: u64 = 0;
@@ -303,7 +319,9 @@ pub fn handle_stats(
         let (file_records, file_errors) = process_file(
             &parser,
             &mut ProcessFileCtx {
-                cfg,
+                compiled_meta: compiled_meta.as_ref(),
+                start_ts: filter_start_ts,
+                end_ts: filter_end_ts,
                 file_name: &file_name,
                 top_n,
                 slow_heap: &mut slow_heap,
@@ -446,7 +464,9 @@ fn parse_group_fields(raw: &[String]) -> Option<Vec<GroupBy>> {
 // ── 处理单个文件 ─────────────────────────────────────────────────────────────
 
 struct ProcessFileCtx<'a> {
-    cfg: &'a Config,
+    compiled_meta: Option<&'a CompiledMetaFilters>,
+    start_ts: Option<&'a str>,
+    end_ts: Option<&'a str>,
     file_name: &'a str,
     top_n: usize,
     slow_heap: &'a mut BinaryHeap<Reverse<SlowEntry>>,
@@ -461,21 +481,9 @@ fn process_file(
     parser: &dm_database_parser_sqllog::LogParser,
     ctx: &mut ProcessFileCtx,
 ) -> (u64, u64) {
-    use crate::features::filters::CompiledMetaFilters;
     let mut file_records: u64 = 0;
     let mut file_errors: u64 = 0;
-    let filter_cfg = ctx
-        .cfg
-        .features
-        .filters
-        .as_ref()
-        .filter(|f| f.has_filters());
-    // 预编译 meta 过滤器（若配置了过滤器）；编译失败则忽略过滤
-    let compiled_meta: Option<CompiledMetaFilters> = filter_cfg
-        .and_then(|f| CompiledMetaFilters::try_from_include_exclude(&f.include, &f.exclude).ok());
-    let start_ts = filter_cfg.and_then(|f| f.include.start_ts.as_deref());
-    let end_ts = filter_cfg.and_then(|f| f.include.end_ts.as_deref());
-    let need_meta = compiled_meta.is_some() || !ctx.group_fields.is_empty();
+    let need_meta = ctx.compiled_meta.is_some() || !ctx.group_fields.is_empty();
     let need_ind = ctx.top_n > 0 || !ctx.group_fields.is_empty() || ctx.bucket_field.is_some();
 
     for result in parser.iter() {
@@ -488,13 +496,13 @@ fn process_file(
                 };
 
                 // 时间过滤
-                if let Some(start) = start_ts {
+                if let Some(start) = ctx.start_ts {
                     let ts = record.ts.as_ref();
                     if ts < start && !ts.starts_with(start) {
                         continue;
                     }
                 }
-                if let Some(end) = end_ts {
+                if let Some(end) = ctx.end_ts {
                     let ts = record.ts.as_ref();
                     if ts > end && !ts.starts_with(end) {
                         continue;
@@ -502,7 +510,7 @@ fn process_file(
                 }
 
                 // 元数据过滤
-                if let (Some(compiled), Some(m)) = (&compiled_meta, &meta) {
+                if let (Some(compiled), Some(m)) = (ctx.compiled_meta, &meta) {
                     if !compiled.should_keep(&RecordMeta {
                         trxid: m.trxid.as_ref(),
                         ip: m.client_ip.as_ref(),
