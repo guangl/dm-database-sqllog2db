@@ -813,7 +813,7 @@ pub fn handle_run(
             }
         }
 
-        // Phase 14 将消费 finalize() 结果并写出报告；此处先记录聚合摘要。
+        // 将模板统计写入 CSV / SQLite（由 cfg.template 配置）。
         let template_stats = parallel_agg.map(TemplateAggregator::finalize);
         if let Some(ref stats) = template_stats {
             info!("Template analysis: {} unique templates", stats.len());
@@ -942,7 +942,7 @@ pub fn handle_run(
             exporter_manager.log_stats();
         }
 
-        // Phase 14 将消费 finalize() 结果并写出报告；此处先记录聚合摘要。
+        // 将模板统计写入 CSV / SQLite（由 cfg.template 配置）。
         let template_stats = template_agg.map(TemplateAggregator::finalize);
         if let Some(ref stats) = template_stats {
             info!("Template analysis: {} unique templates", stats.len());
