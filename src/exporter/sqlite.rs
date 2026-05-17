@@ -418,16 +418,18 @@ impl Exporter for SqliteExporter {
         if table_name.trim().is_empty() {
             return Ok(());
         }
-        // 防 SQL 注入：表名必须仅含 ASCII 字母数字或下划线
-        if table_name
-            .chars()
-            .any(|c| !c.is_ascii_alphanumeric() && c != '_')
-        {
+        // 防 SQL 注入：表名首字符必须是字母或下划线，其余字符必须是 ASCII 字母数字或下划线
+        let mut ident_chars = table_name.chars();
+        let valid_ident = ident_chars
+            .next()
+            .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+            && ident_chars.all(|c| c.is_ascii_alphanumeric() || c == '_');
+        if !valid_ident {
             return Err(Error::Config(crate::error::ConfigError::InvalidValue {
                 field: "template.output_sqlite_table".to_string(),
                 value: table_name.to_string(),
-                reason: "table name contains invalid characters; \
-                     only ASCII alphanumeric and underscore are allowed"
+                reason: "table name must start with a letter or underscore \
+                         and contain only ASCII alphanumeric or underscore"
                     .to_string(),
             }));
         }
@@ -440,12 +442,12 @@ impl Exporter for SqliteExporter {
         conn.execute_batch("BEGIN;")
             .map_err(|e| Self::db_err(format!("begin failed: {e}")))?;
         if self.overwrite {
-            conn.execute(&format!("DROP TABLE IF EXISTS {table_name}"), [])
+            conn.execute(&format!("DROP TABLE IF EXISTS \"{table_name}\""), [])
                 .map_err(|e| Self::db_err(format!("drop {table_name} failed: {e}")))?;
         }
         conn.execute(
             &format!(
-                "CREATE TABLE IF NOT EXISTS {table_name} \
+                "CREATE TABLE IF NOT EXISTS \"{table_name}\" \
                  (template_key TEXT NOT NULL PRIMARY KEY, \
                   count INTEGER NOT NULL, \
                   avg_us INTEGER NOT NULL, \
@@ -465,7 +467,7 @@ impl Exporter for SqliteExporter {
             #[rustfmt::skip]
             let p = rusqlite::params![s.template_key, s.count as i64, s.avg_us as i64, s.min_us as i64, s.max_us as i64, s.p50_us as i64, s.p95_us as i64, s.p99_us as i64, s.first_seen, s.last_seen];
             conn.execute(
-                &format!("INSERT INTO {table_name} VALUES (?,?,?,?,?,?,?,?,?,?)"),
+                &format!("INSERT INTO \"{table_name}\" VALUES (?,?,?,?,?,?,?,?,?,?)"),
                 p,
             )
             .map_err(|e| Self::db_err(format!("insert {table_name} failed: {e}")))?;
@@ -1267,7 +1269,34 @@ mod tests {
         );
         exporter.initialize().unwrap();
         exporter.finalize().unwrap();
+        // 含空格和分号的表名应被拒绝
         let result = exporter.write_template_stats(&stats, None, Some("bad name;DROP"));
         assert!(result.is_err(), "非法表名应返回 Err，实际: {result:?}");
+        // 前导数字的表名应被拒绝（WR-01）
+        let result2 = exporter.write_template_stats(&stats, None, Some("1bad"));
+        assert!(
+            result2.is_err(),
+            "前导数字表名应返回 Err，实际: {result2:?}"
+        );
+    }
+
+    // 新增：SQLite 保留字（group）作为带引号的表名时应成功（CR-02）
+    #[test]
+    fn test_sqlite_write_template_stats_reserved_word_table_name() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let dbfile = dir.path().join("reserved.db");
+
+        let stats = vec![make_template_stats_sqlite("SELECT 1")];
+        let mut exporter = SqliteExporter::new(
+            dbfile.to_string_lossy().into(),
+            "sqllog_records".into(),
+            true,
+            false,
+        );
+        exporter.initialize().unwrap();
+        exporter.finalize().unwrap();
+        // "group" 是 SQLite 保留字，加引号后应接受
+        let result = exporter.write_template_stats(&stats, None, Some("group_stats"));
+        assert!(result.is_ok(), "合法标识符应成功：{result:?}");
     }
 }
