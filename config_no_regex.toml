@@ -1,0 +1,9 @@
+[sqllog]
+path = "sqllogs"
+
+[output]
+type = "csv"
+file = "output.csv"
+
+[error]
+file = "errors.log"

@@ -4,7 +4,7 @@ pub mod trend_line;
 pub mod user_pie;
 
 use crate::error::{FileError, Result};
-use crate::features::{ChartEntry, ChartsConfig};
+use crate::pipeline::{ChartEntry, ChartsConfig};
 
 pub(super) fn truncate_label(key: &str, max_chars: usize) -> String {
     let chars: Vec<char> = key.chars().collect();
@@ -17,7 +17,7 @@ pub(super) fn truncate_label(key: &str, max_chars: usize) -> String {
 }
 
 pub fn generate_charts(
-    agg: &crate::features::TemplateAggregator,
+    agg: &crate::pipeline::TemplateAggregator,
     cfg: &ChartsConfig,
 ) -> Result<()> {
     let output_dir = std::path::Path::new(&cfg.output_dir);

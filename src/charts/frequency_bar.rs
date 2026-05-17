@@ -1,5 +1,5 @@
 use crate::error::{Error, FileError};
-use crate::features::ChartEntry;
+use crate::pipeline::ChartEntry;
 use plotters::prelude::*;
 
 const CHART_W: u32 = 1200;
@@ -126,7 +126,7 @@ mod tests {
 
     #[test]
     fn test_draw_frequency_bar_creates_nonempty_svg() {
-        use crate::features::TemplateAggregator;
+        use crate::pipeline::TemplateAggregator;
         use tempfile::TempDir;
 
         let tmp = TempDir::new().unwrap();

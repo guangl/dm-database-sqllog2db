@@ -106,7 +106,7 @@ impl PreflightResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{Config, CsvExporter, ExporterConfig, SqllogConfig};
+    use crate::config::{Config, CsvExporterConfig, ExporterConfig, SqllogConfig};
 
     fn config_with_log_dir(dir: &str) -> Config {
         Config {
@@ -211,11 +211,11 @@ mod tests {
         let out_file = dir.path().join("out.csv");
         let mut cfg = config_with_log_dir(dir.path().to_str().unwrap());
         cfg.exporter = ExporterConfig {
-            csv: Some(CsvExporter {
+            csv: Some(CsvExporterConfig {
                 file: out_file.to_str().unwrap().to_string(),
                 overwrite: false,
                 append: false,
-                ..CsvExporter::default()
+                ..CsvExporterConfig::default()
             }),
             ..Default::default()
         };
@@ -231,11 +231,11 @@ mod tests {
         std::fs::write(&out_file, "").unwrap(); // pre-create file
         let mut cfg = config_with_log_dir(dir.path().to_str().unwrap());
         cfg.exporter = ExporterConfig {
-            csv: Some(CsvExporter {
+            csv: Some(CsvExporterConfig {
                 file: out_file.to_str().unwrap().to_string(),
                 overwrite: false,
                 append: false,
-                ..CsvExporter::default()
+                ..CsvExporterConfig::default()
             }),
             ..Default::default()
         };

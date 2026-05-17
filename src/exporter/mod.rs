@@ -48,7 +48,7 @@ pub trait Exporter {
     /// 默认实现为 no-op，向后兼容现有 exporter。
     fn write_template_stats(
         &mut self,
-        stats: &[crate::features::TemplateStats],
+        stats: &[crate::pipeline::TemplateStats],
         final_path: Option<&std::path::Path>,
     ) -> Result<()> {
         let _ = (stats, final_path);
@@ -118,7 +118,7 @@ impl ExporterKind {
     #[inline]
     fn write_template_stats(
         &mut self,
-        stats: &[crate::features::TemplateStats],
+        stats: &[crate::pipeline::TemplateStats],
         final_path: Option<&std::path::Path>,
     ) -> Result<()> {
         match self {
@@ -198,7 +198,7 @@ impl Exporter for DryRunExporter {
 
     fn write_template_stats(
         &mut self,
-        stats: &[crate::features::TemplateStats],
+        stats: &[crate::pipeline::TemplateStats],
         _final_path: Option<&std::path::Path>,
     ) -> Result<()> {
         info!(
@@ -247,14 +247,10 @@ impl ExporterManager {
     pub fn from_config(config: &Config) -> Result<Self> {
         info!("Initializing exporter manager...");
 
-        let normalize = config
-            .features
-            .replace_parameters
-            .as_ref()
-            .is_none_or(|r| r.enable);
+        let normalize = config.pipeline.normalize.as_ref().is_none_or(|r| r.enable);
 
-        let field_mask = config.features.field_mask();
-        let ordered_indices = config.features.ordered_field_indices();
+        let field_mask = config.pipeline.field_mask();
+        let ordered_indices = config.pipeline.ordered_field_indices();
 
         if let Some(cfg) = &config.exporter.csv {
             info!("Using CSV exporter: {}", cfg.file);
@@ -316,7 +312,7 @@ impl ExporterManager {
 
     pub fn write_template_stats(
         &mut self,
-        stats: &[crate::features::TemplateStats],
+        stats: &[crate::pipeline::TemplateStats],
         final_path: Option<&std::path::Path>,
     ) -> Result<()> {
         self.exporter.write_template_stats(stats, final_path)
@@ -532,7 +528,7 @@ mod tests {
 
     #[test]
     fn test_from_config_sqlite_path() {
-        use crate::config::SqliteExporter as SqliteExporterCfg;
+        use crate::config::SqliteExporterConfig as SqliteExporterCfg;
         use crate::config::{Config, ExporterConfig, SqllogConfig};
         let cfg = Config {
             exporter: ExporterConfig {
@@ -633,8 +629,8 @@ mod tests {
     // ── write_template_stats ───────────────────────────────────
 
     /// 辅助：构造一个最小 `TemplateStats` 实例
-    fn make_template_stats(key: &str) -> crate::features::TemplateStats {
-        crate::features::TemplateStats {
+    fn make_template_stats(key: &str) -> crate::pipeline::TemplateStats {
+        crate::pipeline::TemplateStats {
             template_key: key.to_string(),
             count: 1,
             avg_us: 100,
@@ -704,7 +700,7 @@ mod tests {
     /// Test 4: `ExporterKind` 三个 variant 透传 `write_template_stats` 均不 panic
     #[test]
     fn test_exporter_kind_dispatch_write_template_stats() {
-        let stats: Vec<crate::features::TemplateStats> = vec![];
+        let stats: Vec<crate::pipeline::TemplateStats> = vec![];
 
         // DryRun variant
         let mut dry_run = ExporterKind::DryRun(DryRunExporter::default());
@@ -720,7 +716,7 @@ mod tests {
         assert!(csv_kind.write_template_stats(&stats, None).is_ok());
 
         // SQLite variant — 需要先 initialize 建立数据库连接
-        use crate::config::SqliteExporter as SqliteExporterCfg;
+        use crate::config::SqliteExporterConfig as SqliteExporterCfg;
         let db_path = dir.path().join("test_dispatch.db");
         let sqlite_cfg = SqliteExporterCfg {
             database_url: db_path.to_string_lossy().into(),

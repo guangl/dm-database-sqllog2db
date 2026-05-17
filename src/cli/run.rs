@@ -3,12 +3,12 @@ use crate::config::Config;
 use crate::error::ParserError;
 use crate::error::{Error, Result};
 use crate::exporter::{CsvExporter, ExporterManager};
-use crate::features::filters::RecordMeta;
-use crate::features::replace_parameters::ParamBuffer;
-use crate::features::{
+use crate::parser::SqllogParser;
+use crate::pipeline::filters::RecordMeta;
+use crate::pipeline::normalizer::ParamBuffer;
+use crate::pipeline::{
     CompiledMetaFilters, CompiledSqlFilters, FieldMask, LogProcessor, Pipeline, TemplateAggregator,
 };
-use crate::parser::SqllogParser;
 use ahash::HashSet as AHashSet;
 use compact_str::CompactString;
 use dm_database_parser_sqllog::{LogParser, MetaParts};
@@ -26,7 +26,7 @@ use std::time::{Duration, Instant};
 fn build_pipeline(cfg: &Config, compiled_meta: Option<CompiledMetaFilters>) -> Pipeline {
     let mut pipeline = Pipeline::new();
 
-    if let (Some(f), Some(meta)) = (cfg.features.filters.as_ref(), compiled_meta) {
+    if let (Some(f), Some(meta)) = (cfg.pipeline.filters.as_ref(), compiled_meta) {
         if f.has_filters() {
             pipeline.add(Box::new(FilterProcessor::new(meta, f)));
         }
@@ -51,7 +51,7 @@ impl FilterProcessor {
     /// 避免在 `run` 路径中第二次调用 `Regex::new()`。
     ///
     /// `has_any_filters()` 包含 exclude 字段，确保纯 exclude 配置也激活 meta 检查路径（D-05）
-    fn new(compiled_meta: CompiledMetaFilters, filter: &crate::features::FiltersFeature) -> Self {
+    fn new(compiled_meta: CompiledMetaFilters, filter: &crate::pipeline::FiltersFeature) -> Self {
         let has_meta_filters = compiled_meta.has_any_filters();
         Self {
             compiled_meta,
@@ -210,7 +210,7 @@ fn process_log_file(
                             let ns = if do_normalize
                                 && (!params_buffer.is_empty() || record.tag.is_none())
                             {
-                                crate::features::compute_normalized(
+                                crate::pipeline::compute_normalized(
                                     &record,
                                     &meta,
                                     pm.sql.as_ref(),
@@ -236,7 +236,7 @@ fn process_log_file(
                                 // 此处显式排除 tag.is_none() 的记录，防止重构时意外计入 PARAMS。
                                 if record.tag.is_some() {
                                     let tmpl_key =
-                                        crate::features::normalize_template(pm.sql.as_ref());
+                                        crate::pipeline::normalize_template(pm.sql.as_ref());
                                     let exectime_us = if pm.exectime.is_finite()
                                         && pm.exectime > 0.0
                                     {
@@ -282,7 +282,7 @@ fn process_log_file(
                         // 被过滤掉的 PARAMS 记录（needs_pm 成立说明 do_normalize &&
                         // record.tag.is_none() 为真）：对 PARAMS 记录而言
                         // pm.sql ≡ record.body()，直接复用，省去 parse_performance_metrics()。
-                        crate::features::compute_normalized(
+                        crate::pipeline::compute_normalized(
                             &record,
                             &meta,
                             record.body().as_ref(),
@@ -337,7 +337,7 @@ fn scan_log_file_for_matches(file_path: &str, cfg: &Config) -> Vec<CompactString
     let Ok(parser) = LogParser::from_path(file_path) else {
         return Vec::new();
     };
-    let filters = match &cfg.features.filters {
+    let filters = match &cfg.pipeline.filters {
         Some(f) if f.has_transaction_filters() => f,
         _ => return Vec::new(),
     };
@@ -663,19 +663,19 @@ fn process_csv_parallel(
 
 /// pre-scan 完成后重新编译 `CompiledMetaFilters`。
 ///
-/// 若 `final_cfg` 含有 `features.filters.enable == true`，则从 `final_cfg` 重新编译以包含
+/// 若 `final_cfg` 含有 `pipeline.filters.enable == true`，则从 `final_cfg` 重新编译以包含
 /// 预扫描发现的 trxids；否则直接回传原始值（`compiled_meta` 来自入参）。
 /// 回传原始值的情形：无 filters 配置、filters 禁用、或调用方传 None 时走 None 路径。
 fn recompile_meta_if_needed(
     final_cfg: &Config,
     original: Option<CompiledMetaFilters>,
 ) -> Result<Option<CompiledMetaFilters>> {
-    let filters = match &final_cfg.features.filters {
+    let filters = match &final_cfg.pipeline.filters {
         Some(f) if f.enable => f,
         _ => return Ok(original),
     };
     // 重新从 final_cfg 编译，以捕获 merge_found_trxids 写入的 trxids
-    let recompiled = crate::features::CompiledMetaFilters::try_from_include_exclude(
+    let recompiled = crate::pipeline::CompiledMetaFilters::try_from_include_exclude(
         &filters.include,
         &filters.exclude,
     )?;
@@ -724,14 +724,14 @@ pub fn handle_run(
     // 仅当有事务级过滤器时才克隆配置（避免常规路径的额外分配）
     let owned_cfg;
     let final_cfg: &Config = if cfg
-        .features
+        .pipeline
         .filters
         .as_ref()
-        .is_some_and(crate::features::FiltersFeature::has_transaction_filters)
+        .is_some_and(crate::pipeline::FiltersFeature::has_transaction_filters)
     {
         let extra_trxids = scan_for_trxids_by_transaction_filters(&log_files, cfg, jobs);
         let mut tmp = cfg.clone();
-        if let Some(f) = &mut tmp.features.filters {
+        if let Some(f) = &mut tmp.pipeline.filters {
             // into_iter() yields CompactString; merge_found_trxids 接受 Vec<CompactString>
             f.merge_found_trxids(extra_trxids.into_iter().collect());
         }
@@ -747,28 +747,28 @@ pub fn handle_run(
 
     let pipeline = build_pipeline(final_cfg, compiled_meta_for_pipeline);
 
-    let field_mask = final_cfg.features.field_mask();
-    let ordered_indices = final_cfg.features.ordered_field_indices();
+    let field_mask = final_cfg.pipeline.field_mask();
+    let ordered_indices = final_cfg.pipeline.ordered_field_indices();
     // 如果字段投影排除了 normalized_sql（字段 14），则禁用参数替换计算
     let do_normalize = field_mask.includes_normalized_sql()
         && final_cfg
-            .features
-            .replace_parameters
+            .pipeline
+            .normalize
             .as_ref()
             .is_none_or(|r| r.enable);
     let do_template = final_cfg
-        .features
+        .pipeline
         .template_analysis
         .as_ref()
         .is_some_and(|t| t.enabled);
     let placeholder_override = final_cfg
-        .features
-        .replace_parameters
+        .pipeline
+        .normalize
         .as_ref()
-        .and_then(crate::features::ReplaceParametersConfig::placeholder_override);
+        .and_then(crate::pipeline::NormalizeConfig::placeholder_override);
     let compiled_record_sql: Option<CompiledSqlFilters> = compiled_sql.filter(|_| {
         final_cfg
-            .features
+            .pipeline
             .filters
             .as_ref()
             .is_some_and(|f| f.enable && f.record_sql.has_filters())
@@ -810,7 +810,7 @@ pub fn handle_run(
         skipped_files = parallel_skipped;
 
         if let Some(ref agg) = parallel_agg {
-            if let Some(charts_cfg) = final_cfg.features.charts.as_ref() {
+            if let Some(charts_cfg) = final_cfg.pipeline.charts.as_ref() {
                 crate::charts::generate_charts(agg, charts_cfg)?;
             }
         }
@@ -917,7 +917,7 @@ pub fn handle_run(
         }
 
         if let Some(ref agg) = template_agg {
-            if let Some(charts_cfg) = final_cfg.features.charts.as_ref() {
+            if let Some(charts_cfg) = final_cfg.pipeline.charts.as_ref() {
                 crate::charts::generate_charts(agg, charts_cfg)?;
             }
         }
@@ -1023,7 +1023,7 @@ mod tests {
         assert!(header.contains("sql"), "sql column should remain: {header}");
     }
 
-    /// 当 `features.template_analysis` 未配置时，`do_template=false`，
+    /// 当 `pipeline.template_analysis` 未配置时，`do_template=false`，
     /// `handle_run` 应正常完成且不 panic。
     #[test]
     fn test_aggregator_disabled_none_path() {
@@ -1038,7 +1038,7 @@ mod tests {
         let error_log = dir.path().join("errors.log");
         let app_log = dir.path().join("app.log");
 
-        // 故意不添加 [features.template_analysis]，确保走 do_template=false 路径
+        // 故意不添加 [pipeline.template_analysis]，确保走 do_template=false 路径
         let toml = format!(
             "[sqllog]\ndirectory = \"{logdir}\"\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n",
             logdir = dir.path().to_string_lossy().replace('\\', "/"),
@@ -1082,7 +1082,7 @@ mod tests {
 
         let make_cfg = |csv_file: &str| {
             let toml = format!(
-                "[sqllog]\ndirectory = \"{logdir}\"\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n[features.template_analysis]\nenabled = true\n",
+                "[sqllog]\ndirectory = \"{logdir}\"\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n[pipeline.template_analysis]\nenabled = true\n",
                 logdir = dir.path().to_string_lossy().replace('\\', "/"),
                 errlog = error_log.to_string_lossy().replace('\\', "/"),
                 applog = app_log.to_string_lossy().replace('\\', "/"),
@@ -1154,7 +1154,7 @@ mod tests {
         let error_log = dir.path().join("errors.log");
         let app_log = dir.path().join("app.log");
 
-        // 不设置 [features.template_analysis]，触发 disabled 路径（template_agg=None）
+        // 不设置 [pipeline.template_analysis]，触发 disabled 路径（template_agg=None）
         let toml = format!(
             "[sqllog]\ndirectory = \"{logdir}\"\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n",
             logdir = dir.path().to_string_lossy().replace('\\', "/"),
@@ -1202,7 +1202,7 @@ mod tests {
 
         // jobs=1 强制走顺序路径；enabled=true 启用模板分析
         let toml = format!(
-            "[sqllog]\ndirectory = \"{logdir}\"\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n[features.template_analysis]\nenabled = true\n",
+            "[sqllog]\ndirectory = \"{logdir}\"\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n[pipeline.template_analysis]\nenabled = true\n",
             logdir = dir.path().to_string_lossy().replace('\\', "/"),
             errlog = error_log.to_string_lossy().replace('\\', "/"),
             applog = app_log.to_string_lossy().replace('\\', "/"),

@@ -7,11 +7,11 @@ use dm_database_sqllog2db::cli::show_config::handle_show_config;
 use dm_database_sqllog2db::cli::stats::handle_stats;
 use dm_database_sqllog2db::cli::validate::handle_validate;
 use dm_database_sqllog2db::config::{
-    Config, CsvExporter, ExporterConfig, SqliteExporter, SqllogConfig,
+    Config, CsvExporterConfig, ExporterConfig, SqliteExporterConfig, SqllogConfig,
 };
-use dm_database_sqllog2db::features::filters::{ExcludeFilters, IncludeFilters};
-use dm_database_sqllog2db::features::{FeaturesConfig, FiltersFeature, ReplaceParametersConfig};
 use dm_database_sqllog2db::lang::Lang;
+use dm_database_sqllog2db::pipeline::filters::{ExcludeFilters, IncludeFilters};
+use dm_database_sqllog2db::pipeline::{FiltersFeature, NormalizeConfig, PipelineConfig};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
@@ -38,11 +38,11 @@ fn make_run_config(log_dir: &std::path::Path, csv_file: &std::path::Path) -> Con
             path: log_dir.to_str().unwrap().to_string(),
         },
         exporter: ExporterConfig {
-            csv: Some(CsvExporter {
+            csv: Some(CsvExporterConfig {
                 file: csv_file.to_str().unwrap().to_string(),
                 overwrite: true,
                 append: false,
-                ..CsvExporter::default()
+                ..CsvExporterConfig::default()
             }),
             ..Default::default()
         },
@@ -724,7 +724,7 @@ fn test_handle_validate_with_sqlite_exporter() {
     let cfg = Config {
         exporter: ExporterConfig {
             csv: None,
-            sqlite: Some(SqliteExporter {
+            sqlite: Some(SqliteExporterConfig {
                 database_url: "/tmp/test.db".to_string(),
                 table_name: "records".to_string(),
                 overwrite: true,
@@ -740,8 +740,8 @@ fn test_handle_validate_with_sqlite_exporter() {
 #[test]
 fn test_handle_validate_with_replace_parameters_none() {
     let cfg = Config {
-        features: FeaturesConfig {
-            replace_parameters: None,
+        pipeline: PipelineConfig {
+            normalize: None,
             ..Default::default()
         },
         ..Default::default()
@@ -752,8 +752,8 @@ fn test_handle_validate_with_replace_parameters_none() {
 #[test]
 fn test_handle_validate_with_replace_parameters_some() {
     let cfg = Config {
-        features: FeaturesConfig {
-            replace_parameters: Some(ReplaceParametersConfig {
+        pipeline: PipelineConfig {
+            normalize: Some(NormalizeConfig {
                 enable: true,
                 placeholders: vec!["?".to_string()],
             }),
@@ -767,7 +767,7 @@ fn test_handle_validate_with_replace_parameters_some() {
 #[test]
 fn test_handle_validate_with_filters_none() {
     let cfg = Config {
-        features: FeaturesConfig {
+        pipeline: PipelineConfig {
             filters: None,
             ..Default::default()
         },
@@ -778,9 +778,9 @@ fn test_handle_validate_with_filters_none() {
 
 #[test]
 fn test_handle_validate_with_filters_all_fields() {
-    use dm_database_sqllog2db::features::filters::{IndicatorFilters, SqlFilters};
+    use dm_database_sqllog2db::pipeline::filters::{IndicatorFilters, SqlFilters};
     let cfg = Config {
-        features: FeaturesConfig {
+        pipeline: PipelineConfig {
             filters: Some(FiltersFeature {
                 enable: true,
                 include: IncludeFilters {
@@ -817,9 +817,9 @@ fn test_handle_validate_with_filters_all_fields() {
 
 #[test]
 fn test_handle_validate_filters_disabled() {
-    use dm_database_sqllog2db::features::filters::IndicatorFilters;
+    use dm_database_sqllog2db::pipeline::filters::IndicatorFilters;
     let cfg = Config {
-        features: FeaturesConfig {
+        pipeline: PipelineConfig {
             filters: Some(FiltersFeature {
                 enable: false,
                 include: IncludeFilters::default(),
@@ -870,7 +870,7 @@ fn test_handle_run_with_filters_builds_pipeline() {
     let csv_file = dir.path().join("out.csv");
     let mut cfg = make_run_config(&log_dir, &csv_file);
     // Enable a record-level filter — exercises build_pipeline and FilterProcessor
-    cfg.features.filters = Some(FiltersFeature {
+    cfg.pipeline.filters = Some(FiltersFeature {
         enable: true,
         include: IncludeFilters {
             users: Some(vec!["TESTUSER".to_string()]),
@@ -933,11 +933,11 @@ fn test_handle_run_with_transaction_filters_prescans() {
     let csv_file = dir.path().join("out.csv");
     let mut cfg = make_run_config(&log_dir, &csv_file);
     // exec_ids filter triggers transaction pre-scan path
-    cfg.features.filters = Some(FiltersFeature {
+    cfg.pipeline.filters = Some(FiltersFeature {
         enable: true,
         include: IncludeFilters::default(),
         exclude: ExcludeFilters::default(),
-        indicators: dm_database_sqllog2db::features::filters::IndicatorFilters {
+        indicators: dm_database_sqllog2db::pipeline::filters::IndicatorFilters {
             exec_ids: Some([0_i64, 1, 2].into_iter().collect()),
             min_runtime_ms: None,
             min_row_count: None,
@@ -968,11 +968,11 @@ fn test_handle_run_with_min_runtime_filter() {
     write_test_log(&log_dir.join("data.log"), 20);
     let csv_file = dir.path().join("out.csv");
     let mut cfg = make_run_config(&log_dir, &csv_file);
-    cfg.features.filters = Some(FiltersFeature {
+    cfg.pipeline.filters = Some(FiltersFeature {
         enable: true,
         include: IncludeFilters::default(),
         exclude: ExcludeFilters::default(),
-        indicators: dm_database_sqllog2db::features::filters::IndicatorFilters {
+        indicators: dm_database_sqllog2db::pipeline::filters::IndicatorFilters {
             exec_ids: None,
             min_runtime_ms: Some(1),
             min_row_count: None,
@@ -1162,20 +1162,20 @@ fn test_init_generates_new_nested_format() {
     handle_init(path_str, false, Lang::Zh).unwrap();
     let content = std::fs::read_to_string(&path).unwrap();
     assert!(
-        content.contains("[features.filters.include]"),
-        "init template must contain [features.filters.include]"
+        content.contains("[pipeline.filters.include]"),
+        "init template must contain [pipeline.filters.include]"
     );
     assert!(
-        content.contains("[features.filters.exclude]"),
-        "init template must contain [features.filters.exclude]"
+        content.contains("[pipeline.filters.exclude]"),
+        "init template must contain [pipeline.filters.exclude]"
     );
     assert!(
-        content.contains("[features.filters.indicators]"),
-        "init template must contain [features.filters.indicators]"
+        content.contains("[pipeline.filters.indicators]"),
+        "init template must contain [pipeline.filters.indicators]"
     );
     assert!(
-        content.contains("[features.filters.sql]"),
-        "init template must contain [features.filters.sql]"
+        content.contains("[pipeline.filters.sql]"),
+        "init template must contain [pipeline.filters.sql]"
     );
     assert!(
         !content.contains("\nusernames = "),

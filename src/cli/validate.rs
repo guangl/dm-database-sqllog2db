@@ -7,14 +7,14 @@ pub fn handle_validate(cfg: &Config) {
     info!("日志文件: {}", cfg.logging.file);
     info!("日志保留: {} 天", cfg.logging.retention_days);
 
-    match &cfg.features.replace_parameters {
+    match &cfg.pipeline.normalize {
         Some(rp) => info!(
-            "features.replace_parameters: enable={}, placeholders={:?}",
+            "pipeline.normalize: enable={}, placeholders={:?}",
             rp.enable, rp.placeholders
         ),
-        None => info!("features.replace_parameters: 未配置（默认启用，自动检测占位符）"),
+        None => info!("pipeline.normalize: 未配置（默认启用，自动检测占位符）"),
     }
-    match &cfg.features.filters {
+    match &cfg.pipeline.filters {
         Some(f) => {
             info!(
                 "features.filters: {}",

@@ -4,9 +4,10 @@ pub mod color;
 pub mod config;
 pub mod error;
 pub mod exporter;
-pub mod features;
-pub use exporter::*;
 pub mod lang;
 pub mod logging;
 pub mod parser;
+pub mod pipeline;
 pub mod resume;
+
+pub use exporter::{CsvExporter, Exporter, SqliteExporter};

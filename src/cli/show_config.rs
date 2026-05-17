@@ -83,9 +83,9 @@ pub fn handle_show_config(cfg: &Config, config_path: &str, diff: bool) {
         println!();
     }
 
-    // [features]
-    if let Some(rp) = &cfg.features.replace_parameters {
-        println!("{}", color::cyan("[features.replace_parameters]"));
+    // [pipeline]
+    if let Some(rp) = &cfg.pipeline.normalize {
+        println!("{}", color::cyan("[pipeline.normalize]"));
         kv("enable", &rp.enable.to_string(), None, diff);
         if !rp.placeholders.is_empty() {
             kv(
@@ -98,8 +98,8 @@ pub fn handle_show_config(cfg: &Config, config_path: &str, diff: bool) {
         println!();
     }
 
-    if let Some(f) = &cfg.features.filters {
-        println!("{}", color::cyan("[features.filters]"));
+    if let Some(f) = &cfg.pipeline.filters {
+        println!("{}", color::cyan("[pipeline.filters]"));
         kv("enable", &f.enable.to_string(), None, diff);
         // include 子表
         if let Some(users) = &f.include.users {
@@ -191,14 +191,14 @@ pub fn handle_show_config(cfg: &Config, config_path: &str, diff: bool) {
         println!();
     }
 
-    if let Some(ta) = &cfg.features.template_analysis {
-        println!("{}", color::cyan("[features.template_analysis]"));
+    if let Some(ta) = &cfg.pipeline.template_analysis {
+        println!("{}", color::cyan("[pipeline.template_analysis]"));
         kv("enabled", &ta.enabled.to_string(), None, diff);
         println!();
     }
 
-    if let Some(charts) = &cfg.features.charts {
-        println!("{}", color::cyan("[features.charts]"));
+    if let Some(charts) = &cfg.pipeline.charts {
+        println!("{}", color::cyan("[pipeline.charts]"));
         kv("output_dir", &charts.output_dir, None, diff);
         kv("top_n", &charts.top_n.to_string(), None, diff);
         kv(
@@ -230,8 +230,8 @@ fn kv(key: &str, value: &str, default: Option<&str>, diff: bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{Config, ExporterConfig, SqliteExporter};
-    use crate::features::{FeaturesConfig, FiltersFeature, ReplaceParametersConfig};
+    use crate::config::{Config, ExporterConfig, SqliteExporterConfig};
+    use crate::pipeline::{FiltersFeature, NormalizeConfig, PipelineConfig};
 
     #[test]
     fn test_handle_show_config_default_does_not_panic() {
@@ -259,7 +259,7 @@ mod tests {
         let cfg = Config {
             exporter: ExporterConfig {
                 csv: None,
-                sqlite: Some(SqliteExporter {
+                sqlite: Some(SqliteExporterConfig {
                     database_url: "out.db".to_string(),
                     table_name: "logs".to_string(),
                     overwrite: false,
@@ -277,7 +277,7 @@ mod tests {
         let cfg = Config {
             exporter: ExporterConfig {
                 csv: None,
-                sqlite: Some(SqliteExporter::default()),
+                sqlite: Some(SqliteExporterConfig::default()),
             },
             ..Default::default()
         };
@@ -288,8 +288,8 @@ mod tests {
     #[test]
     fn test_handle_show_config_with_replace_parameters() {
         let cfg = Config {
-            features: FeaturesConfig {
-                replace_parameters: Some(ReplaceParametersConfig {
+            pipeline: PipelineConfig {
+                normalize: Some(NormalizeConfig {
                     enable: true,
                     placeholders: vec!["?".to_string()],
                 }),
@@ -306,8 +306,8 @@ mod tests {
     #[test]
     fn test_handle_show_config_with_filters() {
         let cfg = Config {
-            features: FeaturesConfig {
-                replace_parameters: None,
+            pipeline: PipelineConfig {
+                normalize: None,
                 filters: Some(FiltersFeature {
                     enable: true,
                     ..Default::default()

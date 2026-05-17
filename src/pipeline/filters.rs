@@ -205,7 +205,7 @@ impl From<RawFiltersFeature> for FiltersFeature {
 
         if raw.include.is_some() && flat_include_present {
             log::warn!(
-                "[features.filters] contains both a `[features.filters.include]` sub-table \
+                "[pipeline.filters] contains both a `[pipeline.filters.include]` sub-table \
                  and legacy flat fields (e.g. `usernames`). The sub-table takes priority; \
                  flat fields are ignored. Remove the legacy keys to suppress this warning."
             );
@@ -221,7 +221,7 @@ impl From<RawFiltersFeature> for FiltersFeature {
 
         if raw.exclude.is_some() && flat_exclude_present {
             log::warn!(
-                "[features.filters] contains both a `[features.filters.exclude]` sub-table \
+                "[pipeline.filters] contains both a `[pipeline.filters.exclude]` sub-table \
                  and legacy flat exclude fields (e.g. `exclude_usernames`). The sub-table takes priority; \
                  flat fields are ignored. Remove the legacy keys to suppress this warning."
             );
@@ -392,51 +392,51 @@ impl CompiledMetaFilters {
     ) -> crate::error::Result<Self> {
         Ok(Self {
             usernames: compile_patterns(
-                "features.filters.include.users",
+                "pipeline.filters.include.users",
                 include.users.as_deref(),
             )?,
-            client_ips: compile_patterns("features.filters.include.ips", include.ips.as_deref())?,
+            client_ips: compile_patterns("pipeline.filters.include.ips", include.ips.as_deref())?,
             sess_ids: compile_patterns(
-                "features.filters.include.sessions",
+                "pipeline.filters.include.sessions",
                 include.sessions.as_deref(),
             )?,
             thrd_ids: compile_patterns(
-                "features.filters.include.threads",
+                "pipeline.filters.include.threads",
                 include.threads.as_deref(),
             )?,
             statements: compile_patterns(
-                "features.filters.include.statements",
+                "pipeline.filters.include.statements",
                 include.statements.as_deref(),
             )?,
-            appnames: compile_patterns("features.filters.include.apps", include.apps.as_deref())?,
-            tags: compile_patterns("features.filters.include.tags", include.tags.as_deref())?,
+            appnames: compile_patterns("pipeline.filters.include.apps", include.apps.as_deref())?,
+            tags: compile_patterns("pipeline.filters.include.tags", include.tags.as_deref())?,
             trxids: include.trxids.clone(),
             exclude_usernames: compile_patterns(
-                "features.filters.exclude.users",
+                "pipeline.filters.exclude.users",
                 exclude.users.as_deref(),
             )?,
             exclude_client_ips: compile_patterns(
-                "features.filters.exclude.ips",
+                "pipeline.filters.exclude.ips",
                 exclude.ips.as_deref(),
             )?,
             exclude_sess_ids: compile_patterns(
-                "features.filters.exclude.sessions",
+                "pipeline.filters.exclude.sessions",
                 exclude.sessions.as_deref(),
             )?,
             exclude_thrd_ids: compile_patterns(
-                "features.filters.exclude.threads",
+                "pipeline.filters.exclude.threads",
                 exclude.threads.as_deref(),
             )?,
             exclude_statements: compile_patterns(
-                "features.filters.exclude.statements",
+                "pipeline.filters.exclude.statements",
                 exclude.statements.as_deref(),
             )?,
             exclude_appnames: compile_patterns(
-                "features.filters.exclude.apps",
+                "pipeline.filters.exclude.apps",
                 exclude.apps.as_deref(),
             )?,
             exclude_tags: compile_patterns(
-                "features.filters.exclude.tags",
+                "pipeline.filters.exclude.tags",
                 exclude.tags.as_deref(),
             )?,
         })
@@ -577,11 +577,11 @@ impl CompiledSqlFilters {
     pub fn try_from_sql_filters(sf: &SqlFilters) -> crate::error::Result<Self> {
         Ok(Self {
             include_patterns: compile_patterns(
-                "features.filters.record_sql.includes",
+                "pipeline.filters.record_sql.includes",
                 sf.includes.as_deref(),
             )?,
             exclude_patterns: compile_patterns(
-                "features.filters.record_sql.excludes",
+                "pipeline.filters.record_sql.excludes",
                 sf.excludes.as_deref(),
             )?,
         })
@@ -1270,7 +1270,7 @@ mod tests {
             users: Some(vec!["[invalid".to_string()]),
             ..ExcludeFilters::default()
         };
-        let result = crate::features::filters::CompiledMetaFilters::try_from_include_exclude(
+        let result = crate::pipeline::filters::CompiledMetaFilters::try_from_include_exclude(
             &IncludeFilters::default(),
             &exclude,
         );
@@ -1307,16 +1307,16 @@ mod tests {
         let toml = r#"
 [sqllog]
 path = "sqllogs"
-[features.filters]
+[pipeline.filters]
 enable = true
 trxids = ["123", "456"]
-[features.filters.indicators]
+[pipeline.filters.indicators]
 exec_ids = [1, 2, 3]
 [exporter.csv]
 file = "out.csv"
 "#;
         let cfg: Config = toml::from_str(toml).unwrap();
-        let filters = cfg.features.filters.unwrap();
+        let filters = cfg.pipeline.filters.unwrap();
         assert!(filters.include.trxids.is_some());
         assert_eq!(filters.include.trxids.unwrap().len(), 2);
         assert!(filters.indicators.exec_ids.is_some());
@@ -1331,9 +1331,9 @@ file = "out.csv"
         let toml = r#"
 [sqllog]
 path = "sqllogs"
-[features.filters]
+[pipeline.filters]
 enable = true
-[features.filters.include]
+[pipeline.filters.include]
 users = ["user1"]
 ips = ["192.168.1.1"]
 sessions = ["s001"]
@@ -1348,7 +1348,7 @@ trxids = ["123456"]
 file = "out.csv"
 "#;
         let cfg: Config = toml::from_str(toml).unwrap();
-        let filters = cfg.features.filters.unwrap();
+        let filters = cfg.pipeline.filters.unwrap();
         assert_eq!(filters.include.users, Some(vec!["user1".to_string()]));
         assert_eq!(filters.include.ips, Some(vec!["192.168.1.1".to_string()]));
         assert!(filters.include.trxids.is_some());
@@ -1361,9 +1361,9 @@ file = "out.csv"
         let toml = r#"
 [sqllog]
 path = "sqllogs"
-[features.filters]
+[pipeline.filters]
 enable = true
-[features.filters.exclude]
+[pipeline.filters.exclude]
 users = ["admin"]
 ips = ["10.0.0.1"]
 sessions = ["s999"]
@@ -1375,7 +1375,7 @@ tags = ["sys"]
 file = "out.csv"
 "#;
         let cfg: Config = toml::from_str(toml).unwrap();
-        let filters = cfg.features.filters.unwrap();
+        let filters = cfg.pipeline.filters.unwrap();
         assert_eq!(filters.exclude.users, Some(vec!["admin".to_string()]));
         assert_eq!(filters.exclude.ips, Some(vec!["10.0.0.1".to_string()]));
     }
@@ -1386,7 +1386,7 @@ file = "out.csv"
         let toml = r#"
 [sqllog]
 path = "sqllogs"
-[features.filters]
+[pipeline.filters]
 enable = true
 usernames = ["user1"]
 exclude_usernames = ["admin"]
@@ -1409,7 +1409,7 @@ trxids = ["123"]
 file = "out.csv"
 "#;
         let cfg: Config = toml::from_str(toml).unwrap();
-        let filters = cfg.features.filters.unwrap();
+        let filters = cfg.pipeline.filters.unwrap();
         // include 类字段映射到 filters.include
         assert_eq!(filters.include.users, Some(vec!["user1".to_string()]));
         assert_eq!(filters.include.ips, Some(vec!["192.168.1.1".to_string()]));
@@ -1426,16 +1426,16 @@ file = "out.csv"
         let toml = r#"
 [sqllog]
 path = "sqllogs"
-[features.filters]
+[pipeline.filters]
 enable = true
-[features.filters.sql]
+[pipeline.filters.sql]
 include_patterns = ["SELECT"]
 exclude_patterns = ["DROP"]
 [exporter.csv]
 file = "out.csv"
 "#;
         let cfg: Config = toml::from_str(toml).unwrap();
-        let filters = cfg.features.filters.unwrap();
+        let filters = cfg.pipeline.filters.unwrap();
         assert_eq!(filters.sql.includes, Some(vec!["SELECT".to_string()]));
         assert_eq!(filters.sql.excludes, Some(vec!["DROP".to_string()]));
     }
@@ -1446,16 +1446,16 @@ file = "out.csv"
         let toml = r#"
 [sqllog]
 path = "sqllogs"
-[features.filters]
+[pipeline.filters]
 enable = true
-[features.filters.sql]
+[pipeline.filters.sql]
 includes = ["FROM USER_TABLES"]
 excludes = ["SELECT 1", "DUAL"]
 [exporter.csv]
 file = "out.csv"
 "#;
         let cfg: Config = toml::from_str(toml).unwrap();
-        let filters = cfg.features.filters.unwrap();
+        let filters = cfg.pipeline.filters.unwrap();
         assert_eq!(
             filters.sql.includes,
             Some(vec!["FROM USER_TABLES".to_string()])
@@ -1472,16 +1472,16 @@ file = "out.csv"
         let toml = r#"
 [sqllog]
 path = "sqllogs"
-[features.filters]
+[pipeline.filters]
 enable = true
 usernames = ["old_user"]
-[features.filters.include]
+[pipeline.filters.include]
 users = ["new_user"]
 [exporter.csv]
 file = "out.csv"
 "#;
         let cfg: Config = toml::from_str(toml).unwrap();
-        let filters = cfg.features.filters.unwrap();
+        let filters = cfg.pipeline.filters.unwrap();
         // 新格式子表优先
         assert_eq!(
             filters.include.users,

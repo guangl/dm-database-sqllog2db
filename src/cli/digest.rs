@@ -1,7 +1,7 @@
 use crate::color;
 use crate::config::Config;
-use crate::features::fingerprint;
 use crate::parser::SqllogParser;
+use crate::pipeline::fingerprint;
 use dm_database_parser_sqllog::LogParser;
 use indicatif::{HumanCount, ProgressBar, ProgressStyle};
 use serde::Serialize;

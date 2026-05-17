@@ -1,7 +1,16 @@
-use crate::error::{ConfigError, Error, Result};
+pub mod exporter;
+pub mod logging;
+pub mod resume;
+pub mod sqllog;
 
-pub const LOG_LEVELS: &[&str] = &["trace", "debug", "info", "warn", "error"];
-pub use crate::features::FeaturesConfig;
+pub use exporter::{CsvExporterConfig, ExporterConfig, SqliteExporterConfig};
+pub use logging::{LOG_LEVELS, LoggingConfig};
+pub use resume::ResumeConfig;
+pub use sqllog::SqllogConfig;
+
+pub use crate::pipeline::PipelineConfig;
+
+use crate::error::{ConfigError, Error, Result};
 use serde::Deserialize;
 use std::path::Path;
 
@@ -12,30 +21,11 @@ pub struct Config {
     #[serde(default)]
     pub logging: LoggingConfig,
     #[serde(default)]
-    pub features: FeaturesConfig,
+    pub pipeline: PipelineConfig,
     #[serde(default)]
     pub exporter: ExporterConfig,
     #[serde(default)]
     pub resume: ResumeConfig,
-}
-
-#[derive(Debug, Deserialize, Clone)]
-pub struct ResumeConfig {
-    /// 状态文件路径，`--resume` 模式下用于记录已处理文件的指纹
-    #[serde(default = "default_state_file")]
-    pub state_file: String,
-}
-
-fn default_state_file() -> String {
-    ".sqllog2db_state.toml".to_string()
-}
-
-impl Default for ResumeConfig {
-    fn default() -> Self {
-        Self {
-            state_file: default_state_file(),
-        }
-    }
 }
 
 impl Config {
@@ -55,89 +45,39 @@ impl Config {
         self.logging.validate()?;
         self.exporter.validate()?;
         self.sqllog.validate()?;
-        if let Some(filters) = &self.features.filters {
-            if filters.enable {
-                crate::features::filters::CompiledMetaFilters::try_from_include_exclude(
-                    &filters.include,
-                    &filters.exclude,
-                )?;
-                crate::features::filters::CompiledSqlFilters::try_from_sql_filters(
-                    &filters.record_sql,
-                )?;
-            }
-        }
-        if let Some(names) = &self.features.fields {
-            for name in names {
-                if !crate::features::FIELD_NAMES.contains(&name.as_str()) {
-                    return Err(Error::Config(ConfigError::InvalidValue {
-                        field: "features.fields".to_string(),
-                        value: name.clone(),
-                        reason: format!(
-                            "unknown field '{name}'; valid fields: {}",
-                            crate::features::FIELD_NAMES.join(", ")
-                        ),
-                    }));
-                }
-            }
-        }
-        if let Some(charts) = &self.features.charts {
-            let ta_enabled = self
-                .features
-                .template_analysis
-                .as_ref()
-                .is_some_and(|ta| ta.enabled);
-            if !ta_enabled {
-                return Err(Error::Config(ConfigError::InvalidValue {
-                    field: "features.charts".to_string(),
-                    value: String::new(),
-                    reason: "启用 [features.charts] 需要先设置 [features.template_analysis]\nenabled = true".to_string(),
-                }));
-            }
-            if charts.output_dir.trim().is_empty() {
-                return Err(Error::Config(ConfigError::InvalidValue {
-                    field: "features.charts.output_dir".to_string(),
-                    value: charts.output_dir.clone(),
-                    reason: "charts output_dir cannot be empty".to_string(),
-                }));
-            }
-            if charts.top_n == 0 {
-                return Err(Error::Config(ConfigError::InvalidValue {
-                    field: "features.charts.top_n".to_string(),
-                    value: "0".to_string(),
-                    reason: "top_n must be greater than 0".to_string(),
-                }));
-            }
-        }
+        self.validate_pipeline_filters()?;
+        self.validate_pipeline_fields()?;
+        self.validate_pipeline_charts()?;
         Ok(())
     }
 
     /// 等价于 `validate()` 但额外返回已编译的过滤器对，供调用方复用，
-    /// 消除 `run` 子命令路径中 regex 的双重编译（per ROADMAP SC-2 / PERF-11）。
+    /// 消除 `run` 子命令路径中 regex 的双重编译。
     ///
     /// 返回值语义：
-    /// - `Ok(None)`：无过滤器配置 或 `features.filters.enable == false`
+    /// - `Ok(None)`：无过滤器配置 或 `pipeline.filters.enable == false`
     /// - `Ok(Some((meta, sql)))`：过滤器已编译，调用方可直接传递给 `build_pipeline`
-    /// - `Err(_)`：任意子校验失败（logging/exporter/sqllog/fields/正则编译）
+    /// - `Err(_)`：任意子校验失败
     pub fn validate_and_compile(
         &self,
     ) -> Result<
         Option<(
-            crate::features::CompiledMetaFilters,
-            crate::features::CompiledSqlFilters,
+            crate::pipeline::CompiledMetaFilters,
+            crate::pipeline::CompiledSqlFilters,
         )>,
     > {
         self.logging.validate()?;
         self.exporter.validate()?;
         self.sqllog.validate()?;
 
-        let compiled = if let Some(filters) = &self.features.filters {
+        let compiled = if let Some(filters) = &self.pipeline.filters {
             if filters.enable {
-                let meta = crate::features::CompiledMetaFilters::try_from_include_exclude(
+                let meta = crate::pipeline::CompiledMetaFilters::try_from_include_exclude(
                     &filters.include,
                     &filters.exclude,
                 )?;
                 let sql =
-                    crate::features::CompiledSqlFilters::try_from_sql_filters(&filters.record_sql)?;
+                    crate::pipeline::CompiledSqlFilters::try_from_sql_filters(&filters.record_sql)?;
                 Some((meta, sql))
             } else {
                 None
@@ -146,49 +86,8 @@ impl Config {
             None
         };
 
-        if let Some(names) = &self.features.fields {
-            for name in names {
-                if !crate::features::FIELD_NAMES.contains(&name.as_str()) {
-                    return Err(Error::Config(ConfigError::InvalidValue {
-                        field: "features.fields".to_string(),
-                        value: name.clone(),
-                        reason: format!(
-                            "unknown field '{name}'; valid fields: {}",
-                            crate::features::FIELD_NAMES.join(", ")
-                        ),
-                    }));
-                }
-            }
-        }
-        if let Some(charts) = &self.features.charts {
-            let ta_enabled = self
-                .features
-                .template_analysis
-                .as_ref()
-                .is_some_and(|ta| ta.enabled);
-            if !ta_enabled {
-                return Err(Error::Config(ConfigError::InvalidValue {
-                    field: "features.charts".to_string(),
-                    value: String::new(),
-                    reason: "启用 [features.charts] 需要先设置 [features.template_analysis]\nenabled = true".to_string(),
-                }));
-            }
-            if charts.output_dir.trim().is_empty() {
-                return Err(Error::Config(ConfigError::InvalidValue {
-                    field: "features.charts.output_dir".to_string(),
-                    value: charts.output_dir.clone(),
-                    reason: "charts output_dir cannot be empty".to_string(),
-                }));
-            }
-            if charts.top_n == 0 {
-                return Err(Error::Config(ConfigError::InvalidValue {
-                    field: "features.charts.top_n".to_string(),
-                    value: "0".to_string(),
-                    reason: "top_n must be greater than 0".to_string(),
-                }));
-            }
-        }
-
+        self.validate_pipeline_fields()?;
+        self.validate_pipeline_charts()?;
         Ok(compiled)
     }
 
@@ -302,26 +201,26 @@ impl Config {
                     .batch_size = parsed;
             }
 
-            "features.filters.enable" => {
-                self.features
+            "pipeline.filters.enable" => {
+                self.pipeline
                     .filters
                     .get_or_insert_with(Default::default)
                     .enable = parse_bool(value)?;
             }
-            "features.replace_parameters.enable" => {
-                self.features
-                    .replace_parameters
+            "pipeline.normalize.enable" => {
+                self.pipeline
+                    .normalize
                     .get_or_insert_with(Default::default)
                     .enable = parse_bool(value)?;
             }
-            "features.template_analysis.enabled" => {
-                self.features
+            "pipeline.template_analysis.enabled" => {
+                self.pipeline
                     .template_analysis
                     .get_or_insert_with(Default::default)
                     .enabled = parse_bool(value)?;
             }
 
-            "features.charts.output_dir" => {
+            "pipeline.charts.output_dir" => {
                 if value.trim().is_empty() {
                     return Err(Error::Config(ConfigError::InvalidValue {
                         field: key.to_string(),
@@ -329,12 +228,12 @@ impl Config {
                         reason: "charts output_dir cannot be empty".to_string(),
                     }));
                 }
-                self.features
+                self.pipeline
                     .charts
                     .get_or_insert_with(Default::default)
                     .output_dir = value.to_string();
             }
-            "features.charts.top_n" => {
+            "pipeline.charts.top_n" => {
                 let parsed = value.parse::<usize>().map_err(|_| {
                     Error::Config(ConfigError::InvalidValue {
                         field: key.to_string(),
@@ -349,31 +248,31 @@ impl Config {
                         reason: "top_n must be greater than 0".to_string(),
                     }));
                 }
-                self.features
+                self.pipeline
                     .charts
                     .get_or_insert_with(Default::default)
                     .top_n = parsed;
             }
-            "features.charts.frequency_bar" => {
-                self.features
+            "pipeline.charts.frequency_bar" => {
+                self.pipeline
                     .charts
                     .get_or_insert_with(Default::default)
                     .frequency_bar = parse_bool(value)?;
             }
-            "features.charts.latency_hist" => {
-                self.features
+            "pipeline.charts.latency_hist" => {
+                self.pipeline
                     .charts
                     .get_or_insert_with(Default::default)
                     .latency_hist = parse_bool(value)?;
             }
-            "features.charts.trend_line" => {
-                self.features
+            "pipeline.charts.trend_line" => {
+                self.pipeline
                     .charts
                     .get_or_insert_with(Default::default)
                     .trend_line = parse_bool(value)?;
             }
-            "features.charts.user_pie" => {
-                self.features
+            "pipeline.charts.user_pie" => {
+                self.pipeline
                     .charts
                     .get_or_insert_with(Default::default)
                     .user_pie = parse_bool(value)?;
@@ -383,251 +282,77 @@ impl Config {
         }
         Ok(())
     }
-}
 
-#[derive(Debug, Deserialize, Clone)]
-pub struct SqllogConfig {
-    /// 日志文件路径：目录、单文件或 glob 模式（e.g. `sqllogs/*.log`）
-    /// 旧配置中的 `directory` 键仍被接受。
-    #[serde(alias = "directory")]
-    pub path: String,
-}
-
-impl Default for SqllogConfig {
-    fn default() -> Self {
-        Self {
-            path: "sqllogs".to_string(),
-        }
-    }
-}
-
-impl SqllogConfig {
-    pub fn validate(&self) -> Result<()> {
-        if self.path.trim().is_empty() {
-            return Err(Error::Config(ConfigError::InvalidValue {
-                field: "sqllog.path".to_string(),
-                value: self.path.clone(),
-                reason: "Input path cannot be empty".to_string(),
-            }));
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug, Deserialize, Clone)]
-pub struct LoggingConfig {
-    #[serde(default = "default_logging_file")]
-    pub file: String,
-    #[serde(default = "default_logging_level")]
-    pub level: String,
-    #[serde(default = "default_retention_days")]
-    pub retention_days: usize,
-}
-
-fn default_logging_file() -> String {
-    "logs/sqllog2db.log".to_string()
-}
-fn default_logging_level() -> String {
-    "info".to_string()
-}
-fn default_retention_days() -> usize {
-    7
-}
-
-impl Default for LoggingConfig {
-    fn default() -> Self {
-        Self {
-            file: "logs/sqllog2db.log".to_string(),
-            level: "info".to_string(),
-            retention_days: 7,
-        }
-    }
-}
-
-impl LoggingConfig {
-    pub fn validate(&self) -> Result<()> {
-        if self.file.trim().is_empty() {
-            return Err(Error::Config(ConfigError::InvalidValue {
-                field: "logging.file".to_string(),
-                value: self.file.clone(),
-                reason: "Log file path cannot be empty".to_string(),
-            }));
-        }
-        if !LOG_LEVELS
-            .iter()
-            .any(|&l| l.eq_ignore_ascii_case(&self.level))
-        {
-            return Err(Error::Config(ConfigError::InvalidLogLevel {
-                level: self.level.clone(),
-                valid_levels: LOG_LEVELS.iter().map(|s| (*s).to_string()).collect(),
-            }));
-        }
-        if self.retention_days == 0 || self.retention_days > 365 {
-            return Err(Error::Config(ConfigError::InvalidValue {
-                field: "logging.retention_days".to_string(),
-                value: self.retention_days.to_string(),
-                reason: "Retention days must be between 1 and 365".to_string(),
-            }));
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug, Deserialize, Clone)]
-pub struct ExporterConfig {
-    pub csv: Option<CsvExporter>,
-    pub sqlite: Option<SqliteExporter>,
-}
-
-impl ExporterConfig {
-    fn has_any(&self) -> bool {
-        self.csv.is_some() || self.sqlite.is_some()
-    }
-
-    pub fn validate(&self) -> Result<()> {
-        if !self.has_any() {
-            return Err(Error::Config(ConfigError::NoExporters));
-        }
-        if let Some(csv) = &self.csv {
-            csv.validate()?;
-        }
-        if let Some(sqlite) = &self.sqlite {
-            sqlite.validate()?;
-        }
-        Ok(())
-    }
-}
-
-impl Default for ExporterConfig {
-    fn default() -> Self {
-        Self {
-            csv: Some(CsvExporter::default()),
-            sqlite: None,
-        }
-    }
-}
-
-#[derive(Debug, Deserialize, Clone)]
-pub struct CsvExporter {
-    pub file: String,
-    #[serde(default = "default_true")]
-    pub overwrite: bool,
-    #[serde(default)]
-    pub append: bool,
-    /// 关闭时跳过 `parse_performance_metrics()`，CSV 省略 `exectime/rowcount/exec_id` 三列。
-    /// 默认 true，保持现有行为不变（D-06）。
-    #[serde(default = "default_true")]
-    pub include_performance_metrics: bool,
-}
-
-impl Default for CsvExporter {
-    fn default() -> Self {
-        Self {
-            file: "outputs/sqllog.csv".to_string(),
-            overwrite: true,
-            append: false,
-            include_performance_metrics: true,
-        }
-    }
-}
-
-impl CsvExporter {
-    pub fn validate(&self) -> Result<()> {
-        if self.file.trim().is_empty() {
-            return Err(Error::Config(ConfigError::InvalidValue {
-                field: "exporter.csv.file".to_string(),
-                value: self.file.clone(),
-                reason: "CSV output file path cannot be empty".to_string(),
-            }));
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug, Deserialize, Clone)]
-pub struct SqliteExporter {
-    pub database_url: String,
-    #[serde(default = "default_table_name")]
-    pub table_name: String,
-    #[serde(default = "default_true")]
-    pub overwrite: bool,
-    #[serde(default)]
-    pub append: bool,
-    #[serde(default = "default_sqlite_batch_size")]
-    pub batch_size: usize,
-}
-
-fn default_table_name() -> String {
-    "sqllog_records".to_string()
-}
-
-fn default_sqlite_batch_size() -> usize {
-    10_000
-}
-
-impl Default for SqliteExporter {
-    fn default() -> Self {
-        Self {
-            database_url: "export/sqllog2db.db".to_string(),
-            table_name: "sqllog_records".to_string(),
-            overwrite: true,
-            append: false,
-            batch_size: 10_000,
-        }
-    }
-}
-
-impl SqliteExporter {
-    pub fn validate(&self) -> Result<()> {
-        if self.database_url.trim().is_empty() {
-            return Err(Error::Config(ConfigError::InvalidValue {
-                field: "exporter.sqlite.database_url".to_string(),
-                value: self.database_url.clone(),
-                reason: "SQLite database URL cannot be empty".to_string(),
-            }));
-        }
-        if self.table_name.trim().is_empty() {
-            return Err(Error::Config(ConfigError::InvalidValue {
-                field: "exporter.sqlite.table_name".to_string(),
-                value: self.table_name.clone(),
-                reason: "SQLite table name cannot be empty".to_string(),
-            }));
-        }
-        // ASCII 标识符校验：^[a-zA-Z_][a-zA-Z0-9_]*$（不引入 regex crate）
-        let is_valid_ident = {
-            let mut chars = self.table_name.chars();
-            chars
-                .next()
-                .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
-                && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
-        };
-        if !is_valid_ident {
-            return Err(Error::Config(ConfigError::InvalidValue {
-                field: "exporter.sqlite.table_name".to_string(),
-                value: self.table_name.clone(),
-                reason: "table name must match ^[a-zA-Z_][a-zA-Z0-9_]*$ (ASCII identifiers only)"
-                    .to_string(),
-            }));
-        }
-        if self.batch_size == 0 {
-            return Err(ConfigError::InvalidValue {
-                field: "exporter.sqlite.batch_size".to_string(),
-                value: "0".to_string(),
-                reason: "batch_size must be greater than 0".to_string(),
+    fn validate_pipeline_filters(&self) -> Result<()> {
+        if let Some(filters) = &self.pipeline.filters {
+            if filters.enable {
+                crate::pipeline::filters::CompiledMetaFilters::try_from_include_exclude(
+                    &filters.include,
+                    &filters.exclude,
+                )?;
+                crate::pipeline::filters::CompiledSqlFilters::try_from_sql_filters(
+                    &filters.record_sql,
+                )?;
             }
-            .into());
         }
         Ok(())
     }
-}
 
-fn default_true() -> bool {
-    true
+    fn validate_pipeline_fields(&self) -> Result<()> {
+        if let Some(names) = &self.pipeline.fields {
+            for name in names {
+                if !crate::pipeline::FIELD_NAMES.contains(&name.as_str()) {
+                    return Err(Error::Config(ConfigError::InvalidValue {
+                        field: "pipeline.fields".to_string(),
+                        value: name.clone(),
+                        reason: format!(
+                            "unknown field '{name}'; valid fields: {}",
+                            crate::pipeline::FIELD_NAMES.join(", ")
+                        ),
+                    }));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_pipeline_charts(&self) -> Result<()> {
+        if let Some(charts) = &self.pipeline.charts {
+            let ta_enabled = self
+                .pipeline
+                .template_analysis
+                .as_ref()
+                .is_some_and(|ta| ta.enabled);
+            if !ta_enabled {
+                return Err(Error::Config(ConfigError::InvalidValue {
+                    field: "pipeline.charts".to_string(),
+                    value: String::new(),
+                    reason: "启用 [pipeline.charts] 需要先设置 [pipeline.template_analysis]\nenabled = true".to_string(),
+                }));
+            }
+            if charts.output_dir.trim().is_empty() {
+                return Err(Error::Config(ConfigError::InvalidValue {
+                    field: "pipeline.charts.output_dir".to_string(),
+                    value: charts.output_dir.clone(),
+                    reason: "charts output_dir cannot be empty".to_string(),
+                }));
+            }
+            if charts.top_n == 0 {
+                return Err(Error::Config(ConfigError::InvalidValue {
+                    field: "pipeline.charts.top_n".to_string(),
+                    value: "0".to_string(),
+                    reason: "top_n must be greater than 0".to_string(),
+                }));
+            }
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pipeline::{ChartsConfig, PipelineConfig, TemplateAnalysisConfig};
 
     fn default_config() -> Config {
         Config::default()
@@ -649,9 +374,9 @@ mod tests {
     #[test]
     fn test_validate_empty_csv_file() {
         let mut cfg = default_config();
-        cfg.exporter.csv = Some(CsvExporter {
+        cfg.exporter.csv = Some(CsvExporterConfig {
             file: "  ".into(),
-            ..CsvExporter::default()
+            ..CsvExporterConfig::default()
         });
         assert!(cfg.validate().is_err());
     }
@@ -660,9 +385,9 @@ mod tests {
     fn test_validate_empty_sqlite_database_url() {
         let mut cfg = default_config();
         cfg.exporter.csv = None;
-        cfg.exporter.sqlite = Some(SqliteExporter {
+        cfg.exporter.sqlite = Some(SqliteExporterConfig {
             database_url: "  ".into(),
-            ..SqliteExporter::default()
+            ..SqliteExporterConfig::default()
         });
         assert!(cfg.validate().is_err());
     }
@@ -671,9 +396,9 @@ mod tests {
     fn test_validate_empty_sqlite_table_name() {
         let mut cfg = default_config();
         cfg.exporter.csv = None;
-        cfg.exporter.sqlite = Some(SqliteExporter {
+        cfg.exporter.sqlite = Some(SqliteExporterConfig {
             table_name: "  ".into(),
-            ..SqliteExporter::default()
+            ..SqliteExporterConfig::default()
         });
         assert!(cfg.validate().is_err());
     }
@@ -771,7 +496,7 @@ mod tests {
     #[test]
     fn test_apply_overrides_bad_format_returns_error() {
         let mut cfg = default_config();
-        assert!(cfg.apply_overrides(&["nodeleimiter".into()]).is_err());
+        assert!(cfg.apply_overrides(&["nodelimiter".into()]).is_err());
     }
 
     #[test]
@@ -882,7 +607,7 @@ file = "out.csv"
 
     #[test]
     fn test_default_sqlite_exporter_values() {
-        let cfg = SqliteExporter::default();
+        let cfg = SqliteExporterConfig::default();
         assert_eq!(cfg.table_name, "sqllog_records");
         assert_eq!(cfg.database_url, "export/sqllog2db.db");
         assert!(cfg.overwrite);
@@ -895,7 +620,7 @@ file = "out.csv"
         let toml = r#"
 [sqllog]
 path = "sqllogs"
-[features.filters]
+[pipeline.filters]
 enable = true
 usernames = ["[invalid"]
 [exporter.csv]
@@ -906,7 +631,7 @@ file = "out.csv"
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(
-            err_msg.contains("features.filters.include.users"),
+            err_msg.contains("pipeline.filters.include.users"),
             "error should mention field name, got: {err_msg}"
         );
     }
@@ -916,7 +641,7 @@ file = "out.csv"
         let toml = r#"
 [sqllog]
 path = "sqllogs"
-[features.filters]
+[pipeline.filters]
 enable = true
 usernames = ["^admin.*"]
 [exporter.csv]
@@ -928,8 +653,8 @@ file = "out.csv"
 
     #[test]
     fn test_csv_exporter_default_include_performance_metrics_true() {
-        let cfg = CsvExporter::default();
-        assert!(cfg.include_performance_metrics, "默认必须为 true（D-06）");
+        let cfg = CsvExporterConfig::default();
+        assert!(cfg.include_performance_metrics);
     }
 
     #[test]
@@ -943,7 +668,6 @@ file = "out.csv"
                 .as_ref()
                 .unwrap()
                 .include_performance_metrics,
-            "--set 覆盖后应为 false"
         );
     }
 
@@ -951,12 +675,11 @@ file = "out.csv"
     fn test_apply_one_csv_include_performance_metrics_invalid() {
         let mut cfg = Config::default();
         let r = cfg.apply_one("exporter.csv.include_performance_metrics", "maybe");
-        assert!(r.is_err(), "非法布尔值必须返回错误");
+        assert!(r.is_err());
     }
 
     #[test]
     fn test_csv_toml_default_include_performance_metrics() {
-        // TOML 未指定 include_performance_metrics 时，serde default 必须生效（true）
         let toml = r#"
 [sqllog]
 directory = "sqllogs"
@@ -972,7 +695,6 @@ append = false
                 .as_ref()
                 .unwrap()
                 .include_performance_metrics,
-            "未指定时 serde 默认必须为 true"
         );
     }
 
@@ -980,12 +702,10 @@ append = false
     #[test]
     fn test_validate_sqlite_table_name_valid_simple() {
         let mut cfg = default_config();
-        cfg.exporter.sqlite = Some(SqliteExporter {
+        cfg.exporter.sqlite = Some(SqliteExporterConfig {
             database_url: "/tmp/x.db".into(),
             table_name: "tbl".into(),
-            overwrite: true,
-            append: false,
-            batch_size: 10_000,
+            ..SqliteExporterConfig::default()
         });
         cfg.exporter.csv = None;
         assert!(cfg.validate().is_ok());
@@ -994,12 +714,10 @@ append = false
     #[test]
     fn test_validate_sqlite_table_name_valid_underscore_prefix() {
         let mut cfg = default_config();
-        cfg.exporter.sqlite = Some(SqliteExporter {
+        cfg.exporter.sqlite = Some(SqliteExporterConfig {
             database_url: "/tmp/x.db".into(),
             table_name: "_records".into(),
-            overwrite: true,
-            append: false,
-            batch_size: 10_000,
+            ..SqliteExporterConfig::default()
         });
         cfg.exporter.csv = None;
         assert!(cfg.validate().is_ok());
@@ -1008,12 +726,10 @@ append = false
     #[test]
     fn test_validate_sqlite_table_name_valid_with_digits() {
         let mut cfg = default_config();
-        cfg.exporter.sqlite = Some(SqliteExporter {
+        cfg.exporter.sqlite = Some(SqliteExporterConfig {
             database_url: "/tmp/x.db".into(),
             table_name: "t1_log_2024".into(),
-            overwrite: true,
-            append: false,
-            batch_size: 10_000,
+            ..SqliteExporterConfig::default()
         });
         cfg.exporter.csv = None;
         assert!(cfg.validate().is_ok());
@@ -1022,12 +738,10 @@ append = false
     #[test]
     fn test_validate_sqlite_table_name_rejects_leading_digit() {
         let mut cfg = default_config();
-        cfg.exporter.sqlite = Some(SqliteExporter {
+        cfg.exporter.sqlite = Some(SqliteExporterConfig {
             database_url: "/tmp/x.db".into(),
             table_name: "1tbl".into(),
-            overwrite: true,
-            append: false,
-            batch_size: 10_000,
+            ..SqliteExporterConfig::default()
         });
         cfg.exporter.csv = None;
         let err = cfg.validate().unwrap_err();
@@ -1039,12 +753,10 @@ append = false
     #[test]
     fn test_validate_sqlite_table_name_rejects_special_char() {
         let mut cfg = default_config();
-        cfg.exporter.sqlite = Some(SqliteExporter {
+        cfg.exporter.sqlite = Some(SqliteExporterConfig {
             database_url: "/tmp/x.db".into(),
             table_name: "tbl;DROP".into(),
-            overwrite: true,
-            append: false,
-            batch_size: 10_000,
+            ..SqliteExporterConfig::default()
         });
         cfg.exporter.csv = None;
         let err = cfg.validate().unwrap_err();
@@ -1055,12 +767,10 @@ append = false
     #[test]
     fn test_validate_sqlite_table_name_rejects_quote() {
         let mut cfg = default_config();
-        cfg.exporter.sqlite = Some(SqliteExporter {
+        cfg.exporter.sqlite = Some(SqliteExporterConfig {
             database_url: "/tmp/x.db".into(),
             table_name: "tbl\"x".into(),
-            overwrite: true,
-            append: false,
-            batch_size: 10_000,
+            ..SqliteExporterConfig::default()
         });
         cfg.exporter.csv = None;
         let err = cfg.validate().unwrap_err();
@@ -1071,12 +781,10 @@ append = false
     #[test]
     fn test_validate_sqlite_table_name_rejects_non_ascii() {
         let mut cfg = default_config();
-        cfg.exporter.sqlite = Some(SqliteExporter {
+        cfg.exporter.sqlite = Some(SqliteExporterConfig {
             database_url: "/tmp/x.db".into(),
             table_name: "日志表".into(),
-            overwrite: true,
-            append: false,
-            batch_size: 10_000,
+            ..SqliteExporterConfig::default()
         });
         cfg.exporter.csv = None;
         let err = cfg.validate().unwrap_err();
@@ -1087,12 +795,10 @@ append = false
     #[test]
     fn test_validate_sqlite_table_name_rejects_space() {
         let mut cfg = default_config();
-        cfg.exporter.sqlite = Some(SqliteExporter {
+        cfg.exporter.sqlite = Some(SqliteExporterConfig {
             database_url: "/tmp/x.db".into(),
             table_name: "my tbl".into(),
-            overwrite: true,
-            append: false,
-            batch_size: 10_000,
+            ..SqliteExporterConfig::default()
         });
         cfg.exporter.csv = None;
         let err = cfg.validate().unwrap_err();
@@ -1105,7 +811,7 @@ append = false
     fn test_validate_and_compile_default_returns_none() {
         let cfg = default_config();
         let result = cfg.validate_and_compile().expect("default config valid");
-        assert!(result.is_none(), "默认 config 无 filters，应返回 None");
+        assert!(result.is_none());
     }
 
     #[test]
@@ -1113,7 +819,7 @@ append = false
         let toml = r#"
 [sqllog]
 path = "sqllogs"
-[features.filters]
+[pipeline.filters]
 enable = false
 usernames = ["^admin.*"]
 [exporter.csv]
@@ -1121,7 +827,7 @@ file = "out.csv"
 "#;
         let cfg: Config = toml::from_str(toml).unwrap();
         let result = cfg.validate_and_compile().expect("config valid");
-        assert!(result.is_none(), "filters.enable=false 时应返回 None");
+        assert!(result.is_none());
     }
 
     #[test]
@@ -1129,7 +835,7 @@ file = "out.csv"
         let toml = r#"
 [sqllog]
 path = "sqllogs"
-[features.filters]
+[pipeline.filters]
 enable = true
 usernames = ["^admin.*"]
 [exporter.csv]
@@ -1137,11 +843,8 @@ file = "out.csv"
 "#;
         let cfg: Config = toml::from_str(toml).unwrap();
         let result = cfg.validate_and_compile().expect("config valid");
-        let pair = result.expect("filters.enable=true 应返回 Some");
-        assert!(
-            pair.0.has_any_filters(),
-            "usernames 配置后 CompiledMetaFilters.has_any_filters 必为 true"
-        );
+        let pair = result.expect("filters.enable=true should return Some");
+        assert!(pair.0.has_any_filters());
     }
 
     #[test]
@@ -1149,7 +852,7 @@ file = "out.csv"
         let toml = r#"
 [sqllog]
 path = "sqllogs"
-[features.filters]
+[pipeline.filters]
 enable = true
 usernames = ["[invalid"]
 [exporter.csv]
@@ -1160,7 +863,7 @@ file = "out.csv"
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(
-            err_msg.contains("features.filters.include.users"),
+            err_msg.contains("pipeline.filters.include.users"),
             "error should mention field name, got: {err_msg}"
         );
     }
@@ -1175,27 +878,26 @@ file = "out.csv"
     #[test]
     fn test_validate_and_compile_unknown_field_returns_err() {
         let mut cfg = default_config();
-        cfg.features.fields = Some(vec!["nonexistent_field".into()]);
+        cfg.pipeline.fields = Some(vec!["nonexistent_field".into()]);
         assert!(cfg.validate_and_compile().is_err());
     }
 
     #[test]
     fn test_validate_and_compile_matches_validate_on_ok() {
-        // 合法配置：两个方法都应返回 Ok（行为等价，仅返回类型不同）
         let cfg = default_config();
         assert!(cfg.validate().is_ok());
         assert!(cfg.validate_and_compile().is_ok());
     }
 
-    // ── features.charts D-06 跨字段依赖校验 ───────────────────
+    // ── pipeline.charts 跨字段依赖校验 ───────────────────
     #[test]
     fn test_validate_charts_requires_template_analysis() {
         let toml = r#"
 [sqllog]
 path = "sqllogs"
-[features.charts]
+[pipeline.charts]
 output_dir = "charts/"
-[features.template_analysis]
+[pipeline.template_analysis]
 enabled = false
 [exporter.csv]
 file = "out.csv"
@@ -1204,13 +906,10 @@ file = "out.csv"
         let result = cfg.validate();
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("pipeline.charts"), "actual: {err_msg}");
         assert!(
-            err_msg.contains("features.charts"),
-            "错误信息应包含 features.charts，实际: {err_msg}"
-        );
-        assert!(
-            err_msg.contains("[features.template_analysis]"),
-            "错误信息应包含 [features.template_analysis]，实际: {err_msg}"
+            err_msg.contains("[pipeline.template_analysis]"),
+            "actual: {err_msg}"
         );
     }
 
@@ -1219,9 +918,9 @@ file = "out.csv"
         let toml = r#"
 [sqllog]
 path = "sqllogs"
-[features.charts]
+[pipeline.charts]
 output_dir = "charts/"
-[features.template_analysis]
+[pipeline.template_analysis]
 enabled = true
 [exporter.csv]
 file = "out.csv"
@@ -1235,7 +934,7 @@ file = "out.csv"
         let toml = r#"
 [sqllog]
 path = "sqllogs"
-[features.charts]
+[pipeline.charts]
 output_dir = "charts/"
 [exporter.csv]
 file = "out.csv"
@@ -1244,61 +943,53 @@ file = "out.csv"
         let result = cfg.validate_and_compile();
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
-        assert!(
-            err_msg.contains("features.charts"),
-            "错误信息应包含 features.charts，实际: {err_msg}"
-        );
-        assert!(
-            err_msg.contains("[features.template_analysis]"),
-            "错误信息应包含 [features.template_analysis]，实际: {err_msg}"
-        );
+        assert!(err_msg.contains("pipeline.charts"), "actual: {err_msg}");
     }
 
     #[test]
     fn test_apply_one_charts_output_dir() {
         let mut cfg = Config::default();
-        cfg.apply_one("features.charts.output_dir", "mydir")
+        cfg.apply_one("pipeline.charts.output_dir", "mydir")
             .expect("apply_one should succeed");
-        assert_eq!(cfg.features.charts.unwrap().output_dir, "mydir");
+        assert_eq!(cfg.pipeline.charts.unwrap().output_dir, "mydir");
     }
 
     #[test]
     fn test_apply_one_charts_top_n() {
         let mut cfg = Config::default();
-        cfg.apply_one("features.charts.top_n", "20")
+        cfg.apply_one("pipeline.charts.top_n", "20")
             .expect("apply_one should succeed");
-        assert_eq!(cfg.features.charts.unwrap().top_n, 20);
+        assert_eq!(cfg.pipeline.charts.unwrap().top_n, 20);
     }
 
     #[test]
     fn test_apply_one_charts_top_n_invalid() {
         let mut cfg = Config::default();
-        let result = cfg.apply_one("features.charts.top_n", "abc");
-        assert!(result.is_err(), "非法整数应返回错误");
+        let result = cfg.apply_one("pipeline.charts.top_n", "abc");
+        assert!(result.is_err());
     }
 
     #[test]
     fn test_apply_one_charts_frequency_bar_false() {
         let mut cfg = Config::default();
-        cfg.apply_one("features.charts.frequency_bar", "false")
+        cfg.apply_one("pipeline.charts.frequency_bar", "false")
             .expect("apply_one should succeed");
-        assert!(!cfg.features.charts.unwrap().frequency_bar);
+        assert!(!cfg.pipeline.charts.unwrap().frequency_bar);
     }
 
     #[test]
     fn test_apply_one_charts_latency_hist_false() {
         let mut cfg = Config::default();
-        cfg.apply_one("features.charts.latency_hist", "false")
+        cfg.apply_one("pipeline.charts.latency_hist", "false")
             .expect("apply_one should succeed");
-        assert!(!cfg.features.charts.unwrap().latency_hist);
+        assert!(!cfg.pipeline.charts.unwrap().latency_hist);
     }
 
-    // ── CR-02: output_dir 非空校验 ─────────────────────────────
+    // ── output_dir 非空校验 ─────────────────────────────
     #[test]
     fn test_validate_charts_empty_output_dir_is_rejected() {
-        use crate::features::{ChartsConfig, FeaturesConfig, TemplateAnalysisConfig};
         let mut cfg = default_config();
-        cfg.features = FeaturesConfig {
+        cfg.pipeline = PipelineConfig {
             template_analysis: Some(TemplateAnalysisConfig { enabled: true }),
             charts: Some(ChartsConfig {
                 output_dir: String::new(),
@@ -1307,19 +998,15 @@ file = "out.csv"
             ..Default::default()
         };
         let result = cfg.validate();
-        assert!(result.is_err(), "空 output_dir 应被拒绝");
+        assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
-        assert!(
-            msg.contains("features.charts.output_dir"),
-            "错误信息应包含字段名，实际: {msg}"
-        );
+        assert!(msg.contains("pipeline.charts.output_dir"), "actual: {msg}");
     }
 
     #[test]
     fn test_validate_charts_whitespace_output_dir_is_rejected() {
-        use crate::features::{ChartsConfig, FeaturesConfig, TemplateAnalysisConfig};
         let mut cfg = default_config();
-        cfg.features = FeaturesConfig {
+        cfg.pipeline = PipelineConfig {
             template_analysis: Some(TemplateAnalysisConfig { enabled: true }),
             charts: Some(ChartsConfig {
                 output_dir: "   ".into(),
@@ -1327,29 +1014,28 @@ file = "out.csv"
             }),
             ..Default::default()
         };
-        assert!(cfg.validate().is_err(), "纯空白 output_dir 应被拒绝");
+        assert!(cfg.validate().is_err());
     }
 
     #[test]
     fn test_apply_one_charts_output_dir_empty_is_rejected() {
         let mut cfg = Config::default();
-        let result = cfg.apply_one("features.charts.output_dir", "");
-        assert!(result.is_err(), "apply_one 空 output_dir 应返回错误");
+        let result = cfg.apply_one("pipeline.charts.output_dir", "");
+        assert!(result.is_err());
     }
 
     #[test]
     fn test_apply_one_charts_output_dir_whitespace_is_rejected() {
         let mut cfg = Config::default();
-        let result = cfg.apply_one("features.charts.output_dir", "   ");
-        assert!(result.is_err(), "apply_one 纯空白 output_dir 应返回错误");
+        let result = cfg.apply_one("pipeline.charts.output_dir", "   ");
+        assert!(result.is_err());
     }
 
-    // ── WR-01: top_n = 0 校验 ──────────────────────────────────
+    // ── top_n = 0 校验 ──────────────────────────────────
     #[test]
     fn test_validate_charts_top_n_zero_is_rejected() {
-        use crate::features::{ChartsConfig, FeaturesConfig, TemplateAnalysisConfig};
         let mut cfg = default_config();
-        cfg.features = FeaturesConfig {
+        cfg.pipeline = PipelineConfig {
             template_analysis: Some(TemplateAnalysisConfig { enabled: true }),
             charts: Some(ChartsConfig {
                 output_dir: "charts/".into(),
@@ -1359,26 +1045,22 @@ file = "out.csv"
             ..Default::default()
         };
         let result = cfg.validate();
-        assert!(result.is_err(), "top_n = 0 应被拒绝");
+        assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
-        assert!(
-            msg.contains("features.charts.top_n"),
-            "错误信息应包含字段名，实际: {msg}"
-        );
+        assert!(msg.contains("pipeline.charts.top_n"), "actual: {msg}");
     }
 
     #[test]
     fn test_apply_one_charts_top_n_zero_is_rejected() {
         let mut cfg = Config::default();
-        let result = cfg.apply_one("features.charts.top_n", "0");
-        assert!(result.is_err(), "apply_one top_n=0 应返回错误");
+        let result = cfg.apply_one("pipeline.charts.top_n", "0");
+        assert!(result.is_err());
     }
 
     #[test]
     fn test_validate_and_compile_charts_empty_output_dir_is_rejected() {
-        use crate::features::{ChartsConfig, FeaturesConfig, TemplateAnalysisConfig};
         let mut cfg = default_config();
-        cfg.features = FeaturesConfig {
+        cfg.pipeline = PipelineConfig {
             template_analysis: Some(TemplateAnalysisConfig { enabled: true }),
             charts: Some(ChartsConfig {
                 output_dir: String::new(),
@@ -1391,9 +1073,8 @@ file = "out.csv"
 
     #[test]
     fn test_validate_and_compile_charts_top_n_zero_is_rejected() {
-        use crate::features::{ChartsConfig, FeaturesConfig, TemplateAnalysisConfig};
         let mut cfg = default_config();
-        cfg.features = FeaturesConfig {
+        cfg.pipeline = PipelineConfig {
             template_analysis: Some(TemplateAnalysisConfig { enabled: true }),
             charts: Some(ChartsConfig {
                 output_dir: "charts/".into(),
@@ -1410,35 +1091,16 @@ file = "out.csv"
         let toml = r#"
 [sqllog]
 path = "sqllogs"
-[features.filters]
+[pipeline.filters]
 enable = true
-[features.filters.include]
+[pipeline.filters.include]
 users = ["admin"]
-[features.filters.exclude]
+[pipeline.filters.exclude]
 users = ["guest"]
 [exporter.csv]
 file = "out.csv"
 "#;
         let cfg: Config = toml::from_str(toml).unwrap();
-        assert!(cfg.validate().is_ok(), "新嵌套格式应通过 validate");
-    }
-
-    #[test]
-    fn test_validate_old_flat_format_passes() {
-        let toml = r#"
-[sqllog]
-path = "sqllogs"
-[features.filters]
-enable = true
-usernames = ["admin"]
-exclude_usernames = ["guest"]
-[exporter.csv]
-file = "out.csv"
-"#;
-        let cfg: Config = toml::from_str(toml).unwrap();
-        assert!(
-            cfg.validate().is_ok(),
-            "旧扁平格式应通过 validate（向后兼容）"
-        );
+        assert!(cfg.validate().is_ok());
     }
 }

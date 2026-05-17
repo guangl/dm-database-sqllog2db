@@ -17,7 +17,7 @@ pub struct SqliteExporter {
     row_count: usize,
     batch_size: usize,
     pub(super) normalize: bool,
-    pub(super) field_mask: crate::features::FieldMask,
+    pub(super) field_mask: crate::pipeline::FieldMask,
     pub(super) ordered_indices: Vec<usize>,
 }
 
@@ -62,14 +62,14 @@ impl SqliteExporter {
             row_count: 0,
             batch_size: 10_000,
             normalize: true,
-            field_mask: crate::features::FieldMask::ALL,
-            ordered_indices: (0..crate::features::FIELD_NAMES.len()).collect(),
+            field_mask: crate::pipeline::FieldMask::ALL,
+            ordered_indices: (0..crate::pipeline::FIELD_NAMES.len()).collect(),
         }
     }
 
     /// 根据有序字段索引列表生成 INSERT SQL
     fn build_insert_sql(table_name: &str, ordered_indices: &[usize]) -> String {
-        use crate::features::FIELD_NAMES;
+        use crate::pipeline::FIELD_NAMES;
         if ordered_indices.len() == FIELD_NAMES.len() {
             // 全量快速路径：与 new() 的默认 insert_sql 一致
             return format!(
@@ -86,7 +86,7 @@ impl SqliteExporter {
 
     /// 根据有序字段索引列表生成 CREATE TABLE SQL
     fn build_create_sql(table_name: &str, ordered_indices: &[usize]) -> String {
-        use crate::features::FIELD_NAMES;
+        use crate::pipeline::FIELD_NAMES;
         const COL_TYPES: &[&str] = &[
             "TEXT NOT NULL",    // ts        0
             "INTEGER NOT NULL", // ep        1
@@ -115,7 +115,7 @@ impl SqliteExporter {
     }
 
     #[must_use]
-    pub fn from_config(config: &crate::config::SqliteExporter) -> Self {
+    pub fn from_config(config: &crate::config::SqliteExporterConfig) -> Self {
         let mut exporter = Self::new(
             config.database_url.clone(),
             config.table_name.clone(),
@@ -156,7 +156,7 @@ impl SqliteExporter {
         meta: &MetaParts<'_>,
         pm: &PerformanceMetrics<'_>,
         normalized_sql: Option<&str>,
-        field_mask: crate::features::FieldMask,
+        field_mask: crate::pipeline::FieldMask,
         ordered_indices: &[usize],
     ) -> std::result::Result<(), rusqlite::Error> {
         let (exec_time_ms, row_count, exec_id) =
@@ -171,7 +171,7 @@ impl SqliteExporter {
                 (None, None, None)
             };
 
-        if field_mask == crate::features::FieldMask::ALL {
+        if field_mask == crate::pipeline::FieldMask::ALL {
             // 全量掩码快速路径：直接绑定全部 15 个参数
             stmt.execute(params![
                 sqllog.ts.as_ref(),
@@ -259,7 +259,7 @@ impl SqliteExporter {
         stmt: &mut rusqlite::CachedStatement<'_>,
         sqllog: &Sqllog<'_>,
         normalized_sql: Option<&str>,
-        field_mask: crate::features::FieldMask,
+        field_mask: crate::pipeline::FieldMask,
         ordered_indices: &[usize],
     ) -> std::result::Result<(), rusqlite::Error> {
         let meta = sqllog.parse_meta();
@@ -408,7 +408,7 @@ impl Exporter for SqliteExporter {
 
     fn write_template_stats(
         &mut self,
-        stats: &[crate::features::TemplateStats],
+        stats: &[crate::pipeline::TemplateStats],
         _final_path: Option<&std::path::Path>,
     ) -> Result<()> {
         let conn = self
@@ -586,7 +586,7 @@ mod tests {
     fn test_sqlite_from_config() {
         let dir = tempfile::TempDir::new().unwrap();
         let dbfile = dir.path().join("cfg.db");
-        let cfg = crate::config::SqliteExporter {
+        let cfg = crate::config::SqliteExporterConfig {
             database_url: dbfile.to_string_lossy().into_owned(),
             table_name: "records".to_string(),
             overwrite: true,
@@ -712,7 +712,7 @@ mod tests {
 
     #[test]
     fn test_sqlite_field_order() {
-        use crate::features::FieldMask;
+        use crate::pipeline::FieldMask;
 
         let dir = tempfile::TempDir::new().unwrap();
         let log = dir.path().join("t.log");
@@ -938,8 +938,8 @@ mod tests {
     }
 
     /// 辅助：构造 `TemplateStats` 测试数据
-    fn make_template_stats_sqlite(key: &str) -> crate::features::TemplateStats {
-        crate::features::TemplateStats {
+    fn make_template_stats_sqlite(key: &str) -> crate::pipeline::TemplateStats {
+        crate::pipeline::TemplateStats {
             template_key: key.to_string(),
             count: 5,
             avg_us: 100,

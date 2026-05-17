@@ -31,7 +31,7 @@ pub(crate) fn build_companion_path(base_path: &Path) -> PathBuf {
 fn format_companion_row(
     buf: &mut Vec<u8>,
     itoa_buf: &mut itoa::Buffer,
-    s: &crate::features::TemplateStats,
+    s: &crate::pipeline::TemplateStats,
 ) {
     buf.clear();
     buf.push(b'"');
@@ -74,7 +74,7 @@ fn io_err(path: &Path, reason: String) -> Error {
 /// 将模板统计写入伴随 CSV 文件（D-10：始终覆盖写入）
 pub(crate) fn write_companion_rows(
     path: &Path,
-    stats: &[crate::features::TemplateStats],
+    stats: &[crate::pipeline::TemplateStats],
 ) -> Result<()> {
     ensure_parent_dir(path).map_err(|e| io_err(path, format!("create dir failed: {e}")))?;
     let file =
@@ -109,7 +109,7 @@ pub struct CsvExporter {
     itoa_buf: itoa::Buffer,
     line_buf: Vec<u8>,
     pub(crate) normalize: bool,
-    pub(crate) field_mask: crate::features::FieldMask,
+    pub(crate) field_mask: crate::pipeline::FieldMask,
     pub(crate) ordered_indices: Vec<usize>,
     /// 是否在输出中包含性能指标列（`exec_time_ms`/`row_count`/`exec_id`）。
     /// 关闭时 header 和数据行都跳过这三列；调用方（`cli/run.rs`）也应跳过 `parse_performance_metrics()`。
@@ -139,14 +139,14 @@ impl CsvExporter {
             // 避免前几条记录触发 Vec 扩容。clear() 保留容量，运行期自动适配长 SQL。
             line_buf: Vec::with_capacity(2048),
             normalize: true,
-            field_mask: crate::features::FieldMask::ALL,
-            ordered_indices: (0..crate::features::FIELD_NAMES.len()).collect(),
+            field_mask: crate::pipeline::FieldMask::ALL,
+            ordered_indices: (0..crate::pipeline::FIELD_NAMES.len()).collect(),
             include_performance_metrics: true,
         }
     }
 
     #[must_use]
-    pub fn from_config(config: &config::CsvExporter) -> Self {
+    pub fn from_config(config: &config::CsvExporterConfig) -> Self {
         let mut e = Self::new(&config.file);
         if config.append {
             e.append = true;
@@ -170,7 +170,7 @@ impl CsvExporter {
         path: &Path,
         normalize: bool,
         normalized_sql: Option<&str>,
-        field_mask: crate::features::FieldMask,
+        field_mask: crate::pipeline::FieldMask,
         ordered_indices: &[usize],
         include_performance_metrics: bool,
     ) -> Result<()> {
@@ -187,7 +187,7 @@ impl CsvExporter {
         }
 
         // 全量掩码快速路径：所有字段直接顺序写入，无分支判断
-        if field_mask == crate::features::FieldMask::ALL {
+        if field_mask == crate::pipeline::FieldMask::ALL {
             line_buf.extend_from_slice(sqllog.ts.as_ref().as_bytes());
             line_buf.push(b',');
             line_buf.extend_from_slice(itoa_buf.format(meta.ep).as_bytes());
@@ -366,7 +366,7 @@ impl CsvExporter {
         path: &Path,
         normalize: bool,
         normalized_sql: Option<&str>,
-        field_mask: crate::features::FieldMask,
+        field_mask: crate::pipeline::FieldMask,
         ordered_indices: &[usize],
         include_performance_metrics: bool,
     ) -> Result<()> {
@@ -399,7 +399,7 @@ impl CsvExporter {
 
     /// 根据 `ordered_indices` 和 `normalize` 标志生成 CSV 头行
     fn build_header(&self) -> Vec<u8> {
-        use crate::features::FIELD_NAMES;
+        use crate::pipeline::FIELD_NAMES;
         let mut header = Vec::with_capacity(128);
         let mut first = true;
         for &idx in &self.ordered_indices {
@@ -568,7 +568,7 @@ impl Exporter for CsvExporter {
 
     fn write_template_stats(
         &mut self,
-        stats: &[crate::features::TemplateStats],
+        stats: &[crate::pipeline::TemplateStats],
         final_path: Option<&std::path::Path>,
     ) -> Result<()> {
         let base_path: &Path = final_path.unwrap_or(self.path.as_path());
@@ -688,11 +688,11 @@ mod tests {
 
         // First write
         {
-            let mut exporter = CsvExporter::from_config(&crate::config::CsvExporter {
+            let mut exporter = CsvExporter::from_config(&crate::config::CsvExporterConfig {
                 file: outfile.to_string_lossy().into(),
                 overwrite: true,
                 append: false,
-                ..crate::config::CsvExporter::default()
+                ..crate::config::CsvExporterConfig::default()
             });
             exporter.initialize().unwrap();
             for r in &records {
@@ -704,11 +704,11 @@ mod tests {
 
         // Append second write
         {
-            let mut exporter = CsvExporter::from_config(&crate::config::CsvExporter {
+            let mut exporter = CsvExporter::from_config(&crate::config::CsvExporterConfig {
                 file: outfile.to_string_lossy().into(),
                 overwrite: false,
                 append: true,
-                ..crate::config::CsvExporter::default()
+                ..crate::config::CsvExporterConfig::default()
             });
             exporter.initialize().unwrap();
             for r in &records {
@@ -800,11 +800,11 @@ mod tests {
     #[test]
     fn test_csv_from_config() {
         use crate::config;
-        let cfg = config::CsvExporter {
+        let cfg = config::CsvExporterConfig {
             file: "/tmp/cfg.csv".to_string(),
             overwrite: true,
             append: false,
-            ..config::CsvExporter::default()
+            ..config::CsvExporterConfig::default()
         };
         let exporter = CsvExporter::from_config(&cfg);
         let s = format!("{exporter:?}");
@@ -813,7 +813,7 @@ mod tests {
 
     #[test]
     fn test_csv_header_field_order() {
-        use crate::features::FieldMask;
+        use crate::pipeline::FieldMask;
         let dir = tempfile::TempDir::new().unwrap();
         let path = dir.path().join("out.csv");
         let mut exporter = CsvExporter::new(&path);
@@ -829,7 +829,7 @@ mod tests {
 
     #[test]
     fn test_csv_header_full_order() {
-        use crate::features::FIELD_NAMES;
+        use crate::pipeline::FIELD_NAMES;
         let dir = tempfile::TempDir::new().unwrap();
         let path = dir.path().join("out.csv");
         let mut exporter = CsvExporter::new(&path);
@@ -861,7 +861,7 @@ mod tests {
     #[test]
     fn test_csv_field_order() {
         // 验证数据行按 ordered_indices=[10,4] 顺序输出（sql, username 两列）
-        use crate::features::FieldMask;
+        use crate::pipeline::FieldMask;
 
         let dir = tempfile::TempDir::new().unwrap();
         let log = dir.path().join("t.log");
@@ -897,7 +897,7 @@ mod tests {
 
     #[test]
     fn test_csv_field_order_normalized_sql_skipped_when_normalize_false() {
-        use crate::features::FieldMask;
+        use crate::pipeline::FieldMask;
 
         let dir = tempfile::TempDir::new().unwrap();
         let log = dir.path().join("t.log");
@@ -1066,7 +1066,7 @@ mod tests {
 
         // 第一个 template_key 含逗号，需转义
         let stats = vec![
-            crate::features::TemplateStats {
+            crate::pipeline::TemplateStats {
                 template_key: r#"SELECT * FROM t WHERE name = "John", age = ?"#.to_string(),
                 count: 42,
                 avg_us: 150,
@@ -1078,7 +1078,7 @@ mod tests {
                 first_seen: "2025-01-01 00:00:00".to_string(),
                 last_seen: "2025-01-01 12:00:00".to_string(),
             },
-            crate::features::TemplateStats {
+            crate::pipeline::TemplateStats {
                 template_key: "INSERT INTO t VALUES (?)".to_string(),
                 count: 7,
                 avg_us: 80,
@@ -1156,7 +1156,7 @@ mod tests {
 
         let mut exporter = CsvExporter::new(&self_path);
 
-        let stats = vec![crate::features::TemplateStats {
+        let stats = vec![crate::pipeline::TemplateStats {
             template_key: "SELECT 1".to_string(),
             count: 1,
             avg_us: 100,
