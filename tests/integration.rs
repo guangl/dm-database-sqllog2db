@@ -1153,3 +1153,38 @@ fn test_csv_throughput_baseline() {
         },
     );
 }
+
+#[test]
+fn test_init_generates_new_nested_format() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("init.toml");
+    let path_str = path.to_str().unwrap();
+    handle_init(path_str, false, Lang::Zh).unwrap();
+    let content = std::fs::read_to_string(&path).unwrap();
+    assert!(
+        content.contains("[features.filters.include]"),
+        "init template must contain [features.filters.include]"
+    );
+    assert!(
+        content.contains("[features.filters.exclude]"),
+        "init template must contain [features.filters.exclude]"
+    );
+    assert!(
+        content.contains("[features.filters.indicators]"),
+        "init template must contain [features.filters.indicators]"
+    );
+    assert!(
+        content.contains("[features.filters.sql]"),
+        "init template must contain [features.filters.sql]"
+    );
+    assert!(
+        !content.contains("\nusernames = "),
+        "init template must not contain active 'usernames' field"
+    );
+    assert!(
+        !content.contains("\ninclude_patterns = "),
+        "init template must not contain active 'include_patterns' field"
+    );
+    let cfg: dm_database_sqllog2db::config::Config = toml::from_str(&content).unwrap();
+    cfg.validate().unwrap();
+}

@@ -91,48 +91,37 @@ enabled = false
 # 是否启用过滤器
 enable = false
 
-# --- 元数据过滤器（Record-level：满足任一条件即保留该条记录）---
-# 过滤指定的事务 ID
-# trxids = ["257809109", "257809110"]
-
-# 过滤指定的客户端 IP（支持正则匹配）
-# client_ips = ["127.0.0.1", "192\\.168"]
-# 排除指定的客户端 IP（OR veto：任一命中则丢弃该记录）
-# exclude_client_ips = ["^10\\.0", "^172\\.16"]
-
+# --- 包含过滤器（Record-level，AND 语义：所有已配置字段都必须匹配才保留）---
+[features.filters.include]
 # 过滤指定的用户名（支持正则匹配）
-# usernames = ["SYSDBA"]
-# 排除指定的用户名（OR veto：任一命中则丢弃该记录）
-# exclude_usernames = ["guest", "^anon"]
-
+# users = ["SYSDBA"]
+# 过滤指定的客户端 IP（支持正则匹配）
+# ips = ["127.0.0.1", "192\\.168"]
+# 过滤指定的会话 ID（支持正则匹配）
+# sessions = ["0x7f41435437a8"]
+# 过滤指定的线程 ID（支持正则匹配）
+# threads = ["2188515"]
+# 过滤指定的语句类型（支持正则匹配）
+# statements = ["INS", "UPD", "DEL"]
+# 过滤指定的应用名称（支持正则匹配）
+# apps = ["DMSQL"]
+# 过滤指定的 tag（支持正则匹配）
+# tags = ["\\[SEL\\]"]
 # 过滤时间范围（格式：2023-01-01 00:00:00）
 # start_ts = "2023-01-01 00:00:00"
 # end_ts   = "2023-01-01 23:59:59"
+# 过滤指定的事务 ID
+# trxids = ["257809109", "257809110"]
 
-# 过滤指定的会话 ID（支持正则匹配）
-# sess_ids = ["0x7f41435437a8"]
-# 排除指定的会话 ID（OR veto：任一命中则丢弃该记录）
-# exclude_sess_ids = ["^0x0000"]
-
-# 过滤指定的线程 ID（支持正则匹配）
-# thrd_ids = ["2188515"]
-# 排除指定的线程 ID（OR veto：任一命中则丢弃该记录）
-# exclude_thrd_ids = ["^0$"]
-
-# 过滤指定的语句类型（支持正则匹配）
-# statements = ["INS", "UPD", "DEL"]
-# 排除指定的语句类型（OR veto：任一命中则丢弃该记录）
-# exclude_statements = ["SEL", "SET"]
-
-# 过滤指定的应用名称（支持正则匹配）
-# appnames = ["DMSQL"]
-# 排除指定的应用名称（OR veto：任一命中则丢弃该记录）
-# exclude_appnames = ["monitor", "health"]
-
-# 过滤指定的 tag（支持正则匹配）
-# tags = ["\\[SEL\\]"]
-# 排除指定的 tag（OR veto：任一命中则丢弃该记录）
-# exclude_tags = ["\\[SET\\]", "\\[OTH\\]"]
+# --- 排除过滤器（Record-level，OR-veto：任一命中则丢弃）---
+[features.filters.exclude]
+# users = ["guest", "^anon"]
+# ips = ["^10\\.0", "^172\\.16"]
+# sessions = ["^0x0000"]
+# threads = ["^0$"]
+# statements = ["SEL", "SET"]
+# apps = ["monitor", "health"]
+# tags = ["\\[SET\\]", "\\[OTH\\]"]
 
 # --- 指标过滤器（Transaction-level：满足条件则保留包含该语句的整个事务，需要预扫描）---
 [features.filters.indicators]
@@ -146,9 +135,9 @@ enable = false
 # --- SQL 过滤器（Transaction-level：满足模式则保留整个事务，需要预扫描）---
 [features.filters.sql]
 # 包含模式列表（SQL 包含任一模式则匹配）
-# include_patterns = ["FROM USER_TABLES", "DELETE FROM"]
+# includes = ["FROM USER_TABLES", "DELETE FROM"]
 # 排除模式列表（SQL 包含任一模式则剔除）
-# exclude_patterns = ["SELECT 1", "DUAL"]
+# excludes = ["SELECT 1", "DUAL"]
 
 # ===================== 断点续传 =====================
 # 使用 --resume 标志时，sqllog2db 会跳过已成功处理的文件（通过文件大小和修改时间判断）。
@@ -201,64 +190,39 @@ enabled = false
 # Enable the filter pipeline
 enable = false
 
-# --- Meta filters (record-level: any match retains the record) ---
-# Filter by transaction IDs
-# trxids = ["257809109", "257809110"]
-
-# Filter by client IPs (regex match)
-# client_ips = ["127.0.0.1", "192\\.168"]
-# Exclude by client IPs (OR veto: any match drops the record)
-# exclude_client_ips = ["^10\\.0", "^172\\.16"]
-
-# Filter by usernames (regex match)
-# usernames = ["SYSDBA"]
-# Exclude by usernames (OR veto: any match drops the record)
-# exclude_usernames = ["guest", "^anon"]
-
-# Filter by time range (format: 2023-01-01 00:00:00)
+# --- Include filters (record-level, AND semantics: every configured field must match) ---
+[features.filters.include]
+# users = ["SYSDBA"]
+# ips = ["127.0.0.1", "192\\.168"]
+# sessions = ["0x7f41435437a8"]
+# threads = ["2188515"]
+# statements = ["INS", "UPD", "DEL"]
+# apps = ["DMSQL"]
+# tags = ["\\[SEL\\]"]
 # start_ts = "2023-01-01 00:00:00"
 # end_ts   = "2023-01-01 23:59:59"
+# trxids = ["257809109", "257809110"]
 
-# Filter by session IDs (regex match)
-# sess_ids = ["0x7f41435437a8"]
-# Exclude by session IDs (OR veto: any match drops the record)
-# exclude_sess_ids = ["^0x0000"]
-
-# Filter by thread IDs (regex match)
-# thrd_ids = ["2188515"]
-# Exclude by thread IDs (OR veto: any match drops the record)
-# exclude_thrd_ids = ["^0$"]
-
-# Filter by statement types (regex match)
-# statements = ["INS", "UPD", "DEL"]
-# Exclude by statement types (OR veto: any match drops the record)
-# exclude_statements = ["SEL", "SET"]
-
-# Filter by application names (regex match)
-# appnames = ["DMSQL"]
-# Exclude by application names (OR veto: any match drops the record)
-# exclude_appnames = ["monitor", "health"]
-
-# Filter by tags (regex match)
-# tags = ["\\[SEL\\]"]
-# Exclude by tags (OR veto: any match drops the record)
-# exclude_tags = ["\\[SET\\]", "\\[OTH\\]"]
+# --- Exclude filters (record-level, OR-veto: any match drops the record) ---
+[features.filters.exclude]
+# users = ["guest", "^anon"]
+# ips = ["^10\\.0", "^172\\.16"]
+# sessions = ["^0x0000"]
+# threads = ["^0$"]
+# statements = ["SEL", "SET"]
+# apps = ["monitor", "health"]
+# tags = ["\\[SET\\]", "\\[OTH\\]"]
 
 # --- Indicator filters (transaction-level: match retains the whole transaction; requires pre-scan) ---
 [features.filters.indicators]
-# Filter by execution IDs (retains entire transaction)
 # exec_ids = [257809109, 257809110]
-# Filter by minimum execution time (ms)
 # min_runtime_ms = 1000
-# Filter by minimum affected rows
 # min_row_count = 100
 
 # --- SQL filters (transaction-level: match retains the whole transaction; requires pre-scan) ---
 [features.filters.sql]
-# Include patterns (SQL matching any pattern is retained)
-# include_patterns = ["FROM USER_TABLES", "DELETE FROM"]
-# Exclude patterns (SQL matching any pattern is dropped)
-# exclude_patterns = ["SELECT 1", "DUAL"]
+# includes = ["FROM USER_TABLES", "DELETE FROM"]
+# excludes = ["SELECT 1", "DUAL"]
 
 # ===================== Resume / Checkpoint =====================
 # With --resume, sqllog2db skips files already successfully processed
