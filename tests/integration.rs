@@ -188,7 +188,7 @@ fn test_handle_run_interrupted() {
         ..Default::default()
     };
 
-    // Pre-set interrupted flag — run should return Err(Interrupted)
+    // Pre-set interrupted flag — run should return early with Ok
     let interrupted = Arc::new(AtomicBool::new(true));
     let result = handle_run(
         &cfg,
@@ -202,8 +202,10 @@ fn test_handle_run_interrupted() {
         1,
         None,
     );
-    // Either Ok (no files processed) or Err(Interrupted) depending on timing
-    let _ = result;
+    assert!(
+        result.is_ok(),
+        "handle_run should return Ok when interrupt flag is pre-set: {result:?}"
+    );
 }
 
 // ── resume tests ─────────────────────────────────────────────────────────────
