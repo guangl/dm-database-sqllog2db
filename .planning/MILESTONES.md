@@ -1,5 +1,37 @@
 # Milestones
 
+## v1.4 — 代码重构 & 质量深化
+
+**Shipped:** 2026-05-18
+**Phases:** 17–20 | **Plans:** 12 | **Commits:** ~90
+
+### Delivered
+
+系统性重构配置模型与代码结构：嵌套子表替代扁平字段（[filter.include]/[filter.exclude]、[template]、[charts]），5 个超大源文件模块化拆分，消除重复投影逻辑，统一 Exporter trait，收紧可见性。补全 7 份 VERIFICATION.md，新增 E2E/边界/proptest 测试。933 测试通过，cargo clippy 零警告。
+
+### Key Accomplishments
+
+1. 过滤器配置嵌套化 — 手写 `FiltersFeature::Deserialize` via `RawFiltersFeature` 中间结构，`IncludeFilters`/`ExcludeFilters` 替代 `MetaFilters`，serde alias 向后兼容旧扁平格式，`pipeline.is_empty()` 快路径不变（CONFIG-01/02/05，Phase 17）
+2. 配置模型顶层化 — 删除 `PipelineConfig`，`Config` 5 个顶层 Option 字段，`pipeline_deprecated` 捕获旧 `[pipeline.*]` 并在 `validate()` 返回 5 条迁移映射，`TemplateConfig`/`OutputConfig` 独立 struct（CONFIG-03/04，Phase 18）
+3. 代码结构重构 — filters.rs (1481→4 模块)、config/mod.rs (1418→3 模块)、csv.rs (1260→目录)、sqlite.rs (1302→目录)、run.rs (1281→4 模块)；`exporter/projection.rs` 消除投影 copy-paste；`DryRunExporter` → `ExporterKind::DryRun`；全 codebase 可见性收紧至 `pub(crate)`（REFACTOR-01/02/03/04，Phase 19）
+4. 测试覆盖深化 — 补全 Phase 12/13/14/15/16/17/18 共 7 份 VERIFICATION.md；3 条 E2E 集成测试（过滤/归一化/投影）+ 4 条边界测试（空文件/全过滤/格式错误/1MB SQL）；2 条 proptest 属性测试（幂等性 + 字面量保护）（TEST-01/02/03/04，Phase 20）
+5. 933 测试全通过，cargo clippy 零警告，性能基准编译无回归
+
+### Stats
+
+- Rust LOC: ~14,763 (src/)
+- Files changed: 58 Rust/TOML files (+8,298 / -7,287)
+- Test suite: 933 tests passing (426 lib + 445 bin + 62 integration)
+- Timeline: 2 days (2026-05-17 → 2026-05-18)
+- Commits: ~90
+
+### Archive
+
+- `.planning/milestones/v1.4-ROADMAP.md`
+- `.planning/milestones/v1.4-REQUIREMENTS.md`
+
+---
+
 ## v1.3 — SQL 模板分析 & 可视化
 
 **Shipped:** 2026-05-17

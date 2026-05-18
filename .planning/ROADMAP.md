@@ -6,7 +6,7 @@
 - ✅ **v1.1 性能优化** — Phases 3–6 (shipped 2026-05-10)
 - ✅ **v1.2 质量强化 & 性能深化** — Phases 7–11 (shipped 2026-05-15)
 - ✅ **v1.3 SQL 模板分析 & 可视化** — Phases 12–16 (shipped 2026-05-17)
-- ✅ **v1.4 代码重构 & 质量深化** — Phases 17–20 (completed 2026-05-18)
+- ✅ **v1.4 代码重构 & 质量深化** — Phases 17–20 (shipped 2026-05-18)
 
 ## Phases
 
@@ -58,114 +58,17 @@ Full details: `.planning/milestones/v1.3-ROADMAP.md`
 
 </details>
 
-### ✅ v1.4 代码重构 & 质量深化 (COMPLETE — 2026-05-18)
+<details>
+<summary>✅ v1.4 代码重构 & 质量深化 (Phases 17–20) — SHIPPED 2026-05-18</summary>
 
-**Milestone Goal:** 系统性重构配置模型与代码结构，补全测试覆盖，大幅提升项目可维护性
+- [x] Phase 17: 过滤器配置嵌套化 (2/2 plans) — completed 2026-05-18
+- [x] Phase 18: 模板 & 图表配置嵌套化 (3/3 plans) — completed 2026-05-18
+- [x] Phase 19: 代码结构重构 (4/4 plans) — completed 2026-05-18
+- [x] Phase 20: 测试覆盖深化 (3/3 plans) — completed 2026-05-18
 
-- [x] **Phase 17: 过滤器配置嵌套化** - 将 [filter] 扁平字段重组为 [filter.include] / [filter.exclude] 子表，serde alias 向后兼容 (completed 2026-05-18)
-- [x] **Phase 18: 模板 & 图表配置嵌套化** - 将模板与图表配置集中至 [template] / [charts] 子表 (completed 2026-05-18)
-- [x] **Phase 19: 代码结构重构** - 拆分超大文件，消除重复代码，收紧可见性，统一 Exporter trait (completed 2026-05-18)
-- [x] **Phase 20: 测试覆盖深化** - 补全 VERIFICATION.md，添加端到端集成测试、边界测试、proptest 属性测试 (completed 2026-05-18)
+Full details: `.planning/milestones/v1.4-ROADMAP.md`
 
-## Phase Details
-
-### Phase 17: 过滤器配置嵌套化
-
-**Goal**: 用户可用 [filter.include] / [filter.exclude] 嵌套子表配置过滤条件，旧版扁平格式仍可正确解析
-**Depends on**: Phase 16
-**Requirements**: CONFIG-01, CONFIG-02, CONFIG-05
-**Success Criteria** (what must be TRUE):
-
-  1. 新格式 config 文件使用 [filter.include] / [filter.exclude] 子表可正常运行，过滤结果与旧格式一致
-  2. 旧版扁平字段配置文件（include_users / exclude_users 等）无需修改即可被正确解析，行为不变
-  3. `cargo run -- validate -c config.toml` 对新旧两种格式均通过验证，无报错
-  4. `pipeline.is_empty()` 热路径快速退出逻辑在新配置结构下保持不变（clippy + 测试全通过）
-
-**Plans:** 2/2 plans executed (Phase 17 COMPLETE)
-Plans:
-**Wave 1**
-
-- [x] 17-01-PLAN.md — Filters struct 重构：新增 IncludeFilters / ExcludeFilters，手写 Deserialize 向后兼容旧扁平格式，重命名 CompiledMetaFilters::try_from_include_exclude，SqlFilters 字段改名加 alias
-
-**Wave 2**
-
-- [x] 17-02-PLAN.md — 调用方适配 + init 模板更新：config.rs / cli/run.rs / cli/init.rs / tests/integration.rs 切换到新 API，init 命令产出新嵌套格式
-
-### Phase 18: 模板 & 图表配置嵌套化
-
-**Goal**: 用户可在 [template] / [charts] / [replace_parameters] / [filter] / [output] 顶层子表集中管理所有功能配置；旧 [pipeline.*] 命名空间在 validate() 阶段被显式拒绝，错误消息列出 5 条迁移映射
-**Depends on**: Phase 17
-**Requirements**: CONFIG-03, CONFIG-04
-**Success Criteria** (what must be TRUE):
-
-  1. 新格式 config 使用 [template] 子表（enable / output_csv_path / output_sqlite_table）可正常运行
-  2. 新格式 config 使用 [charts] 子表（output_dir / top_n / *_bar / *_hist / *_line / *_pie）可正常生成 SVG 图表
-  3. `cargo run -- init -o config.toml --force` 生成的默认配置文件使用新顶层格式，且 `cargo run -- validate -c config.toml` 直接通过
-  4. 含旧 [pipeline] 段的配置文件在 validate() 阶段返回明确迁移错误（5 条映射）
-  5. cargo clippy --all-targets -- -D warnings 零警告，cargo test 全通过
-
-**Plans:** 3/3 plans executed (Phase 18 COMPLETE)
-Plans:
-**Wave 1**
-
-- [x] 18-01-PLAN.md — Config struct 与 pipeline mod 顶层化：新增 TemplateConfig / OutputConfig；删除 PipelineConfig / TemplateAnalysisConfig；Config 顶层新增 5 个 Option 字段 + `pipeline_deprecated` 私有字段；validate() 加旧路径检测；apply_one 切换到新键路径 (commits: c39e8cc, 7d895c4)
-
-**Wave 2** *(blocked on Wave 1)*
-
-- [x] 18-02-PLAN.md — 调用方迁移 + Exporter trait 升级：cli/run.rs / main.rs / validate.rs / show_config.rs / stats.rs / pipeline/filters.rs 切换到顶层字段；write_template_stats 签名改为 `(csv_path: Option<&str>, sqlite_table: Option<&str>)`；CsvExporter 空路径短路；SqliteExporter 空表名短路 + identifier 校验
-
-**Wave 3** *(blocked on Wave 2)*
-
-- [x] 18-03-PLAN.md — init 模板与集成测试：CONFIG_TEMPLATE_ZH/EN 添加 # [charts] 注释段；tests/integration.rs 新增 4 条端到端测试（init→validate 成功路径 + 旧 [pipeline.*] 拒绝路径）(commit: 4097db5)
-
-### Phase 19: 代码结构重构
-
-**Goal**: 源代码文件按职责合理拆分，重复逻辑消除，可见性收紧，Exporter trait 统一
-**Depends on**: Phase 18
-**Requirements**: REFACTOR-01, REFACTOR-02, REFACTOR-03, REFACTOR-04
-**Success Criteria** (what must be TRUE):
-
-  1. 原超过 300 行的源文件（filters.rs / config.rs / run.rs 等）已按职责拆分，各子模块行数合理
-  2. CsvExporter 与 SqliteExporter 的字段投影逻辑已合并至共用辅助函数，无 copy-paste 重复片段
-  3. Exporter trait 涵盖 write_record / finalize 等核心方法，不必要的特化分支已消除
-  4. pub 可见性已收紧为 pub(crate) / pub(super)，跨层漏出的实现细节减少
-  5. cargo clippy --all-targets -- -D warnings 零警告，cargo test 全通过，性能基准无回归
-
-**Plans:** 4/4 plans complete
-Plans:
-**Wave 1**
-
-- [x] 19-01-PLAN.md — 拆分 src/pipeline/filters.rs (1481 行) 为 filters/{mod.rs, types.rs, compiled.rs, serde_helpers.rs}；按 D-10 收紧 filters 模块 pub 可见性
-- [x] 19-02-PLAN.md — 拆分 src/config/mod.rs (1418 行) 为 mod.rs (≤300) + validate.rs + apply_one.rs；89 个测试分类迁移；config 模块 pub 收紧
-
-**Wave 2** *(blocked on Wave 1 完成)*
-
-- [x] 19-03-PLAN.md — 拆分 csv.rs (1260) + sqlite.rs (1302) 为目录子模块；新建 exporter/projection.rs (REFACTOR-02)；整合 DryRunExporter 进 ExporterKind (D-08, REFACTOR-03)；清理 Exporter trait 冗余 match (D-07)；sqlite conn_ref tech debt 修复
-
-**Wave 3** *(blocked on Wave 2)*
-
-- [x] 19-04-PLAN.md — 拆分 src/cli/run.rs (1281) 为 run/{mod.rs, processor.rs, prescan.rs, parallel.rs}；全 codebase pub 可见性收紧终验（lib.rs 各 pub mod 按 integration test 引用情况评估收紧）；REQUIREMENTS.md 状态更新
-
-### Phase 20: 测试覆盖深化
-
-**Goal**: 补全历史遗留的 VERIFICATION.md，新增端到端集成测试、边界条件测试和属性测试
-**Depends on**: Phase 19
-**Requirements**: TEST-01, TEST-02, TEST-03, TEST-04
-**Success Criteria** (what must be TRUE):
-
-  1. Phase 12 / 13 / 14 / 16 各有完整 VERIFICATION.md，覆盖 UAT 标准与成功标准
-  2. 至少一条端到端集成测试：读取 fixture .log 文件 → 运行完整 pipeline → 验证 CSV 或 SQLite 输出内容正确
-  3. 边界条件测试覆盖：空 log 文件、全部记录被过滤输出为空、格式错误行被跳过并计入 error log、超长 SQL 字段
-  4. normalize_template 有 proptest 属性测试，验证幂等性（归一化两次 = 归一化一次）和字面量保护不变性
-  5. cargo test 全通过（含新增测试），cargo clippy --all-targets -- -D warnings 零警告
-
-**Plans:** 3/3 plans complete (Phase 20 COMPLETE)
-Plans:
-**Wave 1**
-
-- [x] 20-01-PLAN.md — 补全 Phase 12/13/14/15(扩展)/16/17/18 共 7 份 VERIFICATION.md (TEST-01)
-- [x] 20-02-PLAN.md — tests/integration.rs 追加 3 条端到端测试 + 4 条边界测试 (TEST-02, TEST-03)
-- [x] 20-03-PLAN.md — proptest 1.6.0 dev-dep + src/pipeline/fingerprint.rs 两条属性测试 (TEST-04)
+</details>
 
 ## Progress
 
