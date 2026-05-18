@@ -15,10 +15,10 @@
 
 ### 代码重构（REFACTOR）
 
-- [ ] **REFACTOR-01**: 超过 300 行的源文件按职责拆分为独立子模块（目标：filters.rs / config.rs / run.rs 等）
+- [x] **REFACTOR-01**: 超过 300 行的源文件按职责拆分为独立子模块（目标：filters.rs / config.rs / run.rs 等）
 - [ ] **REFACTOR-02**: CsvExporter 与 SqliteExporter 中重复的字段投影逻辑抽取到共用辅助函数，消除 copy-paste 片段
 - [ ] **REFACTOR-03**: Exporter trait 接口统一，涵盖 write_record / finalize 等核心方法，消除不必要的特化分支
-- [ ] **REFACTOR-04**: 内部类型可见性收紧（pub → pub(crate) / pub(super)），减少跨层漏出的实现细节
+- [x] **REFACTOR-04**: 内部类型可见性收紧（pub → pub(crate) / pub(super)），减少跨层漏出的实现细节
 
 ### 测试覆盖（TEST）
 
@@ -54,10 +54,10 @@
 | CONFIG-05 | Phase 17 | Complete |
 | CONFIG-03 | Phase 18 | Complete |
 | CONFIG-04 | Phase 18 | Complete |
-| REFACTOR-01 | Phase 19 | Pending |
+| REFACTOR-01 | Phase 19 | Complete |
 | REFACTOR-02 | Phase 19 | Pending |
 | REFACTOR-03 | Phase 19 | Pending |
-| REFACTOR-04 | Phase 19 | Pending |
+| REFACTOR-04 | Phase 19 | Complete |
 | TEST-01 | Phase 20 | Pending |
 | TEST-02 | Phase 20 | Pending |
 | TEST-03 | Phase 20 | Pending |
