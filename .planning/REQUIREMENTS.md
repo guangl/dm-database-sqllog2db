@@ -57,7 +57,26 @@
 
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
-| | | *待 roadmap 分配* |
+| DOC-01 | Phase 21 | Pending |
+| DOC-02 | Phase 21 | Pending |
+| DOC-03 | Phase 21 | Pending |
+| DOC-04 | Phase 21 | Pending |
+| DOC-05 | Phase 21 | Pending |
+| DOC-06 | Phase 21 | Pending |
+| DOC-07 | Phase 21 | Pending |
+| DOC-08 | Phase 21 | Pending |
+| DOC-09 | Phase 21 | Pending |
+| PAGES-01 | Phase 22 | Pending |
+| PAGES-02 | Phase 22 | Pending |
+| PAGES-03 | Phase 22 | Pending |
+| PAGES-04 | Phase 22 | Pending |
+| PAGES-05 | Phase 22 | Pending |
+| SUPP-01 | Phase 22 | Pending |
+| SUPP-06 | Phase 22 | Pending |
+| SUPP-02 | Phase 23 | Pending |
+| SUPP-03 | Phase 23 | Pending |
+| SUPP-04 | Phase 23 | Pending |
+| SUPP-05 | Phase 23 | Pending |
 
 ---
 *Requirements for: sqllog2db v1.5*
