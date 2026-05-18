@@ -159,7 +159,13 @@ Plans:
   4. normalize_template 有 proptest 属性测试，验证幂等性（归一化两次 = 归一化一次）和字面量保护不变性
   5. cargo test 全通过（含新增测试），cargo clippy --all-targets -- -D warnings 零警告
 
-**Plans**: TBD
+**Plans:** 3 plans
+Plans:
+**Wave 1** *(三个 plan 文件级独立,可并行执行)*
+
+- [ ] 20-01-PLAN.md — 补全 Phase 12/13/14/15(扩展)/16/17/18 共 7 份 VERIFICATION.md (TEST-01)
+- [ ] 20-02-PLAN.md — tests/integration.rs 追加 3 条端到端测试 + 4 条边界测试 (TEST-02, TEST-03)
+- [ ] 20-03-PLAN.md — proptest 1.6.0 dev-dep + src/pipeline/fingerprint.rs 两条属性测试 (TEST-04)
 
 ## Progress
 
@@ -184,4 +190,4 @@ Plans:
 | 17. 过滤器配置嵌套化 | v1.4 | 1/2 | In Progress|  |
 | 18. 模板 & 图表配置嵌套化 | v1.4 | 2/3 | In Progress|  |
 | 19. 代码结构重构 | v1.4 | 4/4 | Complete    | 2026-05-18 |
-| 20. 测试覆盖深化 | v1.4 | 0/TBD | Not started | - |
+| 20. 测试覆盖深化 | v1.4 | 0/3 | Planned     | - |
