@@ -157,8 +157,7 @@ pub fn handle_run(
                 if let Some(sqlite_cfg) = final_cfg.exporter.sqlite.as_ref() {
                     use crate::exporter::{Exporter, SqliteExporter};
                     let mut sqlite = SqliteExporter::from_config(sqlite_cfg);
-                    sqlite.initialize()?;
-                    sqlite.finalize()?;
+                    sqlite.open_connection_only()?;
                     sqlite.write_template_stats(stats, None, Some(table_name))?;
                 }
             }
