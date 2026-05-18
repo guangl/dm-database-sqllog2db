@@ -107,9 +107,7 @@ pub(super) fn process_csv_parallel(
             .parent()
             .filter(|p| !p.as_os_str().is_empty())
             .unwrap_or(Path::new("."));
-        if let Some(parent) = output_path.parent().filter(|p| !p.as_os_str().is_empty()) {
-            std::fs::create_dir_all(parent)?;
-        }
+        std::fs::create_dir_all(preferred)?;
         let candidate = preferred.join(&dir_name);
         if std::fs::create_dir_all(&candidate).is_ok() {
             candidate
