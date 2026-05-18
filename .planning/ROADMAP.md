@@ -106,7 +106,11 @@ Plans:
   3. 用户能在落地页看到 SVG 图表 Gallery（4 张实际生成的图表示例：频率柱状图、延迟直方图、趋势折线图、用户饼图）
   4. GitHub Actions 在推送 `site/**` 变更时自动构建 mdBook 并部署到 `gh-pages` 分支，落地页内容与 README 互补非重复
   5. Cargo.toml 的 `documentation` 字段指向已部署的 GitHub Pages URL
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 22-01-PLAN.md -- mdBook 基础设施（book.toml/SUMMARY.md/custom.css）+ GHA 部署流水线 + Cargo.toml documentation 字段
+- [ ] 22-02-PLAN.md -- 落地页内容（Hero/Install/Feature/Architecture/Performance/SVG Gallery/Links）+ 4 张示例 SVG 图表
 
 ### Phase 23: 补充文档 + CI 质量门禁
 **Goal**: 用户能访问更详细的快速入门指南、完整的配置参考文档，以及 Asciicast 终端演示，CI 自动防止文档链接腐化
@@ -146,5 +150,5 @@ Plans:
 | 19. 代码结构重构 | v1.4 | 4/4 | Complete | 2026-05-18 |
 | 20. 测试覆盖深化 | v1.4 | 3/3 | Complete | 2026-05-18 |
 | 21. README 全面更新 + 根文档补全 | v1.5 | 0/2 | Not started | - |
-| 22. GitHub Pages 落地页 + 部署流水线 | v1.5 | 0/TBD | Not started | - |
+| 22. GitHub Pages 落地页 + 部署流水线 | v1.5 | 0/2 | Not started | - |
 | 23. 补充文档 + CI 质量门禁 | v1.5 | 0/TBD | Not started | - |
