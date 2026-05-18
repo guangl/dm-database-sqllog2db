@@ -346,7 +346,7 @@ fn test_handle_stats_empty_dir() {
         },
         ..Default::default()
     };
-    // No log files → prints "No log files found" and returns without panic
+    // Smoke test: handle_stats returns () — verifies no panic; no return value assertion
     handle_stats(&cfg, true, false, None, false, &[], None, None);
 }
 
@@ -374,7 +374,7 @@ fn test_handle_stats_nonexistent_dir() {
         },
         ..Default::default()
     };
-    // Should not panic — prints an error and returns
+    // Smoke test: handle_stats returns () — should not panic on nonexistent dir
     handle_stats(&cfg, true, false, None, false, &[], None, None);
 }
 
@@ -403,6 +403,7 @@ fn make_stats_cfg(log_dir: &std::path::Path) -> Config {
     }
 }
 
+// Smoke tests: handle_stats returns (), no return value assertions
 #[test]
 fn test_handle_stats_group_by_user() {
     let dir = tempfile::TempDir::new().unwrap();
@@ -570,7 +571,7 @@ fn test_handle_stats_group_and_bucket_non_quiet() {
     );
 }
 
-// ── handle_digest tests ──────────────────────────────────────────────────────
+// ── handle_digest tests (smoke tests — handle_digest returns (), no return value assertion) ───────────────────
 
 #[test]
 fn test_handle_digest_empty_dir() {
@@ -989,7 +990,7 @@ fn test_handle_run_with_min_runtime_filter() {
 #[test]
 fn test_handle_show_config_integration() {
     let cfg = Config::default();
-    // Just verify no panic when called from integration test context
+    // Smoke test: handle_show_config returns () — no return value assertion
     handle_show_config(&cfg, "/path/to/config.toml", false);
 }
 
