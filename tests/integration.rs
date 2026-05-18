@@ -1502,3 +1502,184 @@ fn test_e2e_field_projection() {
         );
     }
 }
+
+// ── Boundary tests (TEST-03) ─────────────────────────────────────────────────
+
+#[test]
+fn test_boundary_empty_log_file() {
+    // Arrange: 0 字节 empty.log
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_dir = dir.path().join("logs");
+    std::fs::create_dir_all(&log_dir).unwrap();
+    std::fs::write(log_dir.join("empty.log"), b"").unwrap();
+
+    let csv_file = dir.path().join("out.csv");
+    let cfg = make_run_config(&log_dir, &csv_file);
+
+    // Act
+    let interrupted = Arc::new(AtomicBool::new(false));
+    handle_run(
+        &cfg,
+        None,
+        false,
+        true,
+        &interrupted,
+        80,
+        false,
+        None,
+        1,
+        None,
+    )
+    .unwrap();
+
+    // Assert: CSV 文件存在且只有 header（1 行）
+    assert!(
+        csv_file.exists(),
+        "CSV file should exist even for empty input"
+    );
+    let content = std::fs::read_to_string(&csv_file).unwrap();
+    assert_eq!(
+        content.lines().count(),
+        1,
+        "expected only header row for empty log, got {} lines",
+        content.lines().count()
+    );
+}
+
+#[test]
+fn test_boundary_all_filtered() {
+    // Arrange: 5 条 user=TESTUSER 记录，但过滤器 include.users=["NONEXISTENT"]
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_dir = dir.path().join("logs");
+    std::fs::create_dir_all(&log_dir).unwrap();
+    write_test_log(&log_dir.join("test.log"), 5);
+
+    let csv_file = dir.path().join("out.csv");
+    let mut cfg = make_run_config(&log_dir, &csv_file);
+    cfg.filter = Some(FiltersFeature {
+        enable: true,
+        include: IncludeFilters {
+            users: Some(vec!["NONEXISTENT".to_string()]),
+            ..Default::default()
+        },
+        exclude: ExcludeFilters::default(),
+        ..Default::default()
+    });
+
+    // Act
+    let interrupted = Arc::new(AtomicBool::new(false));
+    handle_run(
+        &cfg,
+        None,
+        false,
+        true,
+        &interrupted,
+        80,
+        false,
+        None,
+        1,
+        None,
+    )
+    .unwrap();
+
+    // Assert: CSV 只有 header（全部记录被过滤）
+    let content = std::fs::read_to_string(&csv_file).unwrap();
+    assert_eq!(
+        content.lines().count(),
+        1,
+        "expected only header row when all records filtered, got {} lines",
+        content.lines().count()
+    );
+}
+
+#[test]
+fn test_boundary_malformed_line() {
+    // Arrange: 2 条正常行 + 1 条无效行 + 2 条正常行 = 4 条正常记录
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_dir = dir.path().join("logs");
+    std::fs::create_dir_all(&log_dir).unwrap();
+
+    // 无效行放在文件开头：解析器会把它作为第一条记录处理 → 解析失败 → 跳过
+    // 后续 4 条正常行继续被导出，验证不 panic 且正常行全部处理
+    use std::fmt::Write as FmtWrite;
+    let mut content = String::new();
+    content.push_str("INVALID LINE NO TIMESTAMP HERE\n");
+    for i in 0..4usize {
+        writeln!(
+            content,
+            "2025-01-15 10:30:28.001 (EP[0] sess:0x{i:04x} user:TESTUSER trxid:{i} stmt:0x1 appname:App ip:10.0.0.1) [SEL] SELECT * FROM t WHERE id={i}. EXECTIME: 0(ms) ROWCOUNT: 1(rows) EXEC_ID: {i}."
+        )
+        .unwrap();
+    }
+    std::fs::write(log_dir.join("mixed.log"), content).unwrap();
+
+    let csv_file = dir.path().join("out.csv");
+    let cfg = make_run_config(&log_dir, &csv_file);
+
+    // Act
+    let interrupted = Arc::new(AtomicBool::new(false));
+    handle_run(
+        &cfg,
+        None,
+        false,
+        true,
+        &interrupted,
+        80,
+        false,
+        None,
+        1,
+        None,
+    )
+    .unwrap();
+
+    // Assert: 无效行被跳过，4 条正常记录导出 → header + 4 data = 5 行
+    let csv_content = std::fs::read_to_string(&csv_file).unwrap();
+    assert_eq!(
+        csv_content.lines().count(),
+        5,
+        "expected header + 4 data rows (malformed line skipped), got {} lines",
+        csv_content.lines().count()
+    );
+}
+
+#[test]
+fn test_boundary_long_sql() {
+    // Arrange: 1 条超长 SQL 记录（SQL 字段 1MB），保持完整达梦日志格式
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_dir = dir.path().join("logs");
+    std::fs::create_dir_all(&log_dir).unwrap();
+
+    let huge_sql = "X".repeat(1_048_576);
+    let log_line = format!(
+        "2025-01-15 10:30:28.001 (EP[0] sess:0x0001 user:TESTUSER trxid:1 stmt:0x1 appname:App ip:10.0.0.1) [SEL] SELECT FROM t WHERE c='{huge_sql}'. EXECTIME: 1(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.\n"
+    );
+    std::fs::write(log_dir.join("long.log"), log_line).unwrap();
+
+    let csv_file = dir.path().join("out.csv");
+    let cfg = make_run_config(&log_dir, &csv_file);
+
+    // Act: 不应 panic，不应 OOM
+    let interrupted = Arc::new(AtomicBool::new(false));
+    handle_run(
+        &cfg,
+        None,
+        false,
+        true,
+        &interrupted,
+        80,
+        false,
+        None,
+        1,
+        None,
+    )
+    .unwrap();
+
+    // Assert: 1 条记录正常导出 → header + 1 data = 2 行
+    let csv_content = std::fs::read_to_string(&csv_file).unwrap();
+    assert_eq!(
+        csv_content.lines().count(),
+        2,
+        "expected header + 1 data row for long SQL, got {} lines",
+        csv_content.lines().count()
+    );
+}
