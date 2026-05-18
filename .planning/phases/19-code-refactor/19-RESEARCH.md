@@ -426,17 +426,19 @@ fn conn_ref(&self) -> crate::error::Result<&rusqlite::Connection> {
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **`cli/stats.rs`（1039 行）是否需要拆分**
    - What we know: 不在 D-01 的 5 个目标文件中；CONTEXT.md 未提及
    - What's unclear: stats.rs 超过了 300 行上限，但决策文档只列了 5 个文件
    - Recommendation: 本 Phase 不拆分，遵循 D-01 的明确范围。若有余力可在 Claude's Discretion 范围内评估，但不作为成功标准
+   - **RESOLVED:** 本 Phase 不拆分 stats.rs，遵循 D-01 的明确 5 文件范围。stats.rs 拆分可放入后续 Phase。
 
 2. **`exporter/mod.rs`（756 行）是否需要拆分**
    - What we know: CONTEXT.md 明确提到"本 Phase 也需评估是否拆分"（Canonical Refs 节）
    - What's unclear: 756 行超过 300 行但不在 D-01 明确列表中
    - Recommendation: 在 DryRunExporter 整合（D-08）后评估行数，若还超 300 行则拆分；`ExporterManager` + `ExporterKind` + `ExportStats` + 工具函数可作为拆分边界
+   - **RESOLVED:** Plan 03-Task3 设定目标 ≤600 行（DryRunExporter 整合后预计从 756 行降至 ~580 行），并提供若仍超 300 行则拆 `ExporterManager` 为 `manager.rs` 的兜底策略。
 
 ---
 
