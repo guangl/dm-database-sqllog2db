@@ -505,13 +505,13 @@ fn process_file(
                 // 时间过滤
                 if let Some(start) = ctx.start_ts {
                     let ts = record.ts.as_ref();
-                    if ts < start && !ts.starts_with(start) {
+                    if ts < start {
                         continue;
                     }
                 }
                 if let Some(end) = ctx.end_ts {
                     let ts = record.ts.as_ref();
-                    if ts > end && !ts.starts_with(end) {
+                    if ts > end {
                         continue;
                     }
                 }

@@ -67,12 +67,12 @@ impl LogProcessor for FilterProcessor {
 
         // 时间过滤：无需构造 RecordMeta
         if let Some(start) = &self.start_ts {
-            if ts < start.as_str() && !ts.starts_with(start.as_str()) {
+            if ts < start.as_str() {
                 return false;
             }
         }
         if let Some(end) = &self.end_ts {
-            if ts > end.as_str() && !ts.starts_with(end.as_str()) {
+            if ts > end.as_str() {
                 return false;
             }
         }
