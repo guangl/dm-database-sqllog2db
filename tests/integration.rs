@@ -869,6 +869,7 @@ fn test_handle_run_with_filters_builds_pipeline() {
     let csv_file = dir.path().join("out.csv");
     let mut cfg = make_run_config(&log_dir, &csv_file);
     // Enable a record-level filter — exercises build_pipeline and FilterProcessor
+    // Explicitly compiles filters and passes them to handle_run (pre-compiled path)
     cfg.filter = Some(FiltersFeature {
         enable: true,
         include: IncludeFilters {
@@ -932,6 +933,7 @@ fn test_handle_run_with_transaction_filters_prescans() {
     let csv_file = dir.path().join("out.csv");
     let mut cfg = make_run_config(&log_dir, &csv_file);
     // exec_ids filter triggers transaction pre-scan path
+    // Passes compiled_filters=None — exercises handle_run's internal recompile_meta_if_needed path
     cfg.filter = Some(FiltersFeature {
         enable: true,
         include: IncludeFilters::default(),
@@ -967,6 +969,8 @@ fn test_handle_run_with_min_runtime_filter() {
     write_test_log(&log_dir.join("data.log"), 20);
     let csv_file = dir.path().join("out.csv");
     let mut cfg = make_run_config(&log_dir, &csv_file);
+    // min_runtime filter — exercises the record-level runtime check
+    // Passes compiled_filters=None — exercises handle_run's internal recompile_meta_if_needed path
     cfg.filter = Some(FiltersFeature {
         enable: true,
         include: IncludeFilters::default(),
