@@ -170,8 +170,13 @@ fn test_handle_run_real_csv_export() {
     .unwrap();
 
     let content = std::fs::read_to_string(&csv_file).unwrap();
-    // header + 10 data rows
-    assert!(content.lines().count() >= 10);
+    // header + 10 data rows = 11 lines
+    assert_eq!(
+        content.lines().count(),
+        11,
+        "expected header + 10 data rows, got {}",
+        content.lines().count()
+    );
 }
 
 #[test]
@@ -240,7 +245,11 @@ fn test_resume_skips_processed_files() {
     )
     .unwrap();
     let rows_first = std::fs::read_to_string(&csv1).unwrap().lines().count();
-    assert!(rows_first >= 10, "expected at least 10 rows");
+    // 2 files × 10 records = 20 data rows + header = 21 lines
+    assert_eq!(
+        rows_first, 21,
+        "expected header + 20 data rows, got {rows_first}"
+    );
 
     // State file must exist after first run
     assert!(state_path.exists(), "state file should be created");
