@@ -136,7 +136,7 @@ Plans:
 **Wave 1**
 
 - [ ] 19-01-PLAN.md — 拆分 src/pipeline/filters.rs (1481 行) 为 filters/{mod.rs, types.rs, compiled.rs, serde_helpers.rs}；按 D-10 收紧 filters 模块 pub 可见性
-- [ ] 19-02-PLAN.md — 拆分 src/config/mod.rs (1418 行) 为 mod.rs (≤300) + validate.rs + apply_one.rs；89 个测试分类迁移；config 模块 pub 收紧
+- [x] 19-02-PLAN.md — 拆分 src/config/mod.rs (1418 行) 为 mod.rs (≤300) + validate.rs + apply_one.rs；89 个测试分类迁移；config 模块 pub 收紧
 
 **Wave 2** *(blocked on Wave 1 完成)*
 

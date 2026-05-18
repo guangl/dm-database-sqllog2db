@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: 代码重构 & 质量深化
 status: executing
-stopped_at: Phase 19 context gathered
-last_updated: "2026-05-18T00:42:49.537Z"
-last_activity: 2026-05-18 -- Phase 19 planning complete
+stopped_at: Phase 19 Plan 02 complete
+last_updated: "2026-05-18T13:25:00.000Z"
+last_activity: 2026-05-18 -- Phase 19 Plan 02 complete (split config/mod.rs)
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 9
-  completed_plans: 5
+  completed_plans: 6
   percent: 50
 ---
 
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-05-17 after v1.3 milestone)
 
 ## Current Position
 
-Phase: 18 of 20 (模板 & 图表配置嵌套化)
-Plan: 03 complete (Phase 18 全部 3 个 Plan 完成)
+Phase: 19 of 20 (代码重构 & 质量深化)
+Plan: 02 complete (Phase 19 已完成 2/4 Plans)
 Status: Ready to execute
-Last activity: 2026-05-18 -- Phase 19 planning complete
+Last activity: 2026-05-18 -- Phase 19 Plan 02 complete (split config/mod.rs)
 
 Progress: [█████████░] 90%
 
@@ -55,6 +55,8 @@ Progress: [█████████░] 90%
 | pub + #[doc(hidden)] for pipeline_deprecated | 技术上需要 pub 供集成测试 struct update 语法，隐藏文档使其不出现在公开 API | 18 |
 | 破坏性升级无 serde alias | 符合 D-05，validate() 明确拒绝旧路径并提供完整迁移指引 | 18 |
 | TemplateConfig.enable 而非 enabled | 与 NormalizeConfig / FiltersFeature 命名对齐，符合 D-03 | 18 |
+| validate_and_compile 和 apply_overrides 保持 pub | 调用方在 binary crate (main.rs)，pub(crate) 导致 dead_code lint | 19 |
+| apply_one 测试留在 apply_one.rs | 私有方法只能在声明模块内测试，不可迁移 | 19 |
 
 ### Blockers/Concerns
 
@@ -72,6 +74,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-05-17T14:15:34.919Z
-Stopped at: Phase 19 context gathered
-Resume file: .planning/phases/19-code-refactor/19-CONTEXT.md
+Last session: 2026-05-18T13:25:00.000Z
+Stopped at: Phase 19 Plan 02 complete
+Resume file: .planning/phases/19-code-refactor/19-02-SUMMARY.md
