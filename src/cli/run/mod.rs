@@ -66,10 +66,10 @@ pub fn handle_run(
         .as_ref()
         .is_some_and(crate::pipeline::FiltersFeature::has_transaction_filters)
     {
-        let extra_trxids = scan_for_trxids_by_transaction_filters(&log_files, cfg, jobs);
+        let extra_trxids = scan_for_trxids_by_transaction_filters(&log_files, cfg, jobs)?;
         let mut tmp = cfg.clone();
         if let Some(f) = &mut tmp.filter {
-            f.merge_found_trxids(extra_trxids.into_iter().collect());
+            f.merge_found_trxids(extra_trxids);
         }
         owned_cfg = tmp;
         &owned_cfg

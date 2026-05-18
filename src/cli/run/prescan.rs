@@ -1,7 +1,6 @@
 use crate::config::Config;
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::pipeline::CompiledMetaFilters;
-use ahash::HashSet as AHashSet;
 use compact_str::CompactString;
 use dm_database_parser_sqllog::LogParser;
 
@@ -57,7 +56,7 @@ pub(super) fn scan_for_trxids_by_transaction_filters(
     log_files: &[std::path::PathBuf],
     cfg: &Config,
     jobs: usize,
-) -> AHashSet<CompactString> {
+) -> Result<Vec<CompactString>> {
     use rayon::prelude::*;
 
     eprintln!(
@@ -70,7 +69,7 @@ pub(super) fn scan_for_trxids_by_transaction_filters(
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(jobs)
         .build()
-        .expect("failed to build pre-scan thread pool");
+        .map_err(|e| Error::Io(std::io::Error::other(e)))?;
 
     let matched: Vec<CompactString> = pool.install(|| {
         log_files
@@ -79,7 +78,7 @@ pub(super) fn scan_for_trxids_by_transaction_filters(
             .collect()
     });
 
-    matched.into_iter().collect()
+    Ok(matched)
 }
 
 /// pre-scan 完成后重新编译 `CompiledMetaFilters`。
