@@ -64,7 +64,7 @@ Full details: `.planning/milestones/v1.3-ROADMAP.md`
 
 - [ ] **Phase 17: 过滤器配置嵌套化** - 将 [filter] 扁平字段重组为 [filter.include] / [filter.exclude] 子表，serde alias 向后兼容
 - [x] **Phase 18: 模板 & 图表配置嵌套化** - 将模板与图表配置集中至 [template] / [charts] 子表
-- [ ] **Phase 19: 代码结构重构** - 拆分超大文件，消除重复代码，收紧可见性，统一 Exporter trait
+- [x] **Phase 19: 代码结构重构** - 拆分超大文件，消除重复代码，收紧可见性，统一 Exporter trait (completed 2026-05-18)
 - [ ] **Phase 20: 测试覆盖深化** - 补全 VERIFICATION.md，添加端到端集成测试、边界测试、proptest 属性测试
 
 ## Phase Details
@@ -131,7 +131,7 @@ Plans:
   4. pub 可见性已收紧为 pub(crate) / pub(super)，跨层漏出的实现细节减少
   5. cargo clippy --all-targets -- -D warnings 零警告，cargo test 全通过，性能基准无回归
 
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans complete
 Plans:
 **Wave 1**
 
@@ -144,7 +144,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2)*
 
-- [ ] 19-04-PLAN.md — 拆分 src/cli/run.rs (1281) 为 run/{mod.rs, processor.rs, prescan.rs, parallel.rs}；全 codebase pub 可见性收紧终验（lib.rs 各 pub mod 按 integration test 引用情况评估收紧）；REQUIREMENTS.md 状态更新
+- [x] 19-04-PLAN.md — 拆分 src/cli/run.rs (1281) 为 run/{mod.rs, processor.rs, prescan.rs, parallel.rs}；全 codebase pub 可见性收紧终验（lib.rs 各 pub mod 按 integration test 引用情况评估收紧）；REQUIREMENTS.md 状态更新
 
 ### Phase 20: 测试覆盖深化
 
@@ -183,5 +183,5 @@ Plans:
 | 16. 剩余图表 | v1.3 | 5/5 | Complete | 2026-05-17 |
 | 17. 过滤器配置嵌套化 | v1.4 | 1/2 | In Progress|  |
 | 18. 模板 & 图表配置嵌套化 | v1.4 | 2/3 | In Progress|  |
-| 19. 代码结构重构 | v1.4 | 3/4 | In Progress|  |
+| 19. 代码结构重构 | v1.4 | 4/4 | Complete   | 2026-05-18 |
 | 20. 测试覆盖深化 | v1.4 | 0/TBD | Not started | - |
