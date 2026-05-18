@@ -1,18 +1,18 @@
 pub mod filters;
-// CompiledMetaFilters, CompiledSqlFilters, FiltersFeature: pub because integration tests use them
-pub use filters::{CompiledMetaFilters, CompiledSqlFilters, FiltersFeature};
+pub use filters::FiltersFeature;
+pub(crate) use filters::{CompiledMetaFilters, CompiledSqlFilters};
 
 pub mod normalizer;
-pub use normalizer::compute_normalized;
+pub(crate) use normalizer::compute_normalized;
 
 pub mod fingerprint;
-pub use fingerprint::fingerprint;
-pub use fingerprint::normalize_template;
+pub(crate) use fingerprint::fingerprint;
+pub(crate) use fingerprint::normalize_template;
 
 pub mod aggregator;
-pub use aggregator::ChartEntry;
-pub use aggregator::TemplateAggregator;
-pub use aggregator::TemplateStats;
+pub(crate) use aggregator::ChartEntry;
+pub(crate) use aggregator::TemplateAggregator;
+pub(crate) use aggregator::TemplateStats;
 
 use dm_database_parser_sqllog::{MetaParts, Sqllog};
 use serde::Deserialize;

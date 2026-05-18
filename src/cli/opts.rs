@@ -9,18 +9,18 @@ use clap_complete::{Shell, generate};
     about = "Parse DM database SQL logs and export to CSV/SQLite",
     long_about = "A lightweight and efficient CLI tool for parsing DM database SQL logs (streaming) and exporting to CSV or SQLite."
 )]
-pub struct Cli {
+pub(crate) struct Cli {
     /// Enable verbose output (debug level)
     #[arg(short = 'v', long = "verbose", global = true)]
-    pub verbose: bool,
+    pub(crate) verbose: bool,
 
     /// Suppress non-error output (error level only)
     #[arg(short = 'q', long = "quiet", global = true, conflicts_with = "verbose")]
-    pub quiet: bool,
+    pub(crate) quiet: bool,
 
     /// Disable colored output (also respects `NO_COLOR` env var)
     #[arg(long = "no-color", global = true)]
-    pub no_color: bool,
+    pub(crate) no_color: bool,
 
     /// Output language: zh | en (default: auto-detect from LANG env var)
     #[arg(
@@ -29,14 +29,14 @@ pub struct Cli {
         global = true,
         env = "SQLLOG2DB_LANG"
     )]
-    pub lang: Option<String>,
+    pub(crate) lang: Option<String>,
 
     #[command(subcommand)]
-    pub command: Option<Commands>,
+    pub(crate) command: Option<Commands>,
 }
 
 #[derive(Debug, Subcommand)]
-pub enum Commands {
+pub(crate) enum Commands {
     /// Run the log export task
     Run {
         /// Configuration file path
@@ -212,7 +212,8 @@ pub enum Commands {
 
 impl Cli {
     /// Generate shell completions
-    pub fn generate_completions(shell: Shell) {
+    #[allow(dead_code)]
+    pub(crate) fn generate_completions(shell: Shell) {
         let mut cmd = Cli::command();
         let bin_name = cmd.get_name().to_string();
         generate(shell, &mut cmd, bin_name, &mut std::io::stdout());

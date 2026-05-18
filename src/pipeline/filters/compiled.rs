@@ -5,7 +5,8 @@ use super::types::{ExcludeFilters, IncludeFilters, RecordMeta, SqlFilters};
 use regex::Regex;
 
 /// 预编译后的元数据过滤器，在热路径中使用。由 `MetaFilters` 在启动时构造。
-// pub: required by integration tests (passed to handle_run via validate_and_compile)
+// 结构体 `pub`（因 handle_run 等 pub 函数签名中使用），但字段为 `pub(crate)`，
+// 且 filters/mod.rs 通过 `pub(crate) use` 限制 crate 外部访问。
 #[derive(Debug)]
 pub struct CompiledMetaFilters {
     pub(crate) usernames: Option<Vec<Regex>>,
@@ -187,7 +188,8 @@ impl CompiledMetaFilters {
 
 /// 预编译后的 SQL 记录级过滤器（D-03）。
 /// 仅用于 `record_sql`，事务级 `sql`（预扫描）保持字符串包含匹配。
-// pub: required by integration tests (passed to handle_run via validate_and_compile)
+// 结构体 `pub`（因 handle_run 等 pub 函数签名中使用），但字段为 `pub(crate)`，
+// 且 filters/mod.rs 通过 `pub(crate) use` 限制 crate 外部访问。
 #[derive(Debug)]
 pub struct CompiledSqlFilters {
     pub(crate) include_patterns: Option<Vec<Regex>>,

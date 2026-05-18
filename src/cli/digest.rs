@@ -20,15 +20,15 @@ struct FingerprintAccumulator {
 }
 
 #[derive(Debug, Serialize)]
-pub struct DigestEntry {
-    pub rank: usize,
-    pub fingerprint: String,
-    pub count: u64,
-    pub total_exec_ms: f64,
-    pub avg_exec_ms: f64,
-    pub max_exec_ms: f32,
-    pub example_sql: String,
-    pub first_seen: String,
+pub(crate) struct DigestEntry {
+    pub(crate) rank: usize,
+    pub(crate) fingerprint: String,
+    pub(crate) count: u64,
+    pub(crate) total_exec_ms: f64,
+    pub(crate) avg_exec_ms: f64,
+    pub(crate) max_exec_ms: f32,
+    pub(crate) example_sql: String,
+    pub(crate) first_seen: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -60,7 +60,9 @@ impl SortBy {
     }
 }
 
-pub const DEFAULT_DIGEST_STATE: &str = ".sqllog2db_digest_state.toml";
+// 仅在 binary crate (main.rs) 中使用；lib crate 生产代码不引用。
+#[allow(dead_code)]
+pub(crate) const DEFAULT_DIGEST_STATE: &str = ".sqllog2db_digest_state.toml";
 
 /// `resume_state_file`: `None` 表示不启用增量模式；`Some(path)` 表示启用并使用该路径作为状态文件。
 pub fn handle_digest(

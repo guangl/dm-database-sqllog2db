@@ -5,8 +5,8 @@ mod types;
 use compact_str::CompactString;
 use serde_helpers::TrxidSet;
 
-// pub: required by integration tests (passed to handle_run via validate_and_compile)
-pub use compiled::{CompiledMetaFilters, CompiledSqlFilters};
+// 仅在 crate 内部使用（validate_and_compile 返回类型），integration tests 不直接引用。
+pub(crate) use compiled::{CompiledMetaFilters, CompiledSqlFilters};
 
 // pub: required by tests/integration.rs
 // ExcludeFilters and IncludeFilters are only used in tests; allow unused for this public re-export

@@ -205,7 +205,9 @@ impl PartialOrd for SlowEntry {
 
 // ── 主入口 ───────────────────────────────────────────────────────────────────
 
-pub const DEFAULT_STATS_STATE: &str = ".sqllog2db_stats_state.toml";
+// 仅在 binary crate (main.rs) 中使用；lib crate 生产代码不引用。
+#[allow(dead_code)]
+pub(crate) const DEFAULT_STATS_STATE: &str = ".sqllog2db_stats_state.toml";
 
 /// `resume_state_file`: `None` 表示不启用增量模式；`Some(path)` 表示启用并使用该路径作为状态文件。
 pub fn handle_stats(

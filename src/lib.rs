@@ -1,11 +1,11 @@
-pub mod charts;
+pub(crate) mod charts;
 pub mod cli;
-pub mod color;
+pub(crate) mod color;
 pub mod config;
-pub mod error;
+pub(crate) mod error;
 pub mod exporter;
 pub mod lang;
-pub mod logging;
-pub mod parser;
+pub(crate) mod logging;
+pub(crate) mod parser;
 pub mod pipeline;
-pub mod resume;
+pub(crate) mod resume;
