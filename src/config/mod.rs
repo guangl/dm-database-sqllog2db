@@ -42,7 +42,7 @@ pub struct Config {
     pub charts: Option<ChartsConfig>,
     #[serde(default)]
     pub output: Option<OutputConfig>,
-    /// 旧路径检测：捕获 [pipeline] 表（若用户仍用旧格式）。
+    /// 旧路径检测：捕获 `[pipeline]` 表（若用户仍用旧格式）。
     /// 非 None 时 validate() 会返回迁移错误，用户不应直接使用此字段。
     #[doc(hidden)]
     #[serde(rename = "pipeline", default)]
