@@ -75,7 +75,7 @@ Full details: `.planning/milestones/v1.4-ROADMAP.md`
 
 **Milestone Goal:** 补全项目文档（README 更新 + CHANGELOG + LICENSE）并建立 GitHub Pages 展示页面，零代码变更
 
-- [ ] **Phase 21: README 全面更新 + 根文档补全** — 重写 README 覆盖 v1.3/v1.4 全部功能，补全 CHANGELOG.md 和 LICENSE
+- [ ] **Phase 21: README 全面更新 + 根文档补全** — 重写 README 覆盖 v1.3/v1.4 全部功能，补全 CHANGELOG.md 和 LICENSE (2 plans)
 - [ ] **Phase 22: GitHub Pages 落地页 + 部署流水线** — mdBook 构建单页落地页，GitHub Actions 自动部署，含架构图/性能数据/SVG Gallery
 - [ ] **Phase 23: 补充文档 + CI 质量门禁** — docs/quickstart.md、docs/config-reference.md、Asciicast 演示、lychee 链接检查
 
@@ -87,10 +87,14 @@ Full details: `.planning/milestones/v1.4-ROADMAP.md`
 **Requirements**: DOC-01, DOC-02, DOC-03, DOC-04, DOC-05, DOC-06, DOC-07, DOC-08, DOC-09
 **Success Criteria** (what must be TRUE):
   1. 用户阅读 README 时能看到 v1.3 模板分析完整说明（normalize_template、TemplateAggregator、双路统计输出）和 v1.4 嵌套配置文档（[filter]、[template]、[charts] 独立子表）
-  2. 用户可以从 README 复制粘贴 5 条 QuickStart 命令（init/run/digest/stats/validate）并成功执行，配置示例与 `sqllog2db init` 实际输出一致
+  2. 用户可以从 README 复制粘贴 3 条 QuickStart 命令（init/validate/run）并成功执行，配置示例与 `sqllog2db init` 实际输出一致
   3. 用户访问仓库根目录能看到 CHANGELOG.md（Keep a Changelog 格式，v1.0-v1.4）、LICENSE（Apache-2.0）和 4-6 个项目徽章（CI、crates.io、license、release）
   4. README 中不存在指向非存在文件的链接（CONTRIBUTING.md、SECURITY.md、docs/architecture.md 等已移除或替换为占位标记）
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 21-01-PLAN.md -- 重写 README.md 为纯英文最小骨架（200-250 行），覆盖 v1.3/v1.4 全部功能
+- [ ] 21-02-PLAN.md -- 补全 CHANGELOG.md 至 v1.4，折叠 0.x 旧版本；确认 LICENSE 存在
 
 ### Phase 22: GitHub Pages 落地页 + 部署流水线
 **Goal**: 用户能访问 `guangl.github.io/sqllog2db/` 看到精美的项目展示页，通过 mdBook 构建并由 GitHub Actions 自动部署
@@ -141,6 +145,6 @@ Full details: `.planning/milestones/v1.4-ROADMAP.md`
 | 18. 模板 & 图表配置嵌套化 | v1.4 | 3/3 | Complete | 2026-05-18 |
 | 19. 代码结构重构 | v1.4 | 4/4 | Complete | 2026-05-18 |
 | 20. 测试覆盖深化 | v1.4 | 3/3 | Complete | 2026-05-18 |
-| 21. README 全面更新 + 根文档补全 | v1.5 | 0/TBD | Not started | - |
+| 21. README 全面更新 + 根文档补全 | v1.5 | 0/2 | Not started | - |
 | 22. GitHub Pages 落地页 + 部署流水线 | v1.5 | 0/TBD | Not started | - |
 | 23. 补充文档 + CI 质量门禁 | v1.5 | 0/TBD | Not started | - |
