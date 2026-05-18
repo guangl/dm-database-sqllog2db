@@ -131,7 +131,20 @@ Plans:
   4. pub 可见性已收紧为 pub(crate) / pub(super)，跨层漏出的实现细节减少
   5. cargo clippy --all-targets -- -D warnings 零警告，cargo test 全通过，性能基准无回归
 
-**Plans**: TBD
+**Plans:** 4 plans
+Plans:
+**Wave 1**
+
+- [ ] 19-01-PLAN.md — 拆分 src/pipeline/filters.rs (1481 行) 为 filters/{mod.rs, types.rs, compiled.rs, serde_helpers.rs}；按 D-10 收紧 filters 模块 pub 可见性
+- [ ] 19-02-PLAN.md — 拆分 src/config/mod.rs (1418 行) 为 mod.rs (≤300) + validate.rs + apply_one.rs；89 个测试分类迁移；config 模块 pub 收紧
+
+**Wave 2** *(blocked on Wave 1 完成)*
+
+- [ ] 19-03-PLAN.md — 拆分 csv.rs (1260) + sqlite.rs (1302) 为目录子模块；新建 exporter/projection.rs (REFACTOR-02)；整合 DryRunExporter 进 ExporterKind (D-08, REFACTOR-03)；清理 Exporter trait 冗余 match (D-07)；sqlite conn_ref tech debt 修复
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 19-04-PLAN.md — 拆分 src/cli/run.rs (1281) 为 run/{mod.rs, processor.rs, prescan.rs, parallel.rs}；全 codebase pub 可见性收紧终验（lib.rs 各 pub mod 按 integration test 引用情况评估收紧）；REQUIREMENTS.md 状态更新
 
 ### Phase 20: 测试覆盖深化
 
@@ -170,5 +183,5 @@ Plans:
 | 16. 剩余图表 | v1.3 | 5/5 | Complete | 2026-05-17 |
 | 17. 过滤器配置嵌套化 | v1.4 | 1/2 | In Progress|  |
 | 18. 模板 & 图表配置嵌套化 | v1.4 | 2/3 | In Progress|  |
-| 19. 代码结构重构 | v1.4 | 0/TBD | Not started | - |
+| 19. 代码结构重构 | v1.4 | 0/4 | Not started | - |
 | 20. 测试覆盖深化 | v1.4 | 0/TBD | Not started | - |
