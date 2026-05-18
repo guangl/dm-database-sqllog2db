@@ -74,6 +74,16 @@ pub fn handle_digest(
     json: bool,
     resume_state_file: Option<&str>,
 ) {
+    // --from/--to 已由 apply_date_range 写入 cfg.filter.include.start_ts/end_ts
+    let start_ts = cfg
+        .filter
+        .as_ref()
+        .and_then(|f| f.include.start_ts.as_deref());
+    let end_ts = cfg
+        .filter
+        .as_ref()
+        .and_then(|f| f.include.end_ts.as_deref());
+
     let start = Instant::now();
     let log_files = match SqllogParser::new(&cfg.sqllog.path).log_files() {
         Ok(files) => files,
@@ -134,6 +144,18 @@ pub fn handle_digest(
         for result in parser.iter() {
             match result {
                 Ok(record) => {
+                    // 时间范围过滤（与 filter_processor 和 stats 一致）
+                    if let Some(start) = start_ts {
+                        if record.ts.as_ref() < start {
+                            continue;
+                        }
+                    }
+                    if let Some(end) = end_ts {
+                        if record.ts.as_ref() > end {
+                            continue;
+                        }
+                    }
+
                     let pm = record.parse_performance_metrics();
                     let raw_sql = pm.sql.as_ref();
                     let fp = fingerprint(raw_sql);
