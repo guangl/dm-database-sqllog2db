@@ -6,7 +6,7 @@
 - ✅ **v1.1 性能优化** — Phases 3–6 (shipped 2026-05-10)
 - ✅ **v1.2 质量强化 & 性能深化** — Phases 7–11 (shipped 2026-05-15)
 - ✅ **v1.3 SQL 模板分析 & 可视化** — Phases 12–16 (shipped 2026-05-17)
-- 🚧 **v1.4 代码重构 & 质量深化** — Phases 17–20 (in progress)
+- ✅ **v1.4 代码重构 & 质量深化** — Phases 17–20 (completed 2026-05-18)
 
 ## Phases
 
@@ -58,14 +58,14 @@ Full details: `.planning/milestones/v1.3-ROADMAP.md`
 
 </details>
 
-### 🚧 v1.4 代码重构 & 质量深化 (In Progress)
+### ✅ v1.4 代码重构 & 质量深化 (COMPLETE — 2026-05-18)
 
 **Milestone Goal:** 系统性重构配置模型与代码结构，补全测试覆盖，大幅提升项目可维护性
 
-- [ ] **Phase 17: 过滤器配置嵌套化** - 将 [filter] 扁平字段重组为 [filter.include] / [filter.exclude] 子表，serde alias 向后兼容
-- [x] **Phase 18: 模板 & 图表配置嵌套化** - 将模板与图表配置集中至 [template] / [charts] 子表
+- [x] **Phase 17: 过滤器配置嵌套化** - 将 [filter] 扁平字段重组为 [filter.include] / [filter.exclude] 子表，serde alias 向后兼容 (completed 2026-05-18)
+- [x] **Phase 18: 模板 & 图表配置嵌套化** - 将模板与图表配置集中至 [template] / [charts] 子表 (completed 2026-05-18)
 - [x] **Phase 19: 代码结构重构** - 拆分超大文件，消除重复代码，收紧可见性，统一 Exporter trait (completed 2026-05-18)
-- [ ] **Phase 20: 测试覆盖深化** - 补全 VERIFICATION.md，添加端到端集成测试、边界测试、proptest 属性测试
+- [x] **Phase 20: 测试覆盖深化** - 补全 VERIFICATION.md，添加端到端集成测试、边界测试、proptest 属性测试 (completed 2026-05-18)
 
 ## Phase Details
 
@@ -81,15 +81,15 @@ Full details: `.planning/milestones/v1.3-ROADMAP.md`
   3. `cargo run -- validate -c config.toml` 对新旧两种格式均通过验证，无报错
   4. `pipeline.is_empty()` 热路径快速退出逻辑在新配置结构下保持不变（clippy + 测试全通过）
 
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans executed (Phase 17 COMPLETE)
 Plans:
 **Wave 1**
 
 - [x] 17-01-PLAN.md — Filters struct 重构：新增 IncludeFilters / ExcludeFilters，手写 Deserialize 向后兼容旧扁平格式，重命名 CompiledMetaFilters::try_from_include_exclude，SqlFilters 字段改名加 alias
 
-**Wave 2** *(blocked on Wave 1 completion)*
+**Wave 2**
 
-- [ ] 17-02-PLAN.md — 调用方适配 + init 模板更新：config.rs / cli/run.rs / cli/init.rs / tests/integration.rs 切换到新 API，init 命令产出新嵌套格式
+- [x] 17-02-PLAN.md — 调用方适配 + init 模板更新：config.rs / cli/run.rs / cli/init.rs / tests/integration.rs 切换到新 API，init 命令产出新嵌套格式
 
 ### Phase 18: 模板 & 图表配置嵌套化
 
@@ -159,13 +159,13 @@ Plans:
   4. normalize_template 有 proptest 属性测试，验证幂等性（归一化两次 = 归一化一次）和字面量保护不变性
   5. cargo test 全通过（含新增测试），cargo clippy --all-targets -- -D warnings 零警告
 
-**Plans:** 3 plans
+**Plans:** 3/3 plans complete (Phase 20 COMPLETE)
 Plans:
-**Wave 1** *(三个 plan 文件级独立,可并行执行)*
+**Wave 1**
 
-- [ ] 20-01-PLAN.md — 补全 Phase 12/13/14/15(扩展)/16/17/18 共 7 份 VERIFICATION.md (TEST-01)
-- [ ] 20-02-PLAN.md — tests/integration.rs 追加 3 条端到端测试 + 4 条边界测试 (TEST-02, TEST-03)
-- [ ] 20-03-PLAN.md — proptest 1.6.0 dev-dep + src/pipeline/fingerprint.rs 两条属性测试 (TEST-04)
+- [x] 20-01-PLAN.md — 补全 Phase 12/13/14/15(扩展)/16/17/18 共 7 份 VERIFICATION.md (TEST-01)
+- [x] 20-02-PLAN.md — tests/integration.rs 追加 3 条端到端测试 + 4 条边界测试 (TEST-02, TEST-03)
+- [x] 20-03-PLAN.md — proptest 1.6.0 dev-dep + src/pipeline/fingerprint.rs 两条属性测试 (TEST-04)
 
 ## Progress
 
@@ -187,7 +187,7 @@ Plans:
 | 14. Exporter 集成输出 | v1.3 | 4/4 | Complete | 2026-05-16 |
 | 15. SVG 图表基础设施 + 前两类图表 | v1.3 | 5/5 | Complete | 2026-05-17 |
 | 16. 剩余图表 | v1.3 | 5/5 | Complete | 2026-05-17 |
-| 17. 过滤器配置嵌套化 | v1.4 | 1/2 | In Progress|  |
-| 18. 模板 & 图表配置嵌套化 | v1.4 | 2/3 | In Progress|  |
-| 19. 代码结构重构 | v1.4 | 4/4 | Complete    | 2026-05-18 |
-| 20. 测试覆盖深化 | v1.4 | 0/3 | Planned     | - |
+| 17. 过滤器配置嵌套化 | v1.4 | 2/2 | Complete | 2026-05-18 |
+| 18. 模板 & 图表配置嵌套化 | v1.4 | 3/3 | Complete | 2026-05-18 |
+| 19. 代码结构重构 | v1.4 | 4/4 | Complete | 2026-05-18 |
+| 20. 测试覆盖深化 | v1.4 | 3/3 | Complete | 2026-05-18 |
