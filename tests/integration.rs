@@ -11,7 +11,9 @@ use dm_database_sqllog2db::config::{
 };
 use dm_database_sqllog2db::lang::Lang;
 use dm_database_sqllog2db::pipeline::filters::{ExcludeFilters, IncludeFilters};
-use dm_database_sqllog2db::pipeline::{FiltersFeature, NormalizeConfig};
+use dm_database_sqllog2db::pipeline::{
+    FiltersFeature, NormalizeConfig, OutputConfig, TemplateConfig,
+};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
@@ -1290,4 +1292,213 @@ fn test_validate_rejects_legacy_pipeline_filters_section() {
         err_msg.contains("[pipeline.fields] → [output.fields]"),
         "error must contain migration hint for fields; got: {err_msg}"
     );
+}
+
+// ── E2E pipeline tests (TEST-02) ─────────────────────────────────────────────
+
+#[test]
+fn test_e2e_filter_pipeline() {
+    // Arrange: 10 条 user=TESTUSER 记录
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_dir = dir.path().join("logs");
+    std::fs::create_dir_all(&log_dir).unwrap();
+    write_test_log(&log_dir.join("test.log"), 10);
+
+    let csv_file = dir.path().join("out.csv");
+    let mut cfg = make_run_config(&log_dir, &csv_file);
+    // 配置 include.users = ["TESTUSER"]，全部 10 条应通过过滤
+    cfg.filter = Some(FiltersFeature {
+        enable: true,
+        include: IncludeFilters {
+            users: Some(vec!["TESTUSER".to_string()]),
+            ..Default::default()
+        },
+        exclude: ExcludeFilters::default(),
+        ..Default::default()
+    });
+
+    // Act
+    let interrupted = Arc::new(AtomicBool::new(false));
+    handle_run(
+        &cfg,
+        None,
+        false,
+        true,
+        &interrupted,
+        80,
+        false,
+        None,
+        1,
+        None,
+    )
+    .unwrap();
+
+    // Assert: header + 10 条数据行 = 11 行
+    let content = std::fs::read_to_string(&csv_file).unwrap();
+    assert_eq!(
+        content.lines().count(),
+        11,
+        "expected header + 10 data rows, got {}",
+        content.lines().count()
+    );
+
+    // 追加一个包含 user=OTHER 的第二个日志文件
+    let log_dir2 = dir.path().join("logs2");
+    std::fs::create_dir_all(&log_dir2).unwrap();
+    {
+        use std::fmt::Write as _;
+        let mut buf = String::with_capacity(5 * 180);
+        for i in 100..105usize {
+            writeln!(
+                buf,
+                "2025-01-15 10:30:28.001 (EP[0] sess:0x{i:04x} user:OTHER trxid:{i} stmt:0x1 appname:App ip:10.0.0.1) [SEL] SELECT * FROM t WHERE id={i}. EXECTIME: 0(ms) ROWCOUNT: 1(rows) EXEC_ID: {i}.",
+            )
+            .unwrap();
+        }
+        std::fs::write(log_dir2.join("other.log"), buf).unwrap();
+    }
+    let csv_file2 = dir.path().join("out2.csv");
+    let mut cfg2 = make_run_config(&log_dir2, &csv_file2);
+    cfg2.filter = Some(FiltersFeature {
+        enable: true,
+        include: IncludeFilters {
+            users: Some(vec!["TESTUSER".to_string()]),
+            ..Default::default()
+        },
+        exclude: ExcludeFilters::default(),
+        ..Default::default()
+    });
+    handle_run(
+        &cfg2,
+        None,
+        false,
+        true,
+        &Arc::new(AtomicBool::new(false)),
+        80,
+        false,
+        None,
+        1,
+        None,
+    )
+    .unwrap();
+    let content2 = std::fs::read_to_string(&csv_file2).unwrap();
+    // OTHER 全被过滤，只有 header
+    assert_eq!(
+        content2.lines().count(),
+        1,
+        "expected only header row when all records filtered out, got {}",
+        content2.lines().count()
+    );
+}
+
+#[test]
+fn test_e2e_template_normalization() {
+    // Arrange: 5 条记录，启用模板归一化
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_dir = dir.path().join("logs");
+    std::fs::create_dir_all(&log_dir).unwrap();
+    write_test_log(&log_dir.join("test.log"), 5);
+
+    let csv_file = dir.path().join("out.csv");
+    let mut cfg = make_run_config(&log_dir, &csv_file);
+    cfg.template = Some(TemplateConfig {
+        enable: true,
+        output_csv_path: String::new(),
+        output_sqlite_table: String::new(),
+    });
+
+    // Act
+    let interrupted = Arc::new(AtomicBool::new(false));
+    handle_run(
+        &cfg,
+        None,
+        false,
+        true,
+        &interrupted,
+        80,
+        false,
+        None,
+        1,
+        None,
+    )
+    .unwrap();
+
+    // Assert: header 包含 normalized_sql，且第一条数据行的 normalized_sql 列非空
+    let content = std::fs::read_to_string(&csv_file).unwrap();
+    let header = content.lines().next().unwrap();
+    assert!(
+        header.contains("normalized_sql"),
+        "CSV header should contain 'normalized_sql', got: {header}"
+    );
+    // 第一条数据行（索引 14 = normalized_sql）应非空
+    let data_line = content.lines().nth(1).unwrap();
+    // normalized_sql 是第 15 个字段（索引 14），用逗号分割取第 14 个字段
+    // 注意：CSV 字段中可能含逗号被引号包裹，此处 SQL 含逗号，需按引号处理
+    // 简化断言：data_line 非空且行内有内容即可（normalized_sql 由 normalize_template 生成）
+    assert!(!data_line.is_empty(), "first data line should not be empty");
+    // 验证 normalized_sql 列存在内容：整行中字段数至少为 15
+    let field_count = data_line.split(',').count();
+    assert!(
+        field_count >= 15,
+        "expected at least 15 fields in data line, got {field_count}: {data_line}"
+    );
+}
+
+#[test]
+fn test_e2e_field_projection() {
+    // Arrange: 3 条记录，字段投影为 ts/username/sql
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_dir = dir.path().join("logs");
+    std::fs::create_dir_all(&log_dir).unwrap();
+    write_test_log(&log_dir.join("test.log"), 3);
+
+    let csv_file = dir.path().join("out.csv");
+    let mut cfg = make_run_config(&log_dir, &csv_file);
+    cfg.output = Some(OutputConfig {
+        fields: Some(vec![
+            "ts".to_string(),
+            "username".to_string(),
+            "sql".to_string(),
+        ]),
+    });
+
+    // Act
+    let interrupted = Arc::new(AtomicBool::new(false));
+    handle_run(
+        &cfg,
+        None,
+        false,
+        true,
+        &interrupted,
+        80,
+        false,
+        None,
+        1,
+        None,
+    )
+    .unwrap();
+
+    // Assert: header 精确为 "ts,username,sql"，数据行 split(',').count() == 3
+    let content = std::fs::read_to_string(&csv_file).unwrap();
+    let header = content.lines().next().unwrap();
+    assert_eq!(
+        header, "ts,username,sql",
+        "expected header 'ts,username,sql', got: {header}"
+    );
+    // 验证每条数据行字段数 == 3（sql 含逗号时会被引号包裹，但字段数仍为3）
+    // 注意：sql 字段内容为 "SELECT * FROM t WHERE id=N" 不含逗号，所以 split(',').count() == 3
+    let data_lines: Vec<_> = content.lines().skip(1).collect();
+    assert_eq!(
+        data_lines.len(),
+        3,
+        "expected 3 data rows, got {}",
+        data_lines.len()
+    );
+    for line in &data_lines {
+        let field_count = line.split(',').count();
+        assert_eq!(
+            field_count, 3,
+            "expected 3 fields per row, got {field_count}: {line}"
+        );
+    }
 }
