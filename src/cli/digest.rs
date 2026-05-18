@@ -1,7 +1,7 @@
 use crate::color;
 use crate::config::Config;
-use crate::features::fingerprint;
 use crate::parser::SqllogParser;
+use crate::pipeline::fingerprint;
 use dm_database_parser_sqllog::LogParser;
 use indicatif::{HumanCount, ProgressBar, ProgressStyle};
 use serde::Serialize;
@@ -20,15 +20,15 @@ struct FingerprintAccumulator {
 }
 
 #[derive(Debug, Serialize)]
-pub struct DigestEntry {
-    pub rank: usize,
-    pub fingerprint: String,
-    pub count: u64,
-    pub total_exec_ms: f64,
-    pub avg_exec_ms: f64,
-    pub max_exec_ms: f32,
-    pub example_sql: String,
-    pub first_seen: String,
+pub(crate) struct DigestEntry {
+    pub(crate) rank: usize,
+    pub(crate) fingerprint: String,
+    pub(crate) count: u64,
+    pub(crate) total_exec_ms: f64,
+    pub(crate) avg_exec_ms: f64,
+    pub(crate) max_exec_ms: f32,
+    pub(crate) example_sql: String,
+    pub(crate) first_seen: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -60,7 +60,9 @@ impl SortBy {
     }
 }
 
-pub const DEFAULT_DIGEST_STATE: &str = ".sqllog2db_digest_state.toml";
+// 仅在 binary crate (main.rs) 中使用；lib crate 生产代码不引用。
+#[allow(dead_code)]
+pub(crate) const DEFAULT_DIGEST_STATE: &str = ".sqllog2db_digest_state.toml";
 
 /// `resume_state_file`: `None` 表示不启用增量模式；`Some(path)` 表示启用并使用该路径作为状态文件。
 pub fn handle_digest(
@@ -72,6 +74,16 @@ pub fn handle_digest(
     json: bool,
     resume_state_file: Option<&str>,
 ) {
+    // --from/--to 已由 apply_date_range 写入 cfg.filter.include.start_ts/end_ts
+    let start_ts = cfg
+        .filter
+        .as_ref()
+        .and_then(|f| f.include.start_ts.as_deref());
+    let end_ts = cfg
+        .filter
+        .as_ref()
+        .and_then(|f| f.include.end_ts.as_deref());
+
     let start = Instant::now();
     let log_files = match SqllogParser::new(&cfg.sqllog.path).log_files() {
         Ok(files) => files,
@@ -132,6 +144,18 @@ pub fn handle_digest(
         for result in parser.iter() {
             match result {
                 Ok(record) => {
+                    // 时间范围过滤（与 filter_processor 和 stats 一致）
+                    if let Some(start) = start_ts {
+                        if record.ts.as_ref() < start {
+                            continue;
+                        }
+                    }
+                    if let Some(end) = end_ts {
+                        if record.ts.as_ref() > end {
+                            continue;
+                        }
+                    }
+
                     let pm = record.parse_performance_metrics();
                     let raw_sql = pm.sql.as_ref();
                     let fp = fingerprint(raw_sql);
@@ -226,7 +250,7 @@ pub fn handle_digest(
             total_errors,
             elapsed_secs,
             rate,
-            fp_map_len_before_filter(&entries),
+            entries.len(),
             skipped_files,
             entries,
         );
@@ -241,11 +265,6 @@ pub fn handle_digest(
         );
         print_table(&entries, sort);
     }
-}
-
-fn fp_map_len_before_filter(entries: &[DigestEntry]) -> usize {
-    // entries 已截断，返回实际展示数即可；调用方用于 JSON 的 fingerprints 字段
-    entries.len()
 }
 
 fn make_progress_bar(quiet: bool) -> ProgressBar {
@@ -367,33 +386,6 @@ mod tests {
     fn test_sort_by_parse_invalid() {
         assert_eq!(SortBy::parse("unknown"), None);
         assert_eq!(SortBy::parse(""), None);
-    }
-
-    #[test]
-    fn test_fp_map_len_before_filter() {
-        let entries = vec![
-            DigestEntry {
-                rank: 1,
-                fingerprint: "fp1".into(),
-                count: 5,
-                total_exec_ms: 10.0,
-                avg_exec_ms: 2.0,
-                max_exec_ms: 5.0,
-                example_sql: "SELECT ?".into(),
-                first_seen: "2025-01-01".into(),
-            },
-            DigestEntry {
-                rank: 2,
-                fingerprint: "fp2".into(),
-                count: 3,
-                total_exec_ms: 6.0,
-                avg_exec_ms: 2.0,
-                max_exec_ms: 3.0,
-                example_sql: "INSERT ?".into(),
-                first_seen: "2025-01-02".into(),
-            },
-        ];
-        assert_eq!(fp_map_len_before_filter(&entries), 2);
     }
 
     #[test]

@@ -75,7 +75,7 @@ fn dispatch_byte(bytes: &[u8], i: usize, len: usize, out: &mut Vec<u8>, mode: Sc
     match bytes[i] {
         b'\'' => handle_quote(bytes, i, out, matches!(mode, ScanMode::Normalize)),
         b'-' if matches!(mode, ScanMode::Normalize) && i + 1 < len && bytes[i + 1] == b'-' => {
-            handle_line_comment(bytes, i)
+            handle_line_comment(bytes, i, out)
         }
         b'/' if matches!(mode, ScanMode::Normalize) && i + 1 < len && bytes[i + 1] == b'*' => {
             handle_block_comment(bytes, i, out)
@@ -112,6 +112,7 @@ fn dispatch_byte(bytes: &[u8], i: usize, len: usize, out: &mut Vec<u8>, mode: Sc
 }
 
 /// 处理单引号字符串字面量。`keep_literal` 为 true 时保留原文（normalize），false 时替换为 `?`（fingerprint）。
+/// 在 fingerprint 模式下，如果替换为 `?` 后下一个字符不是空白，则插入一个空格防止 token 粘连。
 fn handle_quote(bytes: &[u8], i: usize, out: &mut Vec<u8>, keep_literal: bool) -> usize {
     let literal_start = i;
     if !keep_literal {
@@ -133,12 +134,21 @@ fn handle_quote(bytes: &[u8], i: usize, out: &mut Vec<u8>, keep_literal: bool) -
     }
     if keep_literal {
         out.extend_from_slice(&bytes[literal_start..j]);
+    } else if j < len
+        && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'_')
+        && !matches!(out.last(), Some(&b' '))
+    {
+        out.push(b' ');
     }
     j
 }
 
 /// 跳过单行注释（`--` 到行尾），i 指向第一个 `-`。
-fn handle_line_comment(bytes: &[u8], i: usize) -> usize {
+/// 在注释前插入一个空格，防止注释后的内容与前面的 token 粘连（如 `SELECT 1--comment\nFROM t` → `SELECT 1 FROM t`）。
+fn handle_line_comment(bytes: &[u8], i: usize, out: &mut Vec<u8>) -> usize {
+    if !matches!(out.last(), Some(&b' ')) {
+        out.push(b' ');
+    }
     match memchr::memchr(b'\n', &bytes[i..]) {
         Some(rel) => i + rel + 1,
         None => bytes.len(),
@@ -325,6 +335,7 @@ fn prev_is_ident_byte(out: &[u8]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     // --- fingerprint 原有测试（9 项，零回归） ---
 
@@ -431,5 +442,27 @@ mod tests {
     #[test]
     fn test_normalize_whitespace_collapsed() {
         assert_eq!(normalize_template("SELECT  *  FROM  t"), "SELECT * FROM t");
+    }
+
+    // --- proptest 属性测试 (TEST-04) ---
+
+    proptest! {
+        #[test]
+        fn prop_normalize_template_is_idempotent(s in any::<String>()) {
+            let once = normalize_template(&s);
+            let twice = normalize_template(&once);
+            prop_assert_eq!(&once, &twice, "normalize_template should be idempotent but got different results");
+        }
+
+        #[test]
+        fn prop_normalize_template_literal_protection(inner in "[A-Za-z0-9 ]{0,50}") {
+            let sql = format!("WHERE col = '{inner}-- not a comment'");
+            let result = normalize_template(&sql);
+            prop_assert!(
+                result.contains("-- not a comment"),
+                "literal comment marker should survive in: {}",
+                result
+            );
+        }
     }
 }

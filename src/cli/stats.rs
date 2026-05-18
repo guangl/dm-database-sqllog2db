@@ -1,7 +1,7 @@
 use crate::color;
 use crate::config::Config;
-use crate::features::filters::RecordMeta;
 use crate::parser::SqllogParser;
+use crate::pipeline::filters::{CompiledMetaFilters, RecordMeta};
 use dm_database_parser_sqllog::{LogParser, MetaParts};
 use indicatif::{HumanCount, ProgressBar, ProgressStyle};
 use serde::Serialize;
@@ -81,7 +81,7 @@ impl GroupBy {
 
 #[derive(Debug, Default, Clone, Copy)]
 struct GroupAccumulator {
-    count: u32,
+    count: u64,
     total_exec_ms: f64,
     max_exec_ms: f32,
 }
@@ -98,13 +98,15 @@ struct GroupEntry {
 impl GroupEntry {
     fn from_acc(key: String, acc: GroupAccumulator) -> Self {
         let avg = if acc.count > 0 {
-            acc.total_exec_ms / f64::from(acc.count)
+            #[allow(clippy::cast_precision_loss)]
+            let count_f64 = acc.count as f64;
+            acc.total_exec_ms / count_f64
         } else {
             0.0
         };
         Self {
             key,
-            count: u64::from(acc.count),
+            count: acc.count,
             total_exec_ms: acc.total_exec_ms,
             avg_exec_ms: avg,
             max_exec_ms: acc.max_exec_ms,
@@ -154,7 +156,7 @@ impl Bucket {
 
 #[derive(Debug, Default)]
 struct BucketAccumulator {
-    count: u32,
+    count: u64,
     total_exec_ms: f64,
     max_exec_ms: f32,
 }
@@ -203,7 +205,9 @@ impl PartialOrd for SlowEntry {
 
 // ── 主入口 ───────────────────────────────────────────────────────────────────
 
-pub const DEFAULT_STATS_STATE: &str = ".sqllog2db_stats_state.toml";
+// 仅在 binary crate (main.rs) 中使用；lib crate 生产代码不引用。
+#[allow(dead_code)]
+pub(crate) const DEFAULT_STATS_STATE: &str = ".sqllog2db_stats_state.toml";
 
 /// `resume_state_file`: `None` 表示不启用增量模式；`Some(path)` 表示启用并使用该路径作为状态文件。
 pub fn handle_stats(
@@ -254,6 +258,26 @@ pub fn handle_stats(
         .as_deref()
         .map(crate::resume::ResumeState::load);
 
+    // 在循环前一次性编译 meta 过滤器，错误直接上报并退出
+    let filter_cfg = cfg
+        .filter
+        .as_ref()
+        .filter(|f: &&crate::pipeline::FiltersFeature| f.has_filters());
+    let compiled_meta: Option<CompiledMetaFilters> = if let Some(fc) = filter_cfg {
+        match CompiledMetaFilters::try_from_include_exclude(&fc.include, &fc.exclude) {
+            Ok(c) if c.has_any_filters() => Some(c),
+            Ok(_) => None,
+            Err(e) => {
+                eprintln!("{} Filter regex error: {e}", color::red("Error:"));
+                return;
+            }
+        }
+    } else {
+        None
+    };
+    let filter_start_ts = filter_cfg.and_then(|f| f.include.start_ts.as_deref());
+    let filter_end_ts = filter_cfg.and_then(|f| f.include.end_ts.as_deref());
+
     let pb = make_progress_bar(quiet);
     let total_files = log_files.len();
     let mut total_records: u64 = 0;
@@ -303,7 +327,9 @@ pub fn handle_stats(
         let (file_records, file_errors) = process_file(
             &parser,
             &mut ProcessFileCtx {
-                cfg,
+                compiled_meta: compiled_meta.as_ref(),
+                start_ts: filter_start_ts,
+                end_ts: filter_end_ts,
                 file_name: &file_name,
                 top_n,
                 slow_heap: &mut slow_heap,
@@ -345,7 +371,16 @@ pub fn handle_stats(
 
     let elapsed = start.elapsed();
     let elapsed_secs = elapsed.as_secs_f64();
-    let rate = total_records / elapsed.as_secs().max(1);
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss
+    )]
+    let rate = if elapsed_secs > 0.0 {
+        (total_records as f64 / elapsed_secs) as u64
+    } else {
+        0
+    };
 
     let mut slow_entries: Vec<SlowEntry> = slow_heap.into_iter().map(|Reverse(e)| e).collect();
     slow_entries.sort_by_key(|e| std::cmp::Reverse(e.exec_time_bits));
@@ -437,7 +472,9 @@ fn parse_group_fields(raw: &[String]) -> Option<Vec<GroupBy>> {
 // ── 处理单个文件 ─────────────────────────────────────────────────────────────
 
 struct ProcessFileCtx<'a> {
-    cfg: &'a Config,
+    compiled_meta: Option<&'a CompiledMetaFilters>,
+    start_ts: Option<&'a str>,
+    end_ts: Option<&'a str>,
     file_name: &'a str,
     top_n: usize,
     slow_heap: &'a mut BinaryHeap<Reverse<SlowEntry>>,
@@ -448,22 +485,13 @@ struct ProcessFileCtx<'a> {
     pb: &'a ProgressBar,
 }
 
-// stats 子命令使用 FiltersFeature::should_keep（OR 语义）做统计过滤，
-// 与热路径导出的 AND 语义无关，此处 OR 语义是预期行为。
-#[allow(deprecated)]
 fn process_file(
     parser: &dm_database_parser_sqllog::LogParser,
     ctx: &mut ProcessFileCtx,
 ) -> (u64, u64) {
     let mut file_records: u64 = 0;
     let mut file_errors: u64 = 0;
-    let filters = ctx
-        .cfg
-        .features
-        .filters
-        .as_ref()
-        .filter(|f| f.has_filters());
-    let need_meta = filters.is_some() || !ctx.group_fields.is_empty();
+    let need_meta = ctx.compiled_meta.is_some() || !ctx.group_fields.is_empty();
     let need_ind = ctx.top_n > 0 || !ctx.group_fields.is_empty() || ctx.bucket_field.is_some();
 
     for result in parser.iter() {
@@ -475,20 +503,32 @@ fn process_file(
                     None
                 };
 
-                if let (Some(f), Some(m)) = (filters, &meta) {
-                    if !f.should_keep(
-                        record.ts.as_ref(),
-                        &RecordMeta {
-                            trxid: m.trxid.as_ref(),
-                            ip: m.client_ip.as_ref(),
-                            sess: m.sess_id.as_ref(),
-                            thrd: m.thrd_id.as_ref(),
-                            user: m.username.as_ref(),
-                            stmt: m.statement.as_ref(),
-                            app: m.appname.as_ref(),
-                            tag: record.tag.as_deref(),
-                        },
-                    ) {
+                // 时间过滤
+                if let Some(start) = ctx.start_ts {
+                    let ts = record.ts.as_ref();
+                    if ts < start {
+                        continue;
+                    }
+                }
+                if let Some(end) = ctx.end_ts {
+                    let ts = record.ts.as_ref();
+                    if ts > end {
+                        continue;
+                    }
+                }
+
+                // 元数据过滤
+                if let (Some(compiled), Some(m)) = (ctx.compiled_meta, &meta) {
+                    if !compiled.should_keep(&RecordMeta {
+                        trxid: m.trxid.as_ref(),
+                        ip: m.client_ip.as_ref(),
+                        sess: m.sess_id.as_ref(),
+                        thrd: m.thrd_id.as_ref(),
+                        user: m.username.as_ref(),
+                        stmt: m.statement.as_ref(),
+                        app: m.appname.as_ref(),
+                        tag: record.tag.as_deref(),
+                    }) {
                         continue;
                     }
                 }
@@ -610,13 +650,15 @@ fn build_bucket_section(
         .into_iter()
         .map(|(time, acc)| {
             let avg = if acc.count > 0 {
-                acc.total_exec_ms / f64::from(acc.count)
+                #[allow(clippy::cast_precision_loss)]
+                let count_f64 = acc.count as f64;
+                acc.total_exec_ms / count_f64
             } else {
                 0.0
             };
             BucketEntry {
                 time,
-                count: u64::from(acc.count),
+                count: acc.count,
                 total_exec_ms: acc.total_exec_ms,
                 avg_exec_ms: avg,
                 max_exec_ms: acc.max_exec_ms,

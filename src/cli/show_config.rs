@@ -83,9 +83,9 @@ pub fn handle_show_config(cfg: &Config, config_path: &str, diff: bool) {
         println!();
     }
 
-    // [features]
-    if let Some(rp) = &cfg.features.replace_parameters {
-        println!("{}", color::cyan("[features.replace_parameters]"));
+    // [replace_parameters]
+    if let Some(rp) = &cfg.replace_parameters {
+        println!("{}", color::cyan("[replace_parameters]"));
         kv("enable", &rp.enable.to_string(), None, diff);
         if !rp.placeholders.is_empty() {
             kv(
@@ -98,35 +98,113 @@ pub fn handle_show_config(cfg: &Config, config_path: &str, diff: bool) {
         println!();
     }
 
-    if let Some(f) = &cfg.features.filters {
-        println!("{}", color::cyan("[features.filters]"));
+    if let Some(f) = &cfg.filter {
+        println!("{}", color::cyan("[filter]"));
         kv("enable", &f.enable.to_string(), None, diff);
-        if let Some(s) = &f.meta.start_ts {
-            kv("start_ts", s, None, diff);
+        // include 子表
+        if let Some(users) = &f.include.users {
+            kv("include.users", &users.join(", "), None, diff);
         }
-        if let Some(e) = &f.meta.end_ts {
-            kv("end_ts", e, None, diff);
+        if let Some(ips) = &f.include.ips {
+            kv("include.ips", &ips.join(", "), None, diff);
         }
-        if let Some(ids) = &f.meta.trxids {
-            kv("trxids", &format!("{} entries", ids.len()), None, diff);
+        if let Some(sess) = &f.include.sessions {
+            kv("include.sessions", &sess.join(", "), None, diff);
         }
-        if let Some(users) = &f.meta.usernames {
-            kv("usernames", &users.join(", "), None, diff);
+        if let Some(thrds) = &f.include.threads {
+            kv("include.threads", &thrds.join(", "), None, diff);
         }
-        if let Some(ips) = &f.meta.client_ips {
-            kv("client_ips", &ips.join(", "), None, diff);
+        if let Some(stmts) = &f.include.statements {
+            kv("include.statements", &stmts.join(", "), None, diff);
+        }
+        if let Some(apps) = &f.include.apps {
+            kv("include.apps", &apps.join(", "), None, diff);
+        }
+        if let Some(tags) = &f.include.tags {
+            kv("include.tags", &tags.join(", "), None, diff);
+        }
+        if let Some(s) = &f.include.start_ts {
+            kv("include.start_ts", s, None, diff);
+        }
+        if let Some(e) = &f.include.end_ts {
+            kv("include.end_ts", e, None, diff);
+        }
+        if let Some(ids) = &f.include.trxids {
+            kv(
+                "include.trxids",
+                &format!("{} entries", ids.len()),
+                None,
+                diff,
+            );
+        }
+        // exclude 子表
+        if let Some(users) = &f.exclude.users {
+            kv("exclude.users", &users.join(", "), None, diff);
+        }
+        if let Some(ips) = &f.exclude.ips {
+            kv("exclude.ips", &ips.join(", "), None, diff);
+        }
+        if let Some(sess) = &f.exclude.sessions {
+            kv("exclude.sessions", &sess.join(", "), None, diff);
+        }
+        if let Some(thrds) = &f.exclude.threads {
+            kv("exclude.threads", &thrds.join(", "), None, diff);
+        }
+        if let Some(stmts) = &f.exclude.statements {
+            kv("exclude.statements", &stmts.join(", "), None, diff);
+        }
+        if let Some(apps) = &f.exclude.apps {
+            kv("exclude.apps", &apps.join(", "), None, diff);
+        }
+        if let Some(tags) = &f.exclude.tags {
+            kv("exclude.tags", &tags.join(", "), None, diff);
+        }
+        // indicators
+        if let Some(ids) = &f.indicators.exec_ids {
+            kv(
+                "indicators.exec_ids",
+                &format!("{} entries", ids.len()),
+                None,
+                diff,
+            );
+        }
+        if let Some(min_rt) = f.indicators.min_runtime_ms {
+            kv("indicators.min_runtime_ms", &min_rt.to_string(), None, diff);
+        }
+        if let Some(min_rc) = f.indicators.min_row_count {
+            kv("indicators.min_row_count", &min_rc.to_string(), None, diff);
+        }
+        // sql (事务级字面量过滤)
+        if let Some(incs) = &f.sql.includes {
+            kv("sql.includes", &incs.join(", "), None, diff);
+        }
+        if let Some(excs) = &f.sql.excludes {
+            kv("sql.excludes", &excs.join(", "), None, diff);
+        }
+        // record_sql (记录级正则过滤)
+        if let Some(incs) = &f.record_sql.includes {
+            kv("record_sql.includes", &incs.join(", "), None, diff);
+        }
+        if let Some(excs) = &f.record_sql.excludes {
+            kv("record_sql.excludes", &excs.join(", "), None, diff);
         }
         println!();
     }
 
-    if let Some(ta) = &cfg.features.template_analysis {
-        println!("{}", color::cyan("[features.template_analysis]"));
-        kv("enabled", &ta.enabled.to_string(), None, diff);
+    if let Some(ta) = &cfg.template {
+        println!("{}", color::cyan("[template]"));
+        kv("enable", &ta.enable.to_string(), None, diff);
+        if !ta.output_csv_path.is_empty() {
+            kv("output_csv_path", &ta.output_csv_path, None, diff);
+        }
+        if !ta.output_sqlite_table.is_empty() {
+            kv("output_sqlite_table", &ta.output_sqlite_table, None, diff);
+        }
         println!();
     }
 
-    if let Some(charts) = &cfg.features.charts {
-        println!("{}", color::cyan("[features.charts]"));
+    if let Some(charts) = &cfg.charts {
+        println!("{}", color::cyan("[charts]"));
         kv("output_dir", &charts.output_dir, None, diff);
         kv("top_n", &charts.top_n.to_string(), None, diff);
         kv(
@@ -158,8 +236,8 @@ fn kv(key: &str, value: &str, default: Option<&str>, diff: bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{Config, ExporterConfig, SqliteExporter};
-    use crate::features::{FeaturesConfig, FiltersFeature, ReplaceParametersConfig};
+    use crate::config::{Config, ExporterConfig, SqliteExporterConfig};
+    use crate::pipeline::{FiltersFeature, NormalizeConfig};
 
     #[test]
     fn test_handle_show_config_default_does_not_panic() {
@@ -187,7 +265,7 @@ mod tests {
         let cfg = Config {
             exporter: ExporterConfig {
                 csv: None,
-                sqlite: Some(SqliteExporter {
+                sqlite: Some(SqliteExporterConfig {
                     database_url: "out.db".to_string(),
                     table_name: "logs".to_string(),
                     overwrite: false,
@@ -205,7 +283,7 @@ mod tests {
         let cfg = Config {
             exporter: ExporterConfig {
                 csv: None,
-                sqlite: Some(SqliteExporter::default()),
+                sqlite: Some(SqliteExporterConfig::default()),
             },
             ..Default::default()
         };
@@ -216,16 +294,10 @@ mod tests {
     #[test]
     fn test_handle_show_config_with_replace_parameters() {
         let cfg = Config {
-            features: FeaturesConfig {
-                replace_parameters: Some(ReplaceParametersConfig {
-                    enable: true,
-                    placeholders: vec!["?".to_string()],
-                }),
-                filters: None,
-                fields: None,
-                template_analysis: None,
-                charts: None,
-            },
+            replace_parameters: Some(NormalizeConfig {
+                enable: true,
+                placeholders: vec!["?".to_string()],
+            }),
             ..Default::default()
         };
         handle_show_config(&cfg, "rp_config.toml", false);
@@ -234,16 +306,10 @@ mod tests {
     #[test]
     fn test_handle_show_config_with_filters() {
         let cfg = Config {
-            features: FeaturesConfig {
-                replace_parameters: None,
-                filters: Some(FiltersFeature {
-                    enable: true,
-                    ..Default::default()
-                }),
-                fields: None,
-                template_analysis: None,
-                charts: None,
-            },
+            filter: Some(FiltersFeature {
+                enable: true,
+                ..Default::default()
+            }),
             ..Default::default()
         };
         handle_show_config(&cfg, "filter_config.toml", false);

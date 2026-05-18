@@ -6,6 +6,7 @@
 - ✅ **v1.1 性能优化** — Phases 3–6 (shipped 2026-05-10)
 - ✅ **v1.2 质量强化 & 性能深化** — Phases 7–11 (shipped 2026-05-15)
 - ✅ **v1.3 SQL 模板分析 & 可视化** — Phases 12–16 (shipped 2026-05-17)
+- ✅ **v1.4 代码重构 & 质量深化** — Phases 17–20 (shipped 2026-05-18)
 
 ## Phases
 
@@ -57,6 +58,18 @@ Full details: `.planning/milestones/v1.3-ROADMAP.md`
 
 </details>
 
+<details>
+<summary>✅ v1.4 代码重构 & 质量深化 (Phases 17–20) — SHIPPED 2026-05-18</summary>
+
+- [x] Phase 17: 过滤器配置嵌套化 (2/2 plans) — completed 2026-05-18
+- [x] Phase 18: 模板 & 图表配置嵌套化 (3/3 plans) — completed 2026-05-18
+- [x] Phase 19: 代码结构重构 (4/4 plans) — completed 2026-05-18
+- [x] Phase 20: 测试覆盖深化 (3/3 plans) — completed 2026-05-18
+
+Full details: `.planning/milestones/v1.4-ROADMAP.md`
+
+</details>
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -77,3 +90,7 @@ Full details: `.planning/milestones/v1.3-ROADMAP.md`
 | 14. Exporter 集成输出 | v1.3 | 4/4 | Complete | 2026-05-16 |
 | 15. SVG 图表基础设施 + 前两类图表 | v1.3 | 5/5 | Complete | 2026-05-17 |
 | 16. 剩余图表 | v1.3 | 5/5 | Complete | 2026-05-17 |
+| 17. 过滤器配置嵌套化 | v1.4 | 2/2 | Complete | 2026-05-18 |
+| 18. 模板 & 图表配置嵌套化 | v1.4 | 3/3 | Complete | 2026-05-18 |
+| 19. 代码结构重构 | v1.4 | 4/4 | Complete | 2026-05-18 |
+| 20. 测试覆盖深化 | v1.4 | 3/3 | Complete | 2026-05-18 |

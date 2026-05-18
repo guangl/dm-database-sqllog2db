@@ -4,9 +4,10 @@ use dm_database_parser_sqllog::{MetaParts, PerformanceMetrics, Sqllog};
 use log::info;
 
 pub mod csv;
+pub(crate) mod projection;
 pub mod sqlite;
-pub use csv::CsvExporter;
-pub use sqlite::SqliteExporter;
+pub(crate) use csv::CsvExporter;
+pub(crate) use sqlite::SqliteExporter;
 
 /// 所有导出器必须实现的接口
 pub trait Exporter {
@@ -45,13 +46,18 @@ pub trait Exporter {
     }
 
     /// 将 SQL 模板聚合统计写入导出目标。
+    ///
+    /// - `csv_output_path`: `None` 或空串 → 跳过 CSV 写入；否则写入到该路径（显式，不再推导）。
+    /// - `sqlite_table_name`: `None` 或空串 → 跳过 `SQLite` 建表；否则以该名称建表。
+    ///
     /// 默认实现为 no-op，向后兼容现有 exporter。
     fn write_template_stats(
         &mut self,
-        stats: &[crate::features::TemplateStats],
-        final_path: Option<&std::path::Path>,
+        stats: &[crate::pipeline::TemplateStats],
+        csv_output_path: Option<&str>,
+        sqlite_table_name: Option<&str>,
     ) -> Result<()> {
-        let _ = (stats, final_path);
+        let _ = (stats, csv_output_path, sqlite_table_name);
         Ok(())
     }
 }
@@ -59,10 +65,10 @@ pub trait Exporter {
 /// 具体导出器的枚举包装，消除 `Box<dyn Exporter>` 的虚表分发开销，
 /// 使编译器能够内联热路径（`export_one_preparsed` → `write_record_preparsed`）。
 #[derive(Debug)]
-pub enum ExporterKind {
+pub(crate) enum ExporterKind {
     Csv(CsvExporter),
     Sqlite(SqliteExporter),
-    DryRun(DryRunExporter),
+    DryRun { stats: ExportStats },
 }
 
 impl ExporterKind {
@@ -70,7 +76,7 @@ impl ExporterKind {
         match self {
             Self::Csv(_) => "CSV",
             Self::Sqlite(_) => "SQLite",
-            Self::DryRun(_) => "dry-run",
+            Self::DryRun { .. } => "dry-run",
         }
     }
 
@@ -88,7 +94,7 @@ impl ExporterKind {
         match self {
             Self::Csv(e) => e.initialize(),
             Self::Sqlite(e) => e.initialize(),
-            Self::DryRun(e) => e.initialize(),
+            Self::DryRun { .. } => Ok(()),
         }
     }
 
@@ -103,7 +109,10 @@ impl ExporterKind {
         match self {
             Self::Csv(e) => e.export_one_preparsed(sqllog, meta, pm, normalized),
             Self::Sqlite(e) => e.export_one_preparsed(sqllog, meta, pm, normalized),
-            Self::DryRun(e) => e.export_one_preparsed(sqllog, meta, pm, normalized),
+            Self::DryRun { stats } => {
+                stats.exported += 1;
+                Ok(())
+            }
         }
     }
 
@@ -111,20 +120,29 @@ impl ExporterKind {
         match self {
             Self::Csv(e) => e.finalize(),
             Self::Sqlite(e) => e.finalize(),
-            Self::DryRun(e) => e.finalize(),
+            Self::DryRun { .. } => Ok(()),
         }
     }
 
     #[inline]
     fn write_template_stats(
         &mut self,
-        stats: &[crate::features::TemplateStats],
-        final_path: Option<&std::path::Path>,
+        stats: &[crate::pipeline::TemplateStats],
+        csv_output_path: Option<&str>,
+        sqlite_table_name: Option<&str>,
     ) -> Result<()> {
         match self {
-            Self::Csv(e) => e.write_template_stats(stats, final_path),
-            Self::Sqlite(e) => e.write_template_stats(stats, final_path),
-            Self::DryRun(e) => e.write_template_stats(stats, final_path),
+            Self::Csv(e) => e.write_template_stats(stats, csv_output_path, sqlite_table_name),
+            Self::Sqlite(e) => e.write_template_stats(stats, csv_output_path, sqlite_table_name),
+            Self::DryRun { .. } => {
+                info!(
+                    "Dry-run: would write {} template stats (csv={:?}, sqlite_table={:?})",
+                    stats.len(),
+                    csv_output_path,
+                    sqlite_table_name,
+                );
+                Ok(())
+            }
         }
     }
 
@@ -132,7 +150,7 @@ impl ExporterKind {
         match self {
             Self::Csv(e) => e.stats_snapshot(),
             Self::Sqlite(e) => e.stats_snapshot(),
-            Self::DryRun(e) => e.stats_snapshot(),
+            Self::DryRun { stats } => Some(*stats),
         }
     }
 }
@@ -163,58 +181,8 @@ impl ExportStats {
     }
 }
 
-/// 空运行导出器：只计数，不写任何文件（用于 --dry-run 模式）
-#[derive(Debug, Default)]
-pub struct DryRunExporter {
-    stats: ExportStats,
-}
-
-impl Exporter for DryRunExporter {
-    fn initialize(&mut self) -> Result<()> {
-        Ok(())
-    }
-
-    fn export(&mut self, _sqllog: &Sqllog<'_>) -> Result<()> {
-        self.stats.exported += 1;
-        Ok(())
-    }
-
-    /// 直接计数，跳过两层默认实现（`export_one_normalized` → `export`）。
-    #[inline]
-    fn export_one_preparsed(
-        &mut self,
-        _sqllog: &Sqllog<'_>,
-        _meta: &MetaParts<'_>,
-        _pm: &PerformanceMetrics<'_>,
-        _normalized: Option<&str>,
-    ) -> Result<()> {
-        self.stats.exported += 1;
-        Ok(())
-    }
-
-    fn finalize(&mut self) -> Result<()> {
-        Ok(())
-    }
-
-    fn write_template_stats(
-        &mut self,
-        stats: &[crate::features::TemplateStats],
-        _final_path: Option<&std::path::Path>,
-    ) -> Result<()> {
-        info!(
-            "Dry-run: would write {} template stats (no file written)",
-            stats.len()
-        );
-        Ok(())
-    }
-
-    fn stats_snapshot(&self) -> Option<ExportStats> {
-        Some(self.stats)
-    }
-}
-
 /// 导出器管理器
-pub struct ExporterManager {
+pub(crate) struct ExporterManager {
     exporter: ExporterKind,
 }
 
@@ -229,7 +197,7 @@ impl std::fmt::Debug for ExporterManager {
 impl ExporterManager {
     /// 从已构建的 `CsvExporter` 创建管理器（并行处理时每个任务独立调用）。
     #[must_use]
-    pub fn from_csv(exporter: CsvExporter) -> Self {
+    pub(crate) fn from_csv(exporter: CsvExporter) -> Self {
         Self {
             exporter: ExporterKind::Csv(exporter),
         }
@@ -237,24 +205,28 @@ impl ExporterManager {
 
     /// 创建空运行导出器，只统计记录数不写文件
     #[must_use]
-    pub fn dry_run() -> Self {
+    pub(crate) fn dry_run() -> Self {
         info!("Dry-run mode: no output will be written");
         Self {
-            exporter: ExporterKind::DryRun(DryRunExporter::default()),
+            exporter: ExporterKind::DryRun {
+                stats: ExportStats::default(),
+            },
         }
     }
 
-    pub fn from_config(config: &Config) -> Result<Self> {
+    pub(crate) fn from_config(config: &Config) -> Result<Self> {
         info!("Initializing exporter manager...");
 
-        let normalize = config
-            .features
-            .replace_parameters
-            .as_ref()
-            .is_none_or(|r| r.enable);
+        let normalize = config.replace_parameters.as_ref().is_none_or(|r| r.enable);
 
-        let field_mask = config.features.field_mask();
-        let ordered_indices = config.features.ordered_field_indices();
+        let field_mask = config.output.as_ref().map_or(
+            crate::pipeline::FieldMask::ALL,
+            crate::pipeline::OutputConfig::field_mask,
+        );
+        let ordered_indices = config.output.as_ref().map_or_else(
+            || (0..crate::pipeline::FIELD_NAMES.len()).collect(),
+            crate::pipeline::OutputConfig::ordered_field_indices,
+        );
 
         if let Some(cfg) = &config.exporter.csv {
             info!("Using CSV exporter: {}", cfg.file);
@@ -283,11 +255,11 @@ impl ExporterManager {
 
     /// 返回当前 active exporter 是否应包含性能指标列。
     /// CSV 路径根据配置返回；其他路径固定返回 true。
-    pub fn csv_include_performance_metrics(&self) -> bool {
+    pub(crate) fn csv_include_performance_metrics(&self) -> bool {
         self.exporter.csv_include_performance_metrics()
     }
 
-    pub fn initialize(&mut self) -> Result<()> {
+    pub(crate) fn initialize(&mut self) -> Result<()> {
         info!("Initializing exporters...");
         self.exporter.initialize()?;
         info!("Exporters initialized");
@@ -296,7 +268,7 @@ impl ExporterManager {
 
     /// 热路径：使用预解析的 meta/pm，避免导出器内部重复解析。
     #[inline]
-    pub fn export_one_preparsed(
+    pub(crate) fn export_one_preparsed(
         &mut self,
         sqllog: &Sqllog<'_>,
         meta: &MetaParts<'_>,
@@ -307,27 +279,29 @@ impl ExporterManager {
             .export_one_preparsed(sqllog, meta, pm, normalized)
     }
 
-    pub fn finalize(&mut self) -> Result<()> {
+    pub(crate) fn finalize(&mut self) -> Result<()> {
         info!("Finalizing exporters...");
         self.exporter.finalize()?;
         info!("Exporters finished");
         Ok(())
     }
 
-    pub fn write_template_stats(
+    pub(crate) fn write_template_stats(
         &mut self,
-        stats: &[crate::features::TemplateStats],
-        final_path: Option<&std::path::Path>,
+        stats: &[crate::pipeline::TemplateStats],
+        csv_output_path: Option<&str>,
+        sqlite_table_name: Option<&str>,
     ) -> Result<()> {
-        self.exporter.write_template_stats(stats, final_path)
+        self.exporter
+            .write_template_stats(stats, csv_output_path, sqlite_table_name)
     }
 
     #[must_use]
-    pub fn name(&self) -> &str {
+    pub(crate) fn name(&self) -> &str {
         self.exporter.kind_name()
     }
 
-    pub fn log_stats(&self) {
+    pub(crate) fn log_stats(&self) {
         if let Some(s) = self.exporter.stats_snapshot() {
             info!(
                 "Export stats: {} => success: {}, failed: {}, skipped: {} (total: {}){}",
@@ -402,342 +376,4 @@ pub(super) fn ensure_parent_dir(path: &std::path::Path) -> std::io::Result<()> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    // ── ExportStats ────────────────────────────────────────────
-    #[test]
-    fn test_export_stats_default() {
-        let s = ExportStats::new();
-        assert_eq!(s.exported, 0);
-        assert_eq!(s.total(), 0);
-    }
-
-    #[test]
-    fn test_export_stats_record_success() {
-        let mut s = ExportStats::new();
-        s.record_success();
-        s.record_success();
-        assert_eq!(s.exported, 2);
-        assert_eq!(s.total(), 2);
-    }
-
-    #[test]
-    fn test_export_stats_total_includes_all() {
-        let mut s = ExportStats::new();
-        s.exported = 5;
-        s.skipped = 2;
-        s.failed = 1;
-        assert_eq!(s.total(), 8);
-    }
-
-    // ── strip_ip_prefix ────────────────────────────────────────
-    #[test]
-    fn test_strip_ip_prefix_with_prefix() {
-        assert_eq!(strip_ip_prefix("::ffff:192.168.1.1"), "192.168.1.1");
-    }
-
-    #[test]
-    fn test_strip_ip_prefix_uppercase() {
-        assert_eq!(strip_ip_prefix("::FFFF:10.0.0.1"), "10.0.0.1");
-    }
-
-    #[test]
-    fn test_strip_ip_prefix_no_prefix() {
-        assert_eq!(strip_ip_prefix("192.168.1.1"), "192.168.1.1");
-    }
-
-    #[test]
-    fn test_strip_ip_prefix_ipv6() {
-        assert_eq!(strip_ip_prefix("2001:db8::1"), "2001:db8::1");
-    }
-
-    #[test]
-    fn test_strip_ip_prefix_empty() {
-        assert_eq!(strip_ip_prefix(""), "");
-    }
-
-    // ── f32_ms_to_i64 ──────────────────────────────────────────
-    #[test]
-    fn test_f32_ms_to_i64_normal() {
-        assert_eq!(f32_ms_to_i64(100.0_f32), 100);
-    }
-
-    #[test]
-    fn test_f32_ms_to_i64_nan() {
-        assert_eq!(f32_ms_to_i64(f32::NAN), 0);
-    }
-
-    #[test]
-    fn test_f32_ms_to_i64_pos_infinity() {
-        assert_eq!(f32_ms_to_i64(f32::INFINITY), 0);
-    }
-
-    #[test]
-    fn test_f32_ms_to_i64_neg_infinity() {
-        assert_eq!(f32_ms_to_i64(f32::NEG_INFINITY), 0);
-    }
-
-    #[test]
-    fn test_f32_ms_to_i64_zero() {
-        assert_eq!(f32_ms_to_i64(0.0), 0);
-    }
-
-    #[test]
-    fn test_f32_ms_to_i64_negative() {
-        assert_eq!(f32_ms_to_i64(-50.0), -50);
-    }
-
-    // ── ensure_parent_dir ──────────────────────────────────────
-    #[test]
-    fn test_ensure_parent_dir_existing() {
-        let dir = tempfile::TempDir::new().unwrap();
-        let path = dir.path().join("out.csv");
-        // Parent exists → should not error
-        ensure_parent_dir(&path).unwrap();
-    }
-
-    #[test]
-    fn test_ensure_parent_dir_creates_new() {
-        let dir = tempfile::TempDir::new().unwrap();
-        let path = dir.path().join("sub/dir/out.csv");
-        ensure_parent_dir(&path).unwrap();
-        assert!(dir.path().join("sub/dir").exists());
-    }
-
-    // ── DryRunExporter ─────────────────────────────────────────
-    #[test]
-    fn test_dry_run_exporter_counts_records() {
-        let mut e = DryRunExporter::default();
-        e.initialize().unwrap();
-        // Manually add some counts via export_batch with empty batches approach
-        e.stats.exported = 5;
-        let snap = e.stats_snapshot().unwrap();
-        assert_eq!(snap.exported, 5);
-    }
-
-    // ── ExporterManager constructors ───────────────────────────
-    #[test]
-    fn test_from_csv_constructor() {
-        let exporter = CsvExporter::new(std::path::PathBuf::from("/tmp/test.csv"));
-        let manager = ExporterManager::from_csv(exporter);
-        assert_eq!(manager.name(), "CSV");
-    }
-
-    #[test]
-    fn test_dry_run_constructor() {
-        let manager = ExporterManager::dry_run();
-        assert_eq!(manager.name(), "dry-run");
-    }
-
-    #[test]
-    fn test_from_config_sqlite_path() {
-        use crate::config::SqliteExporter as SqliteExporterCfg;
-        use crate::config::{Config, ExporterConfig, SqllogConfig};
-        let cfg = Config {
-            exporter: ExporterConfig {
-                csv: None,
-                sqlite: Some(SqliteExporterCfg {
-                    database_url: "/tmp/test_mod.db".to_string(),
-                    table_name: "records".to_string(),
-                    overwrite: true,
-                    append: false,
-                    batch_size: 10_000,
-                }),
-            },
-            sqllog: SqllogConfig {
-                path: "sqllogs".to_string(),
-            },
-            ..Default::default()
-        };
-        let manager = ExporterManager::from_config(&cfg).unwrap();
-        assert_eq!(manager.name(), "SQLite");
-    }
-
-    #[test]
-    fn test_from_config_no_exporters_error() {
-        use crate::config::{Config, ExporterConfig, SqllogConfig};
-        let cfg = Config {
-            exporter: ExporterConfig {
-                csv: None,
-                sqlite: None,
-            },
-            sqllog: SqllogConfig {
-                path: "sqllogs".to_string(),
-            },
-            ..Default::default()
-        };
-        let result = ExporterManager::from_config(&cfg);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_log_stats_with_flush_operations() {
-        let mut stats = ExportStats::new();
-        stats.exported = 10;
-        stats.flush_operations = 2;
-        stats.last_flush_size = 5;
-        // log_stats reads from the exporter kind — use DryRunExporter and manually check
-        let e = DryRunExporter { stats };
-        let snap = e.stats_snapshot().unwrap();
-        assert_eq!(snap.flush_operations, 2);
-        assert_eq!(snap.last_flush_size, 5);
-    }
-
-    #[test]
-    fn test_exporter_manager_log_stats_no_panic() {
-        let manager = ExporterManager::dry_run();
-        // Just verify it doesn't panic
-        manager.log_stats();
-    }
-
-    #[test]
-    fn test_exporter_manager_debug_format() {
-        let manager = ExporterManager::dry_run();
-        let s = format!("{manager:?}");
-        assert!(s.contains("ExporterManager"));
-    }
-
-    #[test]
-    fn test_dry_run_export_via_trait() {
-        use dm_database_parser_sqllog::LogParser;
-        let dir = tempfile::TempDir::new().unwrap();
-        let log = dir.path().join("t.log");
-        std::fs::write(&log, "2025-01-15 10:30:28.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:App ip:10.0.0.1) [SEL] SELECT 1. EXECTIME: 1(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.\n").unwrap();
-        let parser = LogParser::from_path(log.to_str().unwrap()).unwrap();
-        let records: Vec<_> = parser.iter().flatten().collect();
-
-        let mut e = DryRunExporter::default();
-        e.initialize().unwrap();
-        for r in &records {
-            e.export(r).unwrap();
-        }
-        e.finalize().unwrap();
-        let snap = e.stats_snapshot().unwrap();
-        assert_eq!(snap.exported, records.len());
-    }
-
-    #[test]
-    fn test_f32_ms_to_i64_large_positive() {
-        // Value larger than i64::MAX should return i64::MAX
-        let result = f32_ms_to_i64(f32::MAX);
-        assert_eq!(result, i64::MAX);
-    }
-
-    #[test]
-    fn test_strip_ip_prefix_colon_non_ffff() {
-        // Starts with ':' but not the exact ffff prefix
-        assert_eq!(strip_ip_prefix("::1"), "::1");
-    }
-
-    // ── write_template_stats ───────────────────────────────────
-
-    /// 辅助：构造一个最小 `TemplateStats` 实例
-    fn make_template_stats(key: &str) -> crate::features::TemplateStats {
-        crate::features::TemplateStats {
-            template_key: key.to_string(),
-            count: 1,
-            avg_us: 100,
-            min_us: 10,
-            max_us: 200,
-            p50_us: 90,
-            p95_us: 180,
-            p99_us: 195,
-            first_seen: "2025-01-01 00:00:00".to_string(),
-            last_seen: "2025-01-01 01:00:00".to_string(),
-        }
-    }
-
-    /// Test 1: 自定义 mock exporter 不覆盖 `write_template_stats`，默认 no-op 返回 `Ok(())`
-    #[test]
-    fn test_default_write_template_stats_noop() {
-        #[derive(Debug, Default)]
-        struct MockExporter;
-
-        impl Exporter for MockExporter {
-            fn initialize(&mut self) -> Result<()> {
-                Ok(())
-            }
-            fn export(&mut self, _: &dm_database_parser_sqllog::Sqllog<'_>) -> Result<()> {
-                Ok(())
-            }
-            fn finalize(&mut self) -> Result<()> {
-                Ok(())
-            }
-            // write_template_stats 未覆盖 → 使用 trait 默认 no-op
-        }
-
-        let mut mock = MockExporter;
-        let stats = vec![make_template_stats("SELECT ?")];
-        let result = mock.write_template_stats(&stats, None);
-        assert!(result.is_ok());
-    }
-
-    /// Test 2: `DryRunExporter` 覆盖为 no-op，不创建任何文件
-    #[test]
-    fn test_dry_run_write_template_stats_noop() {
-        let mut e = DryRunExporter::default();
-        e.initialize().unwrap();
-        let before = e.stats_snapshot().unwrap().exported;
-
-        let stats = vec![
-            make_template_stats("SELECT ?"),
-            make_template_stats("INSERT ?"),
-        ];
-        let result = e.write_template_stats(&stats, None);
-        assert!(result.is_ok());
-
-        // write_template_stats 不影响 exported 计数
-        let after = e.stats_snapshot().unwrap().exported;
-        assert_eq!(before, after);
-    }
-
-    /// Test 3: `ExporterManager::dry_run()` 委托调用 `write_template_stats` 返回 `Ok(())`
-    #[test]
-    fn test_exporter_manager_write_template_stats_dry_run() {
-        let mut manager = ExporterManager::dry_run();
-        let stats = vec![make_template_stats("SELECT ?")];
-        let result = manager.write_template_stats(&stats, None);
-        assert!(result.is_ok());
-    }
-
-    /// Test 4: `ExporterKind` 三个 variant 透传 `write_template_stats` 均不 panic
-    #[test]
-    fn test_exporter_kind_dispatch_write_template_stats() {
-        let stats: Vec<crate::features::TemplateStats> = vec![];
-
-        // DryRun variant
-        let mut dry_run = ExporterKind::DryRun(DryRunExporter::default());
-        assert!(dry_run.write_template_stats(&stats, None).is_ok());
-
-        // CSV variant — 空 stats，伴随文件写入成功
-        let dir = tempfile::TempDir::new().unwrap();
-        let csv_path = dir.path().join("test_dispatch.csv");
-        let mut csv = CsvExporter::new(&csv_path);
-        csv.initialize().unwrap();
-        csv.finalize().unwrap();
-        let mut csv_kind = ExporterKind::Csv(csv);
-        assert!(csv_kind.write_template_stats(&stats, None).is_ok());
-
-        // SQLite variant — 需要先 initialize 建立数据库连接
-        use crate::config::SqliteExporter as SqliteExporterCfg;
-        let db_path = dir.path().join("test_dispatch.db");
-        let sqlite_cfg = SqliteExporterCfg {
-            database_url: db_path.to_string_lossy().into(),
-            table_name: "records".to_string(),
-            overwrite: true,
-            append: false,
-            batch_size: 10_000,
-        };
-        let mut sqlite = SqliteExporter::from_config(&sqlite_cfg);
-        sqlite.initialize().unwrap();
-        // finalize() commits the main transaction so write_template_stats can open its own
-        sqlite.finalize().unwrap();
-        let mut sqlite_kind = ExporterKind::Sqlite(sqlite);
-        let result = sqlite_kind.write_template_stats(&stats, None);
-        assert!(
-            result.is_ok(),
-            "sqlite write_template_stats failed: {result:?}"
-        );
-    }
-}
+mod tests;

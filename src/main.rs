@@ -9,10 +9,10 @@ mod color;
 mod config;
 mod error;
 mod exporter;
-mod features;
 mod lang;
 mod logging;
 mod parser;
+mod pipeline;
 mod resume;
 
 use config::Config;
@@ -79,13 +79,13 @@ fn apply_date_range(cfg: &mut Config, from: Option<&str>, to: Option<&str>) {
     if from.is_none() && to.is_none() {
         return;
     }
-    let filters = cfg.features.filters.get_or_insert_with(Default::default);
+    let filters = cfg.filter.get_or_insert_with(Default::default);
     filters.enable = true;
     if let Some(f) = from {
-        filters.meta.start_ts = Some(f.to_string());
+        filters.include.start_ts = Some(f.to_string());
     }
     if let Some(t) = to {
-        filters.meta.end_ts = Some(t.to_string());
+        filters.include.end_ts = Some(t.to_string());
     }
 }
 
@@ -429,9 +429,9 @@ mod tests {
     fn test_apply_date_range_both() {
         let mut cfg = Config::default();
         apply_date_range(&mut cfg, Some("2025-01-01"), Some("2025-12-31"));
-        let f = cfg.features.filters.unwrap();
-        assert_eq!(f.meta.start_ts.as_deref(), Some("2025-01-01"));
-        assert_eq!(f.meta.end_ts.as_deref(), Some("2025-12-31"));
+        let f = cfg.filter.unwrap();
+        assert_eq!(f.include.start_ts.as_deref(), Some("2025-01-01"));
+        assert_eq!(f.include.end_ts.as_deref(), Some("2025-12-31"));
         assert!(f.enable);
     }
 
@@ -439,25 +439,25 @@ mod tests {
     fn test_apply_date_range_from_only() {
         let mut cfg = Config::default();
         apply_date_range(&mut cfg, Some("2025-06-01"), None);
-        let f = cfg.features.filters.unwrap();
-        assert_eq!(f.meta.start_ts.as_deref(), Some("2025-06-01"));
-        assert!(f.meta.end_ts.is_none());
+        let f = cfg.filter.unwrap();
+        assert_eq!(f.include.start_ts.as_deref(), Some("2025-06-01"));
+        assert!(f.include.end_ts.is_none());
     }
 
     #[test]
     fn test_apply_date_range_to_only() {
         let mut cfg = Config::default();
         apply_date_range(&mut cfg, None, Some("2025-06-30"));
-        let f = cfg.features.filters.unwrap();
-        assert!(f.meta.start_ts.is_none());
-        assert_eq!(f.meta.end_ts.as_deref(), Some("2025-06-30"));
+        let f = cfg.filter.unwrap();
+        assert!(f.include.start_ts.is_none());
+        assert_eq!(f.include.end_ts.as_deref(), Some("2025-06-30"));
     }
 
     #[test]
     fn test_apply_date_range_neither() {
         let mut cfg = Config::default();
         apply_date_range(&mut cfg, None, None);
-        assert!(cfg.features.filters.is_none());
+        assert!(cfg.filter.is_none());
     }
 
     #[test]

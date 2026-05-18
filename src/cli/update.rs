@@ -1,9 +1,12 @@
+// 整个模块仅在 binary crate (main.rs) 中使用；lib crate 生产代码不调用。
+#![allow(dead_code)]
+
 use crate::error::{Result, UpdateError};
 use log::info;
 use self_update::cargo_crate_version;
 
 /// Handle the self-update command
-pub fn handle_update(check: bool) -> Result<()> {
+pub(crate) fn handle_update(check: bool) -> Result<()> {
     let current_version = cargo_crate_version!();
     info!("Current version: {current_version}");
 
@@ -64,7 +67,7 @@ pub fn handle_update(check: bool) -> Result<()> {
 }
 
 /// Check for updates at startup (silently if no update found)
-pub fn check_for_updates_at_startup() {
+pub(crate) fn check_for_updates_at_startup() {
     std::thread::spawn(|| {
         let current_version = cargo_crate_version!();
 

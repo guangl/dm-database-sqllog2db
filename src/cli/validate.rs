@@ -7,37 +7,37 @@ pub fn handle_validate(cfg: &Config) {
     info!("日志文件: {}", cfg.logging.file);
     info!("日志保留: {} 天", cfg.logging.retention_days);
 
-    match &cfg.features.replace_parameters {
+    match &cfg.replace_parameters {
         Some(rp) => info!(
-            "features.replace_parameters: enable={}, placeholders={:?}",
+            "replace_parameters: enable={}, placeholders={:?}",
             rp.enable, rp.placeholders
         ),
-        None => info!("features.replace_parameters: 未配置（默认启用，自动检测占位符）"),
+        None => info!("replace_parameters: 未配置（默认启用，自动检测占位符）"),
     }
-    match &cfg.features.filters {
+    match &cfg.filter {
         Some(f) => {
             info!(
-                "features.filters: {}",
+                "filter: {}",
                 if f.enable {
                     "启用"
                 } else {
                     "配置但未明确启用"
                 }
             );
-            if let Some(start) = &f.meta.start_ts {
+            if let Some(start) = &f.include.start_ts {
                 info!("  start_ts = {start}");
             }
-            if let Some(end) = &f.meta.end_ts {
+            if let Some(end) = &f.include.end_ts {
                 info!("  end_ts = {end}");
             }
-            if let Some(ids) = &f.meta.trxids {
+            if let Some(ids) = &f.include.trxids {
                 info!("  trxids = {} 条", ids.len());
             }
-            if let Some(users) = &f.meta.usernames {
-                info!("  usernames = {users:?}");
+            if let Some(users) = &f.include.users {
+                info!("  include.users = {users:?}");
             }
-            if let Some(ips) = &f.meta.client_ips {
-                info!("  client_ips = {ips:?}");
+            if let Some(ips) = &f.include.ips {
+                info!("  include.ips = {ips:?}");
             }
             if let Some(ids) = &f.indicators.exec_ids {
                 info!("  exec_ids = {} 条", ids.len());
@@ -50,13 +50,13 @@ pub fn handle_validate(cfg: &Config) {
             }
             if f.sql.has_filters() {
                 info!(
-                    "  sql.include_patterns = {} 条, exclude_patterns = {} 条",
-                    f.sql.include_patterns.as_ref().map_or(0, Vec::len),
-                    f.sql.exclude_patterns.as_ref().map_or(0, Vec::len),
+                    "  sql.includes = {} 条, excludes = {} 条",
+                    f.sql.includes.as_ref().map_or(0, Vec::len),
+                    f.sql.excludes.as_ref().map_or(0, Vec::len),
                 );
             }
         }
-        None => info!("features.filters: 未配置"),
+        None => info!("filter: 未配置"),
     }
 
     if let Some(csv) = &cfg.exporter.csv {

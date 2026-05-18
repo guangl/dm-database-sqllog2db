@@ -1,3 +1,7 @@
+// 整个模块仅在 binary crate (main.rs) 中使用；lib crate 生产代码不调用。
+// 其 `#[cfg(test)]` 单元测试直接引用当前模块中的 items，编译不受影响。
+#![allow(dead_code)]
+
 use crate::color;
 use crate::config::Config;
 use crate::parser::SqllogParser;
@@ -6,7 +10,7 @@ use std::path::Path;
 /// 在 run 命令执行前检查基础条件。
 /// 返回所有警告/错误，调用方决定是否中止。
 #[must_use]
-pub fn check(cfg: &Config) -> PreflightResult {
+pub(crate) fn check(cfg: &Config) -> PreflightResult {
     let mut result = PreflightResult::default();
     check_log_path(&cfg.sqllog.path, &mut result);
     check_output_writable(cfg, &mut result);
@@ -79,20 +83,20 @@ fn check_path_writable(file_path: &str, result: &mut PreflightResult) {
 }
 
 #[derive(Debug, Default)]
-pub struct PreflightResult {
-    pub errors: Vec<String>,
-    pub warnings: Vec<String>,
+pub(crate) struct PreflightResult {
+    pub(crate) errors: Vec<String>,
+    pub(crate) warnings: Vec<String>,
 }
 
 impl PreflightResult {
     #[must_use]
-    pub fn has_errors(&self) -> bool {
+    pub(crate) fn has_errors(&self) -> bool {
         !self.errors.is_empty()
     }
 
     /// 打印所有警告和错误，返回是否有致命错误。
     #[must_use]
-    pub fn print_and_check(&self) -> bool {
+    pub(crate) fn print_and_check(&self) -> bool {
         for warn in &self.warnings {
             eprintln!("{} {warn}", color::yellow("Warning:"));
         }
@@ -106,7 +110,7 @@ impl PreflightResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{Config, CsvExporter, ExporterConfig, SqllogConfig};
+    use crate::config::{Config, CsvExporterConfig, ExporterConfig, SqllogConfig};
 
     fn config_with_log_dir(dir: &str) -> Config {
         Config {
@@ -211,11 +215,11 @@ mod tests {
         let out_file = dir.path().join("out.csv");
         let mut cfg = config_with_log_dir(dir.path().to_str().unwrap());
         cfg.exporter = ExporterConfig {
-            csv: Some(CsvExporter {
+            csv: Some(CsvExporterConfig {
                 file: out_file.to_str().unwrap().to_string(),
                 overwrite: false,
                 append: false,
-                ..CsvExporter::default()
+                ..CsvExporterConfig::default()
             }),
             ..Default::default()
         };
@@ -231,11 +235,11 @@ mod tests {
         std::fs::write(&out_file, "").unwrap(); // pre-create file
         let mut cfg = config_with_log_dir(dir.path().to_str().unwrap());
         cfg.exporter = ExporterConfig {
-            csv: Some(CsvExporter {
+            csv: Some(CsvExporterConfig {
                 file: out_file.to_str().unwrap().to_string(),
                 overwrite: false,
                 append: false,
-                ..CsvExporter::default()
+                ..CsvExporterConfig::default()
             }),
             ..Default::default()
         };

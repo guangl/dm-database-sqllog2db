@@ -6,21 +6,21 @@ use std::path::{Path, PathBuf};
 
 /// SQL 日志解析器
 #[derive(Debug)]
-pub struct SqllogParser {
+pub(crate) struct SqllogParser {
     /// 日志路径（文件、目录或 glob 模式）
     path: PathBuf,
 }
 
 impl SqllogParser {
     /// 创建新的 SQL 日志解析器
-    pub fn new(path: impl AsRef<Path>) -> Self {
+    pub(crate) fn new(path: impl AsRef<Path>) -> Self {
         Self {
             path: path.as_ref().to_path_buf(),
         }
     }
 
     /// 返回所有日志文件的路径列表（已按路径排序）
-    pub fn log_files(&self) -> Result<Vec<PathBuf>> {
+    pub(crate) fn log_files(&self) -> Result<Vec<PathBuf>> {
         self.scan_log_files()
     }
 

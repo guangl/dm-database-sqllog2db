@@ -1,17 +1,18 @@
 pub mod filters;
-pub use filters::{CompiledMetaFilters, CompiledSqlFilters, FiltersFeature};
+pub use filters::FiltersFeature;
+pub(crate) use filters::{CompiledMetaFilters, CompiledSqlFilters};
 
-pub mod replace_parameters;
-pub use replace_parameters::compute_normalized;
+pub mod normalizer;
+pub(crate) use normalizer::compute_normalized;
 
-pub mod sql_fingerprint;
-pub use sql_fingerprint::fingerprint;
-pub use sql_fingerprint::normalize_template;
+pub mod fingerprint;
+pub(crate) use fingerprint::fingerprint;
+pub(crate) use fingerprint::normalize_template;
 
-pub mod template_aggregator;
-pub use template_aggregator::ChartEntry;
-pub use template_aggregator::TemplateAggregator;
-pub use template_aggregator::TemplateStats;
+pub mod aggregator;
+pub(crate) use aggregator::ChartEntry;
+pub(crate) use aggregator::TemplateAggregator;
+pub(crate) use aggregator::TemplateStats;
 
 use dm_database_parser_sqllog::{MetaParts, Sqllog};
 use serde::Deserialize;
@@ -76,9 +77,9 @@ impl Default for FieldMask {
     }
 }
 
-/// `[features.replace_parameters]` 配置段
+/// `[replace_parameters]` 配置段
 #[derive(Debug, Deserialize, Clone)]
-pub struct ReplaceParametersConfig {
+pub struct NormalizeConfig {
     /// 是否在导出结果中写入 `normalized_sql` 列（默认 true）
     #[serde(default = "default_true")]
     pub enable: bool,
@@ -90,7 +91,7 @@ pub struct ReplaceParametersConfig {
     pub placeholders: Vec<String>,
 }
 
-impl Default for ReplaceParametersConfig {
+impl Default for NormalizeConfig {
     fn default() -> Self {
         Self {
             enable: true,
@@ -99,7 +100,7 @@ impl Default for ReplaceParametersConfig {
     }
 }
 
-impl ReplaceParametersConfig {
+impl NormalizeConfig {
     /// 将 `placeholders` 列表转换为 `compute_normalized` 所需的 `placeholder_override`：
     /// - `None`        → 自动检测
     /// - `Some(false)` → 强制 `?` 风格
@@ -126,15 +127,21 @@ fn default_top_n() -> usize {
     10
 }
 
-/// `[features.template_analysis]` 配置段
+/// `[template]` 配置段
 #[derive(Debug, Deserialize, Clone, Default)]
-pub struct TemplateAnalysisConfig {
+pub struct TemplateConfig {
     /// 是否启用 SQL 模板归一化（默认 false）
     #[serde(default)]
-    pub enabled: bool,
+    pub enable: bool,
+    /// 模板统计 CSV 输出路径；空字符串 = 不生成
+    #[serde(default)]
+    pub output_csv_path: String,
+    /// 模板统计 `SQLite` 表名；空字符串 = 不生成
+    #[serde(default)]
+    pub output_sqlite_table: String,
 }
 
-/// `[features.charts]` 配置段
+/// `[charts]` 配置段
 #[derive(Debug, Deserialize, Clone)]
 #[allow(clippy::struct_excessive_bools)]
 pub struct ChartsConfig {
@@ -170,36 +177,31 @@ impl Default for ChartsConfig {
     }
 }
 
-/// 功能开关配置
+/// `[output]` 配置段：字段投影
 #[derive(Debug, Deserialize, Clone, Default)]
-pub struct FeaturesConfig {
-    pub filters: Option<FiltersFeature>,
-    pub replace_parameters: Option<ReplaceParametersConfig>,
+pub struct OutputConfig {
     /// 字段投影：仅导出指定字段，默认为全部 15 个字段
+    #[serde(default)]
     pub fields: Option<Vec<String>>,
-    pub template_analysis: Option<TemplateAnalysisConfig>,
-    pub charts: Option<ChartsConfig>,
 }
 
-impl FeaturesConfig {
+impl OutputConfig {
     /// 计算字段投影掩码。字段名在 `validate()` 阶段已验证，无效名称静默退化为全量掩码。
     #[must_use]
     pub fn field_mask(&self) -> FieldMask {
         match &self.fields {
             None => FieldMask::ALL,
-            Some(names) if names.is_empty() => FieldMask::ALL, // D-02: 空列表等同于 None
+            Some(names) if names.is_empty() => FieldMask::ALL,
             Some(names) => FieldMask::from_names(names).unwrap_or(FieldMask::ALL),
         }
     }
 
     /// 按用户配置顺序返回字段索引列表，供 exporter 写入时按序遍历。
-    /// - `None` 或空列表 → `[0, 1, ..., 14]`（全量原始顺序，对应 D-02 决策）
-    /// - 有效列表 → 按配置顺序的字段索引（字段名已在 `Config::validate()` 阶段验证）
     #[must_use]
     pub fn ordered_field_indices(&self) -> Vec<usize> {
         match &self.fields {
             None => (0..FIELD_NAMES.len()).collect(),
-            Some(names) if names.is_empty() => (0..FIELD_NAMES.len()).collect(), // D-02
+            Some(names) if names.is_empty() => (0..FIELD_NAMES.len()).collect(),
             Some(names) => names
                 .iter()
                 .filter_map(|name| FIELD_NAMES.iter().position(|&n| n == name.as_str()))
@@ -215,7 +217,7 @@ pub trait LogProcessor: Send + Sync + std::fmt::Debug {
 
     /// 使用调用方已预解析的 `MetaParts` 运行过滤逻辑，
     /// 消除 `parse_meta()` 的重复调用。
-    /// 默认实现退化为 `process()`（向后兼容）。
+    /// 默认实现退化为 `process()`。
     fn process_with_meta(&self, record: &Sqllog, _meta: &MetaParts<'_>) -> bool {
         self.process(record)
     }
@@ -233,19 +235,15 @@ impl Pipeline {
         Self::default()
     }
 
-    /// 添加处理器到管线末尾
     pub fn add(&mut self, processor: Box<dyn LogProcessor>) {
         self.processors.push(processor);
     }
 
-    /// 管线是否为空（空管线可以走零开销快速路径）
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.processors.is_empty()
     }
 
-    /// 使用已预解析的 `MetaParts` 顺序执行所有处理器，
-    /// 避免各处理器内部重复调用 `parse_meta()`。
     #[inline]
     #[must_use]
     pub fn run_with_meta(&self, record: &Sqllog, meta: &MetaParts<'_>) -> bool {
@@ -259,7 +257,6 @@ impl Pipeline {
 mod tests {
     use super::*;
 
-    // ── Pipeline ───────────────────────────────────────────────
     #[test]
     fn test_pipeline_empty() {
         let p = Pipeline::new();
@@ -282,10 +279,9 @@ mod tests {
         assert!(!p.is_empty());
     }
 
-    // ── ReplaceParametersConfig ────────────────────────────────
     #[test]
     fn test_placeholder_override_question() {
-        let cfg = ReplaceParametersConfig {
+        let cfg = NormalizeConfig {
             enable: true,
             placeholders: vec!["?".into()],
         };
@@ -294,7 +290,7 @@ mod tests {
 
     #[test]
     fn test_placeholder_override_colon() {
-        let cfg = ReplaceParametersConfig {
+        let cfg = NormalizeConfig {
             enable: true,
             placeholders: vec![":1".into()],
         };
@@ -303,7 +299,7 @@ mod tests {
 
     #[test]
     fn test_placeholder_override_auto() {
-        let cfg = ReplaceParametersConfig {
+        let cfg = NormalizeConfig {
             enable: true,
             placeholders: vec![],
         };
@@ -312,24 +308,13 @@ mod tests {
 
     #[test]
     fn test_placeholder_override_both_is_auto() {
-        let cfg = ReplaceParametersConfig {
+        let cfg = NormalizeConfig {
             enable: true,
             placeholders: vec!["?".into(), ":1".into()],
         };
-        // Both → ambiguous → None
         assert_eq!(cfg.placeholder_override(), None);
     }
 
-    // ── FeaturesConfig ─────────────────────────────────────────
-    #[test]
-    fn test_features_config_default() {
-        let cfg = FeaturesConfig::default();
-        assert!(cfg.filters.is_none());
-        assert!(cfg.replace_parameters.is_none());
-        assert!(cfg.template_analysis.is_none());
-    }
-
-    // ── ChartsConfig ───────────────────────────────────────────
     #[test]
     fn test_charts_config_default_values() {
         let cfg = ChartsConfig::default();
@@ -363,95 +348,84 @@ latency_hist = false
         assert_eq!(cfg.top_n, 5);
         assert!(!cfg.frequency_bar);
         assert!(!cfg.latency_hist);
-        assert!(cfg.trend_line); // defaults to true even when not in TOML
+        assert!(cfg.trend_line);
         assert!(cfg.user_pie);
     }
 
     #[test]
-    fn test_features_config_default_charts_is_none() {
-        let cfg = FeaturesConfig::default();
-        assert!(cfg.charts.is_none());
+    fn test_template_config_default() {
+        let cfg = TemplateConfig::default();
+        assert!(!cfg.enable);
+        assert_eq!(cfg.output_csv_path, "");
+        assert_eq!(cfg.output_sqlite_table, "");
     }
 
     #[test]
-    fn test_template_analysis_config_default() {
-        let cfg = TemplateAnalysisConfig::default();
-        assert!(!cfg.enabled);
+    fn test_template_config_deserialize_full() {
+        let toml = "enable = true\noutput_csv_path = \"out.csv\"\noutput_sqlite_table = \"tpl\"";
+        let cfg: TemplateConfig = toml::from_str(toml).unwrap();
+        assert!(cfg.enable);
+        assert_eq!(cfg.output_csv_path, "out.csv");
+        assert_eq!(cfg.output_sqlite_table, "tpl");
     }
 
     #[test]
-    fn test_template_analysis_config_deserialize_enabled_true() {
-        let cfg: TemplateAnalysisConfig = toml::from_str("enabled = true").unwrap();
-        assert!(cfg.enabled);
+    fn test_template_config_deserialize_empty_is_default() {
+        let cfg: TemplateConfig = toml::from_str("").unwrap();
+        assert!(!cfg.enable);
+        assert_eq!(cfg.output_csv_path, "");
+        assert_eq!(cfg.output_sqlite_table, "");
     }
 
     #[test]
-    fn test_template_analysis_config_deserialize_empty_is_false() {
-        let cfg: TemplateAnalysisConfig = toml::from_str("").unwrap();
-        assert!(!cfg.enabled);
-    }
-
-    #[test]
-    fn test_replace_parameters_config_default() {
-        let cfg = ReplaceParametersConfig::default();
+    fn test_normalize_config_default() {
+        let cfg = NormalizeConfig::default();
         assert!(cfg.enable);
         assert!(cfg.placeholders.is_empty());
     }
 
-    // ── FeaturesConfig::ordered_field_indices ─────────────────
-
     #[test]
-    fn test_ordered_field_indices_none_returns_all() {
-        let cfg = FeaturesConfig::default();
-        let indices = cfg.ordered_field_indices();
-        assert_eq!(indices, (0..15_usize).collect::<Vec<_>>());
+    fn test_output_config_field_mask_default() {
+        let cfg = OutputConfig::default();
+        assert_eq!(cfg.field_mask(), FieldMask::ALL);
     }
 
     #[test]
-    fn test_ordered_field_indices_empty_equals_all() {
-        // D-02：空列表等同于不配置，导出全部字段
-        let cfg = FeaturesConfig {
-            fields: Some(vec![]),
-            ..Default::default()
+    fn test_output_config_field_mask_with_names() {
+        let cfg = OutputConfig {
+            fields: Some(vec!["sql".into(), "username".into()]),
         };
-        let indices = cfg.ordered_field_indices();
-        assert_eq!(indices.len(), 15);
-        assert_eq!(indices, (0..15_usize).collect::<Vec<_>>());
+        let mask = cfg.field_mask();
+        // sql=10, username=4
+        assert!(mask.is_active(10));
+        assert!(mask.is_active(4));
+        assert!(!mask.is_active(0)); // ts not included
     }
 
     #[test]
-    fn test_ordered_field_indices_preserves_user_order() {
-        // 用户配置顺序 sql(10), username(4), ts(0) → 索引按此顺序
-        let cfg = FeaturesConfig {
+    fn test_output_config_ordered_indices_preserves_user_order() {
+        let cfg = OutputConfig {
             fields: Some(vec!["sql".into(), "username".into(), "ts".into()]),
-            ..Default::default()
         };
         let indices = cfg.ordered_field_indices();
         assert_eq!(indices, vec![10_usize, 4, 0]);
     }
 
     #[test]
-    fn test_ordered_field_indices_single_field() {
-        let cfg = FeaturesConfig {
-            fields: Some(vec!["normalized_sql".into()]),
-            ..Default::default()
-        };
+    fn test_output_config_ordered_indices_none_returns_all() {
+        let cfg = OutputConfig::default();
         let indices = cfg.ordered_field_indices();
-        assert_eq!(indices, vec![14_usize]);
+        assert_eq!(indices, (0..15_usize).collect::<Vec<_>>());
     }
 
     #[test]
-    fn test_ordered_field_indices_all_fields_reversed() {
-        // 15 个字段反序配置 → 索引反序
-        let reversed_names: Vec<String> =
-            FIELD_NAMES.iter().rev().map(|&s| s.to_string()).collect();
-        let cfg = FeaturesConfig {
-            fields: Some(reversed_names),
-            ..Default::default()
+    fn test_output_config_ordered_indices_empty_equals_all() {
+        let cfg = OutputConfig {
+            fields: Some(vec![]),
         };
         let indices = cfg.ordered_field_indices();
-        let expected: Vec<usize> = (0..15).rev().collect();
-        assert_eq!(indices, expected);
+        assert_eq!(indices.len(), 15);
+        assert_eq!(indices, (0..15_usize).collect::<Vec<_>>());
     }
 
     #[test]
@@ -464,8 +438,8 @@ user_pie = false
         let cfg: ChartsConfig = toml::from_str(toml_str).unwrap();
         assert!(!cfg.trend_line);
         assert!(!cfg.user_pie);
-        assert!(cfg.frequency_bar); // defaults to true
-        assert!(cfg.latency_hist); // defaults to true
+        assert!(cfg.frequency_bar);
+        assert!(cfg.latency_hist);
     }
 
     #[test]
@@ -477,8 +451,7 @@ user_pie = false
 
     #[test]
     fn test_default_true_via_serde() {
-        // TOML without `enable` field → serde calls default_true() → true
-        let cfg: ReplaceParametersConfig = toml::from_str("").unwrap();
+        let cfg: NormalizeConfig = toml::from_str("").unwrap();
         assert!(cfg.enable);
     }
 
@@ -492,7 +465,6 @@ user_pie = false
             fn process(&self, _: &dm_database_parser_sqllog::Sqllog) -> bool {
                 true
             }
-            // No process_with_meta override → uses default which calls process()
         }
 
         #[derive(Debug)]
