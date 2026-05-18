@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: 代码重构 & 质量深化
 status: executing
-stopped_at: Phase 19 Plan 02 complete
-last_updated: "2026-05-18T13:25:00.000Z"
-last_activity: 2026-05-18 -- Phase 19 Plan 01+02 complete (filters + config split)
+stopped_at: Phase 19 Plan 03 complete
+last_updated: "2026-05-18T19:00:00.000Z"
+last_activity: 2026-05-18 -- Phase 19 Plan 03 complete (exporter subsystem refactor)
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 9
-  completed_plans: 6
-  percent: 50
+  completed_plans: 7
+  percent: 78
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-17 after v1.3 milestone)
 ## Current Position
 
 Phase: 19 of 20 (代码重构 & 质量深化)
-Plan: 02 complete (Phase 19 已完成 2/4 Plans)
-Status: Ready to execute
-Last activity: 2026-05-18 -- Phase 19 Plan 01+02 complete (filters + config split)
+Plan: 03 complete (Phase 19 已完成 3/4 Plans)
+Status: Phase 19 — plan 3 of 4 complete
+Last activity: 2026-05-18 -- Phase 19 Plan 03 complete (exporter subsystem refactor)
 
-Progress: [███████░░░] 67%
+Progress: [█████████░] 89%
 
 ## Performance Metrics
 
@@ -58,6 +58,13 @@ Progress: [███████░░░] 67%
 | Phase 19-code-refactor P01 | 90min | 3 tasks | 7 files |
 | validate_and_compile 和 apply_overrides 保持 pub | 调用方在 binary crate (main.rs)，pub(crate) 导致 dead_code lint | 19 |
 | apply_one 测试留在 apply_one.rs | 私有方法只能在声明模块内测试，不可迁移 | 19 |
+| Phase 19-code-refactor P03 | 45min | 3 tasks | 15 files |
+| D-08: DryRunExporter integrated into ExporterKind as struct variant DryRun { stats } | 通过 struct variant 消除独立的 DryRunExporter struct，减少代码量 | 19 |
+| D-07: Redundant DryRun dispatch arms inlined in ExporterKind match | 清理 Exporter trait 默认实现中的冗余分支 | 19 |
+| D-10: ExporterManager 及方法收紧至 pub(crate) | Exporter trait 保留 pub（bench 需求），Manager 全部 pub(crate) | 19 |
+| write_csv_escaped 提升为 pub(crate) | 供 companion.rs 复用 CSV 转义逻辑 | 19 |
+| csv/mod.rs 重导出 write_companion_rows | cli/run.rs 兼容调用路径 | 19 |
+| 测试移至 exporter/tests.rs | 控制 mod.rs ≤ 600 行 | 19 |
 
 ### Blockers/Concerns
 
@@ -75,6 +82,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-05-18T13:25:00.000Z
-Stopped at: Phase 19 Plan 02 complete
-Resume file: .planning/phases/19-code-refactor/19-02-SUMMARY.md
+Last session: 2026-05-18T19:00:00.000Z
+Stopped at: Phase 19 Plan 03 complete
+Resume file: .planning/phases/19-code-refactor/19-03-SUMMARY.md

@@ -140,7 +140,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 完成)*
 
-- [ ] 19-03-PLAN.md — 拆分 csv.rs (1260) + sqlite.rs (1302) 为目录子模块；新建 exporter/projection.rs (REFACTOR-02)；整合 DryRunExporter 进 ExporterKind (D-08, REFACTOR-03)；清理 Exporter trait 冗余 match (D-07)；sqlite conn_ref tech debt 修复
+- [x] 19-03-PLAN.md — 拆分 csv.rs (1260) + sqlite.rs (1302) 为目录子模块；新建 exporter/projection.rs (REFACTOR-02)；整合 DryRunExporter 进 ExporterKind (D-08, REFACTOR-03)；清理 Exporter trait 冗余 match (D-07)；sqlite conn_ref tech debt 修复
 
 **Wave 3** *(blocked on Wave 2)*
 
