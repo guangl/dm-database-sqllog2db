@@ -101,11 +101,9 @@ pub(super) fn process_log_file(
 
                         // SQL 记录级过滤：只对 DML 记录（有 tag）生效，PARAMS 记录始终通过。
                         // 被过滤掉的 DML 直接丢弃，不影响 params_buffer。
-                        if sql_record_filter
-                            .is_some_and(|f| record.tag.is_some() && !f.matches(pm.sql.as_ref()))
-                        {
-                            // 记录 SQL 内容不匹配，跳过导出
-                        } else {
+                        let sql_filter_pass = sql_record_filter
+                            .is_none_or(|f| record.tag.is_none() || f.matches(pm.sql.as_ref()));
+                        if sql_filter_pass {
                             // 快速路径：params_buffer 为空且当前是 DML 记录（有 tag），
                             // 则不可能存在待替换参数，完全跳过 compute_normalized。
                             let ns = if do_normalize
