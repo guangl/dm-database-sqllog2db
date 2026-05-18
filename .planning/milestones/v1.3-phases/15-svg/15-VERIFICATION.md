@@ -131,3 +131,63 @@ Phase 15 剩余工作（Plan 03: Top-N 频率条形图、Plan 04: 耗时直方�
 
 _Verified: 2026-05-16T12:00:00Z_
 _Verifier: Claude (gsd-verifier)_
+
+---
+
+## Wave 2/3 Coverage Backfill
+
+**Backfill Date:** 2026-05-18T12:30:00Z
+**Covers:** Phase 15 Plans 03/04/05 (plotters 依赖 + SVG 渲染层 + run.rs 接入)
+**Status:** PASSED
+
+### Observable Truths (Wave 2/3)
+
+| # | Truth | Status | Evidence |
+| --- | ----- | ------ | -------- |
+| 1 | plotters 0.3.7 SVG-only feature 配置存在于 Cargo.toml，无字体/图像系统依赖 | ✓ VERIFIED | `grep "plotters" Cargo.toml` → `plotters = { version = "0.3.7", default-features = false, features = ["svg_backend", "all_series", "all_elements"] }`；15-03-SUMMARY 记录 "Cargo.toml 新增 plotters 0.3.7" |
+| 2 | `src/charts/mod.rs::generate_charts()` 入口函数在 `exporter.finalize()` 之前调用 | ✓ VERIFIED | `grep -n "generate_charts\|finalize" src/cli/run/mod.rs` → 第 137/242 行 generate_charts 调用，位于 finalize 之前；15-05-SUMMARY 记录 "generate_charts 在 exporter_manager.finalize() 之前调用" |
+| 3 | `src/charts/frequency_bar.rs::draw_frequency_bar()` 生成 top_n_frequency.svg（横向条形图） | ✓ VERIFIED | `grep -n "pub fn draw_frequency_bar" src/charts/frequency_bar.rs` → 第 1 行；`cargo test test_draw_frequency_bar_creates_nonempty_svg` passed；15-03-SUMMARY 记录 "集成测试验证非空 SVG" |
+| 4 | `src/charts/latency_hist.rs::draw_latency_hist()` 生成 latency_histogram.svg（对数轴直方图） | ✓ VERIFIED | `grep -n "pub fn draw_latency_hist" src/charts/latency_hist.rs` → 第 8 行；`cargo test test_draw_latency_hist_creates_nonempty_svg` passed；15-04-SUMMARY 记录 "log_scale() X 轴" |
+| 5 | `src/main.rs` 包含 `mod charts;` 声明，charts 模块在整个 binary crate 可见 | ✓ VERIFIED | `grep -n "mod charts" src/main.rs` → 第 6 行；15-05-SUMMARY 记录 "Task 1 — main.rs 新增 mod charts;" |
+| 6 | 顺序/并行两条路径均使用 if-let-Some 守卫调用 generate_charts，未配置 charts 时零开销跳过 | ✓ VERIFIED | `grep -n "generate_charts" src/cli/run/mod.rs` → 第 137/242 行各一处（if-let Some 守卫内）；15-05-SUMMARY 记录两路径接入 |
+
+**Wave 2/3 Score:** 6/6 truths verified
+
+### Required Artifacts (Wave 2/3)
+
+| Artifact | Expected | Status | Details |
+| -------- | -------- | ------ | ------- |
+| `src/charts/mod.rs` | `generate_charts(agg, cfg)` 入口 + sanitize_filename + draw_all_latency_hists | ✓ VERIFIED | `grep -n "pub fn generate_charts" src/charts/mod.rs` → 第 19 行；5 个 sanitize_filename 测试通过 |
+| `src/charts/frequency_bar.rs` | `draw_frequency_bar` + `build_chart` + `truncate_label` + `to_write_err` | ✓ VERIFIED | 文件存在；`grep -c "fn draw_frequency_bar" src/charts/frequency_bar.rs` = 1 |
+| `src/charts/latency_hist.rs` | `draw_latency_hist` + `extract_buckets` + `draw_buckets` + 对数轴 X | ✓ VERIFIED | 文件存在；`grep -c "fn draw_latency_hist" src/charts/latency_hist.rs` = 1；15-04-SUMMARY 记录 "log_scale() iter_recorded()" |
+| `src/main.rs` | `mod charts;` 声明（第 6 行） | ✓ VERIFIED | `grep -n "mod charts" src/main.rs` → 第 6 行 |
+
+### Key Link Verification (Wave 2/3)
+
+| From | To | Via | Status | Details |
+| ---- | --- | --- | ------ | ------- |
+| `src/charts/mod.rs::generate_charts` | `src/cli/run/mod.rs` 顺序/并行路径 | `crate::charts::generate_charts(agg, charts_cfg)?` | ✓ WIRED | run/mod.rs 第 137/242 行各一次调用；15-05-SUMMARY 记录 "两路径均接入" |
+| `src/charts/frequency_bar.rs::draw_frequency_bar` | `src/charts/mod.rs::generate_charts` | `cfg.frequency_bar` 开关分发 | ✓ WIRED | mod.rs 中 `if cfg.frequency_bar { draw_frequency_bar(...) }` 条件分发 |
+| `src/charts/latency_hist.rs::draw_latency_hist` | `src/charts/mod.rs::draw_all_latency_hists` | `cfg.latency_hist` 开关分发 | ✓ WIRED | mod.rs draw_all_latency_hists 私有函数调用 draw_latency_hist |
+
+### Behavioral Spot-Checks (Wave 2/3)
+
+| Behavior | Command | Result | Status |
+| -------- | ------- | ------ | ------ |
+| cargo build --release (含 plotters) | `cargo build --release` | exit 0；plotters SVG 后端编译无依赖问题 | ✓ PASS |
+| draw_frequency_bar 非空 SVG | `cargo test test_draw_frequency_bar_creates_nonempty_svg` | passed（15-03-SUMMARY） | ✓ PASS |
+| draw_latency_hist 对数轴 SVG | `cargo test test_draw_latency_hist_creates_nonempty_svg` | passed（15-04-SUMMARY） | ✓ PASS |
+| cargo clippy --all-targets -- -D warnings | `cargo clippy --all-targets -- -D warnings` | 0 warnings（15-05 记录 416 tests passed） | ✓ PASS |
+
+### Requirements Coverage (Wave 2/3)
+
+| Requirement | Source Plan | Description | Status | Evidence |
+| ----------- | ----------- | ----------- | ------ | -------- |
+| CHART-01 | 15-01/03/05 | 用户可在 config 指定 SVG 输出目录，run 后自动生成图表 | ✓ SATISFIED | ChartsConfig.output_dir + generate_charts 接入 run.rs 两路径 |
+| CHART-02 | 15-03 | 生成 Top N 模板执行频率横向条形图（SVG） | ✓ SATISFIED | draw_frequency_bar 完整实现，非空 SVG 集成测试通过 |
+| CHART-03 | 15-04 | 生成全局耗时分布直方图（SVG，对数轴，hdrhistogram bucket） | ✓ SATISFIED | draw_latency_hist 完整实现，iter_recorded + log_scale() + Rectangle::new 渲染 |
+
+---
+
+_Wave 2/3 Backfill Verified: 2026-05-18T12:30:00Z_
+_Verifier: Claude (gsd-planner backfill)_
