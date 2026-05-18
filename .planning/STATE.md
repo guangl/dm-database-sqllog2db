@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: 代码重构 & 质量深化
 status: executing
-stopped_at: Phase 19 context gathered
-last_updated: "2026-05-18T05:26:44.241Z"
-last_activity: 2026-05-18
+stopped_at: Phase 19 Plan 02 complete
+last_updated: "2026-05-18T13:25:00.000Z"
+last_activity: 2026-05-18 -- Phase 19 Plan 01+02 complete (filters + config split)
 progress:
   total_phases: 4
   completed_phases: 2
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-05-17 after v1.3 milestone)
 
 ## Current Position
 
-Phase: 19 (code-refactor) — EXECUTING
-Plan: 2 of 4
+Phase: 19 of 20 (代码重构 & 质量深化)
+Plan: 02 complete (Phase 19 已完成 2/4 Plans)
 Status: Ready to execute
-Last activity: 2026-05-18
+Last activity: 2026-05-18 -- Phase 19 Plan 01+02 complete (filters + config split)
 
 Progress: [███████░░░] 67%
 
@@ -36,7 +36,7 @@ Progress: [███████░░░] 67%
 
 **Velocity:**
 
-- Total plans completed: 1 (v1.4)
+- Total plans completed: 2 (v1.4)
 - Average duration: ~90 min
 - Total execution time: ~90 min
 
@@ -56,6 +56,8 @@ Progress: [███████░░░] 67%
 | 破坏性升级无 serde alias | 符合 D-05，validate() 明确拒绝旧路径并提供完整迁移指引 | 18 |
 | TemplateConfig.enable 而非 enabled | 与 NormalizeConfig / FiltersFeature 命名对齐，符合 D-03 | 18 |
 | Phase 19-code-refactor P01 | 90min | 3 tasks | 7 files |
+| validate_and_compile 和 apply_overrides 保持 pub | 调用方在 binary crate (main.rs)，pub(crate) 导致 dead_code lint | 19 |
+| apply_one 测试留在 apply_one.rs | 私有方法只能在声明模块内测试，不可迁移 | 19 |
 
 ### Blockers/Concerns
 
@@ -73,6 +75,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-05-18T05:26:44.238Z
-Stopped at: Phase 19 context gathered
-Resume file: None
+Last session: 2026-05-18T13:25:00.000Z
+Stopped at: Phase 19 Plan 02 complete
+Resume file: .planning/phases/19-code-refactor/19-02-SUMMARY.md
