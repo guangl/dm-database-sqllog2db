@@ -1,12 +1,17 @@
 # sqllog2db — 达梦 SQL 日志解析工具
 
-## Current State: v1.4 已发布 ✅
+## Current State: v1.4 已发布 ✅ — v1.5 文档完善启动中
 
 sqllog2db 完成五个里程碑迭代，具备完整的 SQL 模板分析、SVG 可视化、嵌套配置模型和模块化代码架构。v1.4 系统性重构了配置模型（嵌套子表替代扁平字段）和代码结构（5 超大文件模块化拆分），933 测试全通过。
 
-## Current Milestone: Planning v1.5
+## Current Milestone: v1.5 文档完善 & 项目展示
 
-**Next focus:** 待定 — 运行 `/gsd:new-milestone` 启动下一里程碑。
+**Goal:** 补全项目文档（README 更新 + 缺失文档创建）并建立精美的 GitHub Pages 展示页面
+
+**Target features:**
+- README 全面更新 — 补充 v1.3 模板分析/SVG 图表 + v1.4 嵌套配置/模块化架构
+- 创建缺失文档 — CHANGELOG.md, docs/quickstart.md, docs/architecture.md, CONTRIBUTING.md, SECURITY.md
+- GitHub Pages — 精美展示页面（功能展示、性能数据、快速上手）
 
 ---
 
@@ -120,4 +125,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-18 after v1.4 milestone*
+*Last updated: 2026-05-18 after v1.5 milestone start*

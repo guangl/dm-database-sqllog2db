@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.4
-milestone_name: 代码重构 & 质量深化
-status: archived
-stopped_at: Milestone v1.4 complete and archived
-last_updated: "2026-05-18T22:30:00.000Z"
-last_activity: 2026-05-18 -- v1.4 milestone archived
+milestone: v1.5
+milestone_name: 文档完善 & 项目展示
+status: planning
+last_updated: "2026-05-18T13:54:27.278Z"
+last_activity: 2026-05-18
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 12
-  completed_plans: 12
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,13 +24,15 @@ See: .planning/PROJECT.md (updated 2026-05-18 after v1.4 milestone)
 
 ## Current Position
 
-All v1.4 phases complete and archived. Ready for next milestone.
-
-Progress: [██████████] 100%
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-05-18 — Milestone v1.5 started
 
 ## Performance Metrics
 
 **Velocity:**
+
 - Total plans completed: 12 (v1.4)
 - Total execution time: ~2 days
 
