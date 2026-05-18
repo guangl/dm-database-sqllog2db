@@ -377,9 +377,14 @@ fn test_handle_stats_with_log_files() {
 
 #[test]
 fn test_handle_stats_nonexistent_dir() {
+    // Use a path from a deleted tempdir — guaranteed not to exist on any platform
+    let nonexistent = {
+        let d = tempfile::TempDir::new().unwrap();
+        d.path().join("nonexistent_subdir")
+    };
     let cfg = Config {
         sqllog: SqllogConfig {
-            path: "/no/such/directory/at/all".to_string(),
+            path: nonexistent.to_str().unwrap().to_string(),
         },
         ..Default::default()
     };
@@ -682,7 +687,10 @@ fn test_handle_init_creates_config_file() {
     handle_init(config_path.to_str().unwrap(), false, Lang::Zh).unwrap();
     assert!(config_path.exists());
     let content = std::fs::read_to_string(&config_path).unwrap();
-    assert!(!content.is_empty());
+    assert!(
+        content.contains("[sqllog]"),
+        "init template should contain [sqllog] section"
+    );
 }
 
 #[test]
@@ -1449,8 +1457,8 @@ fn test_e2e_template_normalization() {
     // 第一条数据行（索引 14 = normalized_sql）应非空
     let data_line = content.lines().nth(1).unwrap();
     // normalized_sql 是第 15 个字段（索引 14），用逗号分割取第 14 个字段
-    // 注意：CSV 字段中可能含逗号被引号包裹，此处 SQL 含逗号，需按引号处理
-    // 简化断言：data_line 非空且行内有内容即可（normalized_sql 由 normalize_template 生成）
+    // 注意：SQL 格式为 "SELECT * FROM t WHERE id=N" 不含逗号，因此 split(',') 安全
+    // 如果测试 SQL 未来包含逗号，需改用 csv crate 正确解析带引号的字段
     assert!(!data_line.is_empty(), "first data line should not be empty");
     // 验证 normalized_sql 列存在内容：整行中字段数至少为 15
     let field_count = data_line.split(',').count();
@@ -1501,8 +1509,9 @@ fn test_e2e_field_projection() {
         header, "ts,username,sql",
         "expected header 'ts,username,sql', got: {header}"
     );
-    // 验证每条数据行字段数 == 3（sql 含逗号时会被引号包裹，但字段数仍为3）
+    // 验证每条数据行字段数 == 3
     // 注意：sql 字段内容为 "SELECT * FROM t WHERE id=N" 不含逗号，所以 split(',').count() == 3
+    // 如果 SQL 中包含逗号，需改用 csv crate 正确解析带引号的字段
     let data_lines: Vec<_> = content.lines().skip(1).collect();
     assert_eq!(
         data_lines.len(),
