@@ -1,9 +1,9 @@
 ---
 phase: 19
 slug: code-refactor
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: approved
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-05-18
 ---
 
@@ -38,10 +38,10 @@ created: 2026-05-18
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 19-01-01 | 01 | 1 | REFACTOR-01 | — | N/A | compile+test | `cargo test` | ✅ | ⬜ pending |
-| 19-02-01 | 02 | 1 | REFACTOR-02 | — | N/A | compile+test | `cargo test` | ✅ | ⬜ pending |
-| 19-03-01 | 03 | 2 | REFACTOR-03 | — | N/A | compile+test | `cargo test` | ✅ | ⬜ pending |
-| 19-04-01 | 04 | 2 | REFACTOR-04 | — | N/A | compile+test | `cargo clippy --all-targets -- -D warnings && cargo test` | ✅ | ⬜ pending |
+| 19-01-01 | 01 | 1 | REFACTOR-01 | — | N/A | compile+test | `cargo test --lib pipeline::filters` | ✅ | ✅ green |
+| 19-02-01 | 02 | 1 | REFACTOR-01 | — | N/A | compile+test | `cargo test --lib config` | ✅ | ✅ green |
+| 19-03-01 | 03 | 2 | REFACTOR-02, REFACTOR-03 | — | N/A | compile+test | `cargo test --lib exporter` | ✅ | ✅ green |
+| 19-04-01 | 04 | 2 | REFACTOR-01, REFACTOR-04 | — | N/A | compile+clippy+test | `cargo clippy --all-targets -- -D warnings && cargo test --all-targets` | ✅ | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -49,7 +49,7 @@ created: 2026-05-18
 
 ## Wave 0 Requirements
 
-Existing infrastructure covers all phase requirements. (所有测试在模块内部，无需新建测试基础设施)
+Existing infrastructure covers all phase requirements.
 
 ---
 
@@ -59,13 +59,23 @@ All phase behaviors have automated verification.
 
 ---
 
+## Validation Audit 2026-05-18
+
+| Metric | Count |
+|--------|-------|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 1 (stats.rs 未拆分 — D-01 范围外，延后) |
+
+---
+
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 30s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 30s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved 2026-05-18
