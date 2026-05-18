@@ -1,4 +1,5 @@
 pub mod filters;
+// CompiledMetaFilters, CompiledSqlFilters, FiltersFeature: pub because integration tests use them
 pub use filters::{CompiledMetaFilters, CompiledSqlFilters, FiltersFeature};
 
 pub mod normalizer;
