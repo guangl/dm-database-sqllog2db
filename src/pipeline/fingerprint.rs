@@ -134,7 +134,10 @@ fn handle_quote(bytes: &[u8], i: usize, out: &mut Vec<u8>, keep_literal: bool) -
     }
     if keep_literal {
         out.extend_from_slice(&bytes[literal_start..j]);
-    } else if j < len && !bytes[j].is_ascii_whitespace() && !matches!(out.last(), Some(&b' ')) {
+    } else if j < len
+        && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'_')
+        && !matches!(out.last(), Some(&b' '))
+    {
         out.push(b' ');
     }
     j
