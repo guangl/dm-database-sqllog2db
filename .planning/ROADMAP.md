@@ -131,7 +131,7 @@ Plans:
   4. pub 可见性已收紧为 pub(crate) / pub(super)，跨层漏出的实现细节减少
   5. cargo clippy --all-targets -- -D warnings 零警告，cargo test 全通过，性能基准无回归
 
-**Plans:** 1/4 plans executed
+**Plans:** 3/4 plans executed
 Plans:
 **Wave 1**
 
@@ -183,5 +183,5 @@ Plans:
 | 16. 剩余图表 | v1.3 | 5/5 | Complete | 2026-05-17 |
 | 17. 过滤器配置嵌套化 | v1.4 | 1/2 | In Progress|  |
 | 18. 模板 & 图表配置嵌套化 | v1.4 | 2/3 | In Progress|  |
-| 19. 代码结构重构 | v1.4 | 1/4 | In Progress|  |
+| 19. 代码结构重构 | v1.4 | 3/4 | In Progress|  |
 | 20. 测试覆盖深化 | v1.4 | 0/TBD | Not started | - |
