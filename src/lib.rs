@@ -9,5 +9,3 @@ pub mod logging;
 pub mod parser;
 pub mod pipeline;
 pub mod resume;
-
-pub use exporter::{CsvExporter, Exporter, SqliteExporter};

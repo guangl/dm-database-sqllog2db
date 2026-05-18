@@ -133,8 +133,8 @@ fn bench_csv_real_file(c: &mut Criterion) {
 /// 注意：本 group 无 v1.0 baseline。**不要**用 `--baseline v1.0` 对比此 group。
 fn bench_csv_format_only(c: &mut Criterion) {
     use dm_database_parser_sqllog::LogParser;
-    use dm_database_sqllog2db::exporter::CsvExporter;
     use dm_database_sqllog2db::exporter::Exporter;
+    use dm_database_sqllog2db::exporter::csv::CsvExporter;
 
     // D-03：硬编码典型记录（中等长度 SQL）
     const LOG_LINE: &str = "2024-01-01 00:00:00.000 (EP[1234] sess:0x0001 user:BENCHUSER trxid:TID001 stmt:0x1 appname:App ip:10.0.0.1) [SEL] SELECT * FROM t WHERE id = 1. EXECTIME: 10(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.\n";

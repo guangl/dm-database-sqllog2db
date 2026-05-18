@@ -4,9 +4,10 @@ use dm_database_parser_sqllog::{MetaParts, PerformanceMetrics, Sqllog};
 use log::info;
 
 pub mod csv;
+pub(crate) mod projection;
 pub mod sqlite;
-pub use csv::CsvExporter;
-pub use sqlite::SqliteExporter;
+pub(crate) use csv::CsvExporter;
+pub(crate) use sqlite::SqliteExporter;
 
 /// 所有导出器必须实现的接口
 pub trait Exporter {
@@ -64,7 +65,7 @@ pub trait Exporter {
 /// 具体导出器的枚举包装，消除 `Box<dyn Exporter>` 的虚表分发开销，
 /// 使编译器能够内联热路径（`export_one_preparsed` → `write_record_preparsed`）。
 #[derive(Debug)]
-pub enum ExporterKind {
+pub(crate) enum ExporterKind {
     Csv(CsvExporter),
     Sqlite(SqliteExporter),
     DryRun(DryRunExporter),
