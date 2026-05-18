@@ -325,6 +325,7 @@ fn prev_is_ident_byte(out: &[u8]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     // --- fingerprint 原有测试（9 项，零回归） ---
 
@@ -431,5 +432,27 @@ mod tests {
     #[test]
     fn test_normalize_whitespace_collapsed() {
         assert_eq!(normalize_template("SELECT  *  FROM  t"), "SELECT * FROM t");
+    }
+
+    // --- proptest 属性测试 (TEST-04) ---
+
+    proptest! {
+        #[test]
+        fn prop_normalize_template_is_idempotent(s in any::<String>()) {
+            let once = normalize_template(&s);
+            let twice = normalize_template(&once);
+            prop_assert_eq!(&once, &twice, "normalize_template should be idempotent but got different results");
+        }
+
+        #[test]
+        fn prop_normalize_template_literal_protection(inner in "[A-Za-z0-9 ]{0,50}") {
+            let sql = format!("WHERE col = '{inner}-- not a comment'");
+            let result = normalize_template(&sql);
+            prop_assert!(
+                result.contains("-- not a comment"),
+                "literal comment marker should survive in: {}",
+                result
+            );
+        }
     }
 }
