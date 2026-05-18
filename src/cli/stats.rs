@@ -265,7 +265,8 @@ pub fn handle_stats(
         .filter(|f: &&crate::pipeline::FiltersFeature| f.has_filters());
     let compiled_meta: Option<CompiledMetaFilters> = if let Some(fc) = filter_cfg {
         match CompiledMetaFilters::try_from_include_exclude(&fc.include, &fc.exclude) {
-            Ok(c) => Some(c),
+            Ok(c) if c.has_any_filters() => Some(c),
+            Ok(_) => None,
             Err(e) => {
                 eprintln!("{} Filter regex error: {e}", color::red("Error:"));
                 return;
