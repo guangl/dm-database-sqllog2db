@@ -1,9 +1,9 @@
 ---
 phase: 17
 slug: filter-nesting
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: approved
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-05-17
 ---
 
@@ -17,20 +17,20 @@ created: 2026-05-17
 
 | Property | Value |
 |----------|-------|
-| **Framework** | Rust built-in test + cargo test |
-| **Config file** | Cargo.toml（[dev-dependencies] tempfile = "3.27.0"） |
-| **Quick run command** | `cargo test --lib features::filters` |
-| **Full suite command** | `cargo test` |
-| **Estimated runtime** | ~5 seconds |
+| **Framework** | cargo test (Rust built-in) |
+| **Config file** | none — cargo test auto-discovers |
+| **Quick run command** | `cargo test --lib` |
+| **Full suite command** | `cargo test --all-targets` |
+| **Estimated runtime** | ~3 seconds |
 
 ---
 
 ## Sampling Rate
 
-- **After every task commit:** `cargo clippy --all-targets -- -D warnings && cargo test --lib`
-- **After every plan wave:** `cargo test`
-- **Before `/gsd:verify-work`:** `cargo test` 全绿 + `cargo run -- validate -c config.toml` 通过
-- **Max feedback latency:** ~5 seconds
+- **After every task commit:** Run `cargo clippy --all-targets -- -D warnings && cargo test --lib`
+- **After every plan wave:** Run `cargo test --all-targets`
+- **Before `/gsd:verify-work`:** Full suite must be green
+- **Max feedback latency:** 3 seconds
 
 ---
 
@@ -38,12 +38,12 @@ created: 2026-05-17
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 17-01-01 | 01 | 1 | CONFIG-01 | — | N/A | unit | `cargo test --lib features::filters::tests::test_new_nested_format_include` | ❌ W0 | ⬜ pending |
-| 17-01-02 | 01 | 1 | CONFIG-02 | — | N/A | unit | `cargo test --lib features::filters::tests::test_new_nested_format_exclude` | ❌ W0 | ⬜ pending |
-| 17-01-03 | 01 | 1 | CONFIG-05 | — | N/A | unit | `cargo test --lib features::filters::tests::test_backward_compat_flat_format` | ❌ W0 | ⬜ pending |
-| 17-01-04 | 01 | 1 | CONFIG-05 | — | N/A | unit | `cargo test --lib features::filters::tests::test_sql_filters_alias_backward_compat` | ❌ W0 | ⬜ pending |
-| 17-02-01 | 02 | 2 | CONFIG-01 | — | N/A | unit | `cargo test --lib` | ✅ | ⬜ pending |
-| 17-02-02 | 02 | 2 | CONFIG-05 | — | N/A | unit | `cargo test` | ✅ | ⬜ pending |
+| 17-01-01 | 01 | 1 | CONFIG-01 | — | N/A | unit | `cargo test --lib pipeline::filters::compiled_tests` | ✅ | ✅ green |
+| 17-01-02 | 01 | 1 | CONFIG-02 | — | N/A | unit | `cargo test --lib pipeline::filters::compiled_tests` | ✅ | ✅ green |
+| 17-01-03 | 01 | 1 | CONFIG-05 | — | N/A | integration | `cargo test --test integration test_init_generates_new_nested_format` | ✅ | ✅ green |
+| 17-01-04 | 01 | 1 | CONFIG-05 | — | N/A | unit | `cargo test --lib config::validate::test_validate_new_nested_format_passes` | ✅ | ✅ green |
+| 17-02-01 | 02 | 2 | CONFIG-01 | — | N/A | unit | `cargo test --lib config::validate::test_validate_and_compile_new_format_filter_enabled` | ✅ | ✅ green |
+| 17-02-02 | 02 | 2 | CONFIG-05 | — | N/A | integration | `cargo test --test integration` | ✅ | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -51,11 +51,13 @@ created: 2026-05-17
 
 ## Wave 0 Requirements
 
-- [ ] `src/features/filters.rs` — 新增 `test_backward_compat_flat_format`：旧扁平格式 TOML → parse → FiltersFeature，验证字段值映射到 include/exclude 正确
-- [ ] `src/features/filters.rs` — 新增 `test_new_nested_format_include`：新格式 include 子表 TOML → parse → IncludeFilters 各字段正确
-- [ ] `src/features/filters.rs` — 新增 `test_new_nested_format_exclude`：新格式 exclude 子表 TOML → parse → ExcludeFilters 各字段正确
-- [ ] `src/features/filters.rs` — 新增 `test_sql_filters_alias_backward_compat`：旧 `include_patterns` / `exclude_patterns` 字段名仍可 parse
-- [ ] 更新现有 `test_filters_toml_deserialization_with_trxids_and_exec_ids`：将 `filters.meta.trxids` 改为 `filters.include.trxids`
+Existing infrastructure covers all phase requirements. Phase 17 delivered:
+- 5 parse tests in plan 01 (RED→GREEN TDD cycle)
+- `test_validate_new_nested_format_passes` — new [features.filters.include]/[features.filters.exclude] TOML
+- `test_validate_old_flat_format_passes` — backward compat flat fields
+- `test_init_generates_new_nested_format` — init generates nested format
+- `test_validate_and_compile_new_format_filter_*` — new format filters
+- All tests migrated through Phase 19 refactoring (filters.rs split), coverage preserved
 
 ---
 
@@ -63,18 +65,27 @@ created: 2026-05-17
 
 | Behavior | Requirement | Why Manual | Test Instructions |
 |----------|-------------|------------|-------------------|
-| `cargo run -- validate -c config.toml` 旧格式通过 | CONFIG-05 | 需要真实 config 文件运行 | `cargo run -- validate -c config.toml` 输出 "Config validated successfully" |
-| `cargo run -- init -o /tmp/test.toml --force` 生成新嵌套格式 | CONFIG-01/02 | 需要 CLI 运行检查模板输出 | `cat /tmp/test.toml` 确认包含 `[features.filter.include]` 子表 |
+| `cargo run -- validate -c config.toml` 旧格式通过 | CONFIG-05 | CLI 端到端行为 | `cargo run -- validate -c config.toml` 返回 exit 0 |
+
+---
+
+## Validation Audit 2026-05-18
+
+| Metric | Count |
+|--------|-------|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
 
 ---
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 5s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 3s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved 2026-05-18
