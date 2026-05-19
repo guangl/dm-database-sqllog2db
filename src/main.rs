@@ -121,14 +121,10 @@ fn run() -> Result<()> {
     // 尽早初始化颜色开关，后续所有输出均依赖此状态
     color::init(cli.no_color);
 
-    // run/stats/digest 命令不走 env_logger，避免与进度条冲突；其他命令用 env_logger 输出到终端
+    // run/digest 命令不走 env_logger，避免与进度条冲突；其他命令用 env_logger 输出到终端
     let needs_simple_logging = !matches!(
         &cli.command,
-        Some(
-            cli::opts::Commands::Run { .. }
-                | cli::opts::Commands::Stats { .. }
-                | cli::opts::Commands::Digest { .. }
-        )
+        Some(cli::opts::Commands::Run { .. } | cli::opts::Commands::Digest { .. })
     );
     if needs_simple_logging {
         init_simple_logging(cli.verbose, cli.quiet);
@@ -219,42 +215,6 @@ fn run() -> Result<()> {
             let mut cfg = load_config(config)?;
             cfg.apply_overrides(set)?;
             cli::show_config::handle_show_config(&cfg, config, *diff);
-            Ok(())
-        }
-        Some(cli::opts::Commands::Stats {
-            config,
-            set,
-            from,
-            to,
-            top,
-            json,
-            group_by,
-            bucket,
-            resume,
-            state_file,
-        }) => {
-            let mut cfg = load_config(config)?;
-            cfg.apply_overrides(set)?;
-            apply_date_range(&mut cfg, from.as_deref(), to.as_deref());
-            let resume_state_file = if *resume {
-                Some(
-                    state_file
-                        .as_deref()
-                        .unwrap_or(cli::stats::DEFAULT_STATS_STATE),
-                )
-            } else {
-                None
-            };
-            cli::stats::handle_stats(
-                &cfg,
-                cli.quiet,
-                cli.verbose,
-                *top,
-                *json,
-                group_by,
-                bucket.as_deref(),
-                resume_state_file,
-            );
             Ok(())
         }
         Some(cli::opts::Commands::Digest {

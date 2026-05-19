@@ -117,44 +117,6 @@ pub(crate) enum Commands {
         #[arg(long = "diff")]
         diff: bool,
     },
-    /// Count records in log files without exporting
-    Stats {
-        /// Configuration file path
-        #[arg(
-            short = 'c',
-            long = "config",
-            default_value = "config.toml",
-            env = "SQLLOG2DB_CONFIG"
-        )]
-        config: String,
-        /// Override config values, e.g. --set sqllog.path=./logs
-        #[arg(long = "set", value_name = "KEY=VALUE")]
-        set: Vec<String>,
-        /// Keep only records at or after this timestamp
-        #[arg(long = "from", value_name = "DATETIME")]
-        from: Option<String>,
-        /// Keep only records at or before this timestamp
-        #[arg(long = "to", value_name = "DATETIME")]
-        to: Option<String>,
-        /// Show top N slowest queries ranked by execution time
-        #[arg(long = "top", value_name = "N")]
-        top: Option<usize>,
-        /// Output statistics as JSON (goes to stdout)
-        #[arg(long = "json")]
-        json: bool,
-        /// Aggregate records by field(s): user, app, ip (repeatable, or comma-separated)
-        #[arg(long = "group-by", value_name = "FIELD", value_delimiter = ',')]
-        group_by: Vec<String>,
-        /// Aggregate records into time buckets: hour, minute
-        #[arg(long = "bucket", value_name = "GRANULARITY")]
-        bucket: Option<String>,
-        /// Skip files already processed in a previous run
-        #[arg(long = "resume")]
-        resume: bool,
-        /// Override the state file path used by --resume (default: `.sqllog2db_stats_state.toml`)
-        #[arg(long = "state-file", value_name = "PATH", requires = "resume")]
-        state_file: Option<String>,
-    },
     /// Fingerprint SQL queries and aggregate by structure
     Digest {
         /// Configuration file path

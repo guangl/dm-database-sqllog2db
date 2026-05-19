@@ -91,7 +91,6 @@ pub(crate) fn apply_zh(cmd: Command) -> Command {
         .mut_subcommand("init", zh_init)
         .mut_subcommand("validate", zh_validate)
         .mut_subcommand("show-config", zh_show_config)
-        .mut_subcommand("stats", zh_stats)
         .mut_subcommand("digest", zh_digest)
 }
 
@@ -135,19 +134,6 @@ fn zh_show_config(s: Command) -> Command {
     zh_common_config_args(s)
         .about("显示当前生效配置（含 --set 覆盖后的值）")
         .mut_arg("diff", |a| a.help("高亮与默认配置不同的字段"))
-}
-
-fn zh_stats(s: Command) -> Command {
-    zh_common_config_args(s)
-        .about("统计日志记录数（无需导出）")
-        .mut_arg("from", |a| a.help("只统计此时间戳之后的记录"))
-        .mut_arg("to", |a| a.help("只统计此时间戳之前的记录"))
-        .mut_arg("top", |a| a.help("显示前 N 条最慢查询（按执行时间排序）"))
-        .mut_arg("json", |a| a.help("以 JSON 格式输出统计结果（到 stdout）"))
-        .mut_arg("group_by", |a| {
-            a.help("按字段聚合统计：user、app、ip（可叠加，逗号分隔）")
-        })
-        .mut_arg("bucket", |a| a.help("按时间粒度分桶统计：hour 或 minute"))
 }
 
 fn zh_digest(s: Command) -> Command {
