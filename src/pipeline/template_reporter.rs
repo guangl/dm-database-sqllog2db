@@ -2,103 +2,15 @@ use crate::error::{Error, ExportError, Result};
 use crate::exporter::ensure_parent_dir;
 use crate::pipeline::TemplateStats;
 use rusqlite::Connection;
-use std::fs::File;
-use std::io::{BufWriter, Write};
 use std::path::Path;
 
 /// 独立模板报告写入器——从 Exporter trait 中解耦
 pub(crate) struct TemplateReporter;
 
 impl TemplateReporter {
-    /// 将模板统计写入 CSV 报告文件（D-02）
+    /// 将模板统计写入 CSV 报告文件（D-02）——委托 `write_companion_rows`
     pub(crate) fn write_csv(path: &Path, stats: &[TemplateStats]) -> Result<()> {
-        ensure_parent_dir(path).map_err(|e| {
-            Error::Export(ExportError::WriteFailed {
-                path: path.to_path_buf(),
-                reason: format!("create dir failed: {e}"),
-            })
-        })?;
-
-        let file = File::create(path).map_err(|e| {
-            Error::Export(ExportError::WriteFailed {
-                path: path.to_path_buf(),
-                reason: e.to_string(),
-            })
-        })?;
-
-        let mut writer = BufWriter::with_capacity(16 * 1024 * 1024, file);
-        writer
-            .write_all(
-                b"template_key,count,avg_us,min_us,max_us,p50_us,p95_us,p99_us,first_seen,last_seen\n",
-            )
-            .map_err(|e| {
-                Error::Export(ExportError::WriteFailed {
-                    path: path.to_path_buf(),
-                    reason: e.to_string(),
-                })
-            })?;
-
-        let mut itoa_buf = itoa::Buffer::new();
-        let mut line_buf = Vec::with_capacity(512);
-
-        for s in stats {
-            line_buf.clear();
-            // template_key (quoted + CSV escaped)
-            line_buf.push(b'"');
-            crate::exporter::csv::writer::write_csv_escaped(
-                &mut line_buf,
-                s.template_key.as_bytes(),
-            );
-            line_buf.push(b'"');
-            line_buf.push(b',');
-            // count
-            line_buf.extend_from_slice(itoa_buf.format(s.count).as_bytes());
-            line_buf.push(b',');
-            // avg_us
-            line_buf.extend_from_slice(itoa_buf.format(s.avg_us).as_bytes());
-            line_buf.push(b',');
-            // min_us
-            line_buf.extend_from_slice(itoa_buf.format(s.min_us).as_bytes());
-            line_buf.push(b',');
-            // max_us
-            line_buf.extend_from_slice(itoa_buf.format(s.max_us).as_bytes());
-            line_buf.push(b',');
-            // p50_us
-            line_buf.extend_from_slice(itoa_buf.format(s.p50_us).as_bytes());
-            line_buf.push(b',');
-            // p95_us
-            line_buf.extend_from_slice(itoa_buf.format(s.p95_us).as_bytes());
-            line_buf.push(b',');
-            // p99_us
-            line_buf.extend_from_slice(itoa_buf.format(s.p99_us).as_bytes());
-            line_buf.push(b',');
-            // first_seen (quoted)
-            line_buf.push(b'"');
-            crate::exporter::csv::writer::write_csv_escaped(&mut line_buf, s.first_seen.as_bytes());
-            line_buf.push(b'"');
-            line_buf.push(b',');
-            // last_seen (quoted)
-            line_buf.push(b'"');
-            crate::exporter::csv::writer::write_csv_escaped(&mut line_buf, s.last_seen.as_bytes());
-            line_buf.push(b'"');
-            line_buf.push(b'\n');
-
-            writer.write_all(&line_buf).map_err(|e| {
-                Error::Export(ExportError::WriteFailed {
-                    path: path.to_path_buf(),
-                    reason: e.to_string(),
-                })
-            })?;
-        }
-
-        writer.flush().map_err(|e| {
-            Error::Export(ExportError::WriteFailed {
-                path: path.to_path_buf(),
-                reason: e.to_string(),
-            })
-        })?;
-
-        Ok(())
+        crate::exporter::csv::write_companion_rows(path, stats)
     }
 
     /// 将模板统计写入 `SQLite` 三表范式化报告文件（D-03）
@@ -121,7 +33,8 @@ impl TemplateReporter {
              PRAGMA synchronous = OFF;
              PRAGMA cache_size = 1000000;
              PRAGMA temp_store = MEMORY;
-             PRAGMA page_size = 65536;",
+             PRAGMA page_size = 65536;
+             PRAGMA foreign_keys = ON;",
         )
         .map_err(|e| {
             Error::Export(ExportError::DatabaseFailed {

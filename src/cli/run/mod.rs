@@ -23,6 +23,43 @@ use parallel::process_csv_parallel;
 use prescan::{recompile_meta_if_needed, scan_for_trxids_by_transaction_filters};
 use processor::process_log_file;
 
+/// 将模板统计报告写入独立文件（`[templates]` 配置段路径）
+fn write_template_reports(cfg: &Config, stats: &[crate::pipeline::TemplateStats]) -> Result<()> {
+    if !templates_report_enabled(cfg) {
+        return Ok(());
+    }
+    let (derived_csv, derived_sqlite) = derive_template_report_paths(cfg);
+    let csv_path = cfg
+        .templates
+        .as_ref()
+        .and_then(|t| {
+            if t.csv_report_path.trim().is_empty() {
+                None
+            } else {
+                Some(PathBuf::from(&t.csv_report_path))
+            }
+        })
+        .or(derived_csv);
+    let sqlite_path = cfg
+        .templates
+        .as_ref()
+        .and_then(|t| {
+            if t.sqlite_report_path.trim().is_empty() {
+                None
+            } else {
+                Some(PathBuf::from(&t.sqlite_report_path))
+            }
+        })
+        .or(derived_sqlite);
+    if let Some(ref path) = csv_path {
+        TemplateReporter::write_csv(path, stats)?;
+    }
+    if let Some(ref path) = sqlite_path {
+        TemplateReporter::write_sqlite(path, stats)?;
+    }
+    Ok(())
+}
+
 /// 主编排函数：解析日志文件并导出到配置的导出器。
 /// `compiled_filters` 由调用方预编译（`Config::validate_and_compile`），避免重复编译正则。
 /// 并行路径：CSV + 多文件 + 无 limit + jobs > 1；顺序路径：其他情况。
@@ -143,38 +180,7 @@ pub fn handle_run(
         if let Some(ref stats) = template_stats {
             info!("Template analysis: {} unique templates", stats.len());
 
-            if templates_report_enabled(final_cfg) {
-                let (derived_csv, derived_sqlite) = derive_template_report_paths(final_cfg);
-                let csv_path = final_cfg
-                    .templates
-                    .as_ref()
-                    .and_then(|t| {
-                        if t.csv_report_path.trim().is_empty() {
-                            None
-                        } else {
-                            Some(PathBuf::from(&t.csv_report_path))
-                        }
-                    })
-                    .or(derived_csv);
-                let sqlite_path = final_cfg
-                    .templates
-                    .as_ref()
-                    .and_then(|t| {
-                        if t.sqlite_report_path.trim().is_empty() {
-                            None
-                        } else {
-                            Some(PathBuf::from(&t.sqlite_report_path))
-                        }
-                    })
-                    .or(derived_sqlite);
-
-                if let Some(ref path) = csv_path {
-                    TemplateReporter::write_csv(path, stats)?;
-                }
-                if let Some(ref path) = sqlite_path {
-                    TemplateReporter::write_sqlite(path, stats)?;
-                }
-            } else {
+            if !templates_report_enabled(final_cfg) {
                 let csv_out_path = final_cfg
                     .template
                     .as_ref()
@@ -197,6 +203,7 @@ pub fn handle_run(
                     }
                 }
             }
+            write_template_reports(final_cfg, stats)?;
         }
         if !interrupted.load(Ordering::Relaxed) {
             if let Some(state) = &mut resume_state {
@@ -286,38 +293,7 @@ pub fn handle_run(
         if let Some(ref stats) = template_stats {
             info!("Template analysis: {} unique templates", stats.len());
 
-            if templates_report_enabled(final_cfg) {
-                let (derived_csv, derived_sqlite) = derive_template_report_paths(final_cfg);
-                let csv_path = final_cfg
-                    .templates
-                    .as_ref()
-                    .and_then(|t| {
-                        if t.csv_report_path.trim().is_empty() {
-                            None
-                        } else {
-                            Some(PathBuf::from(&t.csv_report_path))
-                        }
-                    })
-                    .or(derived_csv);
-                let sqlite_path = final_cfg
-                    .templates
-                    .as_ref()
-                    .and_then(|t| {
-                        if t.sqlite_report_path.trim().is_empty() {
-                            None
-                        } else {
-                            Some(PathBuf::from(&t.sqlite_report_path))
-                        }
-                    })
-                    .or(derived_sqlite);
-
-                if let Some(ref path) = csv_path {
-                    TemplateReporter::write_csv(path, stats)?;
-                }
-                if let Some(ref path) = sqlite_path {
-                    TemplateReporter::write_sqlite(path, stats)?;
-                }
-            } else {
+            if !templates_report_enabled(final_cfg) {
                 let csv_out_path = final_cfg
                     .template
                     .as_ref()
@@ -330,6 +306,7 @@ pub fn handle_run(
                     .map(|t| t.output_sqlite_table.as_str());
                 exporter_manager.write_template_stats(stats, csv_out_path, sqlite_table)?;
             }
+            write_template_reports(final_cfg, stats)?;
         }
     }
     pb.finish_and_clear();

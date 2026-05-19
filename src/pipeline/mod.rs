@@ -15,8 +15,6 @@ pub(crate) use aggregator::TemplateAggregator;
 pub(crate) use aggregator::TemplateStats;
 
 pub(crate) mod template_reporter;
-#[allow(unused_imports)]
-pub(crate) use template_reporter::TemplateReporter;
 
 use dm_database_parser_sqllog::{MetaParts, Sqllog};
 use serde::Deserialize;
@@ -149,7 +147,7 @@ pub struct TemplateConfig {
 /// `[templates]` 配置段 — 独立模板报告输出（D-05）
 #[derive(Debug, Deserialize, Clone)]
 pub struct TemplatesReportConfig {
-    /// 是否启用独立模板报告（默认 true，跟随 template.enable）
+    /// 是否启用独立模板报告（默认 `true`；仅在显式配置 `[templates]` 段时生效）
     #[serde(default = "default_true")]
     pub enabled: bool,
     /// CSV 报告路径；空字符串 = 从 exporter 路径自动派生

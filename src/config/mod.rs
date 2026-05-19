@@ -277,11 +277,12 @@ append = false
     }
 
     #[test]
-    fn test_config_has_5_top_level_optional_fields() {
-        // 确保 5 个顶层字段默认值为 None
+    fn test_config_has_6_top_level_optional_fields() {
+        // 确保 6 个顶层字段默认值为 None
         let cfg = default_config();
         assert!(cfg.replace_parameters.is_none());
         assert!(cfg.template.is_none());
+        assert!(cfg.templates.is_none());
         assert!(cfg.filter.is_none());
         assert!(cfg.charts.is_none());
         assert!(cfg.output.is_none());
