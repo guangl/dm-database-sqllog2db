@@ -20,20 +20,20 @@
 
 ### GitHub Pages 展示 (PAGES)
 
-- [ ] **PAGES-01**: 用户访问 `guangl.github.io/sqllog2db/` 能看到精美的项目落地页（项目介绍、安装命令、功能概览）
-- [ ] **PAGES-02**: 落地页使用 mdBook 构建，零 Node.js 依赖，通过 GitHub Actions 自动部署到 gh-pages 分支
-- [ ] **PAGES-03**: 落地页包含性能基准展示（表格：合成 CSV 5.2M/s + 真实文件 1.55M/s，标注测试环境）
-- [ ] **PAGES-04**: 落地页包含架构/数据流图（Mermaid.js 或 ASCII：日志文件 → Parser → Pipeline → ExporterManager → CSV/SQLite）
-- [ ] **PAGES-05**: 落地页与 README 内容互补非重复（Pages 侧重可视化展示，README 是文字参考源）
+- [x] **PAGES-01**: 用户访问 `guangl.github.io/sqllog2db/` 能看到精美的项目落地页（项目介绍、安装命令、功能概览）
+- [x] **PAGES-02**: 落地页使用 mdBook 构建，零 Node.js 依赖，通过 GitHub Actions 自动部署到 gh-pages 分支
+- [x] **PAGES-03**: 落地页包含性能基准展示（表格：合成 CSV 5.2M/s + 真实文件 1.55M/s，标注测试环境）
+- [x] **PAGES-04**: 落地页包含架构/数据流图（Mermaid.js 或 ASCII：日志文件 → Parser → Pipeline → ExporterManager → CSV/SQLite）
+- [x] **PAGES-05**: 落地页与 README 内容互补非重复（Pages 侧重可视化展示，README 是文字参考源）
 
 ### 补充文档 & 质量保障 (SUPP)
 
-- [ ] **SUPP-01**: 落地页包含 SVG 图表 Gallery（4 张实际生成的图表示例：频率柱状图、延迟直方图、趋势折线图、用户饼图）
-- [ ] **SUPP-02**: 项目存在 docs/quickstart.md，内容比 README QuickStart 更详细（含完整输出示例和故障排除）
-- [ ] **SUPP-03**: 项目存在 docs/config-reference.md，包含所有配置块的注释示例（filter / template / charts / output / replace_parameters）
-- [ ] **SUPP-04**: README 或 Pages 中嵌入 Asciicast 终端演示（约 30 秒，展示 `sqllog2db run` 实时输出）
-- [ ] **SUPP-05**: CI 工作流包含 lychee 链接检查，防止文档断链回归
-- [ ] **SUPP-06**: Cargo.toml 的 `documentation` 字段指向 GitHub Pages URL（部署后更新）
+- [x] **SUPP-01**: 落地页包含 SVG 图表 Gallery（4 张实际生成的图表示例：频率柱状图、延迟直方图、趋势折线图、用户饼图）
+- [x] **SUPP-02**: 项目存在 docs/quickstart.md，内容比 README QuickStart 更详细（含完整输出示例和故障排除）
+- [x] **SUPP-03**: 项目存在 docs/config-reference.md，包含所有配置块的注释示例（filter / template / charts / output / replace_parameters）
+- [x] **SUPP-04**: README 或 Pages 中嵌入 Asciicast 终端演示（约 30 秒，展示 `sqllog2db run` 实时输出）
+- [x] **SUPP-05**: CI 工作流包含 lychee 链接检查，防止文档断链回归
+- [x] **SUPP-06**: Cargo.toml 的 `documentation` 字段指向 GitHub Pages URL（部署后更新）
 
 ## Future Requirements (v1.6+)
 
@@ -66,17 +66,17 @@
 | DOC-07 | Phase 21 | Complete |
 | DOC-08 | Phase 21 | Complete |
 | DOC-09 | Phase 21 | Complete |
-| PAGES-01 | Phase 22 | Pending |
-| PAGES-02 | Phase 22 | Pending |
-| PAGES-03 | Phase 22 | Pending |
-| PAGES-04 | Phase 22 | Pending |
-| PAGES-05 | Phase 22 | Pending |
-| SUPP-01 | Phase 22 | Pending |
-| SUPP-06 | Phase 22 | Pending |
-| SUPP-02 | Phase 23 | Pending |
-| SUPP-03 | Phase 23 | Pending |
-| SUPP-04 | Phase 23 | Pending |
-| SUPP-05 | Phase 23 | Pending |
+| PAGES-01 | Phase 22 | Complete |
+| PAGES-02 | Phase 22 | Complete |
+| PAGES-03 | Phase 22 | Complete |
+| PAGES-04 | Phase 22 | Complete |
+| PAGES-05 | Phase 22 | Complete |
+| SUPP-01 | Phase 22 | Complete |
+| SUPP-06 | Phase 22 | Complete |
+| SUPP-02 | Phase 23 | Complete |
+| SUPP-03 | Phase 23 | Complete |
+| SUPP-04 | Phase 23 | Complete |
+| SUPP-05 | Phase 23 | Complete |
 
 ---
 *Requirements for: sqllog2db v1.5*

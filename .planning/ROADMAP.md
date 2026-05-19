@@ -76,8 +76,8 @@ Full details: `.planning/milestones/v1.4-ROADMAP.md`
 **Milestone Goal:** 补全项目文档（README 更新 + CHANGELOG + LICENSE）并建立 GitHub Pages 展示页面，零代码变更
 
 - [x] **Phase 21: README 全面更新 + 根文档补全** — 重写 README 覆盖 v1.3/v1.4 全部功能，补全 CHANGELOG.md 和 LICENSE (2 plans) (completed 2026-05-19)
-- [ ] **Phase 22: GitHub Pages 落地页 + 部署流水线** — mdBook 构建单页落地页，GitHub Actions 自动部署，含架构图/性能数据/SVG Gallery
-- [ ] **Phase 23: 补充文档 + CI 质量门禁** — docs/quickstart.md、docs/config-reference.md、Asciicast 演示、lychee 链接检查
+- [x] **Phase 22: GitHub Pages 落地页 + 部署流水线** — mdBook 构建单页落地页，GitHub Actions 自动部署，含架构图/性能数据/SVG Gallery (completed 2026-05-19)
+- [x] **Phase 23: 补充文档 + CI 质量门禁** — docs/quickstart.md、docs/config-reference.md、Asciicast 演示、lychee 链接检查 (completed 2026-05-19)
 
 ## Phase Details
 
@@ -118,11 +118,11 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 22-01-PLAN.md -- mdBook 基础设施（book.toml/SUMMARY.md/custom.css）+ GHA 部署流水线 + Cargo.toml documentation 字段
+- [x] 22-01-PLAN.md -- mdBook 基础设施（book.toml/SUMMARY.md/custom.css）+ GHA 部署流水线 + Cargo.toml documentation 字段
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 22-02-PLAN.md -- 落地页内容（Hero/Install/Feature/Architecture/Performance/SVG Gallery/Links）+ 4 张示例 SVG 图表
+- [x] 22-02-PLAN.md -- 落地页内容（Hero/Install/Feature/Architecture/Performance/SVG Gallery/Links）+ 4 张示例 SVG 图表
 
 ### Phase 23: 补充文档 + CI 质量门禁
 
@@ -176,5 +176,5 @@ Plans:
 | 19. 代码结构重构 | v1.4 | 4/4 | Complete | 2026-05-18 |
 | 20. 测试覆盖深化 | v1.4 | 3/3 | Complete | 2026-05-18 |
 | 21. README 全面更新 + 根文档补全 | v1.5 | 2/2 | Complete    | 2026-05-19 |
-| 22. GitHub Pages 落地页 + 部署流水线 | v1.5 | 0/2 | Not started | - |
-| 23. 补充文档 + CI 质量门禁 | v1.5 | 0/4 | Not started | - |
+| 22. GitHub Pages 落地页 + 部署流水线 | v1.5 | 2/2 | Complete    | 2026-05-19 |
+| 23. 补充文档 + CI 质量门禁 | v1.5 | 0/4 | Complete    | 2026-05-19 |
