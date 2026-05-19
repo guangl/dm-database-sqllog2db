@@ -44,16 +44,24 @@ Requires Rust 1.85+. Binary size ~5 MB.
 
 ## Architecture
 
-```mermaid
-graph LR
-    A[SQL Log Files] --> B[SqllogParser]
-    B --> C[dm-database-parser-sqllog]
-    C --> D{Pipeline}
-    D -->|empty| F[ExporterManager]
-    D -->|filters| E[FilterProcessor]
-    E --> F
-    F --> G[CSV Exporter]
-    F --> H[SQLite Exporter]
+```
+SQL Log Files (.log)
+      │
+      ▼
+  SqllogParser          ← discovers files, iterates lines
+      │
+      ▼
+dm-database-parser-sqllog  ← parses each line → Sqllog record
+      │
+      ▼
+   Pipeline             ← empty = zero-overhead fast path
+   ├─ (empty) ──────────────────────────┐
+   └─ FilterProcessor ─────────────────►│
+                                        │
+                                        ▼
+                                 ExporterManager
+                                 ├─ CSV Exporter  → output.csv
+                                 └─ SQLite Exporter → output.db
 ```
 
 Data flows through four stages: **Discovery** → **Parsing** → **Pipeline** (optional filters) → **Export**. A zero-overhead fast path bypasses all feature logic when the pipeline is empty.
