@@ -1,22 +1,12 @@
 # sqllog2db — 达梦 SQL 日志解析工具
 
-## Current State: v1.4 已发布 ✅ — v1.5 文档完善启动中
+## Current State: v1.5 已发布 ✅ — 规划 v1.6 中
 
-sqllog2db 完成五个里程碑迭代，具备完整的 SQL 模板分析、SVG 可视化、嵌套配置模型和模块化代码架构。v1.4 系统性重构了配置模型（嵌套子表替代扁平字段）和代码结构（5 超大文件模块化拆分），933 测试全通过。
-
-## Current Milestone: v1.5 文档完善 & 项目展示
-
-**Goal:** 补全项目文档（README 更新 + 缺失文档创建）并建立精美的 GitHub Pages 展示页面
-
-**Target features:**
-- README 全面更新 — 补充 v1.3 模板分析/SVG 图表 + v1.4 嵌套配置/模块化架构
-- 创建缺失文档 — CHANGELOG.md, docs/quickstart.md, docs/architecture.md, CONTRIBUTING.md, SECURITY.md
-- GitHub Pages — 精美展示页面（功能展示、性能数据、快速上手）
-
----
+sqllog2db 完成六个里程碑迭代，具备完整的 SQL 模板分析、SVG 可视化、嵌套配置模型、模块化代码架构，以及完善的项目文档和 GitHub Pages 展示页面。v1.5 实现了 README 全面重写（纯英文 208 行）、CHANGELOG.md 补全、GitHub Pages 落地页（mdBook + GHA 自动部署）、补充文档（quickstart + config-reference）、Asciicast 演示和 lychee CI 链接检查。
 
 ## Previous Milestones
 
+- ✅ **v1.5** (2026-05-19) — 文档完善 & 项目展示（Phases 21–23）
 - ✅ **v1.4** (2026-05-18) — 代码重构 & 质量深化（Phases 17–20）
 - ✅ **v1.3** (2026-05-17) — SQL 模板分析 & 可视化（Phases 12–16）
 - ✅ **v1.2** (2026-05-15) — 质量强化 & 性能深化（Phases 7–11）
@@ -65,8 +55,11 @@ sqllog2db 是一个用于解析达梦数据库 SQL 日志文件并将其导出�
 
 ### Active
 
-- [ ] **TMPL-03**: 模板统计结果输出为独立 JSON 报告文件 — 延后至 v1.5+
-- [ ] **TMPL-03b**: 模板统计结果输出为独立 CSV 摘要文件 — 延后至 v1.5+
+- [ ] **TMPL-03**: 模板统计结果输出为独立 JSON 报告文件 — 延后至 v1.6+
+- [ ] **TMPL-03b**: 模板统计结果输出为独立 CSV 摘要文件 — 延后至 v1.6+
+- [ ] **DOC-F01**: CONTRIBUTING.md — 贡献指南（环境搭建、编码规约、PR 流程） — v1.6
+- [ ] **DOC-F02**: SECURITY.md — 安全策略（漏洞报告联系方式） — v1.6
+- [ ] **DOC-F03**: docs/architecture.md — 详细架构文档 — v1.6
 
 ### Out of Scope
 
@@ -113,6 +106,10 @@ sqllog2db 是一个用于解析达梦数据库 SQL 日志文件并将其导出�
 | DryRunExporter → ExporterKind::DryRun | struct variant 减少代码量 | ✓ v1.4 |
 | ExporterManager 收紧至 pub(crate) | Exporter trait 保留 pub（bench） | ✓ v1.4 |
 | proptest 属性测试 | 幂等性/不变性验证优于 fuzz | ✓ v1.4 |
+| README 纯英文最小骨架 | 国际可见性 + 降低中英混排维护负担 | ✓ v1.5 |
+| rsvg-convert 替代 ImageMagick | macOS IMv7 字体渲染失败，librsvg 干净解决 | ✓ v1.5 |
+| ASCII art 替代 Mermaid.js（Pages） | mdBook 不支持 Mermaid.js，无需 JS 依赖 | ✓ v1.5 |
+| lychee CI 内部严格 + 外部重试 | 防断链回归，crates.io 速率限制排除 | ✓ v1.5 |
 
 ## Evolution
 
@@ -125,4 +122,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-18 after v1.5 milestone start*
+*Last updated: 2026-05-19 after v1.5 milestone*

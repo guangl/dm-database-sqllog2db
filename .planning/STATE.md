@@ -2,25 +2,25 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: 文档完善 & 项目展示
-status: milestone_complete
-stopped_at: Milestone complete (Phase 23 was final phase)
-last_updated: 2026-05-19T00:33:31.624Z
+status: archived
+stopped_at: Milestone archived (v1.5 complete 2026-05-19)
+last_updated: 2026-05-19T02:50:00Z
 progress:
   total_phases: 3
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 8
-  completed_plans: 4
-  percent: 67
+  completed_plans: 8
+  percent: 100
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-05-18 after v1.5 milestone start)
+See: .planning/PROJECT.md (updated 2026-05-19 after v1.5 milestone)
 
 **Core value:** 用户能够精确指定"导出哪些记录的哪些字段"——过滤逻辑清晰可配置，输出结果完全可控
-**Current focus:** Milestone complete
+**Current focus:** 规划 v1.6 中
 
 ## Current Position
 
