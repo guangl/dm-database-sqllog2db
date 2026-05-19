@@ -190,31 +190,6 @@ pub fn handle_show_config(cfg: &Config, config_path: &str, diff: bool) {
         }
         println!();
     }
-
-    if let Some(ta) = &cfg.template {
-        println!("{}", color::cyan("[template]"));
-        kv("enable", &ta.enable.to_string(), None, diff);
-        if let Some(report) = &ta.report {
-            kv("report.enabled", &report.enabled.to_string(), None, diff);
-            if !report.csv_report_path.is_empty() {
-                kv(
-                    "report.csv_report_path",
-                    &report.csv_report_path,
-                    None,
-                    diff,
-                );
-            }
-            if !report.sqlite_report_path.is_empty() {
-                kv(
-                    "report.sqlite_report_path",
-                    &report.sqlite_report_path,
-                    None,
-                    diff,
-                );
-            }
-        }
-        println!();
-    }
 }
 
 /// Print a key=value line, optionally highlighting if the value differs from its default.

@@ -452,10 +452,6 @@ file = "out.csv"
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(
-            err_msg.contains("[pipeline.template_analysis] → [template]"),
-            "actual: {err_msg}"
-        );
-        assert!(
             err_msg.contains("[pipeline.charts] → [charts]"),
             "actual: {err_msg}"
         );

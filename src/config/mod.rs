@@ -11,12 +11,11 @@ pub use resume::ResumeConfig;
 pub use sqllog::SqllogConfig;
 
 use crate::error::{ConfigError, Error, Result};
-use crate::pipeline::{FiltersFeature, NormalizeConfig, OutputConfig, TemplateConfig};
+use crate::pipeline::{FiltersFeature, NormalizeConfig, OutputConfig};
 use serde::Deserialize;
 use std::path::Path;
 
-const PIPELINE_MIGRATION_HINT: &str = "配置格式已升级，请迁移以下字段：\n  [pipeline.template_analysis] → [template]\n  \
-     [pipeline.charts] → [charts]\n  [pipeline.normalize] → [replace_parameters]\n  \
+const PIPELINE_MIGRATION_HINT: &str = "配置格式已升级，请迁移以下字段：\n  [pipeline.charts] → [charts]\n  [pipeline.normalize] → [replace_parameters]\n  \
      [pipeline.filters.*] → [filter.*]\n  [pipeline.fields] → [output.fields]\n\
      详见 .planning/phases/18-template-chart-nesting/18-CONTEXT.md";
 
@@ -32,8 +31,6 @@ pub struct Config {
     pub resume: ResumeConfig,
     #[serde(default)]
     pub replace_parameters: Option<NormalizeConfig>,
-    #[serde(default)]
-    pub template: Option<TemplateConfig>,
     #[serde(default)]
     pub filter: Option<FiltersFeature>,
     #[serde(default)]
@@ -270,11 +267,10 @@ append = false
     }
 
     #[test]
-    fn test_config_has_4_top_level_optional_fields() {
-        // 确保 4 个顶层字段默认值为 None
+    fn test_config_has_3_top_level_optional_fields() {
+        // 确保 3 个顶层字段默认值为 None
         let cfg = default_config();
         assert!(cfg.replace_parameters.is_none());
-        assert!(cfg.template.is_none());
         assert!(cfg.filter.is_none());
         assert!(cfg.output.is_none());
     }

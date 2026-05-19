@@ -5,8 +5,10 @@ use rusqlite::Connection;
 use std::path::Path;
 
 /// 独立模板报告写入器——从 Exporter trait 中解耦
+#[allow(dead_code)]
 pub(crate) struct TemplateReporter;
 
+#[allow(dead_code)]
 impl TemplateReporter {
     /// 将模板统计写入 CSV 报告文件（D-02）——委托 `write_companion_rows`
     pub(crate) fn write_csv(path: &Path, stats: &[TemplateStats]) -> Result<()> {

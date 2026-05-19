@@ -3,12 +3,9 @@ use crate::config::Config;
 use crate::error::{Error, Result};
 use crate::exporter::ExporterManager;
 use crate::parser::SqllogParser;
-use crate::pipeline::template_reporter::TemplateReporter;
 use crate::pipeline::{CompiledMetaFilters, CompiledSqlFilters, TemplateAggregator};
-use crate::pipeline::{derive_template_report_paths, template_report_enabled};
 use indicatif::HumanCount;
 use log::{info, warn};
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
@@ -22,40 +19,6 @@ use filter_processor::{build_pipeline, make_progress_bar};
 use parallel::process_csv_parallel;
 use prescan::{recompile_meta_if_needed, scan_for_trxids_by_transaction_filters};
 use processor::process_log_file;
-
-/// 将模板统计报告写入独立文件（`[template.report]` 配置段路径）
-fn write_template_reports(cfg: &Config, stats: &[crate::pipeline::TemplateStats]) -> Result<()> {
-    if !template_report_enabled(cfg) {
-        return Ok(());
-    }
-    let report = cfg.template.as_ref().and_then(|t| t.report.as_ref());
-    let (derived_csv, derived_sqlite) = derive_template_report_paths(cfg);
-    let csv_path = report
-        .and_then(|r| {
-            if r.csv_report_path.trim().is_empty() {
-                None
-            } else {
-                Some(PathBuf::from(&r.csv_report_path))
-            }
-        })
-        .or(derived_csv);
-    let sqlite_path = report
-        .and_then(|r| {
-            if r.sqlite_report_path.trim().is_empty() {
-                None
-            } else {
-                Some(PathBuf::from(&r.sqlite_report_path))
-            }
-        })
-        .or(derived_sqlite);
-    if let Some(ref path) = csv_path {
-        TemplateReporter::write_csv(path, stats)?;
-    }
-    if let Some(ref path) = sqlite_path {
-        TemplateReporter::write_sqlite(path, stats)?;
-    }
-    Ok(())
-}
 
 /// 主编排函数：解析日志文件并导出到配置的导出器。
 /// `compiled_filters` 由调用方预编译（`Config::validate_and_compile`），避免重复编译正则。
@@ -127,7 +90,7 @@ pub fn handle_run(
             .replace_parameters
             .as_ref()
             .is_none_or(|r| r.enable);
-    let do_template = final_cfg.template.as_ref().is_some_and(|t| t.enable);
+    let do_template = false;
     let placeholder_override = final_cfg
         .replace_parameters
         .as_ref()
@@ -150,7 +113,7 @@ pub fn handle_run(
 
     if use_parallel {
         info!("Parsing and exporting SQL logs (parallel, {jobs} jobs)...");
-        let (processed_files, parallel_skipped, parallel_agg) = process_csv_parallel(
+        let (processed_files, parallel_skipped, _parallel_agg) = process_csv_parallel(
             &log_files,
             final_cfg,
             &pipeline,
@@ -168,12 +131,6 @@ pub fn handle_run(
         )?;
         total_records = processed_files.iter().map(|(_, c)| *c).sum();
         skipped_files = parallel_skipped;
-        let template_stats = parallel_agg.map(TemplateAggregator::finalize);
-        if let Some(ref stats) = template_stats {
-            info!("Template analysis: {} unique templates", stats.len());
-
-            write_template_reports(final_cfg, stats)?;
-        }
         if !interrupted.load(Ordering::Relaxed) {
             if let Some(state) = &mut resume_state {
                 for (file, count) in &processed_files {
@@ -252,12 +209,6 @@ pub fn handle_run(
         exporter_manager.finalize()?;
         if !quiet {
             exporter_manager.log_stats();
-        }
-        let template_stats = template_agg.map(TemplateAggregator::finalize);
-        if let Some(ref stats) = template_stats {
-            info!("Template analysis: {} unique templates", stats.len());
-
-            write_template_reports(final_cfg, stats)?;
         }
     }
     pb.finish_and_clear();

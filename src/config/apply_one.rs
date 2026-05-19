@@ -120,30 +120,6 @@ impl Config {
                     .get_or_insert_with(Default::default)
                     .enable = parse_bool(value)?;
             }
-            "template.enable" => {
-                self.template.get_or_insert_with(Default::default).enable = parse_bool(value)?;
-            }
-            "template.report.enabled" => {
-                self.template
-                    .get_or_insert_with(Default::default)
-                    .report
-                    .get_or_insert_with(Default::default)
-                    .enabled = parse_bool(value)?;
-            }
-            "template.report.csv_report_path" => {
-                self.template
-                    .get_or_insert_with(Default::default)
-                    .report
-                    .get_or_insert_with(Default::default)
-                    .csv_report_path = value.to_string();
-            }
-            "template.report.sqlite_report_path" => {
-                self.template
-                    .get_or_insert_with(Default::default)
-                    .report
-                    .get_or_insert_with(Default::default)
-                    .sqlite_report_path = value.to_string();
-            }
 
             "output.fields" => {
                 let parsed: Vec<String> = value
@@ -184,36 +160,6 @@ mod tests {
         let mut cfg = Config::default();
         let r = cfg.apply_one("exporter.csv.include_performance_metrics", "maybe");
         assert!(r.is_err());
-    }
-
-    #[test]
-    fn test_apply_one_template_enable() {
-        let mut cfg = Config::default();
-        cfg.apply_one("template.enable", "true")
-            .expect("apply_one should succeed");
-        assert!(cfg.template.unwrap().enable);
-    }
-
-    #[test]
-    fn test_apply_one_template_report_csv_path() {
-        let mut cfg = Config::default();
-        cfg.apply_one("template.report.csv_report_path", "/tmp/a.csv")
-            .expect("apply_one should succeed");
-        assert_eq!(
-            cfg.template.unwrap().report.unwrap().csv_report_path,
-            "/tmp/a.csv"
-        );
-    }
-
-    #[test]
-    fn test_apply_one_template_report_sqlite_path() {
-        let mut cfg = Config::default();
-        cfg.apply_one("template.report.sqlite_report_path", "tpl.db")
-            .expect("apply_one should succeed");
-        assert_eq!(
-            cfg.template.unwrap().report.unwrap().sqlite_report_path,
-            "tpl.db"
-        );
     }
 
     #[test]

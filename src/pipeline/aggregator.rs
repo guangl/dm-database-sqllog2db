@@ -53,12 +53,14 @@ pub struct ChartEntry<'a> {
 /// 存储耗时样本（微秒）。支持 `observe()` 热循环累积、`merge()` 并行合并、
 /// `finalize()` 输出统计结果。
 #[derive(Debug, Default)]
+#[allow(dead_code)]
 pub struct TemplateAggregator {
     entries: ahash::AHashMap<String, TemplateEntry>,
     hour_counts: BTreeMap<String, u64>,
     user_counts: ahash::AHashMap<String, u64>,
 }
 
+#[allow(dead_code)]
 impl TemplateAggregator {
     /// 创建新的聚合器
     #[must_use]

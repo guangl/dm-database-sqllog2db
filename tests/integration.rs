@@ -9,9 +9,7 @@ use dm_database_sqllog2db::config::{
 };
 use dm_database_sqllog2db::lang::Lang;
 use dm_database_sqllog2db::pipeline::filters::{ExcludeFilters, IncludeFilters};
-use dm_database_sqllog2db::pipeline::{
-    FiltersFeature, NormalizeConfig, OutputConfig, TemplateConfig,
-};
+use dm_database_sqllog2db::pipeline::{FiltersFeature, NormalizeConfig, OutputConfig};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
@@ -851,10 +849,6 @@ fn test_init_generates_new_nested_format() {
         "init template must contain [filter.sql]"
     );
     assert!(
-        content.contains("[template]"),
-        "init template must contain [template]"
-    );
-    assert!(
         content.contains("[replace_parameters]"),
         "init template must contain [replace_parameters]"
     );
@@ -925,10 +919,6 @@ fn test_validate_rejects_legacy_pipeline_template_analysis() {
     );
     let err_msg = result.unwrap_err().to_string();
     assert!(
-        err_msg.contains("[pipeline.template_analysis] → [template]"),
-        "error must contain migration hint for template_analysis; got: {err_msg}"
-    );
-    assert!(
         err_msg.contains("[pipeline.charts] → [charts]"),
         "error must contain migration hint for charts; got: {err_msg}"
     );
@@ -954,10 +944,6 @@ fn test_validate_rejects_legacy_pipeline_filters_section() {
         "legacy [pipeline.filters] must be rejected by validate()"
     );
     let err_msg = result.unwrap_err().to_string();
-    assert!(
-        err_msg.contains("[pipeline.template_analysis] → [template]"),
-        "error must contain migration hint for template_analysis; got: {err_msg}"
-    );
     assert!(
         err_msg.contains("[pipeline.charts] → [charts]"),
         "error must contain migration hint for charts; got: {err_msg}"
@@ -1070,58 +1056,6 @@ fn test_e2e_filter_pipeline() {
         1,
         "expected only header row when all records filtered out, got {}",
         content2.lines().count()
-    );
-}
-
-#[test]
-fn test_e2e_template_normalization() {
-    // Arrange: 5 条记录，启用模板归一化
-    let dir = tempfile::TempDir::new().unwrap();
-    let log_dir = dir.path().join("logs");
-    std::fs::create_dir_all(&log_dir).unwrap();
-    write_test_log(&log_dir.join("test.log"), 5);
-
-    let csv_file = dir.path().join("out.csv");
-    let mut cfg = make_run_config(&log_dir, &csv_file);
-    cfg.template = Some(TemplateConfig {
-        enable: true,
-        report: None,
-    });
-
-    // Act
-    let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(
-        &cfg,
-        None,
-        false,
-        true,
-        &interrupted,
-        80,
-        false,
-        None,
-        1,
-        None,
-    )
-    .unwrap();
-
-    // Assert: header 包含 normalized_sql，且第一条数据行的 normalized_sql 列非空
-    let content = std::fs::read_to_string(&csv_file).unwrap();
-    let header = content.lines().next().unwrap();
-    assert!(
-        header.contains("normalized_sql"),
-        "CSV header should contain 'normalized_sql', got: {header}"
-    );
-    // 第一条数据行（索引 14 = normalized_sql）应非空
-    let data_line = content.lines().nth(1).unwrap();
-    // normalized_sql 是第 15 个字段（索引 14），用逗号分割取第 14 个字段
-    // 注意：SQL 格式为 "SELECT * FROM t WHERE id=N" 不含逗号，因此 split(',') 安全
-    // 如果测试 SQL 未来包含逗号，需改用 csv crate 正确解析带引号的字段
-    assert!(!data_line.is_empty(), "first data line should not be empty");
-    // 验证 normalized_sql 列存在内容：整行中字段数至少为 15
-    let field_count = data_line.split(',').count();
-    assert!(
-        field_count >= 15,
-        "expected at least 15 fields in data line, got {field_count}: {data_line}"
     );
 }
 

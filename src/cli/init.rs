@@ -81,18 +81,6 @@ retention_days = 7
 # 对 INS/DEL/UPD/ORA 类型的记录，将 PARAMS 参数值填入 SQL 的占位符
 enable = true
 
-[template]
-# SQL 模板归一化（v1.4 新增顶层配置）
-# 启用后对 sql_text 执行注释去除、IN 列表折叠、关键字大写、空白折叠四项变换，生成稳定的模板 key
-# 默认 false（不影响热循环性能）
-enable = false
-
-# 模板报告独立输出（可选配置，跟随 template.enable 自动启用）
-# [template.report]
-# enabled = true
-# csv_report_path = ""                # 留空 = 自动派生 (out.csv → out_templates.csv)
-# sqlite_report_path = ""             # 留空 = 自动派生 (out.db → out_templates.db)
-
 [filter]
 # 是否启用过滤器
 enable = false
@@ -185,18 +173,6 @@ retention_days = 7
 # Write a normalized_sql column in export output (default: true).
 # For INS/DEL/UPD/ORA records, parameter values are substituted into SQL placeholders.
 enable = true
-
-[template]
-# SQL template normalization (new in v1.4, top-level config)
-# Strips comments, folds IN lists, uppercases keywords, collapses whitespace to produce a stable template key
-# Default false (zero overhead in hot loop when disabled)
-enable = false
-
-# Template report independent output (optional, auto-enabled when template.enable = true)
-# [template.report]
-# enabled = true
-# csv_report_path = ""                # leave empty to auto-derive (out.csv → out_templates.csv)
-# sqlite_report_path = ""             # leave empty to auto-derive (out.db → out_templates.db)
 
 [filter]
 # Enable the filter pipeline
