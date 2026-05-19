@@ -16,7 +16,6 @@ impl Config {
         self.validate_filter()?;
         self.validate_output_fields()?;
         self.validate_charts()?;
-        self.validate_template()?;
         Ok(())
     }
 
@@ -64,7 +63,6 @@ impl Config {
 
         self.validate_output_fields()?;
         self.validate_charts()?;
-        self.validate_template()?;
         Ok(compiled)
     }
 
@@ -94,29 +92,6 @@ impl Config {
                             "unknown field '{name}'; valid fields: {}",
                             crate::pipeline::FIELD_NAMES.join(", ")
                         ),
-                    }));
-                }
-            }
-        }
-        Ok(())
-    }
-
-    fn validate_template(&self) -> Result<()> {
-        if let Some(tmpl) = &self.template {
-            let name = tmpl.output_sqlite_table.trim();
-            if !name.is_empty() {
-                let mut chars = name.chars();
-                let valid = chars
-                    .next()
-                    .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
-                    && chars.all(|c| c.is_ascii_alphanumeric() || c == '_');
-                if !valid {
-                    return Err(Error::Config(ConfigError::InvalidValue {
-                        field: "template.output_sqlite_table".to_string(),
-                        value: name.to_string(),
-                        reason: "table name must start with a letter or underscore \
-                                 and contain only ASCII alphanumeric or underscore"
-                            .to_string(),
                     }));
                 }
             }
@@ -742,51 +717,6 @@ file = "out.csv"
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(err_msg.contains("[pipeline]"), "actual: {err_msg}");
-    }
-
-    // ── validate_template ─────────────────────────────────────────
-    #[test]
-    fn test_validate_template_sqlite_table_invalid_leading_digit() {
-        let mut cfg = default_config();
-        cfg.template = Some(TemplateConfig {
-            enable: true,
-            output_sqlite_table: "1bad".into(),
-            ..TemplateConfig::default()
-        });
-        assert!(cfg.validate().is_err());
-    }
-
-    #[test]
-    fn test_validate_template_sqlite_table_invalid_hyphen() {
-        let mut cfg = default_config();
-        cfg.template = Some(TemplateConfig {
-            enable: true,
-            output_sqlite_table: "my-table".into(),
-            ..TemplateConfig::default()
-        });
-        assert!(cfg.validate().is_err());
-    }
-
-    #[test]
-    fn test_validate_template_sqlite_table_valid() {
-        let mut cfg = default_config();
-        cfg.template = Some(TemplateConfig {
-            enable: true,
-            output_sqlite_table: "sql_templates".into(),
-            ..TemplateConfig::default()
-        });
-        assert!(cfg.validate().is_ok());
-    }
-
-    #[test]
-    fn test_validate_template_sqlite_table_empty_ok() {
-        let mut cfg = default_config();
-        cfg.template = Some(TemplateConfig {
-            enable: true,
-            output_sqlite_table: String::new(),
-            ..TemplateConfig::default()
-        });
-        assert!(cfg.validate().is_ok());
     }
 
     #[test]

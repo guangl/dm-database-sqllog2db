@@ -130,24 +130,21 @@ fn default_top_n() -> usize {
     10
 }
 
-/// `[template]` 配置段
+/// `[template]` 配置段 — SQL 模板归一化与聚合
 #[derive(Debug, Deserialize, Clone, Default)]
 pub struct TemplateConfig {
     /// 是否启用 SQL 模板归一化（默认 false）
     #[serde(default)]
     pub enable: bool,
-    /// 模板统计 CSV 输出路径；空字符串 = 不生成
+    /// `[template.report]` 子配置段 — 独立报告输出
     #[serde(default)]
-    pub output_csv_path: String,
-    /// 模板统计 `SQLite` 表名；空字符串 = 不生成
-    #[serde(default)]
-    pub output_sqlite_table: String,
+    pub report: Option<TemplateReportConfig>,
 }
 
-/// `[templates]` 配置段 — 独立模板报告输出（D-05）
+/// `[template.report]` 子配置段 — 独立模板报告输出（D-05）
 #[derive(Debug, Deserialize, Clone)]
-pub struct TemplatesReportConfig {
-    /// 是否启用独立模板报告（默认 `true`；仅在显式配置 `[templates]` 段时生效）
+pub struct TemplateReportConfig {
+    /// 是否启用独立模板报告（默认 `true`）
     #[serde(default = "default_true")]
     pub enabled: bool,
     /// CSV 报告路径；空字符串 = 从 exporter 路径自动派生
@@ -158,7 +155,7 @@ pub struct TemplatesReportConfig {
     pub sqlite_report_path: String,
 }
 
-impl Default for TemplatesReportConfig {
+impl Default for TemplateReportConfig {
     fn default() -> Self {
         Self {
             enabled: true,
@@ -168,9 +165,13 @@ impl Default for TemplatesReportConfig {
     }
 }
 
-/// 检查是否应生成独立模板报告文件（仅当显式配置 `[templates]` 段时启用）
-pub(crate) fn templates_report_enabled(cfg: &crate::config::Config) -> bool {
-    cfg.templates.as_ref().is_some_and(|t| t.enabled)
+/// 检查是否应生成独立模板报告文件
+/// 当 `[template.report]` 存在时使用其 `enabled` 值，否则跟随 `template.enable`
+pub(crate) fn template_report_enabled(cfg: &crate::config::Config) -> bool {
+    cfg.template
+        .as_ref()
+        .and_then(|t| t.report.as_ref().map(|r| r.enabled))
+        .unwrap_or_else(|| cfg.template.as_ref().is_some_and(|t| t.enable))
 }
 
 /// 自动派生模板报告文件路径（D-04）
@@ -411,25 +412,24 @@ latency_hist = false
     fn test_template_config_default() {
         let cfg = TemplateConfig::default();
         assert!(!cfg.enable);
-        assert_eq!(cfg.output_csv_path, "");
-        assert_eq!(cfg.output_sqlite_table, "");
+        assert!(cfg.report.is_none());
     }
 
     #[test]
-    fn test_template_config_deserialize_full() {
-        let toml = "enable = true\noutput_csv_path = \"out.csv\"\noutput_sqlite_table = \"tpl\"";
+    fn test_template_config_deserialize_with_report() {
+        let toml = "enable = true\n[report]\nenabled = true\ncsv_report_path = \"out.csv\"";
         let cfg: TemplateConfig = toml::from_str(toml).unwrap();
         assert!(cfg.enable);
-        assert_eq!(cfg.output_csv_path, "out.csv");
-        assert_eq!(cfg.output_sqlite_table, "tpl");
+        let r = cfg.report.unwrap();
+        assert!(r.enabled);
+        assert_eq!(r.csv_report_path, "out.csv");
     }
 
     #[test]
     fn test_template_config_deserialize_empty_is_default() {
         let cfg: TemplateConfig = toml::from_str("").unwrap();
         assert!(!cfg.enable);
-        assert_eq!(cfg.output_csv_path, "");
-        assert_eq!(cfg.output_sqlite_table, "");
+        assert!(cfg.report.is_none());
     }
 
     #[test]

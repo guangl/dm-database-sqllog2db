@@ -13,7 +13,6 @@ pub use sqllog::SqllogConfig;
 use crate::error::{ConfigError, Error, Result};
 use crate::pipeline::{
     ChartsConfig, FiltersFeature, NormalizeConfig, OutputConfig, TemplateConfig,
-    TemplatesReportConfig,
 };
 use serde::Deserialize;
 use std::path::Path;
@@ -37,8 +36,6 @@ pub struct Config {
     pub replace_parameters: Option<NormalizeConfig>,
     #[serde(default)]
     pub template: Option<TemplateConfig>,
-    #[serde(default)]
-    pub templates: Option<TemplatesReportConfig>,
     #[serde(default)]
     pub filter: Option<FiltersFeature>,
     #[serde(default)]
@@ -277,12 +274,11 @@ append = false
     }
 
     #[test]
-    fn test_config_has_6_top_level_optional_fields() {
-        // 确保 6 个顶层字段默认值为 None
+    fn test_config_has_5_top_level_optional_fields() {
+        // 确保 5 个顶层字段默认值为 None
         let cfg = default_config();
         assert!(cfg.replace_parameters.is_none());
         assert!(cfg.template.is_none());
-        assert!(cfg.templates.is_none());
         assert!(cfg.filter.is_none());
         assert!(cfg.charts.is_none());
         assert!(cfg.output.is_none());

@@ -128,6 +128,7 @@ impl SqliteExporter {
 
     /// 仅打开数据库连接并设置 pragmas，不创建主数据表。
     /// 用于并行 CSV 路径中写入模板统计的场景，避免创建空的主数据表。
+    #[allow(dead_code)]
     pub(crate) fn open_connection_only(&mut self) -> Result<()> {
         let conn = Connection::open(&self.database_url)
             .map_err(|e| Self::db_err(format!("open failed: {e}")))?;

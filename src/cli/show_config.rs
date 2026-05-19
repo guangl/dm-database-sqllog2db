@@ -194,11 +194,24 @@ pub fn handle_show_config(cfg: &Config, config_path: &str, diff: bool) {
     if let Some(ta) = &cfg.template {
         println!("{}", color::cyan("[template]"));
         kv("enable", &ta.enable.to_string(), None, diff);
-        if !ta.output_csv_path.is_empty() {
-            kv("output_csv_path", &ta.output_csv_path, None, diff);
-        }
-        if !ta.output_sqlite_table.is_empty() {
-            kv("output_sqlite_table", &ta.output_sqlite_table, None, diff);
+        if let Some(report) = &ta.report {
+            kv("report.enabled", &report.enabled.to_string(), None, diff);
+            if !report.csv_report_path.is_empty() {
+                kv(
+                    "report.csv_report_path",
+                    &report.csv_report_path,
+                    None,
+                    diff,
+                );
+            }
+            if !report.sqlite_report_path.is_empty() {
+                kv(
+                    "report.sqlite_report_path",
+                    &report.sqlite_report_path,
+                    None,
+                    diff,
+                );
+            }
         }
         println!();
     }

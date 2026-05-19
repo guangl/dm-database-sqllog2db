@@ -219,7 +219,7 @@ fn test_template_stats_enabled_end_to_end_sequential() {
     let app_log = dir.path().join("app.log");
 
     let toml = format!(
-        "[sqllog]\npath = \"{logdir}\"\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n[template]\nenable = true\noutput_csv_path = \"{companion}\"\n",
+        "[sqllog]\npath = \"{logdir}\"\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n[template]\nenable = true\n[template.report]\ncsv_report_path = \"{companion}\"\n",
         logdir = dir.path().to_string_lossy().replace('\\', "/"),
         errlog = error_log.to_string_lossy().replace('\\', "/"),
         applog = app_log.to_string_lossy().replace('\\', "/"),
@@ -250,7 +250,7 @@ fn test_template_stats_enabled_end_to_end_sequential() {
 
     assert!(
         companion_path.exists(),
-        "enabled=true 时应在 output_csv_path 指定位置生成伴随文件"
+        "enabled=true 时应在 csv_report_path 指定位置生成报告文件"
     );
 
     let companion_content = std::fs::read_to_string(&companion_path).unwrap();

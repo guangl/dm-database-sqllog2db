@@ -86,8 +86,12 @@ enable = true
 # 启用后对 sql_text 执行注释去除、IN 列表折叠、关键字大写、空白折叠四项变换，生成稳定的模板 key
 # 默认 false（不影响热循环性能）
 enable = false
-# output_csv_path = "outputs/templates.csv"     # 不填则不生成
-# output_sqlite_table = "sql_templates"          # 不填则不生成
+
+# 模板报告独立输出（可选配置，跟随 template.enable 自动启用）
+# [template.report]
+# enabled = true
+# csv_report_path = ""                # 留空 = 自动派生 (out.csv → out_templates.csv)
+# sqlite_report_path = ""             # 留空 = 自动派生 (out.db → out_templates.db)
 
 [filter]
 # 是否启用过滤器
@@ -197,8 +201,12 @@ enable = true
 # Strips comments, folds IN lists, uppercases keywords, collapses whitespace to produce a stable template key
 # Default false (zero overhead in hot loop when disabled)
 enable = false
-# output_csv_path = "outputs/templates.csv"     # leave empty to disable
-# output_sqlite_table = "sql_templates"          # leave empty to disable
+
+# Template report independent output (optional, auto-enabled when template.enable = true)
+# [template.report]
+# enabled = true
+# csv_report_path = ""                # leave empty to auto-derive (out.csv → out_templates.csv)
+# sqlite_report_path = ""             # leave empty to auto-derive (out.db → out_templates.db)
 
 [filter]
 # Enable the filter pipeline
