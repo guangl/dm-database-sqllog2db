@@ -4,8 +4,8 @@ milestone: v1.6
 milestone_name: 文档中文化 & 延后需求补全
 status: executing
 stopped_at: Phases 24-27 context gathered
-last_updated: "2026-05-19T13:01:21.773Z"
-last_activity: 2026-05-19 -- Phase 27 planning complete
+last_updated: "2026-05-19T13:08:09.447Z"
+last_activity: 2026-05-19 -- Phase 24 execution started
 progress:
   total_phases: 4
   completed_phases: 0
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-19 after v1.6 milestone start)
 
 **Core value:** 用户能够精确指定"导出哪些记录的哪些字段"——过滤逻辑清晰可配置，输出结果完全可控
-**Current focus:** v1.6 文档中文化 & 延后需求补全 — 4 阶段（Phases 24–27）
+**Current focus:** Phase 24 — 文档中文化 & 去 SVG 化
 
 ## Current Position
 
-Phase: 24 (文档中文化 & 去 SVG 化) — Not started
-Plan: —
-Status: Ready to execute
-Last activity: 2026-05-19 -- Phase 27 planning complete
+Phase: 24 (文档中文化 & 去 SVG 化) — EXECUTING
+Plan: 1 of 3
+Status: Executing Phase 24
+Last activity: 2026-05-19 -- Phase 24 execution started
 
 ### Phase Sequence
 

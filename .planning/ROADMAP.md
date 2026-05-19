@@ -85,7 +85,7 @@ Full details: `.planning/milestones/v1.5-ROADMAP.md`
 
 ### v1.6 文档中文化 & 延后需求补全 (Phases 24–27) — IN PROGRESS
 
-- [ ] **Phase 24: 文档中文化 & 去 SVG 化** — 6 requirements
+- [x] **Phase 24: 文档中文化 & 去 SVG 化** — 6 requirements (completed 2026-05-19)
 - [ ] **Phase 25: 延后文档补全** — 3 requirements
 - [ ] **Phase 26: GitHub Pages 多页文档站** — 1 requirement
 - [ ] **Phase 27: 模板报告独立输出** — 2 requirements
@@ -105,9 +105,9 @@ Full details: `.planning/milestones/v1.5-ROADMAP.md`
 **Plans**: 3 plans
 
 Plans:
-- [ ] 24-01-PLAN.md — README.md 中文化 + 去 SVG + book.toml language="zh"
-- [ ] 24-02-PLAN.md — GitHub Pages 落地页中文化 + 移除 SVG Gallery
-- [ ] 24-03-PLAN.md — docs/quickstart.md + docs/config-reference.md 中文化
+- [x] 24-01-PLAN.md — README.md 中文化 + 去 SVG + book.toml language="zh"
+- [x] 24-02-PLAN.md — GitHub Pages 落地页中文化 + 移除 SVG Gallery
+- [x] 24-03-PLAN.md — docs/quickstart.md + docs/config-reference.md 中文化
 
 ### Phase 25: 延后文档补全
 
@@ -181,7 +181,7 @@ Plans:
 | 21. README 全面更新 + 根文档补全 | v1.5 | 2/2 | Complete | 2026-05-19 |
 | 22. GitHub Pages 落地页 + 部署流水线 | v1.5 | 2/2 | Complete | 2026-05-19 |
 | 23. 补充文档 + CI 质量门禁 | v1.5 | 4/4 | Complete | 2026-05-19 |
-| 24. 文档中文化 & 去 SVG 化 | v1.6 | 0/3 | Not started | - |
+| 24. 文档中文化 & 去 SVG 化 | v1.6 | 3/3 | Complete   | 2026-05-19 |
 | 25. 延后文档补全 | v1.6 | 0/0 | Not started | - |
 | 26. GitHub Pages 多页文档站 | v1.6 | 0/1 | Not started | - |
 | 27. 模板报告独立输出 | v1.6 | 0/2 | Not started | - |
