@@ -1,5 +1,37 @@
 # Milestones
 
+## v1.6 — 文档中文化 & 延后需求补全
+
+**Shipped:** 2026-05-19
+**Phases:** 24–27 | **Plans:** 7 | **Files changed:** 43 (+3,848 / -1,058 lines)
+
+### Delivered
+
+将所有公开文档全面中文化（README、GitHub Pages、快速入门、配置参考），去除文档中 SVG 截图和图表引用，补全 CONTRIBUTING.md / SECURITY.md / architecture.md 三份延后文档，GitHub Pages 从单页升级为 mdBook 四章多页文档站，模板统计支持独立 CSV 和 SQLite 三表范式化报告输出。
+
+### Key Accomplishments
+
+1. **文档全面中文化** — README.md、site/ 落地页、docs/quickstart.md、docs/config-reference.md 全部改为中文，无英文段落残留（I18N-01~04，Phase 24）
+2. **去 SVG 化** — README 和 GitHub Pages 中移除所有 SVG 截图和图表引用，代码保留不变（DESVG-01~02，Phase 24）
+3. **延后文档补全** — CONTRIBUTING.md（5.0KB）+ SECURITY.md（2.9KB）+ docs/architecture.md（9.6KB）三份全新中文文档（DOC-01~03，Phase 25）
+4. **mdBook 多页文档站** — GitHub Pages 四章导航（首页/快速入门/配置参考/架构设计），GHA 自动部署（PAGES-01，Phase 26）
+5. **模板报告独立输出** — `[template.report]` 配置段 + `TemplateReporter` CSV 报告 + SQLite 三表范式化报告（TMPL-03/TMPL-03b，Phase 27）
+
+### Stats
+
+- Timeline: 1 day (2026-05-19)
+- Files changed: 43 (+3,848 / -1,058 lines)
+- Commits: 18
+- All 12 v1.6 requirements validated complete
+
+### Archive
+
+- `.planning/milestones/v1.6-ROADMAP.md`
+- `.planning/milestones/v1.6-REQUIREMENTS.md`
+- `.planning/v1.6-MILESTONE-AUDIT.md`
+
+---
+
 ## v1.5 — 文档完善 & 项目展示
 
 **Shipped:** 2026-05-19

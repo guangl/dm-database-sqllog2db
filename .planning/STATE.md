@@ -2,68 +2,61 @@
 gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: 文档中文化 & 延后需求补全
-status: executing
-stopped_at: Phases 24-27 context gathered
-last_updated: "2026-05-19T13:08:09.447Z"
-last_activity: 2026-05-19 -- Phase 24 execution started
+status: complete
+stopped_at: v1.6 milestone archived
+last_updated: "2026-05-19T14:20:00.000Z"
+last_activity: 2026-05-19 -- v1.6 milestone completed and archived
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 4
   total_plans: 7
-  completed_plans: 0
-  percent: 0
+  completed_plans: 7
+  percent: 100
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-05-19 after v1.6 milestone start)
+See: .planning/PROJECT.md (updated 2026-05-19 after v1.6 milestone)
 
 **Core value:** 用户能够精确指定"导出哪些记录的哪些字段"——过滤逻辑清晰可配置，输出结果完全可控
-**Current focus:** Phase 24 — 文档中文化 & 去 SVG 化
+**Current focus:** 准备下一里程碑（`/gsd:new-milestone`）
 
 ## Current Position
 
-Phase: 24 (文档中文化 & 去 SVG 化) — EXECUTING
-Plan: 1 of 3
-Status: Executing Phase 24
-Last activity: 2026-05-19 -- Phase 24 execution started
+All v1.6 phases complete. Milestone archived to `.planning/milestones/v1.6-ROADMAP.md`.
 
 ### Phase Sequence
 
 | # | Phase | Requirements | Status |
 |---|-------|-------------|--------|
-| 24 | 文档中文化 & 去 SVG 化 | I18N-01~04, DESVG-01~02 | Not started |
-| 25 | 延后文档补全 | DOC-01, DOC-02, DOC-03 | Not started |
-| 26 | GitHub Pages 多页文档站 | PAGES-01 | Not started |
-| 27 | 模板报告独立输出 | TMPL-03, TMPL-03b | Not started |
+| 24 | 文档中文化 & 去 SVG 化 | I18N-01~04, DESVG-01~02 | Complete |
+| 25 | 延后文档补全 | DOC-01, DOC-02, DOC-03 | Complete |
+| 26 | GitHub Pages 多页文档站 | PAGES-01 | Complete |
+| 27 | 模板报告独立输出 | TMPL-03, TMPL-03b | Complete |
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed across all milestones: 63
-- v1.5 (Phases 21–23) completed 2026-05-19
-- v1.6 total phases: 4
+- Total plans completed across all milestones: 70
+- v1.6 (Phases 24–27) completed 2026-05-19
 
 ## Accumulated Context
 
 ### Decisions
 
-- [v1.6 Roadmap]: 四阶段结构：文档中文化 & 去 SVG（Phase 24）→ 延后文档补全（Phase 25）→ GitHub Pages 多页站点（Phase 26）→ 模板报告（Phase 27）
-- [v1.6 Roadmap]: I18N + DESVG 合并为同一阶段，因为二者修改相同文件集（README、docs/*、site/）
-- [v1.6 Roadmap]: PAGES-01 依赖 Phase 24+25（所有文档中文化定稿后重构站点结构）
-- [v1.6 Roadmap]: TMPL-03/TMPL-03b 为独立代码变更，置于最后，不依赖文档阶段
-- [v1.6 Roadmap]: REQUIREMENTS.md 为 TMPL-03/TMPL-03b 的权威描述（PROJECT.md Active 区描述为过时版本）
-- [v1.6 Roadmap]: 旧版英文 README 不保留双版本（与 REQUIREMENTS.md Out of Scope 一致）
+- [v1.6 Executed]: 所有 12 个 v1.6 需求已验证完成
+- [v1.6 Executed]: README 改为中文，目标用户为中文 DBA
+- [v1.6 Executed]: I18N + DESVG 合并为 Phase 24，修改相同文件集
+- [v1.6 Executed]: TMPL-03 CSV + TMPL-03b SQLite 独立报告
+- [v1.6 Executed]: GitHub Pages 升级为 mdBook 四章多页文档站
+- [v1.6 Executed]: `[templates]` 重命名为 `[template.report]`
 
 ### Pending Todos
 
-- `/gsd:plan-phase 24` — 规划 Phase 24 (文档中文化 & 去 SVG 化)
-- `/gsd:plan-phase 25` — 规划 Phase 25 (延后文档补全)
-- `/gsd:plan-phase 26` — 规划 Phase 26 (GitHub Pages 多页文档站)
-- `/gsd:plan-phase 27` — 规划 Phase 27 (模板报告独立输出)
+- `/gsd:new-milestone` — 启动下一里程碑
 
 ### Blockers/Concerns
 
@@ -75,10 +68,3 @@ None.
 |----------|------|--------|---------|
 | PAGES-F02 | Playground / WASM Demo | 高复杂度 | Future |
 | CHART | SVG 图表代码移除 | 仅清理文档引用，保留代码 | N/A |
-
-## Session Continuity
-
-Last session: 2026-05-19T12:19:46.927Z
-Stopped at: Phases 24-27 context gathered
-Resume file: .planning/phases/24-svg/24-CONTEXT.md
-Next step: `/gsd:plan-phase 24`

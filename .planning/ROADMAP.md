@@ -8,7 +8,7 @@
 - ✅ **v1.3 SQL 模板分析 & 可视化** — Phases 12–16 (shipped 2026-05-17)
 - ✅ **v1.4 代码重构 & 质量深化** — Phases 17–20 (shipped 2026-05-18)
 - ✅ **v1.5 文档完善 & 项目展示** — Phases 21–23 (shipped 2026-05-19)
-- [ ] **v1.6 文档中文化 & 延后需求补全** — Phases 24–27 (in progress)
+- ✅ **v1.6 文档中文化 & 延后需求补全** — Phases 24–27 (shipped 2026-05-19)
 
 ## Phases
 
@@ -83,76 +83,17 @@ Full details: `.planning/milestones/v1.5-ROADMAP.md`
 
 </details>
 
-### v1.6 文档中文化 & 延后需求补全 (Phases 24–27) — IN PROGRESS
+<details>
+<summary>✅ v1.6 文档中文化 & 延后需求补全 (Phases 24–27) — SHIPPED 2026-05-19</summary>
 
-- [x] **Phase 24: 文档中文化 & 去 SVG 化** — 6 requirements (completed 2026-05-19)
-- [x] **Phase 25: 延后文档补全** — 3 requirements (completed 2026-05-19)
-- [x] **Phase 26: GitHub Pages 多页文档站** — 1 requirement (completed 2026-05-19)
-- [x] **Phase 27: 模板报告独立输出** — 2 requirements (completed 2026-05-19)
+- [x] Phase 24: 文档中文化 & 去 SVG 化 (3/3 plans) — completed 2026-05-19
+- [x] Phase 25: 延后文档补全 (1/1 plan) — completed 2026-05-19
+- [x] Phase 26: GitHub Pages 多页文档站 (1/1 plan) — completed 2026-05-19
+- [x] Phase 27: 模板报告独立输出 (2/2 plans) — completed 2026-05-19
 
-## Phase Details
+Full details: `.planning/milestones/v1.6-ROADMAP.md`
 
-### Phase 24: 文档中文化 & 去 SVG 化
-
-**Goal**: 用户能阅读全中文的 README、快速入门指南和配置参考文档，且文档中不再包含 SVG 截图和图表引用
-**Depends on**: Phase 23 (v1.5)
-**Requirements**: I18N-01, I18N-02, I18N-03, I18N-04, DESVG-01, DESVG-02
-**Success Criteria** (what must be TRUE):
-1. README.md 全部为中文，无英文段落残留，无 SVG 截图或图表引用
-2. GitHub Pages 落地页内容全部为中文，SVG Gallery 段落已移除
-3. docs/quickstart.md 全部为中文
-4. docs/config-reference.md 全部为中文
-**Plans**: 3 plans
-
-Plans:
-- [x] 24-01-PLAN.md — README.md 中文化 + 去 SVG + book.toml language="zh"
-- [x] 24-02-PLAN.md — GitHub Pages 落地页中文化 + 移除 SVG Gallery
-- [x] 24-03-PLAN.md — docs/quickstart.md + docs/config-reference.md 中文化
-
-### Phase 25: 延后文档补全
-
-**Goal**: 用户能访问 CONTRIBUTING.md、SECURITY.md 和 docs/architecture.md 三份中文文档，涵盖贡献指引、安全策略和架构说明
-**Depends on**: Phase 24 (中文化文档风格定稿后新文档遵循相同模式)
-**Requirements**: DOC-01, DOC-02, DOC-03
-**Success Criteria** (what must be TRUE):
-1. CONTRIBUTING.md（中文）提供完整的环境搭建、编码规约和 PR 提交流程
-2. SECURITY.md（中文）提供漏洞报告联系方式和安全策略说明
-3. docs/architecture.md（中文）提供数据流、模块划分和关键设计的架构文档
-**Plans**: 1 plan
-
-Plans:
-- [x] 25-01-PLAN.md — 创建 CONTRIBUTING.md、SECURITY.md、docs/architecture.md 三份中文文档
-
-### Phase 26: GitHub Pages 多页文档站
-
-**Goal**: GitHub Pages 从单页落地页升级为 mdBook 多页文档站，用户可通过导航栏访问各文档页面
-**Depends on**: Phase 24, Phase 25 (所有文档内容定稿后进行站点重构)
-**Requirements**: PAGES-01
-**Success Criteria** (what must be TRUE):
-1. GitHub Pages 显示多页文档站结构（导航栏、搜索功能），非单页落地页
-2. 所有已中文化文档（README、quickstart、config-reference、architecture）在文档站中可访问
-3. 文档站由 GitHub Actions 自动触发部署
-**Plans**: 1 plan
-
-Plans:
-- [x] 26-01-PLAN.md — 重构 SUMMARY.md 为四章导航 + 创建章节页面 + 重写首页概览
-**UI hint**: yes
-
-### Phase 27: 模板报告独立输出
-
-**Goal**: 用户在启用模板分析时，能通过独立文件获取模板统计摘要报告，内容与主流程结果一致
-**Depends on**: Phase 23 (独立于文档阶段，仅涉及 src/ 代码变更)
-**Requirements**: TMPL-03, TMPL-03b
-**Success Criteria** (what must be TRUE):
-1. 启用模板分析时，输出目录生成 `*_templates.csv` 独立摘要文件
-2. 启用模板分析时，输出目录生成 `*_templates.db` SQLite 独立报告文件
-3. 报告文件内容与 `--include-templates` 双路统计输出保持一致
-4. 禁用模板分析时，不生成任何额外的报告文件
-**Plans**: 2 plans
-
-Plans:
-- [x] 27-01-PLAN.md — [templates] 配置段 + 自动派生文件名 + TemplateReporter CSV 报告
-- [x] 27-02-PLAN.md — TemplateReporter SQLite 三表范式化报告
+</details>
 
 ## Progress
 
