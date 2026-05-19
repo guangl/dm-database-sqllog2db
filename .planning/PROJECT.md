@@ -1,8 +1,19 @@
 # sqllog2db — 达梦 SQL 日志解析工具
 
-## Current State: v1.5 已发布 ✅ — 规划 v1.6 中
+## Current Milestone: v1.6 — 文档中文化 & 延后需求补全
 
-sqllog2db 完成六个里程碑迭代，具备完整的 SQL 模板分析、SVG 可视化、嵌套配置模型、模块化代码架构，以及完善的项目文档和 GitHub Pages 展示页面。v1.5 实现了 README 全面重写（纯英文 208 行）、CHANGELOG.md 补全、GitHub Pages 落地页（mdBook + GHA 自动部署）、补充文档（quickstart + config-reference）、Asciicast 演示和 lychee CI 链接检查。
+**Goal:** 将所有公开文档全面中文化，补全 v1.5 延后的文档和功能需求，去除文档中的 SVG 引用。
+
+**Target features:**
+- 文档中文化（README、GitHub Pages、docs/ 全部改为中文）
+- 去 SVG 化（文档中移除 SVG Gallery 和截图引用，代码保留）
+- 模板统计独立报告（TMPL-03 JSON + TMPL-03b CSV）
+- 延后文档补全（CONTRIBUTING.md、SECURITY.md、docs/architecture.md）
+- GitHub Pages 单页 → 多页文档站（PAGES-F01）
+
+## Current State
+
+sqllog2db 完成六个里程碑迭代，具备完整的 SQL 模板分析、SVG 可视化、嵌套配置模型、模块化代码架构，以及完善的项目文档和 GitHub Pages 展示页面。
 
 ## Previous Milestones
 
@@ -122,4 +133,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-19 after v1.5 milestone*
+*Last updated: 2026-05-19 after v1.6 milestone start*

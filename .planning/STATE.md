@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.5
-milestone_name: 文档完善 & 项目展示
-status: archived
-stopped_at: Milestone archived (v1.5 complete 2026-05-19)
-last_updated: 2026-05-19T02:50:00Z
+milestone: v1.6
+milestone_name: 文档中文化 & 延后需求补全
+status: planning
+last_updated: "2026-05-19T11:54:36.499Z"
+last_activity: 2026-05-19
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 8
-  completed_plans: 8
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -24,11 +24,10 @@ See: .planning/PROJECT.md (updated 2026-05-19 after v1.5 milestone)
 
 ## Current Position
 
-Phase: 23
-Plan: Not started
-Status: Milestone complete
-
-Progress: [                    ] 0%
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-05-19 — Milestone v1.6 started
 
 ## Performance Metrics
 
