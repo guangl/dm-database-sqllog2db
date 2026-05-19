@@ -41,7 +41,6 @@ jobs:
             --no-progress
             --max-retries 3
             --timeout 30
-            --exclude-mail
             --cache
             --max-cache-age 1d
             --exclude 'https://crates.io/crates/.*'
