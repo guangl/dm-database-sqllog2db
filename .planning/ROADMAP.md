@@ -75,7 +75,7 @@ Full details: `.planning/milestones/v1.4-ROADMAP.md`
 
 **Milestone Goal:** 补全项目文档（README 更新 + CHANGELOG + LICENSE）并建立 GitHub Pages 展示页面，零代码变更
 
-- [ ] **Phase 21: README 全面更新 + 根文档补全** — 重写 README 覆盖 v1.3/v1.4 全部功能，补全 CHANGELOG.md 和 LICENSE (2 plans)
+- [x] **Phase 21: README 全面更新 + 根文档补全** — 重写 README 覆盖 v1.3/v1.4 全部功能，补全 CHANGELOG.md 和 LICENSE (2 plans) (completed 2026-05-19)
 - [ ] **Phase 22: GitHub Pages 落地页 + 部署流水线** — mdBook 构建单页落地页，GitHub Actions 自动部署，含架构图/性能数据/SVG Gallery
 - [ ] **Phase 23: 补充文档 + CI 质量门禁** — docs/quickstart.md、docs/config-reference.md、Asciicast 演示、lychee 链接检查
 
@@ -97,8 +97,8 @@ Full details: `.planning/milestones/v1.4-ROADMAP.md`
 
 Plans:
 
-- [ ] 21-01-PLAN.md -- 重写 README.md 为纯英文最小骨架（200-250 行），覆盖 v1.3/v1.4 全部功能
-- [ ] 21-02-PLAN.md -- 补全 CHANGELOG.md 至 v1.4，折叠 0.x 旧版本；确认 LICENSE 存在
+- [x] 21-01-PLAN.md -- 重写 README.md 为纯英文最小骨架（200-250 行），覆盖 v1.3/v1.4 全部功能
+- [x] 21-02-PLAN.md -- 补全 CHANGELOG.md 至 v1.4，折叠 0.x 旧版本；确认 LICENSE 存在
 
 ### Phase 22: GitHub Pages 落地页 + 部署流水线
 
@@ -175,6 +175,6 @@ Plans:
 | 18. 模板 & 图表配置嵌套化 | v1.4 | 3/3 | Complete | 2026-05-18 |
 | 19. 代码结构重构 | v1.4 | 4/4 | Complete | 2026-05-18 |
 | 20. 测试覆盖深化 | v1.4 | 3/3 | Complete | 2026-05-18 |
-| 21. README 全面更新 + 根文档补全 | v1.5 | 0/2 | Not started | - |
+| 21. README 全面更新 + 根文档补全 | v1.5 | 2/2 | Complete    | 2026-05-19 |
 | 22. GitHub Pages 落地页 + 部署流水线 | v1.5 | 0/2 | Not started | - |
 | 23. 补充文档 + CI 质量门禁 | v1.5 | 0/4 | Not started | - |

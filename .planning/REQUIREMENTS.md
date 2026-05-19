@@ -8,15 +8,15 @@
 
 ### 基础文档 (DOC)
 
-- [ ] **DOC-01**: 用户能在 README 中看到 v1.3 模板分析功能的完整说明（normalize_template、TemplateAggregator、双路统计输出）
-- [ ] **DOC-02**: 用户能在 README 中看到 v1.4 嵌套配置模型的完整说明（[filter.include]/[filter.exclude]、[template]、[charts] 独立子表）
-- [ ] **DOC-03**: README 中的配置示例代码块与实际 `sqllog2db init` 输出一致（使用当前嵌套格式，非旧扁平格式）
-- [ ] **DOC-04**: 用户能在 README 中看到四类 SVG 图表的功能说明和输出示例
-- [ ] **DOC-05**: 项目仓库根目录存在 CHANGELOG.md，按 Keep a Changelog 格式记录 v1.0 至 v1.4 所有版本变更
-- [ ] **DOC-06**: 项目仓库根目录存在 LICENSE 文件（Apache-2.0）
-- [ ] **DOC-07**: README 头部包含项目徽章（CI status、crates.io version、license、release），数量 4-6 个
-- [ ] **DOC-08**: README 包含 3-5 个可复制粘贴的 QuickStart 命令行示例（覆盖 init / run / digest / stats / validate）
-- [ ] **DOC-09**: README 中不存在的文件链接已移除或替换为占位标记（CONTRIBUTING.md、SECURITY.md、docs/architecture.md 推迟至 v1.6+）
+- [x] **DOC-01**: 用户能在 README 中看到 v1.3 模板分析功能的完整说明（normalize_template、TemplateAggregator、双路统计输出）
+- [x] **DOC-02**: 用户能在 README 中看到 v1.4 嵌套配置模型的完整说明（[filter.include]/[filter.exclude]、[template]、[charts] 独立子表）
+- [x] **DOC-03**: README 中的配置示例代码块与实际 `sqllog2db init` 输出一致（使用当前嵌套格式，非旧扁平格式）
+- [x] **DOC-04**: 用户能在 README 中看到四类 SVG 图表的功能说明和输出示例
+- [x] **DOC-05**: 项目仓库根目录存在 CHANGELOG.md，按 Keep a Changelog 格式记录 v1.0 至 v1.4 所有版本变更
+- [x] **DOC-06**: 项目仓库根目录存在 LICENSE 文件（Apache-2.0）
+- [x] **DOC-07**: README 头部包含项目徽章（CI status、crates.io version、license、release），数量 4-6 个
+- [x] **DOC-08**: README 包含 3-5 个可复制粘贴的 QuickStart 命令行示例（覆盖 init / run / digest / stats / validate）
+- [x] **DOC-09**: README 中不存在的文件链接已移除或替换为占位标记（CONTRIBUTING.md、SECURITY.md、docs/architecture.md 推迟至 v1.6+）
 
 ### GitHub Pages 展示 (PAGES)
 
@@ -57,15 +57,15 @@
 
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
-| DOC-01 | Phase 21 | Pending |
-| DOC-02 | Phase 21 | Pending |
-| DOC-03 | Phase 21 | Pending |
-| DOC-04 | Phase 21 | Pending |
-| DOC-05 | Phase 21 | Pending |
-| DOC-06 | Phase 21 | Pending |
-| DOC-07 | Phase 21 | Pending |
-| DOC-08 | Phase 21 | Pending |
-| DOC-09 | Phase 21 | Pending |
+| DOC-01 | Phase 21 | Complete |
+| DOC-02 | Phase 21 | Complete |
+| DOC-03 | Phase 21 | Complete |
+| DOC-04 | Phase 21 | Complete |
+| DOC-05 | Phase 21 | Complete |
+| DOC-06 | Phase 21 | Complete |
+| DOC-07 | Phase 21 | Complete |
+| DOC-08 | Phase 21 | Complete |
+| DOC-09 | Phase 21 | Complete |
 | PAGES-01 | Phase 22 | Pending |
 | PAGES-02 | Phase 22 | Pending |
 | PAGES-03 | Phase 22 | Pending |
