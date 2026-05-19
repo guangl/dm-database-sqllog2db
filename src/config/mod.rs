@@ -13,6 +13,7 @@ pub use sqllog::SqllogConfig;
 use crate::error::{ConfigError, Error, Result};
 use crate::pipeline::{
     ChartsConfig, FiltersFeature, NormalizeConfig, OutputConfig, TemplateConfig,
+    TemplatesReportConfig,
 };
 use serde::Deserialize;
 use std::path::Path;
@@ -36,6 +37,8 @@ pub struct Config {
     pub replace_parameters: Option<NormalizeConfig>,
     #[serde(default)]
     pub template: Option<TemplateConfig>,
+    #[serde(default)]
+    pub templates: Option<TemplatesReportConfig>,
     #[serde(default)]
     pub filter: Option<FiltersFeature>,
     #[serde(default)]

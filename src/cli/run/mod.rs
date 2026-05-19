@@ -3,10 +3,12 @@ use crate::config::Config;
 use crate::error::{Error, Result};
 use crate::exporter::ExporterManager;
 use crate::parser::SqllogParser;
+use crate::pipeline::template_reporter::TemplateReporter;
 use crate::pipeline::{CompiledMetaFilters, CompiledSqlFilters, TemplateAggregator};
+use crate::pipeline::{derive_template_report_paths, templates_report_enabled};
 use indicatif::HumanCount;
 use log::{info, warn};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
@@ -140,25 +142,59 @@ pub fn handle_run(
         let template_stats = parallel_agg.map(TemplateAggregator::finalize);
         if let Some(ref stats) = template_stats {
             info!("Template analysis: {} unique templates", stats.len());
-            let csv_out_path = final_cfg
-                .template
-                .as_ref()
-                .filter(|t| !t.output_csv_path.trim().is_empty())
-                .map(|t| t.output_csv_path.as_str());
-            let sqlite_table = final_cfg
-                .template
-                .as_ref()
-                .filter(|t| !t.output_sqlite_table.trim().is_empty())
-                .map(|t| t.output_sqlite_table.as_str());
-            if let Some(path_str) = csv_out_path {
-                crate::exporter::csv::write_companion_rows(Path::new(path_str), stats)?;
-            }
-            if let Some(table_name) = sqlite_table {
-                if let Some(sqlite_cfg) = final_cfg.exporter.sqlite.as_ref() {
-                    use crate::exporter::{Exporter, SqliteExporter};
-                    let mut sqlite = SqliteExporter::from_config(sqlite_cfg);
-                    sqlite.open_connection_only()?;
-                    sqlite.write_template_stats(stats, None, Some(table_name))?;
+
+            if templates_report_enabled(final_cfg) {
+                let (derived_csv, derived_sqlite) = derive_template_report_paths(final_cfg);
+                let csv_path = final_cfg
+                    .templates
+                    .as_ref()
+                    .and_then(|t| {
+                        if t.csv_report_path.trim().is_empty() {
+                            None
+                        } else {
+                            Some(PathBuf::from(&t.csv_report_path))
+                        }
+                    })
+                    .or(derived_csv);
+                let sqlite_path = final_cfg
+                    .templates
+                    .as_ref()
+                    .and_then(|t| {
+                        if t.sqlite_report_path.trim().is_empty() {
+                            None
+                        } else {
+                            Some(PathBuf::from(&t.sqlite_report_path))
+                        }
+                    })
+                    .or(derived_sqlite);
+
+                if let Some(ref path) = csv_path {
+                    TemplateReporter::write_csv(path, stats)?;
+                }
+                if let Some(ref path) = sqlite_path {
+                    TemplateReporter::write_sqlite(path, stats)?;
+                }
+            } else {
+                let csv_out_path = final_cfg
+                    .template
+                    .as_ref()
+                    .filter(|t| !t.output_csv_path.trim().is_empty())
+                    .map(|t| t.output_csv_path.as_str());
+                let sqlite_table = final_cfg
+                    .template
+                    .as_ref()
+                    .filter(|t| !t.output_sqlite_table.trim().is_empty())
+                    .map(|t| t.output_sqlite_table.as_str());
+                if let Some(path_str) = csv_out_path {
+                    crate::exporter::csv::write_companion_rows(Path::new(path_str), stats)?;
+                }
+                if let Some(table_name) = sqlite_table {
+                    if let Some(sqlite_cfg) = final_cfg.exporter.sqlite.as_ref() {
+                        use crate::exporter::{Exporter, SqliteExporter};
+                        let mut sqlite = SqliteExporter::from_config(sqlite_cfg);
+                        sqlite.open_connection_only()?;
+                        sqlite.write_template_stats(stats, None, Some(table_name))?;
+                    }
                 }
             }
         }
@@ -249,17 +285,51 @@ pub fn handle_run(
         let template_stats = template_agg.map(TemplateAggregator::finalize);
         if let Some(ref stats) = template_stats {
             info!("Template analysis: {} unique templates", stats.len());
-            let csv_out_path = final_cfg
-                .template
-                .as_ref()
-                .filter(|t| !t.output_csv_path.trim().is_empty())
-                .map(|t| t.output_csv_path.as_str());
-            let sqlite_table = final_cfg
-                .template
-                .as_ref()
-                .filter(|t| !t.output_sqlite_table.trim().is_empty())
-                .map(|t| t.output_sqlite_table.as_str());
-            exporter_manager.write_template_stats(stats, csv_out_path, sqlite_table)?;
+
+            if templates_report_enabled(final_cfg) {
+                let (derived_csv, derived_sqlite) = derive_template_report_paths(final_cfg);
+                let csv_path = final_cfg
+                    .templates
+                    .as_ref()
+                    .and_then(|t| {
+                        if t.csv_report_path.trim().is_empty() {
+                            None
+                        } else {
+                            Some(PathBuf::from(&t.csv_report_path))
+                        }
+                    })
+                    .or(derived_csv);
+                let sqlite_path = final_cfg
+                    .templates
+                    .as_ref()
+                    .and_then(|t| {
+                        if t.sqlite_report_path.trim().is_empty() {
+                            None
+                        } else {
+                            Some(PathBuf::from(&t.sqlite_report_path))
+                        }
+                    })
+                    .or(derived_sqlite);
+
+                if let Some(ref path) = csv_path {
+                    TemplateReporter::write_csv(path, stats)?;
+                }
+                if let Some(ref path) = sqlite_path {
+                    TemplateReporter::write_sqlite(path, stats)?;
+                }
+            } else {
+                let csv_out_path = final_cfg
+                    .template
+                    .as_ref()
+                    .filter(|t| !t.output_csv_path.trim().is_empty())
+                    .map(|t| t.output_csv_path.as_str());
+                let sqlite_table = final_cfg
+                    .template
+                    .as_ref()
+                    .filter(|t| !t.output_sqlite_table.trim().is_empty())
+                    .map(|t| t.output_sqlite_table.as_str());
+                exporter_manager.write_template_stats(stats, csv_out_path, sqlite_table)?;
+            }
         }
     }
     pb.finish_and_clear();

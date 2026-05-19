@@ -14,8 +14,13 @@ pub(crate) use aggregator::ChartEntry;
 pub(crate) use aggregator::TemplateAggregator;
 pub(crate) use aggregator::TemplateStats;
 
+pub(crate) mod template_reporter;
+#[allow(unused_imports)]
+pub(crate) use template_reporter::TemplateReporter;
+
 use dm_database_parser_sqllog::{MetaParts, Sqllog};
 use serde::Deserialize;
+use std::path::PathBuf;
 
 /// 导出字段名列表（顺序与 CSV/SQLite 列顺序一致，共 15 个字段）
 pub const FIELD_NAMES: &[&str] = &[
@@ -139,6 +144,58 @@ pub struct TemplateConfig {
     /// 模板统计 `SQLite` 表名；空字符串 = 不生成
     #[serde(default)]
     pub output_sqlite_table: String,
+}
+
+/// `[templates]` 配置段 — 独立模板报告输出（D-05）
+#[derive(Debug, Deserialize, Clone)]
+pub struct TemplatesReportConfig {
+    /// 是否启用独立模板报告（默认 true，跟随 template.enable）
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// CSV 报告路径；空字符串 = 从 exporter 路径自动派生
+    #[serde(default)]
+    pub csv_report_path: String,
+    /// `SQLite` 报告路径；空字符串 = 从 exporter 路径自动派生
+    #[serde(default)]
+    pub sqlite_report_path: String,
+}
+
+impl Default for TemplatesReportConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            csv_report_path: String::new(),
+            sqlite_report_path: String::new(),
+        }
+    }
+}
+
+/// 检查是否应生成独立模板报告文件（仅当显式配置 `[templates]` 段时启用）
+pub(crate) fn templates_report_enabled(cfg: &crate::config::Config) -> bool {
+    cfg.templates.as_ref().is_some_and(|t| t.enabled)
+}
+
+/// 自动派生模板报告文件路径（D-04）
+pub(crate) fn derive_template_report_paths(
+    cfg: &crate::config::Config,
+) -> (Option<PathBuf>, Option<PathBuf>) {
+    let dot = PathBuf::from(".");
+    let (parent, stem) = if let Some(ref csv) = cfg.exporter.csv {
+        let p = PathBuf::from(&csv.file);
+        let dir = p.parent().unwrap_or(&dot);
+        let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("sqllog");
+        (dir.to_path_buf(), stem.to_string())
+    } else if let Some(ref sqlite) = cfg.exporter.sqlite {
+        let p = PathBuf::from(&sqlite.database_url);
+        let dir = p.parent().unwrap_or(&dot);
+        let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("sqllog");
+        (dir.to_path_buf(), stem.to_string())
+    } else {
+        return (None, None);
+    };
+    let csv = parent.join(format!("{stem}_templates.csv"));
+    let sqlite = parent.join(format!("{stem}_templates.db"));
+    (Some(csv), Some(sqlite))
 }
 
 /// `[charts]` 配置段
