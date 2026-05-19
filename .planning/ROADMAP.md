@@ -136,7 +136,18 @@ Plans:
   3. 用户能在 README 或落地页中观看嵌入的 Asciicast 终端演示（约 30 秒，展示 `sqllog2db run` 实时输出）
   4. CI 工作流包含 lychee 链接检查，文档中不存在断链
 
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 23-01-PLAN.md -- 创建 docs/quickstart.md（4 场景教程 + 环境准备 + 故障排除）
+- [ ] 23-02-PLAN.md -- 创建 docs/config-reference.md（8 配置块 x TOML示例+字段表格+注意事项）
+- [ ] 23-03-PLAN.md -- Asciicast 录制 init→validate→run，嵌入 README(SVG) + Pages(交互播放器)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 23-04-PLAN.md -- lychee 链接检查 CI workflow（paths 过滤 + 外部重试 + 内部严格）
 
 ## Progress
 
@@ -166,4 +177,4 @@ Plans:
 | 20. 测试覆盖深化 | v1.4 | 3/3 | Complete | 2026-05-18 |
 | 21. README 全面更新 + 根文档补全 | v1.5 | 0/2 | Not started | - |
 | 22. GitHub Pages 落地页 + 部署流水线 | v1.5 | 0/2 | Not started | - |
-| 23. 补充文档 + CI 质量门禁 | v1.5 | 0/TBD | Not started | - |
+| 23. 补充文档 + CI 质量门禁 | v1.5 | 0/4 | Not started | - |
