@@ -1,0 +1,80 @@
+:root {
+  --brand-color: #2563eb;
+  --brand-accent: #06b6d4;
+  --brand-hover: #1d4ed8;
+}
+
+/* Hero area — larger title with more breathing room */
+.content h1 {
+  font-size: 2.5rem;
+  padding-top: 2rem;
+}
+
+.content h1:first-child {
+  margin-top: 0;
+}
+
+body,
+.content {
+  font-size: 16px;
+  line-height: 1.7;
+}
+
+/* Link colors */
+.content a {
+  color: var(--brand-color);
+}
+
+.content a:hover {
+  color: var(--brand-hover);
+}
+
+/* Code block rounding */
+pre,
+code {
+  border-radius: 6px;
+}
+
+/* Performance table alternating rows */
+.content table tbody tr:nth-child(even) {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+@media (prefers-color-scheme: dark) {
+  .content table tbody tr:nth-child(even) {
+    background: rgba(255, 255, 255, 0.05);
+  }
+}
+
+.content table {
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+/* SVG Gallery — collapsible details */
+.content details {
+  margin: 1rem 0;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+}
+
+.content details summary {
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.5rem 0;
+}
+
+.content details:not([open]) {
+  opacity: 0.85;
+}
+
+.content details[open] {
+  opacity: 1;
+}
+
+@media (prefers-color-scheme: dark) {
+  .content details {
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+}

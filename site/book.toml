@@ -1,0 +1,22 @@
+[book]
+title = "sqllog2db"
+authors = ["guangl"]
+description = "High-performance CLI tool for parsing DaMeng database SQL logs and exporting to CSV/SQLite"
+language = "en"
+
+[output.html]
+default-theme = "ayu"
+preferred-dark-theme = "ayu"
+additional-css = ["theme/custom.css"]
+git-repository-url = "https://github.com/guangl/sqllog2db"
+
+[output.html.fold]
+enable = true
+level = 1
+
+[output.html.playground]
+editor = false
+runnable = false
+
+[build]
+create-missing = false
