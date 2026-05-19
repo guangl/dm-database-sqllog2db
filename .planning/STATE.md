@@ -2,10 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: 文档中文化 & 延后需求补全
-status: roadmap_ready
-last_updated: "2026-05-19T20:10:00.000Z"
-last_activity: 2026-05-19
+status: Roadmap created, awaiting plan-phase execution
+stopped_at: Phases 24-27 context gathered
+last_updated: "2026-05-19T12:19:46.935Z"
+last_activity: 2026-05-19 — v1.6 roadmap created
 progress:
+  total_phases: 4
+  completed_phases: 0
   total_plans: 0
   completed_plans: 0
   percent: 0
@@ -75,7 +78,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-05-19
-Stopped at: v1.6 roadmap created (Phases 24–27)
-Resume file: .planning/ROADMAP.md
+Last session: 2026-05-19T12:19:46.927Z
+Stopped at: Phases 24-27 context gathered
+Resume file: .planning/phases/24-svg/24-CONTEXT.md
 Next step: `/gsd:plan-phase 24`
