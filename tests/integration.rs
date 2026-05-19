@@ -1,6 +1,5 @@
 //! Integration tests for CLI handlers and the run pipeline.
 
-use dm_database_sqllog2db::cli::digest::{SortBy, handle_digest};
 use dm_database_sqllog2db::cli::init::handle_init;
 use dm_database_sqllog2db::cli::run::handle_run;
 use dm_database_sqllog2db::cli::show_config::handle_show_config;
@@ -339,108 +338,6 @@ fn test_resume_reprocesses_changed_file() {
     assert!(csv2.exists(), "changed file should be reprocessed");
     let rows = std::fs::read_to_string(&csv2).unwrap().lines().count();
     assert!(rows >= 1, "expected rows from reprocessed file");
-}
-
-fn make_stats_cfg(log_dir: &std::path::Path) -> Config {
-    Config {
-        sqllog: SqllogConfig {
-            path: log_dir.to_str().unwrap().to_string(),
-        },
-        ..Default::default()
-    }
-}
-
-// ── handle_digest tests (smoke tests — handle_digest returns (), no return value assertion) ───────────────────
-
-#[test]
-fn test_handle_digest_empty_dir() {
-    let dir = tempfile::TempDir::new().unwrap();
-    let log_dir = dir.path().join("nologs");
-    let cfg = Config {
-        sqllog: SqllogConfig {
-            path: log_dir.to_str().unwrap().to_string(),
-        },
-        ..Default::default()
-    };
-    // No log files → prints message and returns without panic
-    handle_digest(&cfg, true, None, SortBy::Count, 1, false, None);
-}
-
-#[test]
-fn test_handle_digest_basic() {
-    let dir = tempfile::TempDir::new().unwrap();
-    std::fs::create_dir_all(dir.path()).unwrap();
-    write_test_log(&dir.path().join("data.log"), 20);
-    let cfg = make_stats_cfg(dir.path());
-    handle_digest(&cfg, true, None, SortBy::Count, 1, false, None);
-}
-
-#[test]
-fn test_handle_digest_sort_exec() {
-    let dir = tempfile::TempDir::new().unwrap();
-    std::fs::create_dir_all(dir.path()).unwrap();
-    write_test_log(&dir.path().join("data.log"), 20);
-    let cfg = make_stats_cfg(dir.path());
-    handle_digest(&cfg, true, None, SortBy::Exec, 1, false, None);
-}
-
-#[test]
-fn test_handle_digest_top_n() {
-    let dir = tempfile::TempDir::new().unwrap();
-    std::fs::create_dir_all(dir.path()).unwrap();
-    write_test_log(&dir.path().join("data.log"), 30);
-    let cfg = make_stats_cfg(dir.path());
-    handle_digest(&cfg, true, Some(5), SortBy::Count, 1, false, None);
-}
-
-#[test]
-fn test_handle_digest_min_count() {
-    let dir = tempfile::TempDir::new().unwrap();
-    std::fs::create_dir_all(dir.path()).unwrap();
-    write_test_log(&dir.path().join("data.log"), 20);
-    let cfg = make_stats_cfg(dir.path());
-    // min_count=100 filters out everything — should print "No SQL fingerprints found."
-    handle_digest(&cfg, true, None, SortBy::Count, 100, false, None);
-}
-
-#[test]
-fn test_handle_digest_json() {
-    let dir = tempfile::TempDir::new().unwrap();
-    std::fs::create_dir_all(dir.path()).unwrap();
-    write_test_log(&dir.path().join("data.log"), 10);
-    let cfg = make_stats_cfg(dir.path());
-    handle_digest(&cfg, true, None, SortBy::Count, 1, true, None);
-}
-
-#[test]
-fn test_handle_digest_nonexistent_dir() {
-    let cfg = Config {
-        sqllog: SqllogConfig {
-            path: "/nonexistent_dir_xyz".to_string(),
-        },
-        ..Default::default()
-    };
-    // Should not panic
-    handle_digest(&cfg, true, None, SortBy::Count, 1, false, None);
-}
-
-#[test]
-fn test_handle_digest_aggregates_same_fingerprint() {
-    let dir = tempfile::TempDir::new().unwrap();
-    std::fs::create_dir_all(dir.path()).unwrap();
-    // Write records with identical SQL structure but different literal values
-    // These should collapse into one fingerprint
-    let mut buf = String::new();
-    use std::fmt::Write as _;
-    for i in 0..5 {
-        writeln!(
-            buf,
-            "2025-01-15 10:30:28.001 (EP[0] sess:0x{i:04x} user:U trxid:{i} stmt:0x1 appname:App ip:10.0.0.1) [SEL] SELECT * FROM tbl WHERE id={i}. EXECTIME: 10(ms) ROWCOUNT: 1(rows) EXEC_ID: {i}.",
-        ).unwrap();
-    }
-    std::fs::write(dir.path().join("data.log"), buf).unwrap();
-    let cfg = make_stats_cfg(dir.path());
-    handle_digest(&cfg, true, None, SortBy::Count, 1, true, None);
 }
 
 // ── handle_init tests ────────────────────────────────────────────────────────

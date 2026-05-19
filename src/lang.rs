@@ -91,7 +91,6 @@ pub(crate) fn apply_zh(cmd: Command) -> Command {
         .mut_subcommand("init", zh_init)
         .mut_subcommand("validate", zh_validate)
         .mut_subcommand("show-config", zh_show_config)
-        .mut_subcommand("digest", zh_digest)
 }
 
 fn zh_common_config_args(s: Command) -> Command {
@@ -134,21 +133,6 @@ fn zh_show_config(s: Command) -> Command {
     zh_common_config_args(s)
         .about("显示当前生效配置（含 --set 覆盖后的值）")
         .mut_arg("diff", |a| a.help("高亮与默认配置不同的字段"))
-}
-
-fn zh_digest(s: Command) -> Command {
-    zh_common_config_args(s)
-        .about("SQL 指纹聚合：按查询结构归类统计执行次数与耗时")
-        .mut_arg("from", |a| a.help("只处理此时间戳之后的记录"))
-        .mut_arg("to", |a| a.help("只处理此时间戳之前的记录"))
-        .mut_arg("top", |a| a.help("只显示前 N 条指纹"))
-        .mut_arg("sort", |a| {
-            a.help("排序方式：count（执行次数，默认）或 exec（总执行时间）")
-        })
-        .mut_arg("min_count", |a| {
-            a.help("忽略出现次数低于 N 的指纹（默认 1）")
-        })
-        .mut_arg("json", |a| a.help("以 JSON 格式输出结果（到 stdout）"))
 }
 
 #[cfg(test)]

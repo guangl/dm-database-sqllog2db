@@ -5,8 +5,6 @@ pub(crate) use filters::{CompiledMetaFilters, CompiledSqlFilters};
 pub mod normalizer;
 pub(crate) use normalizer::compute_normalized;
 
-pub mod fingerprint;
-pub(crate) use fingerprint::fingerprint;
 pub(crate) use normalizer::normalize_template;
 
 pub mod aggregator;

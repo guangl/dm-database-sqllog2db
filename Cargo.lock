@@ -487,7 +487,6 @@ dependencies = [
  "rusqlite",
  "ryu",
  "serde",
- "serde_json",
  "smallvec",
  "tempfile",
  "thiserror",
