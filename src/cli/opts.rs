@@ -200,12 +200,6 @@ pub(crate) enum Commands {
         #[arg(value_enum)]
         shell: Shell,
     },
-    /// Self-update the application to the latest version
-    SelfUpdate {
-        /// Check for updates without performing the update
-        #[arg(short = 'k', long = "check")]
-        check: bool,
-    },
     /// Print the man page to stdout
     Man,
 }

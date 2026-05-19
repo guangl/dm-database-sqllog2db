@@ -18,23 +18,11 @@ pub enum Error {
     #[error("Export error: {0}")]
     Export(#[from] ExportError),
 
-    #[error("Update error: {0}")]
-    Update(#[from] UpdateError),
-
     #[error("IO error: {0}")]
     Io(#[from] io::Error),
 
     #[error("Interrupted by user")]
     Interrupted,
-}
-
-#[derive(Debug, Error)]
-pub enum UpdateError {
-    #[error("Update failed: {0}")]
-    UpdateFailed(String),
-
-    #[error("Check for updates failed: {0}")]
-    CheckFailed(String),
 }
 
 #[derive(Debug, Error)]

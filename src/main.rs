@@ -39,11 +39,10 @@ fn exit_code_for(e: &error::Error) -> i32 {
         error::Error::File(_) | error::Error::Parser(_) | error::Error::Io(_) => EXIT_IO,
         error::Error::Export(_) => EXIT_EXPORT,
         error::Error::Interrupted => EXIT_INTERRUPTED,
-        error::Error::Update(_) => 1,
     }
 }
 
-/// Initialize simple console logging for init/completions/update commands
+/// Initialize simple console logging for init/completions commands
 fn init_simple_logging(verbose: bool, quiet: bool) {
     let level = if verbose {
         "debug"
@@ -135,16 +134,6 @@ fn run() -> Result<()> {
         init_simple_logging(cli.verbose, cli.quiet);
     }
 
-    // Check for updates at startup unless we are already running self-update or quiet
-    if !cli.quiet
-        && !matches!(
-            &cli.command,
-            Some(cli::opts::Commands::SelfUpdate { .. } | cli::opts::Commands::Completions { .. })
-        )
-    {
-        cli::update::check_for_updates_at_startup();
-    }
-
     match &cli.command {
         Some(cli::opts::Commands::Init { output, force }) => {
             cli::init::handle_init(output, *force, lang)
@@ -153,7 +142,6 @@ fn run() -> Result<()> {
             cli::opts::Cli::generate_completions(*shell);
             Ok(())
         }
-        Some(cli::opts::Commands::SelfUpdate { check }) => cli::update::handle_update(*check),
         Some(cli::opts::Commands::Man) => {
             use clap::CommandFactory;
             let cmd = cli::opts::Cli::command();
@@ -352,7 +340,7 @@ fn load_config(config_path: &str) -> Result<Config> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::error::{ConfigError, ExportError, FileError, ParserError, UpdateError};
+    use crate::error::{ConfigError, ExportError, FileError, ParserError};
 
     #[test]
     fn test_exit_code_config_error() {
@@ -394,12 +382,6 @@ mod tests {
     #[test]
     fn test_exit_code_interrupted() {
         assert_eq!(exit_code_for(&error::Error::Interrupted), EXIT_INTERRUPTED);
-    }
-
-    #[test]
-    fn test_exit_code_update_error() {
-        let e = error::Error::Update(UpdateError::UpdateFailed("test".into()));
-        assert_eq!(exit_code_for(&e), 1);
     }
 
     #[test]

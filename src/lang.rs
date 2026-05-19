@@ -97,10 +97,6 @@ pub(crate) fn apply_zh(cmd: Command) -> Command {
             s.about("生成 Shell 自动补全脚本")
                 .mut_arg("shell", |a| a.help("目标 Shell 类型"))
         })
-        .mut_subcommand("self-update", |s| {
-            s.about("将工具自更新到最新版本")
-                .mut_arg("check", |a| a.help("只检查是否有新版本（不执行更新）"))
-        })
         .mut_subcommand("man", |s| s.about("将 man page 输出到 stdout"))
 }
 
