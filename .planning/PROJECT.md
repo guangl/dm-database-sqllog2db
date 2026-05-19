@@ -7,7 +7,7 @@
 **Target features:**
 - 文档中文化（README、GitHub Pages、docs/ 全部改为中文）
 - 去 SVG 化（文档中移除 SVG Gallery 和截图引用，代码保留）
-- 模板统计独立报告（TMPL-03 JSON + TMPL-03b CSV）
+- 模板统计独立报告（TMPL-03 CSV + TMPL-03b SQLite）
 - 延后文档补全（CONTRIBUTING.md、SECURITY.md、docs/architecture.md）
 - GitHub Pages 单页 → 多页文档站（PAGES-F01）
 
@@ -66,11 +66,18 @@ sqllog2db 是一个用于解析达梦数据库 SQL 日志文件并将其导出�
 
 ### Active
 
-- [ ] **TMPL-03**: 模板统计结果输出为独立 JSON 报告文件 — 延后至 v1.6+
-- [ ] **TMPL-03b**: 模板统计结果输出为独立 CSV 摘要文件 — 延后至 v1.6+
-- [ ] **DOC-F01**: CONTRIBUTING.md — 贡献指南（环境搭建、编码规约、PR 流程） — v1.6
-- [ ] **DOC-F02**: SECURITY.md — 安全策略（漏洞报告联系方式） — v1.6
-- [ ] **DOC-F03**: docs/architecture.md — 详细架构文档 — v1.6
+- [ ] **TMPL-03**: 模板统计结果输出为独立 CSV 摘要文件（`*_templates.csv`） — v1.6
+- [ ] **TMPL-03b**: 模板统计结果输出为独立 SQLite 报告文件（`*_templates.db`） — v1.6
+- [ ] **I18N-01**: README.md 改为中文 — v1.6
+- [ ] **I18N-02**: GitHub Pages 落地页改为中文 — v1.6
+- [ ] **I18N-03**: docs/quickstart.md 改为中文 — v1.6
+- [ ] **I18N-04**: docs/config-reference.md 改为中文 — v1.6
+- [ ] **DESVG-01**: README 中移除 SVG 截图和图表引用 — v1.6
+- [ ] **DESVG-02**: GitHub Pages 中移除 SVG Gallery section — v1.6
+- [ ] **DOC-01**: CONTRIBUTING.md（中文）— 贡献指南 — v1.6
+- [ ] **DOC-02**: SECURITY.md（中文）— 安全策略 — v1.6
+- [ ] **DOC-03**: docs/architecture.md（中文）— 架构文档 — v1.6
+- [ ] **PAGES-01**: GitHub Pages 单页→多页 mdBook 文档站 — v1.6
 
 ### Out of Scope
 
@@ -121,6 +128,10 @@ sqllog2db 是一个用于解析达梦数据库 SQL 日志文件并将其导出�
 | rsvg-convert 替代 ImageMagick | macOS IMv7 字体渲染失败，librsvg 干净解决 | ✓ v1.5 |
 | ASCII art 替代 Mermaid.js（Pages） | mdBook 不支持 Mermaid.js，无需 JS 依赖 | ✓ v1.5 |
 | lychee CI 内部严格 + 外部重试 | 防断链回归，crates.io 速率限制排除 | ✓ v1.5 |
+| README 改为中文（I18N-01） | 目标用户为中文 DBA，无需双语维护 | v1.6 |
+| I18N + DESVG 合并为 Phase 24 | 修改相同文件集（README、docs/*、site/） | v1.6 |
+| TMPL-03 为独立 CSV 报告（非 JSON） | 与既有 `*_templates.csv` 输出模式一致 | v1.6 |
+| TMPL-03b 为独立 SQLite 报告 | 补充 JSON 外另一种结构化输出格式 | v1.6 |
 
 ## Evolution
 
@@ -133,4 +144,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-19 after v1.6 milestone start*
+*Last updated: 2026-05-19 after v1.6 roadmap creation*

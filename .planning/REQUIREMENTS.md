@@ -50,24 +50,24 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| I18N-01 | — | Pending |
-| I18N-02 | — | Pending |
-| I18N-03 | — | Pending |
-| I18N-04 | — | Pending |
-| DESVG-01 | — | Pending |
-| DESVG-02 | — | Pending |
-| DOC-01 | — | Pending |
-| DOC-02 | — | Pending |
-| DOC-03 | — | Pending |
-| PAGES-01 | — | Pending |
-| TMPL-03 | — | Pending |
-| TMPL-03b | — | Pending |
+| I18N-01 | Phase 24 | Pending |
+| I18N-02 | Phase 24 | Pending |
+| I18N-03 | Phase 24 | Pending |
+| I18N-04 | Phase 24 | Pending |
+| DESVG-01 | Phase 24 | Pending |
+| DESVG-02 | Phase 24 | Pending |
+| DOC-01 | Phase 25 | Pending |
+| DOC-02 | Phase 25 | Pending |
+| DOC-03 | Phase 25 | Pending |
+| PAGES-01 | Phase 26 | Pending |
+| TMPL-03 | Phase 27 | Pending |
+| TMPL-03b | Phase 27 | Pending |
 
 **Coverage:**
 - v1 requirements: 12 total
-- Mapped to phases: 0
-- Unmapped: 12 ⚠️
+- Mapped to phases: 12
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-05-19*
-*Last updated: 2026-05-19 after initial definition*
+*Last updated: 2026-05-19 — v1.6 phases mapped*
