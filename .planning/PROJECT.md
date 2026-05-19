@@ -2,20 +2,20 @@
 
 ## Current State
 
-sqllog2db 完成七个里程碑迭代（v1.0–v1.6），具备完整的 SQL 模板分析、SVG 可视化、嵌套配置模型、模块化代码架构，全中文项目文档和 GitHub Pages mdBook 多页文档站。v1.7 进入精简阶段。
+sqllog2db 完成七个里程碑迭代（v1.0–v1.6），具备完整的 SQL 模板分析、SVG 可视化、嵌套配置模型、模块化代码架构，全中文项目文档和 GitHub Pages mdBook 多页文档站。v1.7 进入精简阶段。Phase 28 完成，移除了 SVG 图表、self-update 自更新、Shell 补全和 Man page 生成。
 
 ## Current Milestone: v1.7 项目精简
 
 **Goal:** 移除低频和非核心功能，减少依赖体积和代码复杂度，保留核心解析导出能力。
 
 **Target features:**
-- 移除 SVG 图表模块（charts/*, plotters）
-- 移除 self-update 自更新（update.rs, self_update, reqwest, rustls）
+- ✅ 移除 SVG 图表模块（charts/*, plotters）— Phase 28
+- ✅ 移除 self-update 自更新（update.rs, self_update, reqwest, rustls）— Phase 28
+- ✅ 移除 Shell 补全 + Man page（clap_complete, clap_mangen）— Phase 28
 - 移除 stats 统计命令（cli/stats.rs, serde_json）
 - 移除 digest 摘要命令（cli/digest.rs, pipeline/fingerprint.rs）
 - 移除模板分析+报告（aggregator, template_reporter, hdrhistogram）
 - 移除断点续传（resume.rs, [resume] 配置）
-- 移除 Shell 补全 + Man page（clap_complete, clap_mangen）
 
 ## Previous Milestones
 
@@ -29,11 +29,11 @@ sqllog2db 完成七个里程碑迭代（v1.0–v1.6），具备完整的 SQL 模
 
 ## What This Is
 
-sqllog2db 是一个用于解析达梦数据库 SQL 日志文件并将其导出为 CSV 或 SQLite 的命令行工具。以流式方式处理日志记录，通过可选的 Pipeline 过滤器处理后写入配置的导出器。支持正则表达式多字段过滤（AND 语义 include + OR-veto exclude）、输出字段精确控制、SQL 模板归一化与统计聚合、四类 SVG 图表可视化。
+sqllog2db 是一个用于解析达梦数据库 SQL 日志文件并将其导出为 CSV 或 SQLite 的命令行工具。以流式方式处理日志记录，通过可选的 Pipeline 过滤器处理后写入配置的导出器。支持正则表达式多字段过滤（AND 语义 include + OR-veto exclude）、输出字段精确控制、SQL 模板归一化与统计聚合。
 
 ## Core Value
 
-用户能够精确指定"导出哪些记录的哪些字段"——过滤逻辑清晰可配置，输出结果完全可控。模板分析与图表让 DBA 能直观理解 SQL 执行模式。
+用户能够精确指定"导出哪些记录的哪些字段"——过滤逻辑清晰可配置，输出结果完全可控。SQL 模板归一化帮助 DBA 理解 SQL 执行模式。
 
 ## Requirements
 
@@ -78,6 +78,9 @@ sqllog2db 是一个用于解析达梦数据库 SQL 日志文件并将其导出�
 - ✓ PAGES-01: GitHub Pages 单页→多页 mdBook 文档站 — v1.6
 - ✓ TMPL-03: 模板统计结果独立 CSV 摘要文件 — v1.6
 - ✓ TMPL-03b: 模板统计结果独立 SQLite 报告文件 — v1.6
+- ✓ RM-01: 移除 SVG 图表模块 — v1.7 Phase 28
+- ✓ RM-02: 移除 self-update 自更新功能 — v1.7 Phase 28
+- ✓ RM-07: 移除 Shell 补全和 Man page 生成 — v1.7 Phase 28
 
 ### Active
 
@@ -96,16 +99,15 @@ sqllog2db 是一个用于解析达梦数据库 SQL 日志文件并将其导出�
 
 ## Context
 
-- 架构：过滤层（`src/pipeline/filters/`）+ 模板分析层（`src/pipeline/fingerprint.rs` + `template_aggregator.rs` + `template_reporter.rs`）+ 图表层（`src/charts/`）
+- 架构：过滤层（`src/pipeline/filters/`）+ 模板分析层（`src/pipeline/fingerprint.rs` + `template_aggregator.rs` + `template_reporter.rs`）
 - v1.4 重构：配置模型 5 顶层字段（template/charts/filter/output/replace_parameters）、代码 5 模块拆分
 - v1.6 新增：`[template.report]` 配置段 + `TemplateReporter` 独立 CSV/SQLite 报告输出
 - `CompiledMetaFilters` + `CompiledSqlFilters` 预编译，`validate_and_compile()` 单次编译贯穿全链路
 - `TemplateAggregator` 通过 `Option<&mut TemplateAggregator>` 侧路径接入热循环
 - `ordered_indices: Vec<usize>` 注入 Exporter，支持任意字段顺序投影
 - `pipeline.is_empty()` 保证无过滤时零开销快路径
-- plotters SVG-only 配置，无字体/图像系统依赖
 - 文档：全中文 README + mdBook 多页文档站（四章导航：首页、快速入门、配置参考、架构设计）
-- Rust LOC: ~15,000+ (src/) | 测试: ~933 tests | 基准: ~5.2M records/sec (CSV synthetic)
+- Rust LOC: ~16,000+ (src/) | 测试: ~832 tests | 基准: ~5.2M records/sec (CSV synthetic)
 
 ## Constraints
 
@@ -124,7 +126,6 @@ sqllog2db 是一个用于解析达梦数据库 SQL 日志文件并将其导出�
 | validate_and_compile() 合并接口 | 消除双重 Regex::new() | ✓ v1.2 |
 | PERF-10 D-G1 门控 >5% | 避免盲目优化 | ✓ v1.2（未命中）|
 | hdrhistogram 存储耗时样本 | ~24KB/模板 vs Vec<u64> ~40MB | ✓ v1.3 |
-| plotters SVG-only | 无字体/图像系统依赖 | ✓ v1.3 |
 | 并行 CSV map-reduce merge() | 消除锁竞争 | ✓ v1.3 |
 | RawFiltersFeature 中间 struct 向后兼容 | serde#2341 flatten+alias 不可靠 | ✓ v1.4 |
 | 破坏性升级无 serde alias | validate() 明确拒绝旧路径 | ✓ v1.4 |
@@ -152,4 +153,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-19 — v1.7 milestone started*
+*Last updated: 2026-05-20 — v1.7 Phase 28 complete*
