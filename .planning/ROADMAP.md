@@ -148,10 +148,11 @@ Plans:
 2. 启用模板分析时，输出目录生成 `*_templates.db` SQLite 独立报告文件
 3. 报告文件内容与 `--include-templates` 双路统计输出保持一致
 4. 禁用模板分析时，不生成任何额外的报告文件
-**Plans**: 1 plan
+**Plans**: 2 plans
 
 Plans:
-- [ ] 25-01-PLAN.md — 创建 CONTRIBUTING.md、SECURITY.md、docs/architecture.md 三份中文文档
+- [ ] 27-01-PLAN.md — [templates] 配置段 + 自动派生文件名 + TemplateReporter CSV 报告
+- [ ] 27-02-PLAN.md — TemplateReporter SQLite 三表范式化报告
 
 ## Progress
 
@@ -173,7 +174,7 @@ Plans:
 | 14. Exporter 集成输出 | v1.3 | 4/4 | Complete | 2026-05-16 |
 | 15. SVG 图表基础设施 + 前两类图表 | v1.3 | 5/5 | Complete | 2026-05-17 |
 | 16. 剩余图表 | v1.3 | 5/5 | Complete | 2026-05-17 |
-| 17. 过滤器配置嵌套化 | v1.4 | 2/2 | Complete | 2026-05-18 |
+| 17. 过滤器配置嵌套化 | v1.4 | 3/3 | Complete | 2026-05-18 |
 | 18. 模板 & 图表配置嵌套化 | v1.4 | 3/3 | Complete | 2026-05-18 |
 | 19. 代码结构重构 | v1.4 | 4/4 | Complete | 2026-05-18 |
 | 20. 测试覆盖深化 | v1.4 | 3/3 | Complete | 2026-05-18 |
@@ -183,4 +184,4 @@ Plans:
 | 24. 文档中文化 & 去 SVG 化 | v1.6 | 0/3 | Not started | - |
 | 25. 延后文档补全 | v1.6 | 0/0 | Not started | - |
 | 26. GitHub Pages 多页文档站 | v1.6 | 0/1 | Not started | - |
-| 27. 模板报告独立输出 | v1.6 | 0/0 | Not started | - |
+| 27. 模板报告独立输出 | v1.6 | 0/2 | Not started | - |

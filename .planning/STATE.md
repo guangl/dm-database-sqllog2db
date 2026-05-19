@@ -4,12 +4,12 @@ milestone: v1.6
 milestone_name: 文档中文化 & 延后需求补全
 status: executing
 stopped_at: Phases 24-27 context gathered
-last_updated: "2026-05-19T12:51:58.693Z"
-last_activity: 2026-05-19 -- Phase 26 planning complete
+last_updated: "2026-05-19T13:01:21.773Z"
+last_activity: 2026-05-19 -- Phase 27 planning complete
 progress:
   total_phases: 4
   completed_phases: 0
-  total_plans: 5
+  total_plans: 7
   completed_plans: 0
   percent: 0
 ---
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-05-19 after v1.6 milestone start)
 Phase: 24 (文档中文化 & 去 SVG 化) — Not started
 Plan: —
 Status: Ready to execute
-Last activity: 2026-05-19 -- Phase 26 planning complete
+Last activity: 2026-05-19 -- Phase 27 planning complete
 
 ### Phase Sequence
 
