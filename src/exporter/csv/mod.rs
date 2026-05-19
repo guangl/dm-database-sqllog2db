@@ -7,10 +7,8 @@ use std::fs::{File, OpenOptions};
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 
-mod companion;
 pub(crate) mod writer;
 
-pub(crate) use self::companion::write_companion_rows;
 use self::writer::{write_record, write_record_preparsed};
 
 #[allow(clippy::struct_excessive_bools)]
@@ -238,15 +236,6 @@ impl Exporter for CsvExporter {
 
     fn stats_snapshot(&self) -> Option<ExportStats> {
         Some(self.stats)
-    }
-
-    fn write_template_stats(
-        &mut self,
-        stats: &[crate::pipeline::TemplateStats],
-        csv_output_path: Option<&str>,
-        _sqlite_table_name: Option<&str>,
-    ) -> Result<()> {
-        companion::write_template_stats(stats, csv_output_path)
     }
 }
 

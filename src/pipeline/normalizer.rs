@@ -459,6 +459,7 @@ const NEEDS_SPECIAL_NORM: [bool; 256] = {
 /// 结构相同的 SQL（无论字面量值或数量）将得到同一模板 key，用于模板聚合统计。
 /// 原位于 `fingerprint.rs`，为保留模板管道功能迁移至此。
 #[must_use]
+#[allow(dead_code)]
 pub fn normalize_template(sql: &str) -> String {
     scan_sql_bytes(sql)
 }

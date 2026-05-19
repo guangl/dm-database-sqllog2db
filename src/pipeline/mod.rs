@@ -5,14 +5,6 @@ pub(crate) use filters::{CompiledMetaFilters, CompiledSqlFilters};
 pub mod normalizer;
 pub(crate) use normalizer::compute_normalized;
 
-pub(crate) use normalizer::normalize_template;
-
-pub mod aggregator;
-pub(crate) use aggregator::TemplateAggregator;
-pub(crate) use aggregator::TemplateStats;
-
-pub(crate) mod template_reporter;
-
 use dm_database_parser_sqllog::{MetaParts, Sqllog};
 use serde::Deserialize;
 
@@ -120,43 +112,6 @@ impl NormalizeConfig {
 
 fn default_true() -> bool {
     true
-}
-
-/// `[template]` 配置段 — SQL 模板归一化与聚合
-#[derive(Debug, Deserialize, Clone, Default)]
-#[allow(dead_code)]
-pub struct TemplateConfig {
-    /// 是否启用 SQL 模板归一化（默认 false）
-    #[serde(default)]
-    pub enable: bool,
-    /// `[template.report]` 子配置段 — 独立报告输出
-    #[serde(default)]
-    pub report: Option<TemplateReportConfig>,
-}
-
-/// `[template.report]` 子配置段 — 独立模板报告输出（D-05）
-#[derive(Debug, Deserialize, Clone)]
-#[allow(dead_code)]
-pub struct TemplateReportConfig {
-    /// 是否启用独立模板报告（默认 `true`）
-    #[serde(default = "default_true")]
-    pub enabled: bool,
-    /// CSV 报告路径；空字符串 = 从 exporter 路径自动派生
-    #[serde(default)]
-    pub csv_report_path: String,
-    /// `SQLite` 报告路径；空字符串 = 从 exporter 路径自动派生
-    #[serde(default)]
-    pub sqlite_report_path: String,
-}
-
-impl Default for TemplateReportConfig {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            csv_report_path: String::new(),
-            sqlite_report_path: String::new(),
-        }
-    }
 }
 
 /// `[output]` 配置段：字段投影
@@ -295,30 +250,6 @@ mod tests {
             placeholders: vec!["?".into(), ":1".into()],
         };
         assert_eq!(cfg.placeholder_override(), None);
-    }
-
-    #[test]
-    fn test_template_config_default() {
-        let cfg = TemplateConfig::default();
-        assert!(!cfg.enable);
-        assert!(cfg.report.is_none());
-    }
-
-    #[test]
-    fn test_template_config_deserialize_with_report() {
-        let toml = "enable = true\n[report]\nenabled = true\ncsv_report_path = \"out.csv\"";
-        let cfg: TemplateConfig = toml::from_str(toml).unwrap();
-        assert!(cfg.enable);
-        let r = cfg.report.unwrap();
-        assert!(r.enabled);
-        assert_eq!(r.csv_report_path, "out.csv");
-    }
-
-    #[test]
-    fn test_template_config_deserialize_empty_is_default() {
-        let cfg: TemplateConfig = toml::from_str("").unwrap();
-        assert!(!cfg.enable);
-        assert!(cfg.report.is_none());
     }
 
     #[test]

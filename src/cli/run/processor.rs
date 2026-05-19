@@ -2,7 +2,7 @@ use crate::color;
 use crate::error::Result;
 use crate::exporter::ExporterManager;
 use crate::pipeline::normalizer::ParamBuffer;
-use crate::pipeline::{CompiledSqlFilters, Pipeline, TemplateAggregator};
+use crate::pipeline::{CompiledSqlFilters, Pipeline};
 use dm_database_parser_sqllog::LogParser;
 use indicatif::{HumanCount, ProgressBar};
 use log::info;
@@ -24,7 +24,6 @@ pub(super) fn process_log_file(
     limit: Option<usize>,
     interrupted: &Arc<AtomicBool>,
     do_normalize: bool,
-    mut aggregator: Option<&mut TemplateAggregator>,
     placeholder_override: Option<bool>,
     params_buffer: &mut ParamBuffer,
     ns_scratch: &mut Vec<u8>,
@@ -88,7 +87,7 @@ pub(super) fn process_log_file(
                         // DML 或通过过滤的 PARAMS：CSV 关闭性能指标时合成空 pm，
                         // 跳过 find_indicators_split（D-05/D-06）；SQL 字段来自 record.body()。
                         // 若 aggregator 存在，无论 include_pm 如何都需要真实的 exectime（CR-01）。
-                        let pm = if include_pm || aggregator.is_some() {
+                        let pm = if include_pm {
                             record.parse_performance_metrics()
                         } else {
                             dm_database_parser_sqllog::PerformanceMetrics {
@@ -125,38 +124,6 @@ pub(super) fn process_log_file(
                             if let Some(remaining) = limit {
                                 if records_in_file >= remaining {
                                     break 'outer;
-                                }
-                            }
-
-                            // 模板聚合：仅对 DML 记录（有 tag）生效；PARAMS 记录不计入统计。
-                            if let Some(ref mut agg) = aggregator {
-                                // 防御性检查：外层 `passes=true` 已隐含 DML 路径，
-                                // 但 needs_pm 也可对无 tag 的 PARAMS 记录成立（do_normalize 时）。
-                                // 此处显式排除 tag.is_none() 的记录，防止重构时意外计入 PARAMS。
-                                if record.tag.is_some() {
-                                    let tmpl_key =
-                                        crate::pipeline::normalize_template(pm.sql.as_ref());
-                                    let exectime_us = if pm.exectime.is_finite()
-                                        && pm.exectime > 0.0
-                                    {
-                                        // pm.exectime > 0 已确保无符号损失；
-                                        // u64::MAX as f32 精度损失可接受（上限保护）。
-                                        #[allow(
-                                            clippy::cast_possible_truncation,
-                                            clippy::cast_sign_loss,
-                                            clippy::cast_precision_loss
-                                        )]
-                                        let us = (pm.exectime * 1000.0).min(u64::MAX as f32) as u64;
-                                        us
-                                    } else {
-                                        0
-                                    };
-                                    agg.observe(
-                                        &tmpl_key,
-                                        exectime_us,
-                                        record.ts.as_ref(),
-                                        meta.username.as_ref(),
-                                    );
                                 }
                             }
 

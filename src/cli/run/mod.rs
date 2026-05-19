@@ -3,7 +3,7 @@ use crate::config::Config;
 use crate::error::{Error, Result};
 use crate::exporter::ExporterManager;
 use crate::parser::SqllogParser;
-use crate::pipeline::{CompiledMetaFilters, CompiledSqlFilters, TemplateAggregator};
+use crate::pipeline::{CompiledMetaFilters, CompiledSqlFilters};
 use indicatif::HumanCount;
 use log::{info, warn};
 use std::sync::Arc;
@@ -90,7 +90,6 @@ pub fn handle_run(
             .replace_parameters
             .as_ref()
             .is_none_or(|r| r.enable);
-    let do_template = false;
     let placeholder_override = final_cfg
         .replace_parameters
         .as_ref()
@@ -113,7 +112,7 @@ pub fn handle_run(
 
     if use_parallel {
         info!("Parsing and exporting SQL logs (parallel, {jobs} jobs)...");
-        let (processed_files, parallel_skipped, _parallel_agg) = process_csv_parallel(
+        let (processed_files, parallel_skipped) = process_csv_parallel(
             &log_files,
             final_cfg,
             &pipeline,
@@ -123,7 +122,6 @@ pub fn handle_run(
             resume_state.as_ref(),
             quiet,
             do_normalize,
-            do_template,
             placeholder_override,
             field_mask,
             &ordered_indices,
@@ -156,7 +154,6 @@ pub fn handle_run(
         );
         let mut params_buffer = crate::pipeline::normalizer::ParamBuffer::default();
         let mut ns_scratch: Vec<u8> = Vec::with_capacity(4096);
-        let mut template_agg = do_template.then(TemplateAggregator::new);
         for (idx, log_file) in log_files.iter().enumerate() {
             if interrupted.load(Ordering::Relaxed) {
                 break;
@@ -188,7 +185,6 @@ pub fn handle_run(
                 remaining,
                 interrupted,
                 do_normalize,
-                template_agg.as_mut(),
                 placeholder_override,
                 &mut params_buffer,
                 &mut ns_scratch,
