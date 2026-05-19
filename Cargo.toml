@@ -5,6 +5,7 @@ edition = "2024"
 rust-version = "1.85"
 authors = ["guangl <guangl@example.com>"]
 description = "高性能 CLI 工具：流式解析达梦数据库 SQL 日志并导出到 CSV/JSONL/SQLite"
+documentation = "https://guangl.github.io/sqllog2db/"
 homepage = "https://github.com/guangl/sqllog2db"
 repository = "https://github.com/guangl/sqllog2db"
 keywords = ["cli", "dm-database", "sqllog"]

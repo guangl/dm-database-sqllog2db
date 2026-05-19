@@ -1,292 +1,165 @@
-# Technology Stack — v1.3 New Capabilities
+# Stack Research
 
-**Project:** sqllog2db v1.3 SQL Template Analysis & SVG Charts
-**Researched:** 2026-05-15
-**Confidence:** HIGH (all primary findings verified via Context7 and official docs)
+**Domain:** Rust CLI documentation tooling and GitHub Pages
+**Researched:** 2026-05-18
+**Confidence:** HIGH
 
----
+## Recommended Stack
 
-## Summary: What Needs to Be Added
+### Core Technologies
 
-The three new feature areas each need at most one new crate. Everything else can be
-implemented in pure Rust using crates already in Cargo.toml (`regex`, `ahash`,
-`memchr`, `serde_json`).
+| Technology | Version | Purpose | Why Recommended |
+|------------|---------|---------|-----------------|
+| **mdBook** | 0.5.2+ | Static site generator for project documentation | Written in Rust (no Node.js dependency for this Rust project), Rust project own docs use it (The Book, Rust Reference), native Markdown with search, syntax highlighting, theming, and integrated toolchain (`mdbook serve` with hot-reload). Outputs plain HTML to `book/` -- trivial to deploy to GitHub Pages. |
+| **GitHub Actions** | N/A | CI/CD deployment | Already has CI and release workflows -- adding a docs deploy workflow reuses existing patterns. Native GitHub Pages deployment via `peaceiris/actions-gh-pages@v4` or the built-in `actions/deploy-pages`. |
+| **GitHub Pages** | N/A | Static site hosting | Free, automatic per-repo hosting. Zero operational overhead. Custom domain support. Integrates directly with Actions. |
+| **lychee** | 0.24.2 | Link checker for Markdown docs | Written in Rust, fast async link checking, supports Markdown/HTML/reST, GitHub Action available (`lycheeverse/lychee-action`), `.lycheeignore` for known-broken links. Native Rust tool that fits project's language ecosystem. |
 
-| Feature Area | New Crate | Version | Action |
-|---|---|---|---|
-| SQL template normalization | none (DIY extension) | — | Extend `sql_fingerprint.rs` |
-| Percentile stats (p50/p95/p99 + buckets) | `hdrhistogram` | 7.5.4 | Add dependency |
-| SVG chart generation | `plotters` | 0.3.7 | Add with SVG-only feature flags |
+### Supporting Libraries
 
----
+| Technology | Version | Purpose | When to Use |
+|------------|---------|---------|-------------|
+| **asciinema** | 3.2.0 | Terminal session recording for CLI demos | Already installed on dev machine. Lightweight asciicast format (~8% of video file size). Embeddable web player for GitHub Pages. Best for recording live CLI sessions with real output. |
+| **markdownlint-cli2** | 0.22.1 | Markdown style checking | Node.js dependency but best-in-class rule set (MD001-MD060). GitHub Action (`DavidAnson/markdownlint-cli2-action`). Config-driven, per-directory overrides. The `--fix` flag auto-corrects common issues. |
+| **cargo doc** | Rust toolchain bundled | API-level Rust documentation | Already in CI (`cargo doc --no-deps` with `RUSTDOCFLAGS: -D warnings`). Generates `target/doc/` -- can be deployed as a subdirectory under GitHub Pages for reference docs alongside the mdBook guide. |
 
-## 1. SQL Template Normalization
+### Development Tools
 
-### Recommendation: DIY Extension of `sql_fingerprint.rs`
+| Tool | Purpose | Notes |
+|------|---------|-------|
+| `cargo doc --no-deps` | Generate Rust API docs | Already configured in CI lint job. Enables doc lint checking. |
+| `lychee` | Check Markdown link health | Run in CI on every PR to catch broken links before merge. |
+| `markdownlint-cli2` | Enforce Markdown consistency | Configure `.markdownlint-cli2.yaml` with project-specific rule overrides. |
+| `asciinema` | Record terminal demo sessions | Record `.cast` files, optionally convert to GIF for README, or embed web player in GitHub Pages. |
+| `git-cliff` | Generate CHANGELOG from conventional commits | Optional: auto-generates CHANGELOG.md from git history. Native Rust. Supports custom templates. |
 
-**Do NOT add `sqlparser` (0.62.0) or `sql-fingerprint` (1.11.1).**
+## Installation
 
-**Why not `sqlparser`:**
-- Full AST parser — compile overhead is substantial (used by DataFusion, Polars, etc.)
-- DaMeng SQL dialect is not a supported dialect — `GenericDialect` will reject or
-  mis-parse DaMeng-specific constructs (`ROWNUM`, DM-specific built-in functions)
-- All four required normalizations (case unification, whitespace, comment removal, IN
-  list unification) are simpler as byte-level passes identical in style to the existing
-  `fingerprint()` function
+```bash
+# Core -- mdBook via Cargo
+cargo install mdbook
 
-**Why not `sql-fingerprint` (1.11.1):**
-- Sole dependency: `sqlparser >= 0.62.0` with `visitor` feature — inherits all the
-  parse overhead and DaMeng dialect problems above
-- Its value-list reduction collapses column lists and alias lists too aggressively;
-  `SELECT a, b FROM t` becomes `SELECT ... FROM t`, destroying template identity
+# Documentation CI tools
+cargo install lychee
 
-**What to build — extend `src/features/sql_fingerprint.rs`:**
+# Markdown linting (requires Node.js)
+brew install markdownlint-cli2
 
-The existing `fingerprint()` function already handles the hardest parts: string-literal
-skipping, whitespace folding, memchr-based bulk scanning. The four new transforms are
-additive byte-walk branches:
+# Terminal recording (already installed)
+# asciinema is available at /opt/homebrew/bin/asciinema 3.2.0
 
-| Transform | Implementation approach |
-|---|---|
-| Comment removal | Add `--` branch (scan forward to `\n`) and `/*` branch (scan forward to `*/`) in the main byte loop, before the existing `match` arms. Output nothing for comment content. |
-| Keyword case unification | After comment/whitespace pass, uppercase token-start bytes in non-literal regions. A simple approach: collect contiguous `[A-Za-z_]` spans and `to_ascii_uppercase()` them. Or maintain a `const` keyword set (SELECT, FROM, WHERE, …) and case-fold only those tokens. |
-| IN list unification | Detect `IN (` sequence (case-insensitive after keyword pass). When found, consume to the matching `)` while skipping nested string literals, and emit `IN (?)` instead. |
-| Whitespace normalization | Already done — existing `fingerprint()` collapses runs to single space. |
+# Optional: CHANGELOG generation
+cargo install git-cliff
 
-**Integration:** The new function `normalize_template(sql: &str) -> String` becomes
-the key for the `ahash::HashMap<String, TemplateStats>` aggregation map. It is called
-once per record in the new pipeline processor; `ahash` is already in Cargo.toml.
-
-**Confidence:** HIGH — existing code verified by reading `sql_fingerprint.rs` and
-`replace_parameters.rs`; same byte-walk pattern used throughout.
-
----
-
-## 2. Percentile Statistics (p50/p95/p99 + Histogram Buckets)
-
-### Recommendation: `hdrhistogram` 7.5.4
-
-```toml
-[dependencies]
-hdrhistogram = "7.5"
+# Optional: terminal GIFs (requires ffmpeg + ttyd)
+brew install vhs
 ```
 
-**API for this project:**
+## Alternatives Considered
 
-```rust
-use hdrhistogram::Histogram;
+| Recommended | Alternative | When to Use Alternative |
+|-------------|-------------|-------------------------|
+| **mdBook** | **VitePress** | When project also uses Vue.js and wants interactive SPA components. Adds Node.js dependency to a Rust project -- unnecessary overhead for documentation-only sites. |
+| **mdBook** | **Hugo** | For larger sites with blog/landing page hybrid needs (e.g., corporate product sites). Overkill for a focused documentation site for one CLI tool. Go template complexity is not worth it. |
+| **mdBook** | **Jekyll** | When using GitHub Pages default and want zero-build-step deployment. But imposes Ruby dependency, limited theming, slower builds, no built-in search without plugins. |
+| **mdBook** | **plain HTML** | When avoiding all build tools. But loses search, navigation, syntax highlighting, hot-reload, and maintainability. Not worth the trade-off for a documentation site. |
+| **mdBook** | **Docusaurus** | Meta's documentation framework. Requires React and heavy Node.js toolchain. Excellent for large OSS projects with multiple languages, but over-engineered for a single CLI tool. |
+| **lychee** | **markdown-link-check** | markdown-link-check (Node.js) is slower and has no Rust alternative for a Rust project. lychee is async, faster, and fits the Rust ecosystem. |
+| **lychee** | **htmltest** | Go-based HTML checker. Fine alternative, but not a Rust tool. lychee is simpler, purpose-built for Markdown. |
+| **markdownlint-cli2** | **markdownlint-cli** | markdownlint-cli2 is actively maintained by the same author, supports per-directory config, multiple output formatters (JUnit, SARIF, JSON), and has a GitHub Action. markdownlint-cli is older. |
+| **markdownlint-cli2** | **rumdl** | Rust-native Markdown linter (rumdl 0.1.94 on crates.io). Would avoid Node.js dependency. However, rumdl has fewer rules, smaller community, and less CI tooling than markdownlint-cli2. Worth re-evaluating if rumdl matures. |
+| **asciinema** | **VHS** | VHS produces animated GIFs directly and supports scripting via `.tape` files. However, asciinema is already installed, produces smaller files (text protocol vs image), and the embeddable web player looks better on docs pages. VHS is better for README.md GIF badges and social sharing. |
 
-// Per-template accumulation (streaming pass):
-let mut hist = Histogram::<u64>::new(3)?;   // 3 significant figures
-hist.record(exec_time_ms as u64)?;
+## What NOT to Use
 
-// Post-collection queries (output phase):
-let p50  = hist.value_at_percentile(50.0);
-let p95  = hist.value_at_percentile(95.0);
-let p99  = hist.value_at_percentile(99.0);
-let avg  = hist.mean();
-let min  = hist.min();
-let max  = hist.max();
-let cnt  = hist.len();
+| Avoid | Why | Use Instead |
+|-------|-----|-------------|
+| **Sphinx (Read the Docs)** | Python dependency, heavy configuration, mdBook is simpler and Rust-native. | mdBook |
+| **docsify** | Runtime-rendered (not static), poor SEO, requires JavaScript to view content. | mdBook (static HTML) |
+| **pandoc+manually generated docs** | No local dev server, no hot-reload, no search, no navigation structure. | mdBook |
+| **screenshot-based demo images** | Static, unmaintainable, need re-screenshotting after every CLI change. | asciinema (text-based, always current, selectable) |
+| **VHS for all demos** | GIF files are larger (pixel data) and cannot be searched or selected. VHS requires ffmpeg + ttyd dependencies. | asciinema for docs pages, VHS for README only if visual GIF demo is needed |
+| **Jekyll default GitHub Pages** | GitHub Pages' built-in Jekyll is limited to a whitelist of plugins, slow builds, Ruby dependency for local dev. | mdBook with peaceiris/actions-gh-pages |
 
-// Histogram buckets for chart (feeds plotters Histogram::vertical):
-for v in hist.iter_recorded() {
-    // v.value_iterated_to() -> bucket upper bound
-    // v.count_at_value()    -> count in this bucket
-}
+## Stack Patterns by Variant
+
+**If you want the simplest possible setup (no Node.js):**
+- Use mdBook + lychee (both Rust-native)
+- Skip markdownlint-cli2 -- use markdownlint-rs (0.3.15) or rumdl (0.1.94) as Rust-native alternatives
+- Record asciinema demos only (no GIF conversion needed)
+- Deploy with `peaceiris/actions-gh-pages@v4`
+- This is the **recommended approach** for this project -- minimal new dependencies
+
+**If you want a polished landing page with visual demos:**
+- Use mdBook for documentation
+- Add a separate landing page (`index.html`) served from GitHub Pages root, linking to mdBook's output at `/docs/`
+- Use VHS for animated GIF demos on the landing page
+- Record longer usage videos with asciinema embedded in the mdBook guide
+
+**If you want to keep everything in pure Rust (zero new language runtimes):**
+- mdBook (Rust) + lychee (Rust) + rumdl (Rust crate-based Markdown linting)
+- asciinema (Rust) for demos
+- This eliminates all Node.js/Python/Ruby dependencies
+
+## Version Compatibility
+
+| Package | Compatible With | Notes |
+|---------|-----------------|-------|
+| mdBook 0.5.2 | Rust 1.88+ | mdBook latest stable via `cargo install mdbook` |
+| peaceiris/actions-gh-pages@v4 | Any runner (linux/macos/windows) | Pin to `@v4` major tag, or specific hash for maximum stability |
+| lychee 0.24.2 | Any platform | Available via `cargo install lychee` or `brew install lychee` |
+| markdownlint-cli2 0.22.1 | Node.js 18+ | Via npm (`npm install -g markdownlint-cli2`) or Homebrew |
+| asciinema 3.2.0 | macOS, Linux, FreeBSD | Already installed locally. NOT available on Windows. |
+| asciinema player | Any modern browser | Embed via `<script src="...">` -- lightweight JS widget |
+| peaceiris/actions-gh-pages@v4 | GITHUB_TOKEN or deploy key | Requires `contents: write` permission in workflow |
+
+## GitHub Pages Site Architecture
+
+The recommended structure:
+
+```
+sqllog2db/
+├── .github/workflows/
+│   ├── ci.yaml                     # existing -- tests, lint, coverage
+│   ├── release.yaml                # existing -- build, crates.io publish
+│   └── docs.yaml                   # NEW -- build mdBook + deploy to GitHub Pages
+├── book/                           # GENERATED -- mdBook output (in .gitignore)
+│   └── (static HTML site)
+├── src.md/                         # NEW -- mdBook source directory (not src/ which is Rust source)
+│   ├── SUMMARY.md                  # NEW -- mdBook chapter structure
+│   ├── intro.md                    # symlinked or copied from project README
+│   ├── quickstart.md
+│   ├── architecture.md
+│   ├── faq.md
+│   ├── demo.cast                   # asciinema recording
+│   └── images/                     # screenshots and diagrams
+├── book.toml                       # NEW -- mdBook configuration
+├── .lycheeignore                    # NEW -- lychee ignore patterns
+├── .markdownlint-cli2.yaml          # NEW -- markdownlint configuration
+└── assets/                         # static files (images, diagrams) if needed
 ```
 
-**Why `hdrhistogram` over alternatives:**
+**NOTE:** The mdBook source directory should NOT be `src/` since that conflicts with Rust source. Use `src.md/` or `docs-md/` as the source directory (configured via `[book] src = "src.md"` in `book.toml`).
 
-| Crate | Version | Verdict | Reason |
-|---|---|---|---|
-| `hdrhistogram` | 7.5.4 | **Use this** | Battle-tested (Tokio, criterion, Prometheus clients); O(1) record; `value_at_percentile()` is clean and direct; `iter_recorded()` produces bucket data directly consumable by plotters |
-| `histogram` | 1.3.1 | Reject | Active API churn: `percentile()` is deprecated in favor of `SampleQuantiles` trait; less adoption than hdrhistogram |
-| `hstats` | unverified | Reject | Very low adoption; `bins_at_centiles()` returns approximate midpoints, not bucket iterator suitable for plotters |
-
-**Usage pattern:** Project is single-threaded streaming. One `Histogram<u64>` per
-template key in the aggregation map. Records accumulate during the streaming pass.
-Percentile and bucket queries run once per template during output. No concurrency
-primitives needed — `hdrhistogram` supports this perfectly.
-
-**Dependencies of `hdrhistogram`:** `byteorder`, `num-traits` — both pure Rust,
-no system deps, no C libraries.
-
-**Confidence:** HIGH — verified via official docs at
-[docs.rs/hdrhistogram](https://docs.rs/hdrhistogram/latest/hdrhistogram/).
-
----
-
-## 3. SVG Chart Generation
-
-### Recommendation: `plotters` 0.3.7 (SVG-only feature flags)
-
-```toml
-[dependencies]
-plotters = { version = "0.3", default-features = false, features = [
-    "svg_backend",
-    "line_series",
-    "histogram",
-    "full_palette",
-    "all_elements",
-] }
+Deployment URL scheme:
 ```
-
-**Why this feature set:**
-- `default-features = false` eliminates `bitmap_backend`, `ttf` (font-kit, freetype),
-  and image encoding — removes all system dependencies
-- `svg_backend` only adds `plotters-svg 0.3.7` + `plotters-backend 0.3.6`, both
-  pure Rust, no system deps
-- `all_elements` is required for the `Pie` element (CHART-05)
-- SVG output uses `<path>` and `<text>` elements with referenced font names (no
-  embedded fonts), so no font system dependency
-- Compile time: stated as < 6 seconds for SVG-only configuration
-
-**Chart type coverage (all four CHART-0x requirements):**
-
-| Chart | Requirement | Plotters API |
-|---|---|---|
-| Top N template frequency bar chart | CHART-02 | `Histogram::vertical()` with `(0u32..N).into_segmented()` axis |
-| Execution time distribution histogram | CHART-03 | `Histogram::vertical()` fed with bucket data from `hdrhistogram::iter_recorded()` |
-| SQL execution trend line chart | CHART-04 | `LineSeries::new()` with `build_cartesian_2d()` on a datetime/numeric x-axis |
-| User/Schema pie chart | CHART-05 | `Pie::new(&center, &radius, &sizes, &colors, &labels)` element |
-
-**Verified code patterns (from Context7):**
-
-Bar/histogram chart:
-```rust
-use plotters::prelude::*;
-let root = SVGBackend::new("chart.svg", (1024, 600)).into_drawing_area();
-root.fill(&WHITE)?;
-let mut chart = ChartBuilder::on(&root)
-    .caption("Top N Templates", ("sans-serif", 30))
-    .margin(10)
-    .x_label_area_size(35)
-    .y_label_area_size(50)
-    .build_cartesian_2d((0u32..top_n).into_segmented(), 0u64..max_count)?;
-chart.configure_mesh().draw()?;
-chart.draw_series(
-    Histogram::vertical(&chart)
-        .style(BLUE.mix(0.6).filled())
-        .margin(2)
-        .data(template_counts.iter().enumerate().map(|(i, &c)| (i as u32, c))),
-)?;
-root.present()?;
+https://guangl.github.io/sqllog2db/     -> mdBook documentation site
+https://guangl.github.io/sqllog2db/api/ -> cargo doc output (optional, deferred)
 ```
-
-Pie chart:
-```rust
-let dims = root.dim_in_pixel();
-let center = (dims.0 as i32 / 2, dims.1 as i32 / 2);
-let mut pie = Pie::new(&center, &250.0f64, &sizes, &colors, &labels);
-pie.start_angle(0.0);
-pie.label_style((("sans-serif", 16).into_font()).color(&BLACK));
-root.draw(&pie)?;
-```
-
-**Why not alternatives:**
-
-| Option | Verdict | Reason |
-|---|---|---|
-| `charts-rs` | Reject | Pulls font rendering + image crates; heavier; lower adoption |
-| `charming` | Reject | Renders via ECharts JS renderer; not standalone SVG file output |
-| Hand-written SVG strings | Reject | Pie chart arc geometry is error-prone to compute manually; plotters handles this correctly |
-| `svg` crate (low-level) | Reject | No chart primitives; all bar/line/pie logic would need to be built from scratch |
-| `plotlib` | Reject | No active development; no pie chart support |
-
-**Known limitation:** SVG text labels use the viewer's system default sans-serif font
-(not embedded). This is acceptable for CLI tooling output — the charts are
-informational, not print-quality reports.
-
-**Confidence:** HIGH — verified via Context7 with working code examples for
-`SVGBackend`, `Histogram::vertical`, `LineSeries`, and `Pie` elements.
-
----
-
-## Cargo.toml Changes
-
-Add to `[dependencies]`:
-
-```toml
-hdrhistogram = "7.5"
-plotters = { version = "0.3", default-features = false, features = [
-    "svg_backend",
-    "line_series",
-    "histogram",
-    "full_palette",
-    "all_elements",
-] }
-```
-
-No removals. No changes to existing dependencies.
-
----
-
-## Integration Points with Existing Code
-
-### SQL Normalization
-
-- **File:** `src/features/sql_fingerprint.rs` — add `normalize_template(sql: &str) -> String`
-  alongside existing `fingerprint()`
-- **Usage:** New pipeline processor `TemplateAggregator` calls `normalize_template()`
-  to derive the map key, then looks up or inserts `TemplateStats` in
-  `ahash::HashMap<String, TemplateStats>` (ahash already in Cargo.toml)
-- The `exec_time_ms` field (index 11 in `FIELD_NAMES`) is the value to aggregate
-
-### Percentile Stats
-
-- **Struct:** `TemplateStats { count: u64, hist: Histogram<u64> }` — one per template key
-- The `Histogram<u64>` accumulates during the streaming pass (hot loop via processor)
-- Queries (`value_at_percentile`, `iter_recorded`) run once per template in the output
-  phase, after all records are processed
-- This is outside the hot loop — no performance impact on existing streaming path
-
-### SVG Charts
-
-- **New module:** `src/chart/` (or `src/features/chart.rs`)
-- Takes `Vec<TemplateStats>` after streaming completes
-- Writes SVG files to the config-specified output directory (`[chart] output_dir`)
-- Runs once after all records are processed — zero impact on the streaming hot loop
-
----
-
-## What NOT to Add
-
-| Crate | Why not |
-|---|---|
-| `sqlparser` | Full parser overhead; no DaMeng dialect; required transforms are simpler as byte-walks |
-| `sql-fingerprint` | Depends on sqlparser; collapses identifiers too aggressively for template identity |
-| `charts-rs` | Font + image deps violate no-system-dep constraint |
-| `charming` | Wrong output model (JS renderer, not standalone SVG) |
-| `ndarray` or `statrs` | Overkill; `hdrhistogram` provides all needed: mean, min, max, percentiles, histogram buckets |
-| `rayon` (new uses in charts) | Chart generation is once-after-streaming; parallelism adds complexity for zero streaming-path gain |
-
----
-
-## Confidence Assessment
-
-| Area | Level | Reason |
-|---|---|---|
-| SQL normalization (DIY) | HIGH | Existing code read and understood; byte-walk pattern is established |
-| `hdrhistogram` API | HIGH | Verified via official docs; `value_at_percentile()` and `iter_recorded()` confirmed |
-| `plotters` SVG-only config | HIGH | Context7 docs verified all four chart types; Cargo.toml feature flags confirmed |
-| DaMeng dialect incompatibility | HIGH | sqlparser dialect list reviewed; no DaMeng entry exists |
-| `sql-fingerprint` over-collapse | HIGH | Docs explicitly state "identifier and value lists reduced to '…'" |
-
----
 
 ## Sources
 
-- plotters docs via Context7 — `SVGBackend::new`, `Histogram::vertical`, `Pie::new`,
-  `LineSeries`, `ChartBuilder`: HIGH confidence
-- plotters 0.3.7 Cargo.toml (feature deps confirmed):
-  [https://docs.rs/crate/plotters/latest/source/Cargo.toml.orig](https://docs.rs/crate/plotters/latest/source/Cargo.toml.orig)
-- hdrhistogram docs — `value_at_percentile()`, `iter_recorded()`, `mean()`, `min()`, `max()`:
-  [https://docs.rs/hdrhistogram/latest/hdrhistogram/](https://docs.rs/hdrhistogram/latest/hdrhistogram/)
-- sql-fingerprint 1.11.1 sole dependency confirmed (sqlparser >= 0.62.0):
-  [https://docs.rs/crate/sql-fingerprint/latest/source/Cargo.toml.orig](https://docs.rs/crate/sql-fingerprint/latest/source/Cargo.toml.orig)
-- sqlparser 0.62.0 (released 2026-05-07) — round-trip normalization via `Display`,
-  no DaMeng dialect:
-  [https://docs.rs/sqlparser/latest/sqlparser/](https://docs.rs/sqlparser/latest/sqlparser/)
-- histogram crate 1.3.1 — SampleQuantiles API (deprecation noted):
-  [https://docs.rs/histogram/latest/histogram/](https://docs.rs/histogram/latest/histogram/)
+- mdBook official documentation (rust-lang.github.io/mdBook/) -- installation, configuration, SUMMARY.md structure [HIGH confidence]
+- peaceiris/actions-gh-pages@v4 GitHub Marketplace -- deployment action capabilities [HIGH confidence]
+- peaceiris/actions-mdbook@v2 -- mdBook setup in CI [HIGH confidence]
+- asciinema v3.2.0 GitHub repo (github.com/asciinema/asciinema) -- terminal recording, asciicast format [HIGH confidence]
+- VHS 0.11.0 Homebrew formula (github.com/charmbracelet/vhs) -- terminal GIF generation [MEDIUM confidence, verified via Homebrew sources]
+- markdownlint-cli2 0.22.1 documentation (github.com/DavidAnson/markdownlint-cli2) -- linting rules, configuration, CI integration [HIGH confidence]
+- lychee 0.24.2 documentation (github.com/lycheeverse/lychee) -- link checking, GitHub Action [HIGH confidence]
+- crates.io search results -- mdbook 0.5.2, lychee 0.24.2, rumdl 0.1.94, markdownlint-rs 0.3.15 [HIGH confidence]
+- Homebrew analytics -- markdownlint-cli2 868 installs/30d, VHS 786 installs/30d [MEDIUM confidence, indication of ecosystem adoption]
+- Actual asciinema 3.2.0 installation confirmed on dev machine at /opt/homebrew/bin/asciinema [HIGH confidence]
+
+---
+*Stack research for: sqllog2db v1.5 documentation and GitHub Pages*
+*Researched: 2026-05-18*

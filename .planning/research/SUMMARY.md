@@ -1,196 +1,226 @@
 # Project Research Summary
 
-**Project:** sqllog2db v1.3 — SQL 模板分析 & 可视化
-**Domain:** Rust streaming CLI — SQL log parsing with template analysis and SVG chart output
-**Researched:** 2026-05-15
-**Confidence:** HIGH
+**Project:** sqllog2db -- v1.5 Documentation and GitHub Pages
+**Domain:** Rust CLI tool documentation -- documentation overhaul, static site generation, GitHub Pages landing page
+**Researched:** 2026-05-18
+**Confidence:** MEDIUM (high confidence on individual research areas, but tension exists between documentation scope approaches)
 
 ## Executive Summary
 
-sqllog2db v1.3 在已有流式解析与过滤基础设施上新增三项能力：SQL 模板归一化、模板级统计聚合、SVG 图表生成。研究表明现有 codebase 已覆盖最难的部分——`fingerprint()` 函数、`ahash::HashMap`、`memchr`、`serde_json`、`rusqlite` 全部在位，只需新增两个外部 crate（`hdrhistogram 7.5` 用于百分位统计、`plotters 0.3` SVG-only 配置用于图表）。SQL 归一化本身无需引入 sqlparser 或 sql-fingerprint，直接扩展 `sql_fingerprint.rs` 用字节级遍历即可覆盖注释去除、IN 列表折叠、关键字大小写统一四项变换。
+sqllog2db is a mature Rust CLI tool for parsing DaMeng (达梦) database SQL logs, now at v1.4 with significant features (template analysis, SVG chart generation, complex filtering) that are completely undocumented in its README. The v1.5 milestone is a documentation-only release with no code changes. Research confirms this is critically needed: the current README references v0.x-era flat configuration, links to 4 non-existent files, and omits all v1.3/v1.4 features. Rust CLI users have clear documentation expectations (QuickStart, --help embedding, CHANGELOG, LICENSE, badges) that are currently unmet.
 
-最关键的架构决策已由研究明确：`TemplateAggregator` 必须作为独立 struct，通过 `Option<&mut TemplateAggregator>` 侧路径接入 `process_log_file()`，绝不实现 `LogProcessor` trait。原因是 `LogProcessor::process()` 接收 `&self`（不可变），无法支持统计累积所需的可变状态；同时如果把聚合器加入 `Pipeline`，会破坏 `pipeline.is_empty()` 零开销快路径，触发 D-G1 性能门控（>5% 退化）。
+**The central tension in the research is the scope of the GitHub Pages landing page.** STACK.md and ARCHITECTURE.md recommend mdBook (Rust-native, full-featured static site generator) as the long-term solution, building a multi-page site with Chinese-first navigation, search, and integrated charts. FEATURES.md and PITFALLS.md argue this is over-engineering for v1.5 and recommend deferring the full mdBook site to v2+, keeping v1.5 to a simple single-page landing page plus README overhaul.
 
-最高风险点是内存设计：若为每个模板存储全量耗时样本（`Vec<u64>`），在大型日志集上会线性增长至数百 MB，打破"流式恒定内存"的核心承诺。研究明确推荐使用 `hdrhistogram::Histogram<u64>`（O(1) 累积、~24 KB/模板、百分位误差 <2%），此决策必须在 TMPL-02 实现前锁定。
+**Recommended resolution:** Use mdBook as the SSG (Rust-native, zero Node.js, well-documented deployment patterns) but deploy a minimal v1.5 site (single landing page + 2-3 supporting pages). Do NOT build the full multi-page site with SUMMARY.md navigation yet. The key deliverable for v1.5 is the README overhaul -- it reaches users on GitHub, crates.io, and every `cargo install` path. The landing page is secondary. The key risks are (1) documentation drift between README and the new pages site, (2) over-engineering the landing page with JS framework dependencies, and (3) creating a "three-body problem" where README, docs/, and pages all contain overlapping content that drifts apart.
 
 ## Key Findings
 
 ### Recommended Stack
 
-v1.3 新增依赖极简：两个 crate，均为纯 Rust、无系统依赖。SQL 归一化复用现有 `memchr` + 字节遍历；百分位统计用 `hdrhistogram`；图表用 `plotters` SVG-only 配置（排除 bitmap 后端、ttf/freetype 字体依赖）。明确拒绝 `sqlparser`（无 DaMeng 方言、编译开销大）、`sql-fingerprint`（依赖 sqlparser 且标识符折叠过激）、`charts-rs`（有字体/图像依赖）、`charming`（JS 渲染器，非独立 SVG 文件）。
+From [STACK.md](STACK.md): The recommended stack is **mdBook** (v0.5.2+) for the static site, **GitHub Actions** for CI/CD, **GitHub Pages** for hosting, and **lychee** (v0.24.2) for link checking. The "simplest possible setup" variant (no Node.js, pure Rust) is the recommended approach.
 
-**新增 Cargo.toml 依赖：**
+**Core technologies:**
+- **mdBook 0.5.2+**: Static site generator -- Rust-native, built-in search/syntax highlighting/theming, outputs plain HTML to `book/` for trivial Pages deployment. Already the Rust ecosystem standard (used by The Rust Book, Rust Reference).
+- **GitHub Actions + peaceiris/actions-gh-pages@v4**: CI/CD deployment -- reuses existing CI/release workflow patterns. `force_orphan: true` ensures clean single-commit `gh-pages` branch history.
+- **GitHub Pages**: Static site hosting -- free, automatic, zero operational overhead, direct Actions integration.
+- **lychee 0.24.2**: Link checker -- Rust-native, async, GitHub Action available (`lycheeverse/lychee-action`), `.lycheeignore` for known-broken links.
+- **asciinema 3.2.0**: Terminal session recording -- already installed on dev machine, lightweight asciicast format (~8% of video), embeddable web player.
 
-- `hdrhistogram = "7.5"` — 百分位统计（p50/p95/p99）+ 直方图桶数据，O(1) 累积，无系统依赖
-- `plotters = { version = "0.3", default-features = false, features = ["svg_backend", "line_series", "histogram", "full_palette", "all_elements"] }` — SVG 图表生成，仅 SVG 后端，无字体/图像依赖
-
-**明确不加：**
-
-| Crate | 原因 |
-|-------|------|
-| `sqlparser` | 无 DaMeng 方言；编译开销大；四项变换用字节遍历更简单 |
-| `sql-fingerprint` | 依赖 sqlparser；折叠标识符过激破坏模板 identity |
-| `charts-rs` | 字体/图像依赖违反无系统依赖约束 |
-| `ndarray` / `statrs` | hdrhistogram 已提供所需统计量 |
+**Key alternative considered:** VitePress/Hugo/Jekyll/Docusaurus all add non-Rust runtime dependencies (Node.js, Ruby, Go) and are explicitly NOT recommended. `markdownlint-cli2` requires Node.js but is recommended for linting quality; if pure-Rust is desired, `rumdl` (v0.1.94) is an alternative with fewer rules.
 
 ### Expected Features
 
-**Must have（table stakes）：**
+From [FEATURES.md](FEATURES.md): Features are organized by priority for the v1.5 documentation milestone. The primary audience is Chinese DaMeng DBAs.
 
-- TMPL-01: 模板归一化可配置（注释去除、IN 列表折叠、关键字大小写统一）— pt-query-digest、pg_stat_statements 均支持，用户默认期待
-- TMPL-02: 每模板 p50/p95/p99 + min/max/avg — 均值掩盖尾延迟；p95/p99 是 DBA SLA 分析的标准指标
-- TMPL-03: 独立 JSON 报告输出 — CI pipeline 和程序化消费必需
-- TMPL-03: 独立 CSV 报告输出 — DBA 用 Excel 分析的常见路径
-- TMPL-04: SQLite `sql_templates` 表 — SQLite 导出用户期待统计数据与原始记录同库
-- TMPL-04: CSV `*_templates.csv` 伴随文件 — CSV 导出用户期待并行摘要文件
-- CHART-02: Top N 模板频率条形图 — "哪些查询最频繁"是 SQL digest 工具的首要用例
+**P1 -- Must have (current README gaps):**
+- **README full rewrite** -- current README references v0.x-era config, omits v1.3 (template analysis) and v1.4 (nested config) features entirely
+- **CHANGELOG.md** -- missing v1.0-v1.4 entries (only exists from v0.10.7), create via Keep a Changelog format
+- **LICENSE file** -- missing from repo root, enterprise users will filter the project out
+- **Project badges** -- CI status, crates.io version, license (shields.io, 4-6 badges max)
+- **QuickStart examples** -- 3-5 copy-paste commands covering `init` + `run` + `digest` + `stats` + `validate`
 
-**Should have（differentiators）：**
+**P2 -- Should have (differentiators):**
+- **GitHub Pages basic landing page** -- single page with project hero, install, feature overview, performance data
+- **Performance benchmarks** -- table showing 5.2M/s synthetic CSV throughput + 1.55M/s on 1.1GB real file + constant memory curve
+- **Architecture / data flow diagram** -- Mermaid.js diagram explaining streaming parser -> pipeline -> exporter architecture
+- **docs/quickstart.md** -- more detailed QuickStart than README
 
-- TMPL-02: JSON 输出中包含直方图 bucket 数据 — pt-query-digest 只有可视化直方图，可机器读取的 bucket 数据是差异化优势
-- TMPL-02: `first_seen` / `last_seen` 时间戳 — 帮助识别近期引入的慢查询
-- CHART-03: 耗时分布直方图（每模板或全局）
-- CHART-04: 执行频率时间趋势折线图 — 复用 `stats.rs` 已有时间分桶数据
-- CHART-05: 用户/Schema 占比饼图 — 容量规划的直观工具
+**P3 -- Nice to have:**
+- SVG chart gallery on landing page (4 real generated charts)
+- Full configuration reference (`docs/config-reference.md`)
+- Asciicast embedded demo (30-second recording of `sqllog2db run`)
 
-**Defer（v2+）：**
-
-- 交互式 HTML 仪表盘 — 需要 JS 运行时，破坏静态文件约束
-- 精确 p50/p95/p99（全量样本排序）— 内存不可控；近似直方图误差 <2% 对 DBA 已足够
-- 模板相似度聚类 — O(N²) 成本；超出范围
-- 实时 live-tail 模式 — 根本性改变批处理模型
+**Deferred (v1.6+):**
+- Full multi-page mdBook site with navigation
+- Chinese-English bilingual documentation
+- WebAssembly/Playground demo
+- CONTRIBUTING.md, SECURITY.md, FAQ page
+- Custom domain
 
 ### Architecture Approach
 
-v1.3 的核心架构原则是"侧路径累积，主路径不变"。`TemplateAggregator` 作为独立 struct，通过 `Option<&mut TemplateAggregator>` 参数传入 `process_log_file()`，在 exporter 写出之后调用 `aggregator.observe()`。`Pipeline` 和 `pipeline.is_empty()` 快路径完全不受影响。流式结束后，`handle_run()` 依次调用：`exporter_manager.finalize()` → `aggregator.finalize()` → `report_writer.write()` → `exporter_manager.write_templates()` → `chart_generator.render()`。
+From [ARCHITECTURE.md](ARCHITECTURE.md): Three architecture sections were researched (v1.2 code improvements, v1.3 template analysis/charts, and v1.5 documentation). For v1.5, the architecture is **two independent documentation systems**: (1) `docs/` -- project Markdown documentation (versioned with code), and (2) `site/` -- mdBook source for the GitHub Pages static site (build artifact, only rendered HTML is deployed).
 
-**Major components（新增）：**
+**Major components:**
+1. **`docs/` directory** -- QuickStart, architecture guide, configuration reference, FAQ. Plain Markdown, versioned with code, excluded from crate via Cargo.toml.
+2. **`site/` directory** -- mdBook project with `book.toml`, `src/SUMMARY.md`, and individual page Markdown. Source is in main branch; built output (`site/book/`) is gitignored.
+3. **GitHub Actions workflows** -- `pages.yaml` (new, path-filtered deploy) + new `docs` job in `ci.yaml` (validate mdBook build on every PR).
 
-1. `src/features/template_normalizer.rs` — `normalize_template(normalized_sql) -> String`：注释去除、IN 折叠、大小写统一；纯函数，无外部 parser 依赖
-2. `src/features/template_aggregator.rs` — `TemplateAggregator`：`observe()` 流式累积（每模板 `hdrhistogram::Histogram<u64>`）、`finalize()` 消费输出、`merge()` 支持并行路径合并
-3. `src/report/mod.rs` — standalone JSON/CSV 报告写出；消费 `TemplateStats`，使用已有 `serde_json`
-4. `src/exporter/` 修改 — `write_templates()` 接口：SQLite 写 `sql_templates` 表；CSV 写 `*_templates.csv`
-5. `src/chart/mod.rs` — SVG 图表生成；消费 `&TemplateStats`；使用 `plotters` SVG 后端；仅在 finalize 阶段运行，完全在热循环之外
+**Key architectural decisions:**
+- `site/` is separate from `docs/` to avoid namespace collision (mdBook expects `src/SUMMARY.md` at its root)
+- Symlinks from `site/src/` to root CHANGELOG.md / CONTRIBUTING.md avoid content duplication
+- Branch-based deployment via `peaceiris/actions-gh-pages@v4` (not native `actions/deploy-pages`) for simplicity
+- `paths` filter on `site/**` avoids rebuilding docs on pure code commits
+- Chinese-first navigation labels (target audience is DM DBAs)
 
 ### Critical Pitfalls
 
-1. **统计累积器加入 Pipeline 破坏 `pipeline.is_empty()` 快路径**（CRITICAL）— 聚合器必须走独立 `Option<&mut TemplateAggregator>` 侧路径，绝不实现 `LogProcessor` trait，绝不加入 `Pipeline`。检测：无过滤无统计配置时 `cargo criterion` 退化 >5% 即触发。
+From [PITFALLS.md](PITFALLS.md): 10 documented pitfalls. Top 5 for roadmap:
 
-2. **`Vec<u64>` 全量样本存储导致 OOM**（CRITICAL）— 精确百分位需排序全量数据，5M 记录规模下单热模板 Vec 已达 40 MB，多模板叠加超 200~400 MB，打破恒定内存承诺。必须使用 `hdrhistogram::Histogram<u64>`（~24 KB/模板，误差 <2%）。此决策必须在 TMPL-02 设计阶段锁定。
+1. **Documentation Drift (P1)** -- Current README is 2 major versions behind. Documentation MUST be validated against actual CLI behavior before publishing. Mitigation: run `cargo run -- init` and `cargo run -- --help` to verify every config example and command output in the documentation.
 
-3. **`LogProcessor` trait `&self` 签名与聚合器可变状态冲突**（实际 CRITICAL）— `process()` 接收 `&self`，统计累积需要 `&mut self`。用 `Mutex` 满足 `Sync` 但热路径每条记录 lock/unlock；改 trait 签名破坏 729 个现有测试。唯一正确方案：聚合器不实现 `LogProcessor`，设计独立 `RecordVisitor` trait（`&mut self`）。
+2. **Over-engineering the Landing Page (P4)** -- Heavy Risk. CLI tool documentation does NOT need React/VitePress/Docusaurus. Set a hard rule: "the landing page must be buildable without `npm install`." mdBook (Rust binary) or plain HTML satisfy this. Full multi-page mdBook site is deferred.
 
-4. **并行 CSV 路径下统计数据分散**（HIGH）— `process_csv_parallel` 每个 rayon task 独立，若聚合器共享则锁竞争消除并行收益。正确方案：每 task 持有独立 `TemplateAggregator`，主线程 pool 完成后 `merge()` 合并（map-reduce 模式）。
+3. **Three-body Problem of Documentation (P5)** -- Maintaining README + docs/ + GitHub Pages as three content sources creates sync burden. Solution: README is the single source of truth. Landing page should NOT duplicate README content -- it should enhance (visual showcase, benchmarks, hero section) and redirect to README for details.
 
-5. **SVG 生成 BufWriter 未显式 flush 导致内容截断**（MEDIUM）— Rust `BufWriter` drop 时不自动 flush，错误被静默忽略。每个 SVG 写出函数末尾必须显式 `flush()?`。SVG 生成只能在 finalize 阶段运行，绝不出现在热循环的 `process()` 中。
+4. **Stale Config Examples (P3)** -- Landing page config examples that hard-code deprecated formats. Mitigation: only show the minimal config on the landing page; point to `cargo run -- init` output as the canonical config reference. Or better: don't show full config on the landing page at all.
+
+5. **Link Rot (P2)** -- Current README links to 4 non-existent files (docs/quickstart.md, docs/architecture.md, CONTRIBUTING.md, SECURITY.md). Mitigation: (a) fix or remove all broken links in Phase 1, (b) add lychee CI check in Phase 3 to prevent future rot.
+
+**Additional notable pitfalls:** Cargo.toml missing `documentation` field (P6 -- fix after Pages deploy), crates.io README compatibility (P9 -- use absolute raw.githubusercontent.com URLs for images), no doc maintenance workflow (P8 -- establish PR checklist for doc updates).
 
 ## Implications for Roadmap
 
-基于研究，建议 5 个阶段的实现顺序，严格遵循依赖链。
+Based on combined research, the v1.5 milestone should be structured in 3 phases with careful dependency ordering:
 
-### Phase 1: SQL 模板归一化引擎（TMPL-01）
+### Phase 1: README Overhaul + Root Documents
 
-**Rationale:** 所有后续阶段的 key 生成依赖归一化函数；先建立函数并通过测试，后续直接调用。无外部依赖，风险最低，适合开局建立信心。
+**Rationale:** Highest impact with lowest cost. README is the single source of truth and reaches users on GitHub, crates.io, and every search result. All other documentation references it. No build tools or deployment infrastructure needed.
 
-**Delivers:** `normalize_template(sql: &str) -> String` 函数；`TemplateAnalysisConfig` config struct；注释去除、IN 折叠、关键字大小写统一四项变换
+**Delivers:**
+- Full README rewrite synchronized with v1.3/v1.4 features (configuration, template analysis, SVG charts, filtering)
+- CHANGELOG.md (Keep a Changelog format, backfill v1.0-v1.4)
+- LICENSE file (MIT or Apache-2.0)
+- shields.io badges (CI, crates.io version, license)
+- QuickStart section with 5 copy-paste commands
 
-**Addresses:** TMPL-01
+**Addresses FEATURES.md:** P1 items (README, CHANGELOG, LICENSE, badges, QuickStart)
 
-**Avoids:** Pitfall 3（另起炉灶归一化逻辑）、Pitfall 9（大小写不一致分裂聚合）
+**Avoids PITFALLS.md:**
+- P1 (Drift): must validate each example against actual `--help` and `init` output
+- P2 (Link Rot): fix links to existing files only; delete phantom references
+- P9 (crates.io): use absolute raw.githubusercontent.com URLs for images
 
-### Phase 2: TemplateAggregator 流式统计累积器（TMPL-02）
+**Research flag:** Standard patterns -- README/CHANGELOG/LICENSE are well-documented conventions. No deeper research needed.
 
-**Rationale:** 所有输出路径（JSON 报告、SQLite 表、CSV 伴随、SVG 图表）均以 `TemplateStats` 为输入；必须先实现累积器并完成 finalize 接口，才能并行推进后续三条输出路径。风险最高——涉及 `process_log_file()` 签名变更和并行路径改造，需要最仔细的设计。
+### Phase 2: GitHub Pages Landing Page + CI Deployment
 
-**Delivers:** `TemplateAggregator { observe(), finalize(), merge() }`；`TemplateStats` 数据结构（含 hdrhistogram 百分位）；`process_log_file()` 新增 `aggregator: Option<&mut TemplateAggregator>` 参数；并行路径 merge 策略
+**Rationale:** After README is the source of truth, the landing page extends it visually. Phase 2 depends on Phase 1 because the landing page references README content and links. The scope for v1.5 is a minimal single-page landing page, NOT a full multi-page mdBook site.
 
-**Uses:** `hdrhistogram = "7.5"`（唯一新增 crate）
+**Delivers:**
+- Single-page landing page deployed to `guangl.github.io/sqllog2db/`
+- Project hero section (name, description, install command, feature highlights)
+- Architecture/Data flow diagram (Mermaid.js)
+- Performance benchmark display (table + constant-memory curve)
+- SVG chart gallery (4 real generated charts as thumbnails)
+- `pages.yaml` workflow with path-filtered deployment
+- mdBook validation job in `ci.yaml`
+- `.gitignore` update for `site/book/`
+- Cargo.toml `documentation` field update after deployment
 
-**Avoids:** Pitfall 1、Pitfall 2、Pitfall 5、Pitfall 12、Pitfall 13
+**Uses STACK.md:** mdBook (minimal mode -- single page), GitHub Actions, peaceiris/actions-gh-pages@v4
 
-**Research flag:** 需在 implementation plan 中明确 `RecordVisitor` trait 精确签名和 `observe()` 参数列表，避免实现中途重构。
+**Implements ARCHITECTURE.md:** `site/` directory, `pages.yaml` workflow, CI validation job
 
-### Phase 3: 独立 JSON/CSV 报告输出（TMPL-03）
+**Avoids PITFALLS.md:**
+- P3 (Stale Config): landing page shows minimal config, not full reference -- points to README
+- P4 (Over-engineering): mdBook single binary, zero npm install; defer multi-page site
+- P5 (Three-body): landing page does NOT duplicate README content; enhances and redirects
+- P6 (Cargo.toml metadata): update immediately after deploy
+- P7 (CI traps): use verified action template; test on PR artifact first
 
-**Rationale:** 依赖 Phase 2 的 `TemplateStats`；纯序列化逻辑，风险低；与 Phase 4、Phase 5 可并行开发。
+**Research flag:** Needs `/gsd:plan-phase --research-phase 2` during roadmap creation to resolve the mdBook scope tension. Specifically: (a) decide whether v1.5 landing page uses full mdBook with subset of pages vs. a standalone HTML file, (b) verify pages.yaml triggers and permissions against actual GitHub Actions behavior, (c) confirm symlink strategy works in Actions checkout environment.
 
-**Delivers:** `src/report/mod.rs`；JSON 报告（新增 p50/p95/p99/histogram_buckets 字段）；CSV 报告；`first_seen`/`last_seen` 时间戳
+### Phase 3: docs/ Directory + CI Quality Gates
 
-**Uses:** `serde_json`（已有）、`itoa`/`ryu`（已有）
+**Rationale:** After README (Phase 1) and landing page (Phase 2) are live, fill in the deeper reference content and add automated quality checks. This phase institutionalizes documentation maintenance.
 
-**Avoids:** Pitfall 7（输出时序不同步）、Pitfall 15（路径未在 validate 阶段检查）
+**Delivers:**
+- `docs/quickstart.md` (more detailed than README)
+- `docs/configuration.md` (full config reference with annotated examples)
+- `docs/faq.md` (preemptive FAQ based on anticipated questions)
+- `lychee` link checker in CI (initial setup as `continue-on-error`, graduate to blocking later)
+- Asciicast demo recording (embedded in README or landing page)
+- Documentation maintenance checklist added to project conventions
 
-### Phase 4: Exporter 集成（TMPL-04）
+**Addresses FEATURES.md:** P3 items (config reference, asciicast) + P2 item (docs/quickstart)
 
-**Rationale:** 依赖 Phase 2 的 `TemplateStats`；需要与 exporter finalize 顺序严格对齐（主 exporter finalize 之后写入）。与 Phase 3 并行。
+**Avoids PITFALLS.md:**
+- P8 (No maintenance workflow): CI link checks + PR checklist for doc updates
+- P10 (Missing API docs): add docs.rs link to landing page footer
 
-**Delivers:** `ExporterManager::write_templates()` 接口；SQLite `sql_templates` 表；CSV `*_templates.csv` 伴随文件
-
-**Avoids:** Pitfall 7（统计写出在主 exporter finalize 前导致数据不完整）
-
-### Phase 5: SVG 图表生成（CHART-01~05）
-
-**Rationale:** 依赖 Phase 2 的 `TemplateStats`；与 Phase 3/4 并行，但复杂度最高（四类图表、新 crate API 验证）。放最后以确保 plotters SVG-only 功能标志行为在实现阶段再验证，不阻塞 TMPL 路径。
-
-**Delivers:** `src/chart/mod.rs`；CHART-02（Top N 频率条形图）、CHART-03（耗时直方图）、CHART-04（时间趋势折线图）、CHART-05（用户/Schema 饼图）；`ChartsConfig` config struct
-
-**Uses:** `plotters 0.3`（SVG-only 功能标志）
-
-**Avoids:** Pitfall 6（SVG 生成混入热循环）、Pitfall 11（BufWriter flush 遗漏）
+**Research flag:** Minimal research needed. Standard patterns for docs/ directory content. The asciicast recording needs practical testing (recording flow, embed code generation).
 
 ### Phase Ordering Rationale
 
-- Phase 1 先行：归一化函数是 key 生成唯一来源，所有 phase 均调用它，必须先稳定接口
-- Phase 2 次之：`TemplateStats` 是所有输出路径唯一数据来源；不完成 finalize 接口，Phase 3/4/5 无法开工
-- Phase 3/4/5 可并行：三条输出路径相互独立，消费同一 `&TemplateStats`
-- 此顺序完全避免"实现一半后发现接口不对"的大规模重构风险
+1. **Phase 1 before Phase 2** -- README must be the established source of truth before the landing page references it. If README has stale content, the landing page inherits stale redirects. Also, quick feedback cycle: README is a single file edited in-place with zero build steps.
+2. **Phase 2 before Phase 3** -- Landing page and CI infrastructure must exist before adding deeper reference docs. The CI checks (lychee) are most valuable once the docs surface area is established.
+3. **Phase 2 scope constraint is critical** -- The biggest risk is Phase 2 expanding into a full mdBook multi-page site. This must be resisted at the roadmap level. The full mdBook site is v1.6+ territory.
+4. **Pitfall avoidance drives ordering** -- Phase 1 addresses the most critical pitfall (README drift-from-code). Phase 2 must avoid the over-engineering trap. Phase 3 prevents future drift from accumulating.
 
 ### Research Flags
 
-需要在 Phase 2 implementation plan 中明确设计（不需要额外外部研究，但需要接口决策文档）：
+**Phases needing deeper research (`/gsd:plan-phase --research-phase`):**
+- **Phase 2:** The mdBook vs. simple-HTML decision needs resolution. If mdBook is used, the scope of which pages to include in v1.5 vs. defer needs precise definition. Also need to verify the pages.yaml `actions-mdbook` + `gh-pages` workflow actually works end-to-end (especially `force_orphan: true` with path-restricted triggers).
+- **Phase 3 (optional):** asciinema recording + embedding approach needs practical validation (recording quality, player embed code, file size tradeoffs).
 
-- **Phase 2:** `RecordVisitor` trait 精确签名；`observe()` 是否接收已归一化的 key 还是原始 sql（推荐接收 key，避免重复归一化）；CHART-04 时间分桶粒度（小时 vs 分钟）
-- **Phase 5:** plotters `Pie::new()` 的 `sizes` 参数类型；长 fingerprint 标签在条形图 Y 轴的截断策略 — 建议用小型原型验证再展开实现
-
-标准模式（可直接实现，无需 research phase）：
-
-- **Phase 1:** 字节级 SQL 归一化，模式已在现有 `fingerprint()` 中建立
-- **Phase 3:** JSON/CSV 序列化，完全复用 `DigestJson`/`itoa` 现有模式
-- **Phase 4:** SQLite DDL + batch INSERT，完全复用现有 `SqliteExporter` 模式
+**Phases with standard patterns (skip research-phase):**
+- **Phase 1:** README updates, CHANGELOG, LICENSE, badges -- all well-documented conventions. No research needed. Use the FEATURES.md competitive analysis as style reference.
+- **Phase 3 (docs/ content):** Standard Markdown documentation. Follow patterns from fd/bat/hyperfine READMEs.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack（新增 crate 选型） | HIGH | hdrhistogram API 经官方文档验证；plotters SVG-only 配置经 Context7 + 代码示例验证；拒绝 sqlparser 的原因经方言列表和 sql-fingerprint 文档确认 |
-| Features（功能范围） | HIGH | 基于现有 codebase 直接分析 + pt-query-digest 行业惯例；table stakes 清晰 |
-| Architecture（聚合器放置方案） | HIGH | Option B（独立 struct）经现有代码 `&mut` 模式和 `LogProcessor` trait 约束直接验证；并行 merge 策略与现有 pre-scan phase merge 模式一致 |
-| Pitfalls | HIGH | 全部从直接源码检查导出，非推断；Pitfall 1/2/12/13 有具体代码证据 |
+| Stack | HIGH | All sources verified against official documentation (mdBook, peaceiris/actions-gh-pages, lychee, asciinema) or actual on-device installation (asciinema). Stack choice is clear and well-supported. |
+| Features | HIGH | Direct analysis of 10+ Rust CLI tools (ripgrep, fd, bat, ruff, hyperfine, zoxide, bottom, eza, xh, gping). Feature priority derived from industry patterns and current sqllog2db README gaps. |
+| Architecture | HIGH | v1.5 architecture based on direct codebase inspection (Cargo.toml, .github/workflows, README, .gitignore) and verified against mdBook/peaceiris official docs. The `site/` vs `docs/` separation is well-reasoned. |
+| Pitfalls | HIGH | Based on actual README/source inspection of THIS project (not generic advice). All 10 pitfalls have concrete examples from sqllog2db's current state (broken links, stale config, missing Cargo.toml fields). |
 
-**Overall confidence:** HIGH
+**Overall confidence:** HIGH for individual research areas; MEDIUM for the integration of these findings into a roadmap due to the unresolved mdBook scope tension between STACK.md/ARCHITECTURE.md and FEATURES.md/PITFALLS.md.
 
 ### Gaps to Address
 
-- **`normalize_template()` 边界情况：** 字符串字面量内部含 `--` 或 `/*` 的注释检测、嵌套括号的 IN 列表识别需要测试用例覆盖。实现中需 fuzzing 或对照测试集验证（MEDIUM confidence 区域）。
+1. **mdBook scope for v1.5** -- STACK.md and ARCHITECTURE.md recommend mdBook with full site structure. FEATURES.md and PITFALLS.md recommend deferring full mdBook to v2+. **Resolution needed during Phase 2 planning:** Decide exact page count for v1.5 landing page (1 page? 3 pages?). If mdBook is kept as builder, what is the minimum viable SUMMARY.md? If rejected, what replaces it (plain HTML? Zola?).
 
-- **plotters `Pie` element 标签布局：** 长 schema 名的溢出处理行为需要 Phase 5 开始时用小型原型确认，不要等到完整实现再发现布局问题。
+2. **Language choice** -- ARCHITECTURE.md assumes Chinese-first for site navigation ("language = zh"). PITFALLS.md notes that existing init templates are bilingual (Chinese + English comments), which is a good pattern. **Decision needed:** Should the landing page be Chinese-only, English-only, or bilingual? The target audience is Chinese DM DBAs, but the GitHub ecosystem is English. This affects SUMMARY.md headings and site hierarchy.
 
-- **hdrhistogram vs 固定桶直方图选择：** 研究推荐 `hdrhistogram`（~24 KB/模板，误差 <2%，API 直接，`iter_recorded()` 供图表直接使用）；PITFALLS 研究提出 64 桶固定数组方案（288 bytes/模板，误差 <5%）。在 Phase 2 设计步骤中做出一次性决策并记录原因。推荐选 `hdrhistogram`。
+3. **Symlink vs. copy for shared content** -- ARCHITECTURE.md recommends symlinks from `site/src/` to root CHANGELOG.md. PITFALLS.md notes symlinks may not work in all CI runners (some Windows actions). **Verify during Phase 2 implementation:** Do symlinks work in the GitHub Actions ubuntu-latest runner with actions/checkout@v6? Fallback: add a copy-script step in CI.
+
+4. **Benchmark data freshness** -- PITFALLS.md notes that performance tables in docs are manually maintained. Current benchmark data (5.2M/s CSV, 1.55M/s real file) is from v1.2 era. **Action:** Re-run benchmarks during Phase 1 to get current v1.4 data for the README and landing page.
+
+5. **Asciinema recording quality** -- asciicast format is recommended, but actual recording quality (color fidelity, terminal size, timing) needs practical validation. **Practical check during Phase 3.**
 
 ## Sources
 
-### Primary（HIGH confidence）
+### Primary (HIGH confidence)
+- Direct source inspection: `src/features/filters.rs`, `src/config.rs`, `src/cli/run.rs`, `src/exporter/*.rs` (architecture verification)
+- Direct source inspection: `README.md`, `Cargo.toml`, `.github/workflows/ci.yaml`, `.github/workflows/release.yaml` (current state assessment)
+- mdBook User Guide: `rust-lang.github.io/mdBook/` (mdBook project structure, configuration, themes)
+- peaceiris/actions-gh-pages@v4: GitHub Marketplace (deployment action capabilities)
+- GitHub Pages documentation: docs.github.com/en/pages (deployment configuration)
+- Rust CLI README analysis: ripgrep, fd, bat, ruff, hyperfine, zoxide, bottom (feature expectations)
 
-- 直接源码检查：`src/features/sql_fingerprint.rs`、`src/features/mod.rs`、`src/cli/run.rs`、`src/exporter/mod.rs`、`src/config.rs` — 所有架构决策基础
-- hdrhistogram 官方文档 [https://docs.rs/hdrhistogram/latest/hdrhistogram/](https://docs.rs/hdrhistogram/latest/hdrhistogram/) — API 验证
-- plotters Context7 文档 + Cargo.toml feature 标志确认 [https://docs.rs/crate/plotters/latest/source/Cargo.toml.orig](https://docs.rs/crate/plotters/latest/source/Cargo.toml.orig)
+### Secondary (MEDIUM confidence)
+- asciinema v3.2.0: confirmed on-device at /opt/homebrew/bin/asciinema (recording tool availability)
+- charts-rs v0.4.2: confirmed via `cargo search`
+- hdrhistogram v7.5.4: confirmed via `cargo info`
+- markdownlint-cli2 0.22.1: Homebrew analytics (868 installs/30d -- ecosystem adoption indicator)
 
-### Secondary（MEDIUM confidence）
-
-- pt-query-digest 文档 [https://docs.percona.com/percona-toolkit/pt-query-digest.html](https://docs.percona.com/percona-toolkit/pt-query-digest.html) — table stakes 功能集参考
-- sql-fingerprint 1.11.1 依赖分析 [https://docs.rs/crate/sql-fingerprint/latest/source/Cargo.toml.orig](https://docs.rs/crate/sql-fingerprint/latest/source/Cargo.toml.orig) — 拒绝原因验证
-- sqlparser 0.62.0 方言列表 [https://docs.rs/sqlparser/latest/sqlparser/](https://docs.rs/sqlparser/latest/sqlparser/) — 无 DaMeng 方言验证
+### Tertiary (LOW confidence)
+- rumdl 0.1.94: Rust-native md linter alternative -- not evaluated in depth; worth revisiting if Node.js dependency becomes a concern
+- VHS terminal GIF generation: not tested on this machine; asciinema is already installed and preferred for docs
 
 ---
-*Research completed: 2026-05-15*
-*Ready for roadmap: yes*
+*Research completed: 2026-05-18*
+*Ready for roadmap: yes (with Phase 2 scope decision needed during planning)*

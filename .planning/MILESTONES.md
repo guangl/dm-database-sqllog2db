@@ -1,5 +1,37 @@
 # Milestones
 
+## v1.5 — 文档完善 & 项目展示
+
+**Shipped:** 2026-05-19
+**Phases:** 21–23 | **Plans:** 8 | **Files changed:** 42 (+6,111 / -777 lines)
+
+### Delivered
+
+补全项目文档并建立 GitHub Pages 展示页面，零代码变更。README 从 395 行中英混排重写为 208 行纯英文骨架（覆盖 v1.3 模板分析 + v1.4 嵌套配置），CHANGELOG.md 补全 v1.0-v1.4 全部条目，docs/quickstart.md + docs/config-reference.md 全新创建，mdBook 落地页含 SVG Gallery，GitHub Actions 自动部署，lychee CI 防断链。
+
+### Key Accomplishments
+
+1. **README 全面重写** — 395 行混排 → 208 行纯英文骨架；6 枚 badges、Mermaid→ASCII 架构图、性能基准表、2 张 SVG PNG 截图、链接状态索引（DOC-01~09，Phase 21）
+2. **CHANGELOG.md 完成** — Keep a Changelog 格式，v1.0–v1.4 五版本条目，v1.1 合并入 v1.2，0.x 405 行折叠为单段摘要（DOC-05，Phase 21）
+3. **GitHub Pages 落地页** — mdBook 单页 7-section（Hero/Install/Features/Architecture/Performance/SVG Gallery/Links），4 类内联 SVG 图表，ayu 主题+自定义 CSS，GHA 自动部署（PAGES-01~05，SUPP-01，Phase 22）
+4. **补充文档** — docs/quickstart.md（306 行，4 场景+故障排除）+ docs/config-reference.md（8 配置块 TOML 参考）（SUPP-02/03，Phase 23）
+5. **Asciicast 演示** — site/src/asciicast/demo.cast（~30s）嵌入 Pages 交互播放器，README SVG badge 链接（SUPP-04，Phase 23）
+6. **lychee 链接 CI** — .github/workflows/lychee.yml 内部严格+外部重试，防止文档断链回归（SUPP-05，Phase 23）
+
+### Stats
+
+- Timeline: 1 day (2026-05-18 → 2026-05-19)
+- Files changed: 42 (+6,111 / -777 lines)
+- Commits: ~20
+
+### Archive
+
+- `.planning/milestones/v1.5-ROADMAP.md`
+- `.planning/milestones/v1.5-REQUIREMENTS.md`
+- `.planning/milestones/v1.5-MILESTONE-AUDIT.md`
+
+---
+
 ## v1.4 — 代码重构 & 质量深化
 
 **Shipped:** 2026-05-18

@@ -1,611 +1,418 @@
-# Pitfalls: v1.3 SQL 模板分析 & SVG 图表
+# Pitfalls Research
 
-**Domain:** Rust streaming CLI — adding SQL template normalization, statistical aggregation, and SVG chart generation
-**Researched:** 2026-05-15
-**Confidence:** HIGH (derived from direct codebase inspection of all hot paths + Rust ecosystem patterns)
-
----
-
-## Severity Classification
-
-| Severity | Meaning |
-|----------|---------|
-| CRITICAL | Causes data corruption, unbounded memory growth, or silent regression on existing tests |
-| HIGH | Performance regression >5% on hot path (D-G1 gate), or incorrect normalization keys producing wrong stats |
-| MEDIUM | Footgun during implementation that requires rework, but testable and recoverable |
-| LOW | Maintenance/correctness risk visible only under specific conditions |
-
----
-
-## Pitfall Table
-
-| # | Name | Severity | Category | Phase |
-|---|------|----------|----------|-------|
-| 1 | 统计累积器加入管线破坏 `pipeline.is_empty()` | CRITICAL | Integration | TMPL-02 |
-| 2 | `Vec<u64>` 每模板无界增长造成 OOM | CRITICAL | Memory | TMPL-02 |
-| 3 | 归一化在现有 `normalized_sql` 路径之外另算，产生不一致 key | HIGH | Correctness | TMPL-01 |
-| 4 | IN 列表归一化产生错误 key（括号/注释边界） | HIGH | Correctness | TMPL-01 |
-| 5 | 百分位数计算在流式路径中无法直接算（需要排序） | HIGH | Correctness | TMPL-02 |
-| 6 | SVG 生成字符串拼接造成热路径外的不可控内存峰值 | HIGH | Memory | CHART-01 |
-| 7 | 统计输出写入与现有 exporter 生命周期不同步 | HIGH | Integration | TMPL-03/04 |
-| 8 | 新 config 字段破坏现有 TOML 向后兼容 | MEDIUM | Config | TMPL-01 |
-| 9 | 模板 key 大小写/空白不一致导致聚合分裂 | MEDIUM | Correctness | TMPL-01 |
-| 10 | `HashMap<String, TemplateStats>` key 分配在热循环 | MEDIUM | Performance | TMPL-02 |
-| 11 | SVG 文件句柄未在 finalize 前关闭，内容截断 | MEDIUM | Resource | CHART-01 |
-| 12 | 统计处理器调用 `process()` 但需要改变状态（trait 错用） | MEDIUM | Design | TMPL-02 |
-| 13 | 并行 CSV 路径下统计累积器跨线程竞争 | HIGH | Concurrency | TMPL-02 |
-| 14 | `apply_overrides` 未覆盖新 config key，导致 `--set` 不生效 | LOW | Config | TMPL-01 |
-| 15 | 模板统计文件路径未在 `validate()` 阶段检查，运行中才报错 | LOW | Config | TMPL-03 |
-
----
+**Domain:** 文档完善 & GitHub Pages 落地页建设（为已有成熟 CLI 工具追加文档）
+**Researched:** 2026-05-18
+**Confidence:** HIGH
 
 ## Critical Pitfalls
 
-### Pitfall 1: 统计累积器加入管线破坏 `pipeline.is_empty()` 零开销快路径
-
-**Severity:** CRITICAL
+### Pitfall 1: 文档与代码脱节（Documentation Drift）
 
 **What goes wrong:**
-`TemplateStatsProcessor` 无论用户是否配置 `[features.template_stats]`，只要代码中无条件调用 `pipeline.add(Box::new(TemplateStatsProcessor::new()))` 就会让 `pipeline.is_empty()` 永远返回 false。
-
-结果：`process_log_file` 热循环中每条记录都经过管线，触发 `record.parse_meta()` + 虚函数调用，**无过滤配置基准从 ~5.2M records/sec 退化**，D-G1 门控（>5%）将被触发。
+文档中的功能描述、配置示例、性能数据与当前代码行为不匹配。用户按照文档操作得到错误结果或报错，失去信任。最典型的是 README 中展示旧版扁平配置格式，而实际代码已在 v1.4 中改为嵌套格式。
 
 **Why it happens:**
-统计累积器与过滤器不同——过滤器是"无规则时不加"，而统计器是"用户想要统计时才加"。但开发者容易写成：
+- 文档在功能实现时撰写，但后续重构未同步更新
+- 对已有项目"追加文档"时，容易只关注新写的内容，忽略对旧有 README 的全面审查
+- 团队（或个人）认为"文档可以后面再补"，结果"后面"永远不会来
+- 回顾 sqllog2db：README 仍然展示 `[features.replace_parameters]` 扁平格式，完全不反映 v1.4 的 5 个顶层配置字段；模板分析（v1.3）和图表功能（v1.3）在 README 中完全缺失
 
-```rust
-// 错误：TemplateStatsProcessor 被无条件添加
-pipeline.add(Box::new(TemplateStatsProcessor::new()));
-```
-
-**Prevention:**
-完全复制现有 `build_pipeline()` 中的守卫模式。只有当 `cfg.features.template_stats` 存在且 `enable == true` 时才添加：
-
-```rust
-if let Some(ts_cfg) = &cfg.features.template_stats {
-    if ts_cfg.enable {
-        pipeline.add(Box::new(TemplateStatsProcessor::new(ts_cfg)));
-    }
-}
-```
-
-无过滤 + 无统计的现有配置走 `pipeline.is_empty() == true` 快路径，完全不受影响。
+**How to avoid:**
+- 在文档撰写开始前，先对 README 做完整的 diff 审查：逐段对比实际 CLI 行为（`--help`、`init` 生成的默认配置、`show-config` 输出）
+- 自动化验证：编写脚本从 `sqllog2db init` 生成真实配置，与文档中的示例做结构性对比
+- 在 doc phase 中把"更新 README"列为独立的 checklist 项，与"创建缺失文档"并列
+- 建立文档审查 checklist：运行 `cargo run -- --help` 逐条验证 README 中的 CLI 示例
 
 **Warning signs:**
-- `cargo criterion --bench bench_csv` 在未配置 template_stats 时性能退化 >5%
-- 单元测试 `assert!(pipeline.is_empty())` 在 `FeaturesConfig::default()` 下失败
+- README 中的 `init` 输出示例与 `cargo run -- init` 实际输出不一致
+- `--help` 输出中的子命令在 README 中找不到对应章节
+- README 引用的配置字段在 `src/config/` 中已删除（如旧 `[pipeline.*]` 字段）
 
-**Phase:** TMPL-02 实现前先写这个守卫的单元测试
+**Phase to address:**
+Phase 1（README 全面更新）— 作为 README 重建的一部分，必须逐段与代码对照验证
 
 ---
 
-### Pitfall 2: `Vec<u64>` 每模板无界增长造成 OOM
-
-**Severity:** CRITICAL
+### Pitfall 2: 链接腐烂（Link Rot）
 
 **What goes wrong:**
-若为每个模板存储全量耗时样本用于精确百分位计算：
+README 和文档中引用的内部链接指向不存在的文件，用户点击后看到 404 页面。在 sqllog2db 中，README 的"快速链接"区域引用了 5 个文件其中 4 个是断链：`./docs/quickstart.md`、`./docs/architecture.md`、`./CONTRIBUTING.md`、`./SECURITY.md`（仅有 `./CHANGELOG.md` 存在）。
 
-```rust
-struct TemplateStats {
-    exec_times: Vec<u64>,  // 无界！
-    ...
-}
-```
+**Why it happens:**
+- 预先在 README 中写好链接占位，期望后续创建对应文件，但文件从未被创建
+- 文件路径重构（如 `docs/ -> docs/guide/`）后未更新所有引用
+- 文档托管到 GitHub Pages 后路径变化，但旧链接未迁移
 
-**具体内存计算（针对本项目规模）：**
-
-- 真实基准：1.1GB 文件，~1.55M records/sec，假设 1 小时日志 ≈ 5M 条记录
-- 假设 10 个高频模板各命中 500K 条：10 × 500K × 8 bytes = **40 MB**
-- 假设 1000 个模板各命中 5K 条：1000 × 5K × 8 bytes = **40 MB**
-- 极端场景：1 个热模板命中全部 5M 条：5M × 8 bytes = **40 MB**（单模板）
-- 真实危险：100 个模板各 50K 条 = 40MB，但叠加 `HashMap<String, TemplateStats>` key 堆分配后，总内存开销可达 **200~400 MB**，在 4GB 以下机器上触发 OOM 或 swap 抖动
-
-设计承诺是"流式处理，内存恒定"——`Vec<u64>` 直接打破这个承诺。
-
-**Prevention:**
-使用近似百分位算法，不存储全量样本：
-
-**选项 A（推荐）：固定尺寸直方图（t-digest lite）**
-按耗时范围分桶，如 64 个桶，每个模板仅占 64×8 = 512 bytes。p50/p95/p99 误差 <5%，内存 O(桶数)，与模板数量无关（模板数量本身有界）。
-
-**选项 B：DDSketch（近似百分位，误差界 ε=0.01）**
-Rust 生态没有成熟的 no-std DDSketch，需要手动实现或引入 `quantiles` crate（依赖较重）。
-
-**选项 C（不推荐）：流式中位数（堆方法）**
-只能算 p50，不支持 p95/p99。
-
-**推荐实现：**
-```rust
-struct TemplateStats {
-    count: u64,
-    sum_ms: u64,
-    min_ms: u64,
-    max_ms: u64,
-    // 固定 64 桶直方图：桶 i 计 [2^i, 2^(i+1)) ms 的次数
-    histogram: [u32; 64],
-}
-```
-
-64 桶覆盖 1ms 到 ~580 年，足以表示所有实际 SQL 耗时。每模板 64×4 + 4×8 = **288 bytes**，10K 模板 = **2.8 MB**，内存完全可控。
+**How to avoid:**
+- 对 README 中所有内部链接做可操作性验证：`for link in $(extract_links README.md); do [ -f "$link" ] || echo "BROKEN: $link"; done`
+- 只链接已存在的文件，不提前声明"计划中的文档"
+- 建立 CI check：在 PR 中自动化检查 README 链接有效性（使用 `lychee` 或 `broken-link-checker`）
+- 如果决定不创建某些文档（如 `SECURITY.md`），必须从 README 中移除对应链接，不能留空
 
 **Warning signs:**
-- `struct TemplateStats` 中出现 `Vec<u64>` 或 `Vec<f32>` 字段
-- 运行 100 万记录后 `/usr/bin/time -v` 显示 RSS 超过 500 MB
+- README 中的 `./` 或 `./docs/` 链接序列，用 `ls` 检查后发现目标不存在
+- GitHub 仓库的文件浏览中看不到 README 引用的文档文件
 
-**Phase:** TMPL-02 设计阶段必须做出选择，不能留到实现后再改
+**Phase to address:**
+Phase 1（README 更新）— 链接修复创建/删除同步；Phase 3（CI 集成）— 添加 lychee 自动化链接检查
 
 ---
 
-## High Severity Pitfalls
-
-### Pitfall 3: 归一化在现有 `normalized_sql` 路径之外另算，产生不一致 key
-
-**Severity:** HIGH
+### Pitfall 3: 落地页配置示例快速过时（Stale Config Examples）
 
 **What goes wrong:**
-现有代码路径：`compute_normalized()` → `apply_params_into()` 产生带参数值的 `normalized_sql`（参数已替换为实际值）。
+GitHub Pages 落地页展示的配置示例（完整的 config.toml）在代码重构后变为错误示例。用户复制落地页的配置但程序报错——因为格式已经改变。这是 Pitfall 1 在落地页上的特化表现，更具破坏性，因为落地页通常是新用户的第一接触点。
 
-模板 key 需要的是参数位置统一为占位符（如 `?`）的 fingerprint，这正是 `src/features/sql_fingerprint.rs` 中 `fingerprint()` 函数做的事。
+**Why it happens:**
+- 落地页的配置示例是硬编码的静态代码片段，不是从实际代码生成
+- 配置模型重构时，开发者记得更新 README 和 init 模板，但忘记同步更新独立落地页
+- 配置示例在落地页上写死（作为 Markdown/HTML 代码块），修改成本高于预期
 
-如果 TMPL-01 在 `TemplateStatsProcessor::process()` 中自己再写一套归一化逻辑，就产生两套并行存在的归一化代码，容易出现：
-- 同一条 SQL 被两套逻辑产生不同的 key
-- 注释处理方式不一致（一个去注释，一个不去）
-- 空白折叠规则不一致
-
-**Prevention:**
-直接复用 `features::fingerprint(sql)` 作为模板 key 生成函数。`fingerprint()` 已经做了：字符串字面量替换为 `?`、数字替换为 `?`、连续空白折叠。这是标准的 SQL fingerprint，不需要重复发明。
-
-如果 TMPL-01 需要额外的注释去除或大小写统一，应在 `sql_fingerprint.rs` 中扩展 `fingerprint()` 或添加 `normalize_for_template()` 函数，而不是在 `TemplateStatsProcessor` 中内联实现。
+**How to avoid:**
+- 从源代码生成配置示例：提取 `sqllog2db init` 生成的默认配置（通过 `--stdout` 或文件），直接注入到落地页中
+- 如果使用静态站点生成器（如 Zola、Hugo），把配置示例作为包含文件（include），避免硬编码
+- 在 Phase 2 落地页 PR 的 checklist 中加入"配置示例与 `cargo run -- init` 输出一致"的验证步骤
+- 最简单的规避：落地页**不展示完整配置示例**，只展示关键配置变化（或直接引用 README 中的完整配置）
 
 **Warning signs:**
-- `TemplateStatsProcessor` 中出现自己实现的 `to_lowercase()` + `trim()` + 正则替换逻辑
-- 两条明显相同结构的 SQL 在统计输出中出现为两个不同模板
+- 落地页中的配置示例包含已废弃的配置字段（如 `[pipeline.*]`）
+- 落地页配置与 `cargo run -- init` 生成的模板格式不同
 
-**Phase:** TMPL-01 实现时，必须先确认 `fingerprint()` 的覆盖范围是否满足需求，缺什么在 `sql_fingerprint.rs` 中统一扩展
+**Phase to address:**
+Phase 2（GitHub Pages 落地页）— 落地页设计时必须解决配置示例的来源问题
 
 ---
 
-### Pitfall 4: IN 列表归一化产生错误 key（括号嵌套/多值处理）
-
-**Severity:** HIGH
+### Pitfall 4: 落地页过度工程化（Over-engineering the Landing Page）
 
 **What goes wrong:**
-SQL 模板归一化的常见需求之一是将 `IN (1, 2, 3)` 和 `IN (1, 2, 3, 4, 5)` 归一化为同一模板。这看似简单，但有多个边界情况：
+为一个 CLI 工具构建过于复杂的落地页：使用 Next.js/SvelteKit/React 等重型前端框架构建纯展示页面，引入 JS 运行时依赖，需要复杂构建管道，增加维护负担。结果：初始构建投入大、构建产物大、后续更新无人敢碰。
 
-1. **嵌套括号：** `IN (SELECT id FROM t WHERE x = 1)` 不应被归一化
-2. **函数调用：** `COALESCE(a, b, c)` 不应被归一化
-3. **字符串中的括号：** `WHERE note = 'IN (1,2)'` 的括号在字符串字面量内部
-4. **已被 fingerprint 处理的数字：** fingerprint 已将 `1, 2, 3` 变成 `?, ?, ?`，IN 列表归一化若在 fingerprint 之前运行，会引入二次处理
+**Why it happens:**
+- 开发者将"精美展示"等同为"用最新前端框架"
+- 低估纯静态页面（HTML + CSS + 少量 JS）在表现力上的能力
+- 认为"既然要做就做好"，选择自己更熟悉的框架而非最适合的工具
+- 社区中存在 showcase 偏见：复杂的页面设计被认为"更专业"
 
-**Prevention:**
-- IN 列表归一化必须在字符串字面量替换之后运行，且只处理被 `?,` 分隔的参数列表
-- 最安全的做法：fingerprint 之后，用正则 `IN\s*\(\s*\?(?:\s*,\s*\?)*\s*\)` 匹配并替换为 `IN (?+)`
-- 或者完全跳过 IN 列表归一化——现有 `fingerprint()` 已将数字替换为 `?`，`IN (1,2,3)` 和 `IN (4,5,6)` 已经得到相同的 fingerprint `IN (?, ?, ?)`，只是 `IN (1,2)` 和 `IN (1,2,3)` 得到不同指纹（参数数量不同）。这对大多数场景是可接受的。
+**How to avoid:**
+- 对于 CLI 工具的 GitHub Pages，最高性价比的选择：**纯 Markdown + GitHub Pages 原生 Jekyll**（零配置，自动部署）或 **Zola**（Rust 原生、单二进制、零 JS 运行时）
+- 按以下优先级决策工具：GitHub Pages 默认 Jekyll（零成本，零学习） -> Zola（Rust 生态，零 JS） -> 简单 HTML/CSS -> 最不优先：JS 框架
+- 设一个硬性原则："落地页必须能在没有 `npm install` 的情况下构建"
+- 从 sqllog2db 的实际受众考虑：这是一个面向中文达梦 DBA 的工具，落地页核心目的是快速传达功能，不是视觉竞赛
+- 如果决定用框架，先评估：Dependabot alerts、npm audit 修复、框架版本升级——这些维护成本是否值得一个 3 页的文档站点
 
 **Warning signs:**
-- 测试用例：`IN ('a', 'b')` 和 `IN ('c')` 被错误地归为同一模板（括号内容不同但数量也不同）
-- 子查询 `IN (SELECT ...)` 被匹配导致整个子查询被删除
+- 方案讨论中出现 `npm create`、`yarn add`、`next.config.js` 等术语
+- 落地页功能列表出现"动画"、"交互式演示"等超出文档范畴的需求
+- 构建工具需要 Node.js、Ruby 以外的运行时
 
-**Phase:** TMPL-01 设计阶段就需要决定是否实现 IN 归一化，以及采用哪种实现策略；可以作为可选步骤后置
+**Phase to address:**
+Phase 0（方案选择阶段）— 在 Phase 2 开始前先决策工具栈，避免实现后返工
 
 ---
 
-### Pitfall 5: 百分位数计算在流式单遍路径中无法直接算（需要全量数据排序）
-
-**Severity:** HIGH
+### Pitfall 5: 多文档源的同步维护负担（Three-body Problem of Documentation）
 
 **What goes wrong:**
-精确的 p95/p99 计算需要对全量样本排序后取第 95/99 百分位，这本质上是 O(n log n) 且需要 O(n) 内存存储全量数据。在流式单遍架构中，每条记录处理完就丢弃，无法回头排序。
+项目同时维护 README（GitHub/根目录）、GitHub Pages 站点（独立部署）、crates.io 文档（自动拉取 README）三个内容源。每次功能更新需要在三个地方分别修改，导致：
+- 开发者只更新了 README 但忘记更新落地页
+- 落地页上的信息与 README 不一致（用户不知道该信哪个）
+- 维护成本随内容源数量线性增长
 
-如果实现者没有意识到这个约束，会在处理完所有记录后调用 `Vec::sort()` 然后取索引，强迫系统把全量数据收集到 `Vec<u64>` 中——这直接触发 Pitfall 2（OOM）。
+**Why it happens:**
+- README 被 crates.io 自动拉取（`readme = "README.md"`，同一个文件），但 GitHub Pages 是独立部署的——这是两个源，不是三个
+- 本质问题不是"文件数量"而是"内容冗余"：落地页与 README 有大量重叠内容
+- GitHub Pages 的独立存在鼓励了添加 README 中没有的额外内容，但又没有机制保证 README 同步更新
 
-**Prevention:**
-在实现设计文档中明确声明：p50/p95/p99 使用近似算法（直方图插值），精度说明写入文档（"基于 64 桶指数直方图，误差 <5%"）。
-
-直方图插值方式：
-```
-// 桶 i 覆盖 [2^i, 2^(i+1)) ms
-// 若 p95 对应第 k 个样本落在桶 i，线性插值得近似值
-fn percentile_from_histogram(hist: &[u32; 64], total: u64, p: f64) -> u64 {
-    let target = (total as f64 * p).ceil() as u64;
-    let mut cumulative = 0u64;
-    for (i, &count) in hist.iter().enumerate() {
-        cumulative += count as u64;
-        if cumulative >= target {
-            return 1u64 << i; // 桶中点近似
-        }
-    }
-    u64::MAX
-}
-```
+**How to avoid:**
+- **最重要的策略：README 是单一事实来源（single source of truth）**。GitHub Pages 作为 README 的增强展示，不应包含 README 中不存在的内容
+- GitHub Pages 不重复 README 的全部内容，聚焦于：项目 hero 展示（screenshot/graphic）、功能亮点、性能数据可视化、指向 README 的"详细文档"引导
+- 详细的 CLI 用法、配置参考、开发指南保持在 README 中，落地页只做摘要和跳转
+- 避免在落地页中维护独立的 FAQ、配置参考、Benchmark 数据——这些已经（或应该）在 README 中
+- 在规划时明确界定：README 负责"完整参考"，落地页负责"首次印象 + 引流"
 
 **Warning signs:**
-- 实现中出现 "排序后取百分位" 注释
-- `TemplateStats` 有 `exec_times: Vec<u64>` 字段（见 Pitfall 2）
+- 落地页中包含与 README 冗余且格式不一致的"快速开始"章节
+- 落地页中有独立的 Benchmark 表格，与 README 中的版本不同（数值有差异）
+- 在落地页上发现"这个内容 README 里没有"的情况——这可能是一件好事，但要走单向同步流程
 
-**Phase:** TMPL-02 设计阶段，必须在第一个实现 step 中写清楚近似方案
+**Phase to address:**
+Phase 0（文档架构决策）— 在规划阶段界定 README 与落地页的职责边界
 
 ---
 
-### Pitfall 6: SVG 生成字符串拼接造成内存峰值和性能问题
-
-**Severity:** HIGH
+### Pitfall 6: Cargo.toml 元数据缺失导致 crates.io 展示不全
 
 **What goes wrong:**
-SVG 是纯文本格式。朴素实现会为每个 SVG 元素创建一个 `String`，然后通过 `+` 或 `format!` 拼接，最后一次性写入文件。在生成 Top N 条形图（N=50 时 SVG 约 50KB）时，可能存在多次完整副本在内存中同时存在（`format!` 创建临时 String → 拼接到大 String → 写入文件 → 临时 String 释放）。
+crates.io 页面上没有"Documentation"按钮，用户从 crates.io 安装后找不到文档入口。sqllog2db 当前 `Cargo.toml` 中 `homepage` 指向 GitHub 仓库而非 GitHub Pages，且没有 `documentation` 字段。
 
-更大的问题：**如果 SVG 生成逻辑混入热循环（即 `process()` 中生成 SVG），会完全破坏流式处理性能。** SVG 必须在全部记录处理完毕（finalize 阶段）后才能生成，因为图表数据来自聚合统计。
+**Why it happens:**
+- `Cargo.toml` 元数据在项目初始化时设置，后续从未更新
+- `documentation` 字段在 GitHub Pages 建立前不存在，建立后忘记添加
+- 开发者认为 `homepage` + `repository` 已足够，忽略 `documentation` 的独立价值
 
-**Prevention:**
-- SVG 生成**只在 finalize 阶段**运行，绝不在热循环的 `process()` 中
-- 使用 `BufWriter<File>` 直接写入，避免内存中持有完整 SVG 字符串
-- 每个 SVG 元素（`<rect>`, `<text>` 等）通过 `write!` 直接输出到 `BufWriter`，不中间存储
-- 如果使用 SVG 生成库（如 `svg` crate），确认其 API 是否支持流式写出；否则用手工 `write!` 宏
-
-**推荐代码模式：**
-```rust
-// 在 finalize() 中，而不是在 process() 中
-fn write_bar_chart(&self, path: &Path, stats: &[TemplateStats]) -> Result<()> {
-    let file = File::create(path)?;
-    let mut w = BufWriter::with_capacity(64 * 1024, file);
-    write!(w, r#"<svg xmlns="...">"#)?;
-    for (i, s) in stats.iter().take(self.top_n).enumerate() {
-        write!(w, r#"<rect x="{}" y="{}" .../>"#, i * 20, s.count)?;
-    }
-    write!(w, "</svg>")?;
-    w.flush()?;  // 必须显式 flush，否则 BufWriter drop 时的错误被静默丢弃
-    Ok(())
-}
-```
+**How to avoid:**
+- 在 GitHub Pages 部署后立即更新 `Cargo.toml`：
+  ```toml
+  homepage = "https://guangl.github.io/sqllog2db"  # 改为 GitHub Pages URL
+  documentation = "https://guangl.github.io/sqllog2db"
+  ```
+- 保留 `repository` 指向 GitHub 仓库不变
+- 将此操作列入 Phase 2 的 deployment checklist（"部署后更新 Cargo.toml 元数据"）
+- 注意：更新在下一次 `cargo publish` 时才生效——确保在下一次发版前做此变更
 
 **Warning signs:**
-- `TemplateStatsProcessor::process()` 中出现任何 SVG 相关代码
-- 在 finalize 外部出现 `svg::Document::new()` 或 `format!("<svg...")` 调用
-- 生成 SVG 后没有显式 `flush()` 调用
+- `cargo metadata` 输出的 `documentation` 字段为空或缺失
+- crates.io 页面上的 crates.io 信息区域没有"Documentation"按钮
 
-**Phase:** CHART-01 实现阶段；在 design step 中明确 finalize-only 约束
+**Phase to address:**
+Phase 2（GitHub Pages 落地页）— 部署后立即更新 Cargo.toml 元数据；在下一次发版前验证
 
 ---
 
-### Pitfall 7: 统计输出写入与现有 exporter 生命周期不同步
-
-**Severity:** HIGH
+### Pitfall 7: GitHub Pages CI 工作流的隐性陷阱
 
 **What goes wrong:**
-现有 exporter 生命周期为：`ExporterManager::initialize()` → 热循环 `export_one_preparsed()` → `ExporterManager::finalize()`。
+GitHub Pages 部署工作流配置不当导致部署失败、部署了空内容、或产物路径与 Pages 设置不匹配。
 
-TMPL-03（独立 JSON/CSV 报告）和 TMPL-04（SQLite `sql_templates` 表 / CSV 伴随文件）需要在热循环结束后写入数据。可能出现：
+**Common specific failures:**
+1. 使用错误的 `publish_dir` 导致部署空目录或错误分支
+2. 未设置正确的 permissions，`GITHUB_TOKEN` 默认无 `contents: write` 和 `pages: write` 权限
+3. 静态站点生成器的输出目录与 Pages 期望的根目录不匹配（如 Zola 输出到 `public/`，但 GitHub Pages action 期望其他路径）
+4. 自定义域名（CNAME）配置在每次构建产物中被覆盖丢失，域名重置为 `<username>.github.io`
+5. 仓库 Settings > Pages > Source 设置为 "GitHub Actions" 但 workflow 的 `upload-pages-artifact` + `deploy-pages` 组合使用不当
+6. `.nojekyll` 文件缺失导致 Jekyll 处理非 Jekyll 站点时跳过 `_` 开头的文件和目录
 
-1. **统计数据在 finalize 之前被写出**：数据不完整（只有部分记录的统计）
-2. **SQLite 统计表在主事务提交之前写入**：若主事务回滚，统计表仍然存在，造成数据不一致
-3. **CSV 伴随文件路径冲突**：`_templates.csv` 写入时主 CSV 文件 `BufWriter` 仍然持有文件锁（Windows 上可能冲突）
-4. **并行路径下统计数据分散**：`process_csv_parallel` 中每个线程有独立的 `ExporterManager`，统计数据无法在 finalize 时合并（各自 finalize 各自的独立分片）
-
-**Prevention:**
-- 统计输出必须作为 `finalize()` 的一部分，在主 exporter finalize 之后运行
-- 对于 TMPL-04 SQLite 统计表：在同一个 `rusqlite::Connection` 的同一事务中写入，或在主事务提交后开新事务写统计表
-- 对于并行路径：`TemplateStatsProcessor` 需要实现跨线程合并接口（`merge(&mut self, other: Self)`），主线程在 `process_csv_parallel` 返回后合并所有线程的统计数据，然后再写出
-- CSV 伴随文件路径：主 CSV 写完（flush + close）之后才开写伴随文件
+**How to avoid:**
+- 使用官方推荐的 `actions/upload-pages-artifact@v3` + `actions/deploy-pages@v4` 组合（而非第三方 action），文档完善、权限清晰
+- 在仓库 Settings > Pages > Source 中确认设置为 "GitHub Actions"
+- 添加显式 `permissions` 块：
+  ```yaml
+  permissions:
+    contents: read
+    pages: write
+    id-token: write
+  ```
+- 如果使用自定义域名，在 SSG 的静态资源目录中包含 `CNAME` 文件（如 Zola 的 `static/CNAME`），确保每次部署都保留
+- 对于非 Jekyll 的 SSG（如 Zola、Hugo），确保根目录有 `.nojekyll` 文件，或通过 `actions/upload-pages-artifact` 的配置包含它
+- 在 PR 中预演部署（使用 `pull_request` 触发 + link to artifact）来验证配置正确性
 
 **Warning signs:**
-- `process_csv_parallel` 返回后没有统计合并步骤
-- `SqliteExporter::finalize()` 在提交主事务之前调用 `write_template_stats()`
-- 伴随文件写入前主 CSV 的 `BufWriter` 还没 drop
+- 部署后页面空白或 HTTP 404（通常是 `publish_dir` 路径错误）
+- 部署后自定义域名不生效（CNAME 文件被覆盖）
+- Actions 日志显示权限拒绝但无明确 error message
+- 页面显示为目录列表而非 HTML 渲染（缺少 `index.html` 或 `publish_dir` 指向了错误路径）
 
-**Phase:** TMPL-03/04 实现阶段；并行路径的合并接口需要在 TMPL-02 设计时就规划
+**Phase to address:**
+Phase 2（GitHub Pages 落地页）— 不要依赖记忆配置，使用经过验证的 action 模板；先在一个测试仓库或 fork 上验证工作流
 
 ---
 
-### Pitfall 13: 并行 CSV 路径下统计累积器跨线程竞争
-
-**Severity:** HIGH
+### Pitfall 8: 不预设文档维护流程——"一次写好，永不更新"
 
 **What goes wrong:**
-`process_csv_parallel` 为每个文件创建独立线程，各持自己的 `ExporterManager`。若 `TemplateStatsProcessor` 是全局共享的（如通过 `Arc<Mutex<TemplateStatsAggregator>>`），所有线程在每条记录时争抢同一把锁，完全消除并行收益，甚至因锁竞争比单线程更慢。
+文档和落地页被视为"一次性交付物"。里程碑完成后，后续代码变更不再同步更新文档。三个月后文档全面过时，需要重建。
 
-**Prevention:**
-每个线程持有独立的 `TemplateStatsProcessor` 实例（不共享），在 `process_csv_parallel` 结束后，由主线程依次合并各线程的统计结果：
+**Why it happens:**
+- 文档更新没有被纳入后续开发工作流（PR checklist 中没有"更新文档"项）
+- 认为"文档更新很简单，随时都能做"——但永远排不到优先级
+- 项目缺少"文档质量"的度量指标（没有类似 test coverage 的"docs freshness"检查）
 
-```rust
-// 每个并行 task 返回自己的 TemplateStats
-type TaskResult = Option<(PathBuf, PathBuf, usize, TemplateStatsSnapshot)>;
-
-// 主线程合并
-let mut global_stats = TemplateStatsAggregator::new();
-for stats_snapshot in thread_stats {
-    global_stats.merge(stats_snapshot);
-}
-global_stats.write_output(&cfg)?;
-```
-
-这要求 `TemplateStatsAggregator` 实现 `merge()` 方法（HashMap 合并），是标准的 map-reduce 模式。
+**How to avoid:**
+- 在 v1.5 完成后，建立一个文档维护流程（写入 CONTRIBUTING.md 和项目约定）：
+  - 每个 PR 必须评估是否需要更新相关文档（README、docs/、落地页对应的片段）
+  - 配置变更 PR 必须更新默认配置模板 + README 配置示例
+  - 新增功能必须在合并前或合并后立即更新文档
+- 在 CI 中添加文档检查：
+  - `lychee`（或 `broken-link-checker`）检查所有内部/外部链接可访问性
+  - `cargo doc --no-deps -D warnings`（CI 已有）确保 API 文档不 broken
+- 在 README 中添加"最后更新"标记（如 `*Last updated: 2026-05-18*`），方便读者判断时效性
+- 考虑每季度或每次 release 前运行一次文档审计
 
 **Warning signs:**
-- `Arc<Mutex<...>>` 出现在 `TemplateStatsProcessor` 或相关聚合器中
-- 并行处理时 CPU 利用率比不用统计时低（锁竞争）
+- 新功能 PR 不包含任何文档变更
+- README 中的"最后更新"标记与实际代码变更间隔超过 3 个月
+- 配置变更后 CI 通过但 README 中的配置示例未同步更新
 
-**Phase:** TMPL-02 设计阶段，在决定数据结构时就确定线程模型
+**Phase to address:**
+Phase 3（CI 与维护流程）— 将文档维护流程制度化；落地页上线后的第一个 feature phase 就会考验这个流程
 
 ---
 
-## Medium Severity Pitfalls
-
-### Pitfall 8: 新 config 字段破坏现有 TOML 向后兼容
-
-**Severity:** MEDIUM
+### Pitfall 9: 忽略 crates.io 自动拉取 README 的兼容性
 
 **What goes wrong:**
-如果新增 `[features.template_stats]` 或 `[chart]` 配置段时忘记给结构体加 `#[serde(default)]`，则现有不包含这些字段的 TOML 文件在反序列化时会报错，所有 729 个集成测试中使用 `toml::from_str` 构建 config 的都会失败。
+修改 README 时使用了 GitHub Pages 独有的资源（相对路径图片、内嵌 SVG 等），导致 crates.io 上的 README 渲染异常——图片显示为断链、格式错乱。
 
-**Prevention:**
-所有新的可选 config 字段必须：
-1. 在 `FeaturesConfig` / `Config` 中用 `Option<T>` 类型（缺失 = None = 功能关闭）
-2. 或在结构体级别加 `#[serde(default)]`（缺失 = `Default::default()`）
+**Why it happens:**
+- crates.io 从 GitHub raw 源拉取 README（`readme = "README.md"`），不执行任何 Jekyll 或 SSG 处理
+- README 中使用的 `![Chart](./docs/chart.svg)` 在 GitHub 仓库中正常，但 crates.io 的 raw 环境无法解析相对路径
+- GitHub Pages 的专属样式或语法（如 Jekyll frontmatter、Liquid tag）会破坏 crates.io 渲染
 
-参考现有模式：`pub filters: Option<FiltersFeature>` — 缺失时为 `None`，整个功能关闭，不影响现有配置。
-
-**不要**用非 Option 类型 + 无默认值来表示新功能：
-```rust
-// 错误：现有 TOML 文件反序列化失败
-pub template_stats: TemplateStatsConfig,
-
-// 正确：可选，缺失时功能关闭
-pub template_stats: Option<TemplateStatsConfig>,
-```
+**How to avoid:**
+- 保持 README 的纯 Markdown 兼容性：不使用任何非标准 Markdown 扩展
+- 图片使用绝对 URL（`https://raw.githubusercontent.com/guangl/sqllog2db/main/docs/chart.svg`）而非相对路径
+- 不在 README 中使用 Jekyll frontmatter、Liquid tag 等 GitHub Pages 专属语法
+- 在部署前用 `cargo publish --dry-run` 检查 README 的预期渲染效果
+- 简单的守则："README 必须能在 GitHub 仓库页面和 crates.io 上都能正确渲染"
 
 **Warning signs:**
-- `cargo test` 在修改 `FeaturesConfig` 后出现 `missing field` serde 错误
-- `toml::from_str("")` 对 `FeaturesConfig` 失败
+- README 中包含 `---` 开头的 YAML frontmatter
+- README 使用 `{% %}` 或 `{{ }}` 模板语法
+- 图片使用相对路径而非 raw 完整 URL
 
-**Phase:** 所有 config 结构体变更阶段（TMPL-01 first step）
+**Phase to address:**
+Phase 1（README 更新）— 图片链接格式在修改 README 时同步修正为绝对 URL
 
 ---
 
-### Pitfall 9: 模板 key 大小写/空白不一致导致聚合分裂
-
-**Severity:** MEDIUM
+### Pitfall 10: 缺少 API 文档集成（`cargo doc` 与落地页分离）
 
 **What goes wrong:**
-DaMeng（达梦）SQL 日志中同一模板可能以不同大小写出现（`SELECT` vs `select`，`WHERE` vs `where`）。如果 key 生成时不统一大小写，同一逻辑模板会被统计为多个不同模板，导致 Top N 结果失真。
+项目的 API 文档（通过 `cargo doc` 生成）完全独立于落地页。落地页展示用户文档和 CLI 用法，`cargo doc` 展示内部 Rust API——两者各自为政，没有相互引导。贡献者不知道如何查阅 API 文档。
 
-现有 `fingerprint()` 函数**不做大小写归一化**，因为它设计用于 `digest` 命令（保留原始大小写用于展示）。但模板统计需要归一化大小写来聚合。
+**Why it happens:**
+- `cargo doc` 是 Rust 项目的标准 API 文档生成工具，天然面向库使用者/贡献者
+- CLI 工具的项目文档（README、落地页）面向终端用户，与 API 文档的受众不同
+- 两者没有自动关联机制，`cargo doc` 的输出也不在 GitHub Pages 部署范围内
 
-**Prevention:**
-模板 key 生成应在 `fingerprint()` 的输出上再做 `to_lowercase()`：
-
-```rust
-let template_key = fingerprint(sql_text).to_lowercase();
-```
-
-注意：`to_lowercase()` 在 Rust 中是 O(n) 的 heap 分配操作。如果模板数量有限（通常 <10K），在 key 插入 HashMap 时执行一次是可接受的。不要在热循环中每条记录都 `to_lowercase()` 整个 SQL，只在首次见到该 key 时做。
+**How to avoid:**
+- 不必将 `cargo doc` 纳入落地页部署（会增加复杂度），但应在落地页和 CONTRIBUTING.md 中显式引导
+- 最简方案：在落地页添加"API Reference"链接指向 `https://docs.rs/dm-database-sqllog2db/latest/`（docs.rs 自动为 crates.io 包构建 API 文档，零维护）
+- 或者在落地页部署时同时发布 API 文档：`cargo doc --no-deps` 的输出与 SSG 产物一起发布到 GitHub Pages 的 `/api/` 子路径
 
 **Warning signs:**
-- 统计报告中 `SELECT * FROM users` 和 `select * from users` 作为两个独立模板出现
-- `TemplateStatsAggregator` 的 HashMap key 是原始 SQL 未经大小写处理
+- CONTRIBUTING.md 中没有任何关于如何查阅 API 文档的指引
+- 落地页没有指向 docs.rs 或 API 文档的链接
+- 项目有外部贡献者但无法找到内部模块文档
 
-**Phase:** TMPL-01 实现阶段，key 生成函数需要测试用例覆盖大小写差异
-
----
-
-### Pitfall 10: `HashMap<String, TemplateStats>` key 分配在热循环
-
-**Severity:** MEDIUM
-
-**What goes wrong:**
-每条记录调用 `aggregator.get_or_insert(key)` 时，若使用 `HashMap<String, TemplateStats>`，会对每条记录调用 `fingerprint(sql)` 生成新的 `String`（heap 分配），然后调用 `HashMap::entry(key)` 查找。对于热模板（1M+ 次命中），这意味着 1M+ 次 `String::new` + hash + 比较 + drop。
-
-现有代码使用 `compact_str::CompactString` 和 `ahash::HashMap` 来优化类似场景（见 `replace_parameters.rs`）。
-
-**Prevention:**
-- HashMap 使用 `ahash::HashMap`（已是项目依赖，hash 比 `std::HashMap` 快 ~2x）
-- 对热路径查找使用 `entry()` API 避免二次查找
-- 考虑使用 `compact_str::CompactString` 作为 key（<=23 字节的 fingerprint 可内联存储，但大多数 SQL fingerprint 超过 23 字节，实际收益有限）
-- 更重要的优化：先检查 `pipeline.is_empty()` 守卫（见 Pitfall 1），没有统计需求时根本不进管线
-
-**Warning signs:**
-- `TemplateStatsAggregator` 使用 `std::collections::HashMap`（而非 `ahash::HashMap`）
-- 每条记录都重新计算完整 fingerprint 即使该 key 已存在
-
-**Phase:** TMPL-02 实现阶段；如果 D-G1 门控被触发再优化
+**Phase to address:**
+Phase 2（落地页）— 添加 API 文档引导链接（docs.rs）；Phase 3（CI）— 可选项：将 API 文档纳入 Pages 部署
 
 ---
 
-### Pitfall 11: SVG 文件句柄未显式 flush，内容截断
+## Technical Debt Patterns
 
-**Severity:** MEDIUM
+Shortcuts that seem reasonable but create long-term problems.
 
-**What goes wrong:**
-Rust 的 `BufWriter` 在 `drop` 时不会自动 flush（与 `Write::flush()` 不同）。如果 SVG 生成函数返回 `Ok(())` 但未调用 `flush()`，`BufWriter` 的缓冲区内容会在 drop 时静默丢失，导致生成的 SVG 文件末尾缺少 `</svg>` 标签，浏览器无法渲染。
-
-这个 Rust 特性与大多数语言不同，容易被忽视。
-
-**Prevention:**
-所有 `BufWriter<File>` 写完后必须显式调用 `flush()`：
-
-```rust
-writer.flush().map_err(|e| Error::Io(e))?;
-// 或者
-use std::io::Write as _;
-writer.flush()?;
-```
-
-在 SVG 写出函数的末尾加 `#[must_use]` 或通过返回 `Result` 强制调用方检查错误。
-
-**Warning signs:**
-- SVG 写出函数的末尾没有 `writer.flush()` 调用
-- 生成的 SVG 文件偶尔在小数据集下完整、大数据集下末尾截断
-
-**Phase:** CHART-01 实现阶段；code review checklist 加入 "BufWriter flush" 检查
-
----
-
-### Pitfall 12: `LogProcessor::process()` trait 签名不允许累积状态（设计冲突）
-
-**Severity:** MEDIUM
-
-**What goes wrong:**
-现有 `LogProcessor` trait 签名为：
-
-```rust
-pub trait LogProcessor: Send + Sync + std::fmt::Debug {
-    fn process(&self, record: &Sqllog) -> bool;
-    fn process_with_meta(&self, record: &Sqllog, meta: &MetaParts<'_>) -> bool;
-}
-```
-
-注意：接收器是 `&self`（共享引用，不可变）。统计累积器需要在每次 `process()` 时**修改内部状态**（计数、累加耗时）。
-
-用 `&self` 是不可能直接修改字段的。可能的解决方案：
-
-1. **`&self` + `RefCell<Stats>` 内部可变性**：可行，但 `RefCell` 不是 `Sync`，而 trait bound 要求 `Sync`（因为 pipeline 在并行路径中跨线程传递）
-2. **`&self` + `Mutex<Stats>`**：满足 `Sync`，但每次 `process()` 都要 lock/unlock，热路径性能下降
-3. **改 trait 签名为 `&mut self`**：与现有所有实现不兼容（需要改 `Pipeline::run_with_meta` 为 `&mut self` + 每次借用 `&mut` processor），破坏所有 729 个使用 `pipeline` 的测试
-4. **统计处理器不实现 `LogProcessor`，而是单独的 `LogSink` trait**：推荐方案，见下方
-
-**Prevention:**
-统计累积器不要实现 `LogProcessor` trait（该 trait 设计用于记录过滤，返回 `bool`）。改为设计独立的 `StatsSink` 或 `RecordVisitor` trait：
-
-```rust
-pub trait RecordVisitor {
-    fn visit(&mut self, record: &Sqllog, meta: &MetaParts<'_>, pm: &PerformanceMetrics<'_>);
-}
-```
-
-在 `process_log_file` 热循环中，统计访问器在 exporter 写出之后调用：
-
-```rust
-exporter_manager.export_one_preparsed(&record, &meta, &pm, ns)?;
-if let Some(visitor) = stats_visitor.as_mut() {
-    visitor.visit(&record, &meta, &pm);
-}
-```
-
-这保留了 `pipeline.is_empty()` 快路径的完整性，且统计访问器使用 `&mut self` 可以自由修改状态。
-
-**Warning signs:**
-- `TemplateStatsProcessor` 实现了 `LogProcessor` trait
-- 代码中出现 `Mutex<TemplateStats>` 在 `LogProcessor::process` 内部
-- `Pipeline` struct 的内部结构被修改（加 `&mut`）
-
-**Phase:** TMPL-02 设计阶段（第一步，在动代码之前确定接口）
-
----
-
-## Low Severity Pitfalls
-
-### Pitfall 14: `apply_overrides()` 未覆盖新 config key
-
-**Severity:** LOW
-
-**What goes wrong:**
-`Config::apply_one()` 中的 `match key { ... _ => return Err(unknown()) }` 要求所有合法的 `--set key=value` key 都在此处枚举。若新增 `features.template_stats.enable` 或 `chart.output_dir` 而未在 `apply_one()` 中添加对应分支，CLI 的 `--set` 功能对新字段无效，用户会得到 "unknown config key" 错误，但实际上 key 是合法的。
-
-**Prevention:**
-每次在 `FeaturesConfig` 或 `Config` 中添加新的顶级字段，同步在 `apply_one()` 中添加对应分支。添加一个集成测试覆盖新 key 的 `--set` 路径。
-
-**Phase:** TMPL-01 和 CHART-01 config 阶段，在添加 config struct 的同一 commit 中更新 `apply_one`
-
----
-
-### Pitfall 15: 统计文件路径未在 `validate()` 阶段检查
-
-**Severity:** LOW
-
-**What goes wrong:**
-若 `template_stats.output` 路径指向一个不存在的目录（如 `/data/reports/stats.json` 但 `/data/reports/` 不存在），错误只在运行结束、调用 `finalize()` 时才出现。此时已经处理了全部记录（耗时可能数分钟），只是在写出统计结果时报错，造成用户体验极差（"跑了十分钟发现输出目录不存在"）。
-
-**Prevention:**
-在 `Config::validate()` / `validate_and_compile()` 中检查统计输出路径的父目录是否可写，或者至少检查路径非空。参考现有 `CsvExporter::validate()` 的模式（只检查路径非空，不要求文件存在，但确保在 initialize 阶段 `ensure_parent_dir()` 被调用）。
-
-**Phase:** TMPL-03 config 阶段；在 `TemplateStatsConfig::validate()` 中实现
-
----
+| Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
+|----------|-------------------|----------------|-----------------|
+| 落地页用纯 HTML/CSS 手写 | 零框架依赖，快速上线 | 难以维护和扩展，新内容需手写 HTML | 落地页内容极少（单页 3 节以下）。sqllog2db 功能丰富，不推荐 |
+| 落地页复制 README 内容 | 快速填充页面，外观丰富 | 两份内容难同步，永远存在差异 | **从不接受**——违反单一事实来源原则 |
+| 先部署落地页，后续再更新 Cargo.toml 元数据 | 减少初期工作 | 用户从 crates.io 找不到文档入口 | 可接受，但必须在同一个 milestone 内的下一 phase 立即修复，不能跨 milestone |
+| 只更新落地页不更新 README | 快速响应更急迫的需求 | 三体问题恶化，用户困惑 | **从不接受** |
+| 无 CI 链接检查 | 节省 CI 资源 | 链接腐烂不被发现直到用户报告 | 仅作为 Phase 1-2 的临时状态，Phase 3 必须补上并设为 PR 检查项 |
+| 忽略 `cargo doc` 部署 | 简化部署流程 | 贡献者不知道如何浏览 API 文档 | 有 docs.rs 链接时可接受，但落地页必须引导至此 |
+| 同一个 README 维护中文和英文版本 | 双语覆盖 | 维护成本翻倍，容易一个更新另一个不更新 | 目标受众单一语言时不做双语。sqllog2db 以中文用户为主，不做英文版 |
+| 落地页跳过 `.nojekyll` 文件（使用 Jekyll 处理） | 少了解一个配置 | Jekyll 自动处理 `_` 开头文件，可能导致静态资源丢失 | 使用默认 Jekyll 没问题；使用其他 SSG 必须添加 `.nojekyll` |
 
 ## Integration Gotchas
 
-| Integration Point | Common Mistake | Correct Approach |
-|------------------|----------------|------------------|
-| `pipeline.is_empty()` | 统计处理器无条件加入管线 | 只在 `cfg.features.template_stats.enable == true` 时才添加；或者不用 `LogProcessor` trait，改用单独的 visitor 路径（见 Pitfall 12） |
-| `process_csv_parallel` | 统计数据在各线程中分散，finalize 时只有最后一个线程的数据 | 每线程独立统计，主线程 merge（map-reduce 模式） |
-| `ExporterManager::finalize()` | 统计表 / 伴随文件在主 exporter finalize 之前写出，数据不完整 | 统计写出在主 exporter finalize 之后，作为独立步骤 |
-| `fingerprint()` 函数 | 另起炉灶写归一化逻辑 | 直接复用 `features::fingerprint(sql)`，在其输出上做 `to_lowercase()` |
-| `Config::validate_and_compile()` | 新 config 段未添加到 validate 链路 | 在 `validate_and_compile()` 中添加对 `template_stats` / `chart` 的校验分支 |
-| `BufWriter` + SVG 写出 | drop 时不 flush 导致末尾截断 | 每个写出函数末尾显式 `flush()?` |
-| `LogProcessor` trait (`&self`) | 统计处理器实现此 trait 但需要 `&mut self` | 使用独立 visitor 接口（`&mut self`），不混入 pipeline |
+Common mistakes when connecting to external services.
 
----
+| Integration | Common Mistake | Correct Approach |
+|-------------|----------------|------------------|
+| **GitHub Actions + pages deploy** | 使用 `JamesIves/github-pages-deploy-action@v4` 但不设置 `branch` 参数，默认推送到 `gh-pages` 但仓库设置不是这个分支 | 先确认仓库 Settings > Pages > Source 设置；推荐用官方 `actions/upload-pages-artifact@v3` + `actions/deploy-pages@v4` 组合 |
+| **CNAME 文件持久化** | 只在首次部署时添加 CNAME，后续部署覆盖丢失 | 将 CNAME 文件放在 SSG 的静态资源目录（如 Zola 的 `static/` 或 Jekyll 的根目录），确保每次部署都包含 |
+| **Custom domain + HTTPS** | 添加自定义域名后立即测试，HTTPS 证书未签发显示不安全 | GitHub 自动签发 HTTPS 证书（通过 Let's Encrypt），但需要 5-30 分钟；使用 CNAME 记录指向 `<username>.github.io` |
+| **lychee link checker** | 配置过于严格，对外部链接的频繁检查导致 CI 经常性失败 | 使用 `--exclude` 排除已知不可达的外部域名（如 `crates.io/api`、`github.com` API 端点）；设置为 `continue-on-error: true` 避免阻塞 PR |
+| **crates.io + README 图片** | 使用相对路径引用截图/图表 | 使用 `https://raw.githubusercontent.com/...` 绝对 URL，确保在 crates.io 上也能正确渲染 |
+| **`.nojekyll` 缺失** | 非 Jekyll 的静态站点部署后 `_` 开头的文件和目录被忽略 | 在 SSG 输出目录的根目录添加一个空文件 `.nojekyll`；或通过 `upload-pages-artifact` 的配置包含它 |
 
 ## Performance Traps
 
-| Trap | Symptoms | Prevention | Threshold |
-|------|----------|------------|-----------|
-| 统计处理器进管线，无统计配置时也执行 | `cargo criterion` 无过滤基准退化 >5% | `pipeline.is_empty()` 守卫 | D-G1: >5% 触发调查 |
-| `Vec<u64>` per template 全量样本 | RSS 超 500 MB，1M 记录 | 固定桶直方图，每模板 <300 bytes | 5M 记录 × 1 模板 = 40 MB 单 Vec |
-| `fingerprint()` 每条记录调用一次 | CPU 热点在 fingerprint 函数 | 只对有 tag 的 DML 记录调用；PARAMS 记录跳过 | 取决于 SQL 长度，通常 <1μs |
-| `HashMap<String, _>` 用 std hasher | hash 速度比 ahash 慢 ~2x | 全项目已用 `ahash::HashMap`，统计器跟进 | 10K 模板时感知不明显；1M 独立 SQL 时明显 |
-| SVG 生成中 `format!` 拼接大字符串 | finalize 阶段内存峰值 | `write!` 直接到 `BufWriter` | Top 50 条形图 SVG ~50KB，一次性拼接无害 |
+Traps that affect documentation maintenance efficiency, not runtime performance.
 
----
+| Trap | Symptoms | Prevention | When It Breaks |
+|------|----------|------------|----------------|
+| **落地页包含大量外部资源**（Google Fonts、CDN 字体、复杂 JS 库） | 中国用户（项目主要受众）加载极慢或无法加载 | 使用自托管资源或无外部依赖；考虑中国用户的网络可达性 | 立即：某些 CDN 在中国可能被限制或延迟严重 |
+| **落地页使用 JS 框架做 SSR** | 每次内容更新需要 npm install、npm audit fix、构建 | 使用 Zola/Jekyll 或纯 HTML——零 JS 运行时 | 第一次 `npm audit --fix` 引入 breaking change 或 Dependabot 持续提醒时 |
+| **版本历史放在 Landing Page 上** | 每次发版需要更新落地页 + CHANGELOG | 落地页只显示最新版本信息和"查看更多"链接到 CHANGELOG | 第 2 个版本发布后维护成本翻倍 |
+| **README 中的性能表格手动维护** | 基准测试更新后忘记更新 README | 自动化：`cargo bench` 后将结果注入 README（通过生成脚本或 CI include） | 每次上游 crate 升级或平台变化后的第一次跑 bench |
+| **多个 feature 的配置示例全在 Landing Page 展示** | 新增 feature 后 Landing Page 配置示例立即过时 | Landing Page 只展示最简配置，完整参考指向 README | 每个新功能发布后 |
+| **SSG 构建时间过长** | CI 部署耗时从 1min 增加到 5min+ | 内容型站点（无 JS/图片处理）的构建应在 <10s | 当引入图片压缩、Sass 编译、JS 打包等步骤时 |
 
-## Memory Pitfall: Concrete Numbers
+## Security Mistakes
 
-**场景：1.1GB 真实日志文件，~1.55M records/sec，假设 5M 总记录**
+| Mistake | Risk | Prevention |
+|---------|------|------------|
+| **在落地页配置示例中包含敏感占位符路径**（如 `/var/run/secret`、`password = "secret"`） | 用户可能直接复制配置而忘记替换敏感占位符 | 使用明确的安全占位符：`path = "/path/to/your/logs"`，不在示例中展示任何像实际凭证的占位 |
+| **落地页使用 CDN 加载 JS 库**（如 highlight.js 代码高亮） | CDN 被攻陷替换为恶意脚本；中国用户加载失败影响使用 | 使用服务端代码高亮（SSG 内置插件）或自托管。若必须用 CDN，使用 SRI（Subresource Integrity） |
+| **落地页暴露内部项目信息**（如 CI 内部 URL、服务器路径、未公开的配置文件） | 信息泄露，社会工程攻击面 | Pages 部署前做一次信息扩散（SII）检查：搜索 landing page 内容中的内网 IP、内部域名、密钥 |
 
-| 统计策略 | 假设模板分布 | 内存占用 | 可接受？ |
-|---------|------------|---------|---------|
-| `Vec<u64>` 全量存储 | 100 模板 × 50K 记录 | 100 × 50K × 8 = 40 MB（仅 Vec 内容，含 HashMap overhead 约 120 MB） | 勉强，但随数据量线性增长 |
-| `Vec<u64>` 全量存储 | 1 热模板 × 5M 记录 | 5M × 8 = 40 MB（单 Vec） | 在设备内存有限时危险 |
-| `Vec<u64>` 全量存储 | 10K 不同模板 × 500 记录 | 10K × 500 × 8 = 40 MB + HashMap 开销 ~100 MB | 总计 140 MB，设计承诺的"恒定内存"被打破 |
-| **64 桶直方图** | 任意分布 | 每模板 288 bytes；10K 模板 = 2.8 MB | **推荐，内存安全** |
-| **t-digest** | 任意分布 | 每模板 ~1KB（100 centroid）；10K 模板 = 10 MB | 可接受，但实现复杂度高 |
+## UX Pitfalls
 
-结论：**`Vec<u64>` 方案在生产数据上不可行**，必须选择固定内存的近似方案。
+| Pitfall | User Impact | Better Approach |
+|---------|-------------|-----------------|
+| **落地页全中文但代码注释和报错信息全英文** | 中文用户读注释吃力但不致命 | 保持一致：sqllog2db 现有 init 模板已是中英双语（`# 中文注释` + `# English comment`），是好的模式，继续沿用 |
+| **GIF 演示 CLI 操作** | 中国用户可能因 GitHub 间歇不可达看不到 GIF；GIF 体积大、加载慢 | 使用静态截图 + 文字说明替代 GIF。如果坚持用动态演示，使用托管在 GitHub 仓库中的视频文件或链接到 YouTube/Bilibili |
+| **落地页首屏堆满功能列表** | 用户无法快速判断"这个工具能解决我的问题吗" | 首屏定位：一句话描述 + screenshot/示意图 + "快速开始"按钮。功能列表放在 second fold |
+| **"快速开始"不是真正的快速开始** | README 的"快速开始"包含 init -> validate -> run -> stats -> digest 5 个步骤，新用户被信息淹没 | 真正的快速开始：`cargo install` -> 生成默认配置 -> 直接运行（展示默认行为）。细节步骤放在"高级用法" |
+| **落地页的"快速开始"示例未经实测** | 展示的命令在实际环境中执行失败（如路径错误、缺少权限） | 所有在落地页展示的 CLI 命令必须从头到尾在真实环境跑通一遍，贴实际输出而不是手写 |
 
----
+## "Looks Done But Isn't" Checklist
 
-## Existing Test Suite Protection
+Things that appear complete but are missing critical pieces.
 
-当前 729 个测试的覆盖范围与新特性的交集：
+- [ ] **README 更新：** 只更新了新增功能部分，忘记审查和更新旧内容（配置示例、性能数据、FAQ 答案是否仍准确？）
+- [ ] **CHANGELOG.md：** 文件存在但版本记录不完整（当前 CHANGELOG 只从 v0.10.7 开始，缺少 v1.x 版本的完整记录）
+- [ ] **docs/ 中的截图/图标：** 文件中引用了图片但图片还未生成或上传（placeholder 问题）
+- [ ] **落地页的"快速开始"示例：** 贴出的命令未在真实环境中运行验证过（应从头到尾跑一遍，贴实际输出）
+- [ ] **内部链接验证：** README 中的所有 `./` 相对链接都手动用 `[ -f ... ]` 检查过可访问性
+- [ ] **Cargo.toml documentation 字段：** GitHub Pages 已上线但 Cargo.toml 中的 `documentation` 字段还未更新指向 Pages URL
+- [ ] **crates.io 版本：** `documentation` 字段在下一次 `cargo publish` 时才生效——确保在下一次发版时已设置
+- [ ] **CI 文档检查：** 添加了 `lychee` 或类似工具但配置了 `--fail`，导致链接检查失败直接阻塞 PR（应根据场景决定是否设为 blocker）
+- [ ] **`.nojekyll` 文件：** 如果使用非 Jekyll SSG，确保产物根目录包含此文件
+- [ ] **`CNAME` 文件：** 如果使用自定义域名，确保在 SSG 的静态资源目录中包含此文件
+- [ ] **落地页的 404 页面：** GitHub Pages 默认有 404 页面，但可能没被自定义
 
-| 测试类别 | 涉及测试数（估计） | 新特性可能破坏的方式 | 防护措施 |
-|---------|----------------|-------------------|---------|
-| `config.rs` serde 测试 | ~30 | `FeaturesConfig` 新增字段未加 `#[serde(default)]` 导致反序列化失败 | 新字段用 `Option<T>` |
-| `features/mod.rs` Pipeline 测试 | ~15 | `pipeline.is_empty()` 行为改变 | 统计器走独立 visitor 路径 |
-| `cli/run.rs` 集成测试 | ~5 | `handle_run` 签名或行为改变 | 统计器参数通过 config 传递，不改 handle_run 签名 |
-| `exporter/csv.rs` + `sqlite.rs` | ~50 | finalize 逻辑改变导致文件截断 | 统计写出在 finalize 之后，独立步骤 |
-| `features/replace_parameters.rs` | ~40 | `compute_normalized` 被修改以支持模板 key 生成 | 模板 key 复用 `fingerprint()`，不修改 `compute_normalized` |
-| `features/sql_fingerprint.rs` | ~10 | `fingerprint()` 函数语义改变 | 如需扩展，添加新函数而非修改现有语义 |
+## Recovery Strategies
 
-**规则：所有 v1.3 阶段的 exit criteria 必须包含 `cargo test` 729 测试全部通过。**
+When pitfalls occur despite prevention, how to recover.
 
----
+| Pitfall | Recovery Cost | Recovery Steps |
+|---------|---------------|----------------|
+| README 配置示例过期 | **LOW**（编辑 README 单文件） | 1. 运行 `cargo run -- init` 获取当前默认配置；2. 用最新输出替换 README 中的配置示例块；3. 检查是否有新增/删除的配置字段在 README 其他部分引用 |
+| 落地页链接腐烂 | **MEDIUM**（需要逐个修复） | 1. 运行 `lychee . --no-progress --exclude github.com` 检查全站链接；2. 批量替换无效外部链接；3. 修复后运行 `lychee` 验证 |
+| landing page 概念过期 | **HIGH**（需要大面积重写） | 1. 在问题发生前防止：用 SSG 的 include/partial 机制减少重复内容；2. 如果已过期，执行"差异审计"：逐段对比 README -> Landing page，标记每个差异点的优先级 |
+| 多文档源不一致（三份各不同） | **MEDIUM**（需要梳理差异） | 1. 锁定 README 为 source of truth；2. 合并所有差异到 README；3. 从 Landing page 删除所有与 README 冗余的内容，改为引用；4. 建立"只有 README -> 落地页"的单向同步流程 |
+| `cargo publish` 后 crates.io 文档链接错误 | **LOW**（下一个版本修复） | 1. 当前版本无法回退 crates.io 信息；2. 在下一次 `cargo publish` 前修复 Cargo.toml；3. 在 README 中添加显式的 docs 链接作为临时替代（README 文件本身 crates.io 会显示） |
+| CI 中 lychee 链接检查频繁失败 | **LOW**（配置调整） | 1. 检查失败的外部域名是否稳定可达；2. 将不稳定域名加入 `--exclude`；3. 考虑设为 `continue-on-error: true` |
+| GitHub Pages 部署后 404 | **HIGH**（需要立即修复） | 1. 检查 GitHub Actions 日志确认 `publish_dir` 是否正确；2. 确认 index.html 存在；3. 检查仓库 Settings > Pages Source 是否设为 "GitHub Actions"；4. 检查 `.nojekyll` 和 `CNAME` 文件 |
 
-## Phase-Specific Warnings
+## Pitfall-to-Phase Mapping
 
-| Phase | Topic | Most Likely Pitfall | Mitigation |
-|-------|-------|---------------------|------------|
-| TMPL-01 | SQL 归一化 key 生成 | P3: 另起炉灶 / P4: IN 列表边界 | 先审查 `fingerprint()` 是否满足，缺什么在 `sql_fingerprint.rs` 中扩展 |
-| TMPL-01 | Config 结构体 | P8: serde 向后兼容 / P14: apply_overrides | 新字段 `Option<T>` + serde default；同 commit 更新 `apply_one` |
-| TMPL-02 | 统计累积器设计 | P1: 破坏快路径 / P2: OOM / P12: trait 冲突 | 先确定接口（RecordVisitor）再写实现；直方图方案 |
-| TMPL-02 | 并行路径 | P13: 线程竞争 | 线程独立统计 + 主线程 merge |
-| TMPL-03/04 | 统计输出时序 | P7: 与 exporter 生命周期不同步 | finalize 顺序：主 exporter → 统计写出 → SVG 生成 |
-| CHART-01~05 | SVG 生成 | P6: 热循环混入 / P11: BufWriter flush | SVG 只在 finalize；显式 flush；BufWriter 直写 |
+How roadmap phases should address these pitfalls.
 
----
+| Pitfall | Prevention Phase | Verification |
+|---------|------------------|--------------|
+| 文档与代码脱节（P1） | Phase 1（README 更新） | 逐段比对：`cargo run -- --help` vs README 命令示例；`cargo run -- init` vs 配置示例 |
+| 链接腐烂（P2） | Phase 1（修复/创建文档）+ Phase 3（CI） | Phase 1 手动验证；Phase 3 lychee CI check 自动拦截 |
+| 落地页配置示例过时（P3） | Phase 0 + Phase 2 | 落地页配置示例与 `cargo run -- init` 输出一致；或落地页不展示完整配置只做引导 |
+| 落地页过度工程化（P4） | Phase 0（工具栈决策） | 构建工具 <= 单个 Rust 二进制（Zola）或零额外依赖（Jekyll/纯 HTML） |
+| 多文档源同步负担（P5） | Phase 0（职责界定） | README 是事实源，落地页内容为 README 子集 + 视觉增强，不引入全新内容 |
+| Cargo.toml 元数据缺失（P6） | Phase 2（部署后立即） | `cargo metadata` 输出中 `documentation` 字段指向 Pages URL |
+| GitHub Pages CI 陷阱（P7） | Phase 2（部署前测试） | 使用官方 actions + 在 PR artifact 中预演；检查 `.nojekyll` 和 `CNAME` |
+| 文档维护流程缺失（P8） | Phase 3（CI 与流程制度） | CONTRIBUTING.md 包含"文档更新"PR checklist；CI 中有链接检查（可不设 blocker） |
+| crates.io README 兼容性（P9） | Phase 1（链接格式修正） | `cargo publish --dry-run` 检查 README 渲染结果；图片用 raw URL |
+| API 文档集成缺失（P10） | Phase 2（落地页链接） | 落地页有指向 docs.rs 或 API 文档的引导链接 |
 
 ## Sources
 
-- 直接代码检查：`src/features/mod.rs`（`Pipeline::is_empty()`, `LogProcessor` trait, `&self` 约束）
-- 直接代码检查：`src/features/sql_fingerprint.rs`（`fingerprint()` 现有实现与局限）
-- 直接代码检查：`src/features/replace_parameters.rs`（`compute_normalized`, `ahash::HashMap`, `CompactString` 模式）
-- 直接代码检查：`src/cli/run.rs`（`process_log_file` 热循环, `process_csv_parallel` 并行路径, `pipeline.is_empty()` 快路径使用位置）
-- 直接代码检查：`src/exporter/mod.rs`（`ExporterKind`, `finalize()` 生命周期, `BufWriter` 使用模式）
-- 直接代码检查：`src/config.rs`（`FeaturesConfig::default()`, `apply_one()` match 模式, `validate_and_compile()` 链路）
-- `Cargo.toml`：`ahash`, `compact_str`, `memchr`, `smallvec` 已作为依赖可直接复用
-- Rust `BufWriter` 文档：drop 时 flush 错误被静默忽略（官方文档明确说明）
-- 近似百分位算法：t-digest (Dunning 2013), DDSketch (Masson 2019)；固定桶直方图插值为常用替代
+- [sqllog2db README.md](https://github.com/guangl/sqllog2db/blob/main/README.md) — 直接文件读取确认：旧配置格式、断链、v1.3 v1.4 功能缺失
+- [sqllog2db CHANGELOG.md](https://github.com/guangl/sqllog2db/blob/main/CHANGELOG.md) — 版本记录不完整，缺少 v1.0-v1.4 的完整记录
+- [sqllog2db Cargo.toml](https://github.com/guangl/sqllog2db/blob/main/Cargo.toml) — 缺少 `documentation` 字段；`homepage` 指向 GitHub 仓库
+- [sqllog2db .github/workflows/ci.yaml](/.github/workflows/ci.yaml) — 已有 `cargo doc --no-deps -D warnings` 但无 lychee 或链接检查
+- [sqllog2db .planning/RETROSPECTIVE.md](/.planning/RETROSPECTIVE.md) — v1.3 retro 记录了"文档债"问题；ROADMAP 进度表陈旧的反复模式
+- [peaceiris/actions-gh-pages](https://github.com/peaceiris/actions-gh-pages) — 成熟的 GitHub Pages 部署 action
+- [lycheeverse/lychee](https://github.com/lycheeverse/lychee) — Rust 生态链接检查工具
+- [Zola SSG](https://www.getzola.org/) — Rust 原生静态站点生成器，单二进制
+- [GitHub Pages 官方文档 - 自定义域名和 HTTPS](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site) — CNAME + HTTPS 配置
+- [GitHub Pages 官方文档 - 使用 actions 部署](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site#publishing-with-a-custom-github-actions-workflow) — 官方推荐部署方式
+- [actions/upload-pages-artifact](https://github.com/actions/upload-pages-artifact) — 官方 Pages 上传 action
+- [actions/deploy-pages](https://github.com/actions/deploy-pages) — 官方 Pages 部署 action
+- 个人经验：多个 Rust 开源项目（clap、serde 生态）的文档维护实践
 
 ---
-*Pitfalls research for: sqllog2db v1.3 — TMPL-01/02/03/04, CHART-01~05*
-*Researched: 2026-05-15*
+*Pitfalls research for: sqllog2db v1.5 文档完善 & GitHub Pages 落地页*
+*Researched: 2026-05-18*

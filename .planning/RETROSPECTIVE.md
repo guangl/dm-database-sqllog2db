@@ -188,16 +188,65 @@
 
 ---
 
+## Milestone: v1.5 — 文档完善 & 项目展示
+
+**Shipped:** 2026-05-19
+**Phases:** 3 (21–23) | **Plans:** 8
+
+### What Was Built
+
+- README.md 从 395 行中英混排重写为 208 行纯英文骨架，覆盖 v1.3 模板分析 + v1.4 嵌套配置，6 枚徽章，Mermaid→ASCII 架构图
+- CHANGELOG.md 补全 v1.0-v1.4 五版本条目，0.x 405 行折叠为摘要段落（Keep a Changelog 格式）
+- GitHub Pages 落地页（mdBook + ayu 主题 + GHA 自动部署），7-section 内容，4 类内联 SVG 图表
+- docs/quickstart.md（306 行，4 场景 + 故障排除）和 docs/config-reference.md（8 配置块完整参考）
+- site/src/asciicast/demo.cast（~30s）嵌入 Pages 交互播放器
+- lychee 链接检查 CI workflow，内部严格 + 外部重试 3 次
+
+### What Worked
+
+- **三阶段串行结构** — Phase 21（基础文档）→ Phase 22（Pages 落地页）→ Phase 23（补充文档 + CI）依赖关系清晰，无阻塞
+- **审计修复内联完成** — 里程碑审计（gaps_found）的所有关键 gap 在 re_audit 前全部修复（死链 + checkout@v6 + VERIFICATION.md），re-audit 即刻通过，无需额外阶段
+- **rsvg-convert 替代 ImageMagick** — 遇到工具链阻塞时迅速切换方案（librsvg），总耗时不受影响
+- **零代码变更约束** — v1.5 全程文档，933 测试保持通过，cargo clippy 零警告，无性能回归风险
+
+### What Was Inefficient
+
+- **Mermaid.js 渲染问题** — Phase 22 初始使用 Mermaid.js 架构图，review 发现 mdBook 不支持 Mermaid.js（未经 JS plugin），需切换为 ASCII art；应在 Phase 22 规划时确认 SSG 支持的图表格式
+- **audit gaps_found 初版** — 初次审计有 gap（dead links + checkout@v6 + missing VERIFICATION.md），通过 re-audit 修复。部分 gap（checkout@v6、dead links）本可在 Phase 23 执行时更早发现
+- **ROADMAP.md 进度表 Phase 23 显示 0/4** — 状态未同步，归档前需手动修正
+
+### Patterns Established
+
+- 文档里程碑三阶段模式：基础文档 → 可视化展示 → 补充文档 + CI 质量门禁
+- mdBook 单页落地页：book.toml（ayu dark theme）+ SUMMARY.md + custom.css + pages.yml 是可复用的最小 Pages 基础设施模板
+- lychee 配置模式：内部链接严格（直接失败）+ 外部链接重试 3 次 + 速率限制域名排除（crates.io、shields.io）
+
+### Key Lessons
+
+- SSG 图表支持应在规划阶段确认（Mermaid.js 需要额外 JS plugin，mdBook 默认不支持）
+- lychee CI 的价值在第一次运行时即显现——README 三个死链接在 Phase 23 之前已存在多个里程碑，CI 一次检查即发现
+- 文档里程碑的测试边界不同于代码里程碑：以"用户能看到什么"为验证标准，VERIFICATION.md 应描述人工验证的 URL 和截图检查，而非自动化测试
+
+### Cost Observations
+
+- Timeline: 1 day (2026-05-18 → 2026-05-19)
+- Commits: ~20
+- Notable: 所有 8 个 plan 在单日内完成执行，审计修复也在同一天内闭环；文档里程碑的执行速度远快于代码里程碑
+
+---
+
 ## Cross-Milestone Trends
 
-| Metric | v1.0 | v1.1 | v1.2 |
-|--------|------|------|------|
-| Phases | 2 | 4 | 5 |
-| Plans | 6 | 12 | 13 |
-| Days | 1 | 14 | 5 |
-| Auto-fixed deviations | 6 (all clippy) | 1 (WAL revert) | 3 (09-05 gap closure, 10 review fixes) |
-| Scope creep | 0 | 0 | 0 |
-| Test suite at close | 629+ | 673 | 729 |
-| Accept-defer decisions | 0 | 1 (PERF-02 real-file) | 0 |
-| User scope removals | 0 | 1 (PERF-05 WAL) | 0 |
-| Gate-driven decisions | 0 | 0 | 1 (D-G1 B-no, Phase 10) |
+| Metric | v1.0 | v1.1 | v1.2 | v1.3 | v1.4 | v1.5 |
+|--------|------|------|------|------|------|------|
+| Phases | 2 | 4 | 5 | 5 | 4 | 3 |
+| Plans | 6 | 12 | 13 | 19 | 12 | 8 |
+| Days | 1 | 14 | 5 | 3 | 2 | 1 |
+| Auto-fixed deviations | 6 (clippy) | 1 (WAL revert) | 3 (gap closure) | — | — | 2 (Mermaid→ASCII, dead links) |
+| Scope creep | 0 | 0 | 0 | 0 | 0 | 0 |
+| Test suite at close | 629+ | 673 | 729 | 418* | 933 | 933 (unchanged) |
+| Accept-defer decisions | 0 | 1 (PERF-02) | 0 | 0 | 0 | 0 |
+| User scope removals | 0 | 1 (WAL) | 0 | 0 | 0 | 0 |
+| Gate-driven decisions | 0 | 0 | 1 (D-G1) | 0 | 0 | 0 |
+
+_*v1.3 test count before v1.4 phase additions_

@@ -771,3 +771,416 @@ For CHART-04 (time trend), storing full timestamp strings per record is expensiv
 
 ---
 *v1.3 architecture research appended: 2026-05-15*
+
+---
+
+# v1.5 Architecture: Documentation Structure & GitHub Pages Integration
+
+**Researched:** 2026-05-18
+**Confidence:** HIGH (ecosystem research from mdBook docs, peaceiris/actions-gh-pages docs, official GitHub Pages docs)
+
+## Overview: Documentation as a Build Artifact
+
+The v1.5 milestone introduces two related but distinct documentation systems:
+
+1. **Project documentation** — Markdown files in `docs/` for developers and users (quickstart, architecture, contributing, changelog). These live in the main repo and are versioned alongside code.
+
+2. **GitHub Pages site** — A rendered static site (via mdBook) deployed to `guangl.github.io/sqllog2db/`. This is a **build artifact** generated from the `site/` source directory, not committed to `main`.
+
+Both systems coexist without conflict. The mdBook source lives in the repo but the rendered output (`site/book/`) is gitignored. Only the `gh-pages` branch contains the deployable HTML.
+
+## Directory Structure
+
+```
+sqllog2db/
+├── docs/                          # [1] Project documentation (Markdown, versioned with code)
+│   ├── quickstart.md              # Quick start guide
+│   ├── architecture.md            # Architecture documentation
+│   ├── configuration.md           # Configuration reference
+│   ├── faq.md                     # Frequently asked questions
+│   └── flamegraphs/               # Existing performance profiles (unchanged)
+│
+├── site/                          # [2] GitHub Pages mdBook source (net-new)
+│   ├── book.toml                  # mdBook configuration
+│   └── src/
+│       ├── SUMMARY.md             # Table of contents
+│       ├── index.md               # Landing page / hero section
+│       ├── quickstart.md          # Quick start (symlink or copy from docs/)
+│       ├── features.md            # Feature overview with screenshots
+│       ├── configuration.md       # Configuration reference
+│       ├── performance.md         # Benchmarks and performance data
+│       ├── architecture.md        # Architecture overview
+│       ├── changelog.md           # CHANGELOG (symlink to ../../CHANGELOG.md)
+│       ├── faq.md                 # FAQ
+│       └── CONTRIBUTING.md        # Contributing guide (symlink to ../../CONTRIBUTING.md)
+│
+├── CHANGELOG.md                   # [3] Root-level docs (existing, unmodified location)
+├── README.md                      # Existing, kept as crate landing
+├── CONTRIBUTING.md                # Net-new (root for discoverability)
+├── SECURITY.md                    # Net-new (root for discoverability)
+│
+├── .github/
+│   └── workflows/
+│       ├── ci.yaml                # Existing — add doc build step
+│       ├── release.yaml           # Existing — unchanged
+│       └── pages.yaml             # Net-new — GitHub Pages deploy workflow
+│
+└── .gitignore                     # Add: /site/book/  (mdBook build output)
+```
+
+### Directory Rationale
+
+- **`docs/`** follows the Cargo convention — `cargo doc` uses it for raw Markdown documentation, and it is excluded from the crate package via `Cargo.toml`'s `exclude = ["/docs/*"]`.
+- **`site/`** is separate from `docs/` to avoid namespace collision between mdBook sources and project Markdown. mdBook expects a `src/SUMMARY.md` at its root, and putting it in `docs/src/SUMMARY.md` would conflict with the convention of `docs/` being purely project documentation.
+- **Root-level `CONTRIBUTING.md`** and **`SECURITY.md`** follow GitHub's automatic discovery convention — GitHub shows these links in the repo sidebar if they exist at root.
+- **Symlinks** in `site/src/` avoid content duplication. Files like `CHANGELOG.md` and `CONTRIBUTING.md` can be symlinked from their root location rather than copied.
+
+## Static Site Architecture: mdBook
+
+### Why mdBook
+
+- **Rust-native** — built in Rust, deployed to Rust projects. Natural fit for a Rust CLI tool.
+- **Integrated search** — generated site includes client-side search, zero external services.
+- **Low maintenance** — one binary, one `book.toml`, no npm/node/pip dependencies.
+- **GitHub Pages ready** — `mdbook build` outputs a flat `book/` directory that deploys directly.
+- **Used by the Rust project itself** — proven for developer-facing documentation.
+
+### Configuration (book.toml)
+
+```toml
+[book]
+title = "sqllog2db"
+authors = ["guangl"]
+description = "高性能 CLI 工具：解析达梦数据库 SQL 日志并导出到 CSV/SQLite"
+language = "zh"          # Primary language is Chinese (tool targets DM DBAs)
+
+[build]
+build-dir = "book"       # Output to site/book/ (relative to site/)
+
+[output.html]
+site-url = "/sqllog2db/"
+git-repository-url = "https://github.com/guangl/sqllog2db"
+edit-url-template = "https://github.com/guangl/sqllog2db/edit/main/site/src/{path}"
+default-theme = "ayu"    # Clean, modern theme
+preferred-dark-theme = "navy"
+no-section-label = false  # Section numbering for navigation
+git-buttons = true       # "Edit" and "Star" buttons in top bar
+```
+
+### Navigation Design (SUMMARY.md)
+
+```
+# Summary
+
+[sqllog2db](index.md)                        # Landing / hero page
+
+# 快速开始 (Quick Start)
+
+- [安装与构建](quickstart.md)                 # Installation & build
+- [五分钟上手](quickstart.md#五分钟上手)        # 5-minute tutorial (anchor link)
+- [配置文件详解](configuration.md)             # Configuration reference
+- [命令参考](commands.md)                      # CLI commands reference
+
+# 功能特性 (Features)
+
+- [核心功能](features.md#核心功能)             # Core features
+- [SQL 模板分析](features.md#sql-模板分析)     # Template analysis
+- [SVG 图表可视化](features.md#svg-图表可视化)  # Chart visualization
+- [过滤与字段控制](features.md#过滤与字段控制)   # Filters & field control
+
+# 性能 (Performance)
+
+- [基准测试](performance.md#基准测试)           # Benchmarks
+- [优化策略](performance.md#优化策略)           # Optimization strategies
+
+# 开发 (Development)
+
+- [架构概览](architecture.md)                 # Architecture
+- [贡献指南](CONTRIBUTING.md)                  # Contributing
+- [更新日志](changelog.md)                     # Changelog
+
+---
+
+[常见问题 (FAQ)](faq.md)
+```
+
+### Navigation Principles
+
+1. **Progressive disclosure** — top-level items cover the most common user needs (quick start, configuration). Deeper items (architecture, contributing) are secondary.
+2. **Chinese-first** — navigation labels in Chinese because the target audience (DM DBAs) is Chinese-speaking. The tool's README and docs are also Chinese-first.
+3. **Flat over nested** — at most one level of nesting. CLI tools don't need deep documentation hierarchies.
+4. **Part titles as section headers** — `# 快速开始`, `# 功能特性`, `# 性能`, `# 开发` serve as unclickable section labels between groups.
+
+## GitHub Pages Deployment Architecture
+
+### Deployment Option Comparison
+
+| Criterion | Branch-based (`gh-pages`) | actions/deploy-pages (GitHub native) |
+|-----------|---------------------------|--------------------------------------|
+| Setup complexity | Low — add branch, push | Medium — requires Pages deployment env + `id-token: write` |
+| Token management | `GITHUB_TOKEN` works | Requires `id-token: write` permission |
+| Build vs deploy sep. | Combined (peaceiris action does both) | Separated (`actions/upload-pages-artifact` → `actions/deploy-pages`) |
+| Orphan branch | Single-commit history via `force_orphan: true` | Managed automatically |
+| Rollback | Reset `gh-pages` branch | Via Pages settings UI |
+| Custom domain | Via `cname` option | Via `actions/configure-pages` |
+| Build env | Any runner | ubuntu-latest only |
+| **Recommendation** | **RECOMMENDED** | Not needed for this project's scale |
+
+**Decision: Branch-based deployment via `peaceiris/actions-gh-pages@v4`.**
+
+Rationale:
+- Simpler setup — one workflow, one action, one permission (`contents: write`).
+- Orphan branch ensures clean, minimal history.
+- The project is a single-user open-source tool — the advanced features of the native Pages deployer (deployment environments, preview URLs) are not needed.
+- The `peaceiris` action is the most widely used Pages deployer on GitHub Actions (20K+ stars).
+
+### Deploy Flow
+
+```
+                GitHub Actions (pages.yaml)
+                     ↓
+            Trigger: push to main
+            (only if site/ or .github/ changed)
+                     ↓
+            actions/checkout@v6
+                     ↓
+            Install mdBook (via peaceiris/actions-mdbook@v2)
+                     ↓
+            mdbook build site/   ← outputs to site/book/
+                     ↓
+            peaceiris/actions-gh-pages@v4
+              with:
+                publish_dir: ./site/book
+                publish_branch: gh-pages
+                force_orphan: true
+                user_name: "github-actions[bot]"
+                user_email: "41898282+github-actions[bot]@users.noreply.github.com"
+```
+
+### Trigger Logic
+
+- **Primary trigger**: push to `main` when files under `site/` or `.github/workflows/pages.yaml` change. This avoids rebuilding docs on every code commit.
+- **Manual trigger**: `workflow_dispatch` for one-off rebuilds.
+- **Pull request**: optional — could add a preview build that uploads artifacts (without deploying).
+
+```yaml
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - ".github/workflows/pages.yaml"
+  workflow_dispatch:
+```
+
+## CI/CD Integration Points
+
+### Existing CI (ci.yaml) — What Changes
+
+The existing `ci.yaml` runs on every push/PR to `main`:
+
+```yaml
+# Existing step (line 62-65):
+- name: Check documentation
+  run: cargo doc --no-deps
+  env:
+    RUSTDOCFLAGS: -D warnings
+```
+
+**Current behavior**: Builds Rust crate docs via `cargo doc`. Flags doc warnings as errors.
+
+**No change needed** to this step. It validates Rust doc comments (`///`). This is orthogonal to the mdBook site.
+
+**Addition to ci.yaml**: A new job (or step) to validate mdBook builds:
+
+```yaml
+docs:
+  name: Docs Site Build
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v6
+    - name: Install mdBook
+      uses: peaceiris/actions-mdbook@v2
+      with:
+        mdbook-version: "latest"
+    - name: Build docs site
+      run: mdbook build site/
+    - name: Check for broken links
+      run: |
+        # Verify all referenced files exist
+        cd site/src
+        for link in $(grep -roh '(\.\./[^)]*\.md)' . | sort -u); do
+          test -f "../../$link" || test -f "$link" || echo "BROKEN: $link"
+        done
+```
+
+**Purpose**: Catches build failures and broken links in the mdBook source before they reach the deploy workflow. This runs on every PR, not just deploys.
+
+### New Workflow (pages.yaml) — Deploy Only
+
+A separate deploy workflow, distinct from the `ci.yaml` validation:
+
+```yaml
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - ".github/workflows/pages.yaml"
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    name: Build and Deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install mdBook
+        uses: peaceiris/actions-mdbook@v2
+        with:
+          mdbook-version: "latest"
+
+      - name: Build site
+        run: mdbook build site/
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site/book
+          publish_branch: gh-pages
+          force_orphan: true
+          user_name: "github-actions[bot]"
+          user_email: "41898282+github-actions[bot]@users.noreply.github.com"
+```
+
+**Key design decisions:**
+- **Separate workflow** — not combined with `ci.yaml`. Deploy has different trigger conditions (`paths` filter) and permissions. Mixing them would either over-deploy (on every code push) or complicate the trigger logic.
+- **`paths` filter on `site/**`** — avoids deploying when only source code changes. The documentation site only needs rebuilding when its source changes.
+- **`force_orphan: true`** — the `gh-pages` branch always has exactly one commit. Minimizes storage and history.
+- **`concurrency` group** — cancels in-progress deploys if a newer push arrives. Prevents race conditions.
+
+## Build and Deploy Flow (Complete)
+
+```
+Developer pushes to main
+    │
+    ├── site/** changed?
+    │   ├── YES → both workflows run:
+    │   │          ci.yaml:   test + lint + cargo doc + cargo bench --no-run
+    │   │          pages.yaml: mdbook build + deploy to gh-pages
+    │   │
+    │   └── NO  → only ci.yaml runs (no pages redeploy)
+    │
+    ├── src/** changed (code)?
+    │       └── ci.yaml runs (test + lint + coverage)
+    │
+    └── tag v*
+            └── release.yaml runs (binary builds + cargo publish)
+```
+
+### Rollback Strategy
+
+- **Immediate**: Push the `main` branch to the previous commit containing the good docs. The `pages.yaml` workflow re-deploys.
+- **Manual**: Go to GitHub repo Settings > Pages, change Source from "Deploy from a branch" to "None", then back to the `gh-pages` branch to force a re-deploy from the last commit.
+- **Full revert**: Delete the `gh-pages` branch via `git push origin --delete gh-pages`, then re-run the workflow.
+
+## Gitignore and Exclusion
+
+### .gitignore additions
+
+```
+# mdBook build output
+/site/book/
+```
+
+### Cargo.toml — existing exclusion (no change needed)
+
+```toml
+exclude = [
+  "/docs/*",
+  "/site/*",    # Add this — mdBook source not needed in the crate
+  ...
+]
+```
+
+## Risk Assessment
+
+| Concern | Impact | Mitigation |
+|---------|--------|------------|
+| mdBook version drift | Broken builds, inconsistent features | Pin version (e.g., `mdbook-version: "0.4.43"`) in both ci.yaml and pages.yaml |
+| Broken links in site | 404 on published site | Add link check job in ci.yaml (runs on PRs) |
+| Accidental deploy on code-only change | Unnecessary rebuild | `paths` filter in pages.yaml |
+| Symlinks not working in Actions checkout | Missing CHANGELOG etc. in site build | Use `actions/checkout@v6` (preserves symlinks); fallback: copy files via script |
+| Large binary size from mdbook install | ~10MB download per deploy | `actions/cache` for mdbook binary; or use docker-based mdbook for build |
+| git conflicts on gh-pages branch | None | `force_orphan: true` guarantees single-commit branch |
+
+## Integration Points Summary
+
+| Integration Point | Type | File | Change |
+|-------------------|------|------|--------|
+| CI validation job | **NET-NEW** | `.github/workflows/ci.yaml` | Add `docs` job: mdbook build + link check |
+| GitHub Pages deploy | **NET-NEW** | `.github/workflows/pages.yaml` | New workflow: build + deploy |
+| mdBook project | **NET-NEW** | `site/book.toml` | mdBook configuration |
+| mdBook sources | **NET-NEW** | `site/src/*.md` | All markdown content for the site |
+| Project docs | **NET-NEW** | `docs/quickstart.md`, `docs/architecture.md`, `docs/configuration.md`, `docs/faq.md` | Markdown documentation |
+| Root docs | **NET-NEW** | `CONTRIBUTING.md`, `SECURITY.md` | GitHub-discoverable docs |
+| Gitignore | **MODIFY** | `.gitignore` | Add `/site/book/` |
+| Cargo.toml | **MODIFY** | `Cargo.toml` | Add `/site/*` to exclude |
+| Root README.md | **MODIFY** | `README.md` | Update links to point to new docs |
+
+## Anti-Patterns to Avoid
+
+### Anti-Pattern: Putting mdBook source in docs/
+
+**What people do:** Use `docs/` as both the project documentation directory and the mdBook source directory.
+
+**Why it's wrong:** `docs/` is excluded from the crate via `Cargo.toml`, which is correct for raw docs. But mdBook expects a specific structure (`book.toml` at root, `src/SUMMARY.md`). Placing this in `docs/` creates confusion about what `docs/` contains (raw Markdown vs. mdBook project). Also, the `docs/` path is conventionally used by GitHub Pages for Jekyll — having mdBook inside it would conflict if GitHub Pages settings are changed.
+
+**Do this instead:** Use `site/` as the mdBook project directory. Keep `docs/` for raw project documentation.
+
+### Anti-Pattern: Deploying on every push
+
+**What people do:** Trigger Pages deploy on every push to main, including pure code changes.
+
+**Why it's wrong:** Unnecessary builds and deploys. Wastes CI minutes. Creates spurious deploys where the site content hasn't changed.
+
+**Do this instead:** Use `paths` filter to only trigger the Pages workflow when `site/**` or `.github/workflows/pages.yaml` changes.
+
+### Anti-Pattern: Content duplication via copy
+
+**What people do:** Copy CHANGELOG.md, CONTRIBUTING.md into the mdBook source directory.
+
+**Why it's wrong:** Two copies drift apart over time. Contributors update one but not the other.
+
+**Do this instead:** Symlink from `site/src/` to the root files. If the runtime environment doesn't support symlinks (some Windows runners), add a script step in CI that copies files before building.
+
+### Anti-Pattern: Combining mdBook build with cargo doc
+
+**What people do:** Run `mdbook build` in the same job as `cargo doc` inside `ci.yaml`.
+
+**Why it's wrong:** These have different purposes: `cargo doc` validates Rust doc comments (must run on every build); mdBook builds the marketing/landing site (only needs validation on PR). Combining them makes ci.yaml harder to reason about.
+
+**Do this instead:** Keep mdBook validation in its own `docs` job inside `ci.yaml` (runs on every push/PR). Keep deploy in a separate `pages.yaml` (runs only on path-filtered main pushes).
+
+## Sources
+
+- mdBook User Guide: `rust-lang.github.io/mdBook/` (2026-05-18) — project structure, `book.toml` config, `SUMMARY.md` format, build command
+- peaceiris/actions-mdbook: `github.com/marketplace/actions/mdbook-action` (2026-05-18) — mdBook GitHub Action for CI
+- peaceiris/actions-gh-pages: `github.com/peaceiris/actions-gh-pages` (2026-05-18) — GitHub Pages deployment action, all options documented
+- GitHub Pages documentation: `docs.github.com/en/pages` (2026-05-18) — deployment branch configuration
+- Code inspection: `Cargo.toml`, `.github/workflows/ci.yaml`, `.github/workflows/release.yaml`, `docs/`, `README.md`, `.gitignore`
+- Confidence: HIGH — all findings verified against official documentation or source code
+
+---
+*v1.5 architecture research (documentation & GitHub Pages): 2026-05-18*

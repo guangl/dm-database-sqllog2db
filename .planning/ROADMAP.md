@@ -7,6 +7,7 @@
 - ✅ **v1.2 质量强化 & 性能深化** — Phases 7–11 (shipped 2026-05-15)
 - ✅ **v1.3 SQL 模板分析 & 可视化** — Phases 12–16 (shipped 2026-05-17)
 - ✅ **v1.4 代码重构 & 质量深化** — Phases 17–20 (shipped 2026-05-18)
+- ✅ **v1.5 文档完善 & 项目展示** — Phases 21–23 (shipped 2026-05-19)
 
 ## Phases
 
@@ -70,6 +71,17 @@ Full details: `.planning/milestones/v1.4-ROADMAP.md`
 
 </details>
 
+<details>
+<summary>✅ v1.5 文档完善 & 项目展示 (Phases 21–23) — SHIPPED 2026-05-19</summary>
+
+- [x] Phase 21: README 全面更新 + 根文档补全 (2/2 plans) — completed 2026-05-19
+- [x] Phase 22: GitHub Pages 落地页 + 部署流水线 (2/2 plans) — completed 2026-05-19
+- [x] Phase 23: 补充文档 + CI 质量门禁 (4/4 plans) — completed 2026-05-19
+
+Full details: `.planning/milestones/v1.5-ROADMAP.md`
+
+</details>
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -94,3 +106,6 @@ Full details: `.planning/milestones/v1.4-ROADMAP.md`
 | 18. 模板 & 图表配置嵌套化 | v1.4 | 3/3 | Complete | 2026-05-18 |
 | 19. 代码结构重构 | v1.4 | 4/4 | Complete | 2026-05-18 |
 | 20. 测试覆盖深化 | v1.4 | 3/3 | Complete | 2026-05-18 |
+| 21. README 全面更新 + 根文档补全 | v1.5 | 2/2 | Complete    | 2026-05-19 |
+| 22. GitHub Pages 落地页 + 部署流水线 | v1.5 | 2/2 | Complete    | 2026-05-19 |
+| 23. 补充文档 + CI 质量门禁 | v1.5 | 4/4 | Complete | 2026-05-19 |
