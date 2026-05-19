@@ -617,6 +617,19 @@ GYS (0.0%)
 
 <!-- Links -->
 
+## Demo
+
+Watch a terminal recording of sqllog2db in action:
+
+<script src="https://cdn.jsdelivr.net/npm/asciinema-player@latest/dist/bundle/asciinema-player.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@latest/dist/bundle/asciinema-player.css">
+
+<asciinema-player src="asciicast/demo.cast" cols="120" rows="30"></asciinema-player>
+
+The asciicast file is also available for download: [demo.cast](asciicast/demo.cast)
+
+---
+
 ## Links
 
 - [GitHub Repository](https://github.com/guangl/sqllog2db)
