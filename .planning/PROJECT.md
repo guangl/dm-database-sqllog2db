@@ -2,7 +2,7 @@
 
 ## Current State
 
-sqllog2db 完成七个里程碑迭代（v1.0–v1.6），具备完整的 SQL 模板分析、SVG 可视化、嵌套配置模型、模块化代码架构，全中文项目文档和 GitHub Pages mdBook 多页文档站。v1.7 进入精简阶段。Phase 28 完成，移除了 SVG 图表、self-update 自更新、Shell 补全和 Man page 生成。
+sqllog2db 完成七个里程碑迭代（v1.0–v1.6），具备完整的 SQL 模板分析、SVG 可视化、嵌套配置模型、模块化代码架构，全中文项目文档和 GitHub Pages mdBook 多页文档站。v1.7 进入精简阶段。Phase 28–29 完成，移除了 SVG 图表、self-update、Shell 补全、Man page、stats 和 digest。
 
 ## Current Milestone: v1.7 项目精简
 
@@ -12,8 +12,8 @@ sqllog2db 完成七个里程碑迭代（v1.0–v1.6），具备完整的 SQL 模
 - ✅ 移除 SVG 图表模块（charts/*, plotters）— Phase 28
 - ✅ 移除 self-update 自更新（update.rs, self_update, reqwest, rustls）— Phase 28
 - ✅ 移除 Shell 补全 + Man page（clap_complete, clap_mangen）— Phase 28
-- 移除 stats 统计命令（cli/stats.rs, serde_json）
-- 移除 digest 摘要命令（cli/digest.rs, pipeline/fingerprint.rs）
+- ✅ 移除 stats 统计命令（cli/stats.rs）— Phase 29
+- ✅ 移除 digest 摘要命令（cli/digest.rs, pipeline/fingerprint.rs, serde_json）— Phase 29
 - 移除模板分析+报告（aggregator, template_reporter, hdrhistogram）
 - 移除断点续传（resume.rs, [resume] 配置）
 
@@ -81,6 +81,8 @@ sqllog2db 是一个用于解析达梦数据库 SQL 日志文件并将其导出�
 - ✓ RM-01: 移除 SVG 图表模块 — v1.7 Phase 28
 - ✓ RM-02: 移除 self-update 自更新功能 — v1.7 Phase 28
 - ✓ RM-07: 移除 Shell 补全和 Man page 生成 — v1.7 Phase 28
+- ✓ RM-03: 移除 stats 统计命令 — v1.7 Phase 29
+- ✓ RM-04: 迁移 normalize_template 并移除 digest 命令 — v1.7 Phase 29
 
 ### Active
 
@@ -153,4 +155,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-20 — v1.7 Phase 28 complete*
+*Last updated: 2026-05-20 — v1.7 Phase 29 complete*
