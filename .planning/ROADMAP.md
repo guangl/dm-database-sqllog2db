@@ -120,7 +120,13 @@ Full details: `.planning/milestones/v1.6-ROADMAP.md`
   3. `sqllog2db --help` 不再显示 `self-update`、`completions`、`man` 子命令
   4. `clap_complete`/`clap_mangen` 依赖从 Cargo.toml 中删除
   5. `[charts]` 配置段被移除，包含该配置段的旧文件在 `validate` 时不再被接受（或被忽略）
-**Plans**: TBD
+**Plans**: 3 plans
+```
+Plans:
+- [ ] 28-01-PLAN.md — 移除 SVG 图表模块（RM-01）
+- [ ] 28-02-PLAN.md — 移除 self-update 自更新（RM-02）
+- [ ] 28-03-PLAN.md — 移除 Shell 补全和 Man page（RM-07）
+```
 
 ### Phase 29: 移除统计与摘要
 **Goal**: 移除 stats 和 digest 两个子命令及其相关依赖和文件
@@ -130,9 +136,14 @@ Full details: `.planning/milestones/v1.6-ROADMAP.md`
   1. `sqllog2db --help` 不再显示 `stats` 子命令
   2. `sqllog2db --help` 不再显示 `digest` 子命令
   3. `src/cli/stats.rs` 和 `src/cli/digest.rs` 文件已移除
-  4. `src/features/fingerprint.rs` 已移除
+  4. `src/pipeline/fingerprint.rs` 已移除
   5. `serde_json` 依赖从 Cargo.toml 中删除
-**Plans**: TBD
+**Plans**: 2 plans
+```
+Plans:
+- [ ] 29-01-PLAN.md — 移除 stats 命令（RM-03）+ serde_json
+- [ ] 29-02-PLAN.md — 迁移 normalize_template + 移除 digest 命令 + 删除 fingerprint.rs（RM-04）
+```
 
 ### Phase 30: 移除模板分析
 **Goal**: 移除模板聚合器、模板报告器和相关配置段
@@ -144,7 +155,13 @@ Full details: `.planning/milestones/v1.6-ROADMAP.md`
   3. `[template]` 和 `[template.report]` 配置段从 Config 结构体中移除
   4. 运行 `sqllog2db run` 时不再生成 `*_templates.csv` 或 SQLite 模板报告文件
   5. 核心 CSV/SQLite 导出在热循环中不受影响，`pipeline.is_empty()` 快路径保持零开销
-**Plans**: TBD
+**Plans**: 3 plans
+```
+Plans:
+- [ ] 30-01-PLAN.md — ...（Phase 30 计划）
+- [ ] 30-02-PLAN.md — ...（Phase 30 计划）
+- [ ] 30-03-PLAN.md — ...（Phase 30 计划）
+```
 
 ### Phase 31: 移除断点续传
 **Goal**: 移除 resume/checkpoint 模块及相关配置和 CLI 选项
@@ -156,7 +173,13 @@ Full details: `.planning/milestones/v1.6-ROADMAP.md`
   3. `sqllog2db --help` 不再显示 `--resume` CLI 选项
   4. 运行 `sqllog2db run` 时不再读取或写入 checkpoint 状态文件
   5. `cargo build --release` 编译成功
-**Plans**: TBD
+**Plans**: 3 plans
+```
+Plans:
+- [ ] 31-01-PLAN.md — ...（Phase 31 计划）
+- [ ] 31-02-PLAN.md — ...（Phase 31 计划）
+- [ ] 31-03-PLAN.md — ...（Phase 31 计划）
+```
 
 ### Phase 32: 项目结构清理
 **Goal**: 清理之前移除操作遗留的空目录和未使用代码，简化项目结构
@@ -168,7 +191,13 @@ Full details: `.planning/milestones/v1.6-ROADMAP.md`
   3. `Config` 结构体中不再包含 `[charts]`、`[template]`、`[resume]` 等已被移除的配置字段
   4. `cargo build` 编译成功且 `cargo clippy --all-targets -- -D warnings` 无警告
   5. Cargo.toml 中已清理所有未被使用的依赖
-**Plans**: TBD
+**Plans**: 3 plans
+```
+Plans:
+- [ ] 32-01-PLAN.md — ...（Phase 32 计划）
+- [ ] 32-02-PLAN.md — ...（Phase 32 计划）
+- [ ] 32-03-PLAN.md — ...（Phase 32 计划）
+```
 
 ### Phase 33: 核心功能验证
 **Goal**: 验证精简后所有核心功能完整可用，构建、测试、lint 全部通过
@@ -182,7 +211,13 @@ Full details: `.planning/milestones/v1.6-ROADMAP.md`
   5. SQLite 导出功能正常工作，用户可以通过配置将日志导出为 SQLite 数据库
   6. Pipeline 过滤器（include/exclude/indicators/sql）正常工作，过滤结果符合预期
   7. `cargo fmt` 格式检查通过
-**Plans**: TBD
+**Plans**: 3 plans
+```
+Plans:
+- [ ] 33-01-PLAN.md — ...（Phase 33 计划）
+- [ ] 33-02-PLAN.md — ...（Phase 33 计划）
+- [ ] 33-03-PLAN.md — ...（Phase 33 计划）
+```
 
 ## Progress
 
@@ -215,8 +250,8 @@ Full details: `.planning/milestones/v1.6-ROADMAP.md`
 | 25. 延后文档补全 | v1.6 | 1/1 | Complete   | 2026-05-19 |
 | 26. GitHub Pages 多页文档站 | v1.6 | 1/1 | Complete   | 2026-05-19 |
 | 27. 模板报告独立输出 | v1.6 | 2/2 | Complete   | 2026-05-19 |
-| 28. 移除图表、自更新、补全 | v1.7 | 0/0 | Not started | - |
-| 29. 移除统计与摘要 | v1.7 | 0/0 | Not started | - |
+| 28. 移除图表、自更新、补全 | v1.7 | 0/3 | Not started | - |
+| 29. 移除统计与摘要 | v1.7 | 0/2 | Planned | - |
 | 30. 移除模板分析 | v1.7 | 0/0 | Not started | - |
 | 31. 移除断点续传 | v1.7 | 0/0 | Not started | - |
 | 32. 项目结构清理 | v1.7 | 0/0 | Not started | - |
