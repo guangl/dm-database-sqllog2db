@@ -86,7 +86,7 @@ Full details: `.planning/milestones/v1.5-ROADMAP.md`
 ### v1.6 文档中文化 & 延后需求补全 (Phases 24–27) — IN PROGRESS
 
 - [x] **Phase 24: 文档中文化 & 去 SVG 化** — 6 requirements (completed 2026-05-19)
-- [ ] **Phase 25: 延后文档补全** — 3 requirements
+- [x] **Phase 25: 延后文档补全** — 3 requirements (completed 2026-05-19)
 - [ ] **Phase 26: GitHub Pages 多页文档站** — 1 requirement
 - [ ] **Phase 27: 模板报告独立输出** — 2 requirements
 
@@ -121,7 +121,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 25-01-PLAN.md — 创建 CONTRIBUTING.md、SECURITY.md、docs/architecture.md 三份中文文档
+- [x] 25-01-PLAN.md — 创建 CONTRIBUTING.md、SECURITY.md、docs/architecture.md 三份中文文档
 
 ### Phase 26: GitHub Pages 多页文档站
 
@@ -182,6 +182,6 @@ Plans:
 | 22. GitHub Pages 落地页 + 部署流水线 | v1.5 | 2/2 | Complete | 2026-05-19 |
 | 23. 补充文档 + CI 质量门禁 | v1.5 | 4/4 | Complete | 2026-05-19 |
 | 24. 文档中文化 & 去 SVG 化 | v1.6 | 3/3 | Complete   | 2026-05-19 |
-| 25. 延后文档补全 | v1.6 | 0/0 | Not started | - |
+| 25. 延后文档补全 | v1.6 | 1/1 | Complete   | 2026-05-19 |
 | 26. GitHub Pages 多页文档站 | v1.6 | 0/1 | Not started | - |
 | 27. 模板报告独立输出 | v1.6 | 0/2 | Not started | - |
