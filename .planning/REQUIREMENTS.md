@@ -1,0 +1,65 @@
+# Requirements: sqllog2db
+
+**Defined:** 2026-05-19
+**Core Value:** 用户能够精确指定"导出哪些记录的哪些字段"——过滤逻辑清晰可配置，输出结果完全可控
+
+## v1.7 Requirements
+
+### 功能移除
+
+- [ ] **RM-01**: 移除 SVG 图表模块（`src/charts/*`），移除 `plotters` 依赖，移除 `[charts]` 配置段
+- [ ] **RM-02**: 移除 self-update 自更新（`cli/update.rs`），移除 `self_update`/`reqwest`/`rustls` 依赖，移除 `self-update` 和 `man` 子命令
+- [ ] **RM-03**: 移除 stats 统计命令（`cli/stats.rs`），移除 `serde_json` 依赖
+- [ ] **RM-04**: 移除 digest 摘要命令（`cli/digest.rs`、`pipeline/fingerprint.rs`）
+- [ ] **RM-05**: 移除模板分析+报告（`pipeline/aggregator.rs`、`pipeline/template_reporter.rs`），移除 `hdrhistogram` 依赖，移除 `[template]`/`[template.report]` 配置段
+- [ ] **RM-06**: 移除断点续传（`resume.rs`），移除 `[resume]` 配置段，移除 `--resume` CLI 选项
+- [ ] **RM-07**: 移除 Shell 补全 + Man page（`completions`/`man` 子命令），移除 `clap_complete`/`clap_mangen` 依赖
+- [ ] **RM-08**: 重构清理后的项目结构（移除空目录、简化 mod 声明、清理未使用的 imports 和配置字段）
+
+### 核心保留验证
+
+- [ ] **KEEP-01**: CSV 导出正常工作，所有现有测试通过
+- [ ] **KEEP-02**: SQLite 导出正常工作，所有现有测试通过
+- [ ] **KEEP-03**: Pipeline 过滤器（include/exclude/indicators/sql）正常工作
+- [ ] **KEEP-04**: 参数归一化（`pipeline/normalizer.rs`）正常工作
+- [ ] **KEEP-05**: 并行 CSV 处理（rayon）正常工作
+- [ ] **KEEP-06**: `cargo build --release` 成功，`cargo test` 全部通过，`cargo clippy` 无警告
+
+## Out of Scope
+
+| Feature | Reason |
+|---------|--------|
+| SQLite 导出 | 核心功能，用户明确保留 |
+| 参数归一化（encoding_rs） | 达梦数据库核心需求 |
+| 并行 CSV（rayon） | 性能关键路径 |
+| Pipeline 过滤器 | 核心功能 |
+| OR 条件组合 | 之前已排除 |
+| 跨字段联合条件 | 之前已排除 |
+
+## Traceability
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| RM-01 | — | Pending |
+| RM-02 | — | Pending |
+| RM-03 | — | Pending |
+| RM-04 | — | Pending |
+| RM-05 | — | Pending |
+| RM-06 | — | Pending |
+| RM-07 | — | Pending |
+| RM-08 | — | Pending |
+| KEEP-01 | — | Pending |
+| KEEP-02 | — | Pending |
+| KEEP-03 | — | Pending |
+| KEEP-04 | — | Pending |
+| KEEP-05 | — | Pending |
+| KEEP-06 | — | Pending |
+
+**Coverage:**
+- v1.7 requirements: 14 total
+- Mapped to phases: 0
+- Unmapped: 14
+
+---
+*Requirements defined: 2026-05-19*
+*Last updated: 2026-05-19 after initial definition*
