@@ -141,8 +141,8 @@ Plans:
 **Plans**: 2 plans
 ```
 Plans:
-- [ ] 29-01-PLAN.md — 移除 stats 命令（RM-03）+ serde_json
-- [ ] 29-02-PLAN.md — 迁移 normalize_template + 移除 digest 命令 + 删除 fingerprint.rs（RM-04）
+- [x] 29-01-PLAN.md — 移除 stats 命令（RM-03）+ serde_json
+- [x] 29-02-PLAN.md — 迁移 normalize_template + 移除 digest 命令 + 删除 fingerprint.rs（RM-04）
 ```
 
 ### Phase 30: 移除模板分析
@@ -250,7 +250,7 @@ Plans:
 | 26. GitHub Pages 多页文档站 | v1.6 | 1/1 | Complete   | 2026-05-19 |
 | 27. 模板报告独立输出 | v1.6 | 2/2 | Complete   | 2026-05-19 |
 | 28. 移除图表、自更新、补全 | v1.7 | 3/3 | Complete    | 2026-05-19 |
-| 29. 移除统计与摘要 | v1.7 | 0/2 | Planned | - |
+| 29. 移除统计与摘要 | v1.7 | 2/2 | Complete    | 2026-05-19 |
 | 30. 移除模板分析 | v1.7 | 0/0 | Not started | - |
 | 31. 移除断点续传 | v1.7 | 0/2 | Planned | - |
 | 32. 项目结构清理 | v1.7 | 0/0 | Not started | - |
