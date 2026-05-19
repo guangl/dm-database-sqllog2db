@@ -173,12 +173,11 @@ Plans:
   3. `sqllog2db --help` 不再显示 `--resume` CLI 选项
   4. 运行 `sqllog2db run` 时不再读取或写入 checkpoint 状态文件
   5. `cargo build --release` 编译成功
-**Plans**: 3 plans
+**Plans**: 2 plans
 ```
 Plans:
-- [ ] 31-01-PLAN.md — ...（Phase 31 计划）
-- [ ] 31-02-PLAN.md — ...（Phase 31 计划）
-- [ ] 31-03-PLAN.md — ...（Phase 31 计划）
+- [ ] 31-01-PLAN.md — 删除 resume 源文件、清理 config/CLI 层、移除 run 循环中的 resume_state 逻辑
+- [ ] 31-02-PLAN.md — 更新测试文件、清理 init 模板和文档、全链路验证
 ```
 
 ### Phase 32: 项目结构清理
@@ -253,6 +252,6 @@ Plans:
 | 28. 移除图表、自更新、补全 | v1.7 | 0/3 | Not started | - |
 | 29. 移除统计与摘要 | v1.7 | 0/2 | Planned | - |
 | 30. 移除模板分析 | v1.7 | 0/0 | Not started | - |
-| 31. 移除断点续传 | v1.7 | 0/0 | Not started | - |
+| 31. 移除断点续传 | v1.7 | 0/2 | Planned | - |
 | 32. 项目结构清理 | v1.7 | 0/0 | Not started | - |
 | 33. 核心功能验证 | v1.7 | 0/0 | Not started | - |
