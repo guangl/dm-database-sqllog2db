@@ -2,7 +2,7 @@
 title = "sqllog2db"
 authors = ["guangl"]
 description = "High-performance CLI tool for parsing DaMeng database SQL logs and exporting to CSV/SQLite"
-language = "en"
+language = "zh"
 
 [output.html]
 default-theme = "ayu"
