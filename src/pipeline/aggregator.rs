@@ -40,6 +40,7 @@ pub struct TemplateStats {
 
 /// 图表生成专用的只读视图：在 finalize 前调用，不消耗 self
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct ChartEntry<'a> {
     pub key: &'a str,
     pub count: u64,
@@ -173,6 +174,7 @@ impl TemplateAggregator {
     /// 返回图表生成专用的只读迭代器，按 count 降序排列（count 相同时按 key 升序）
     ///
     /// 在 `finalize()` 之前调用，不消耗 self。
+    #[allow(dead_code)]
     pub fn iter_chart_entries(&self) -> impl Iterator<Item = ChartEntry<'_>> {
         let mut entries: Vec<ChartEntry<'_>> = self
             .entries
@@ -188,11 +190,13 @@ impl TemplateAggregator {
     }
 
     /// 按 hour bucket key 升序返回 (`bucket_key`, count) 迭代器
+    #[allow(dead_code)]
     pub fn iter_hour_counts(&self) -> impl Iterator<Item = (&str, u64)> {
         self.hour_counts.iter().map(|(k, &v)| (k.as_str(), v))
     }
 
     /// 按 count 降序返回 (user, count) 迭代器（count 相同时按 user 升序）
+    #[allow(dead_code)]
     pub fn iter_user_counts(&self) -> impl Iterator<Item = (&str, u64)> + '_ {
         let mut pairs: Vec<(&str, u64)> = self
             .user_counts

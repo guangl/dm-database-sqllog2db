@@ -715,7 +715,6 @@ dependencies = [
  "log",
  "memchr",
  "mimalloc",
- "plotters",
  "proptest",
  "rayon",
  "regex",

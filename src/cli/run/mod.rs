@@ -168,11 +168,6 @@ pub fn handle_run(
         )?;
         total_records = processed_files.iter().map(|(_, c)| *c).sum();
         skipped_files = parallel_skipped;
-        if let Some(ref agg) = parallel_agg {
-            if let Some(charts_cfg) = final_cfg.charts.as_ref() {
-                crate::charts::generate_charts(agg, charts_cfg)?;
-            }
-        }
         let template_stats = parallel_agg.map(TemplateAggregator::finalize);
         if let Some(ref stats) = template_stats {
             info!("Template analysis: {} unique templates", stats.len());
@@ -252,11 +247,6 @@ pub fn handle_run(
             total_records += processed;
             if limit.is_some_and(|l| total_records >= l) {
                 break;
-            }
-        }
-        if let Some(ref agg) = template_agg {
-            if let Some(charts_cfg) = final_cfg.charts.as_ref() {
-                crate::charts::generate_charts(agg, charts_cfg)?;
             }
         }
         exporter_manager.finalize()?;

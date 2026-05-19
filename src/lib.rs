@@ -1,4 +1,3 @@
-pub(crate) mod charts;
 pub mod cli;
 pub(crate) mod color;
 pub mod config;

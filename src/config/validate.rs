@@ -15,7 +15,6 @@ impl Config {
         self.sqllog.validate()?;
         self.validate_filter()?;
         self.validate_output_fields()?;
-        self.validate_charts()?;
         Ok(())
     }
 
@@ -62,7 +61,6 @@ impl Config {
         };
 
         self.validate_output_fields()?;
-        self.validate_charts()?;
         Ok(compiled)
     }
 
@@ -98,41 +96,13 @@ impl Config {
         }
         Ok(())
     }
-
-    fn validate_charts(&self) -> Result<()> {
-        if let Some(charts) = &self.charts {
-            let template_enabled = self.template.as_ref().is_some_and(|t| t.enable);
-            if !template_enabled {
-                return Err(Error::Config(ConfigError::InvalidValue {
-                    field: "[charts]".to_string(),
-                    value: String::new(),
-                    reason: "启用 [charts] 需要先设置 [template]\nenable = true".to_string(),
-                }));
-            }
-            if charts.output_dir.trim().is_empty() {
-                return Err(Error::Config(ConfigError::InvalidValue {
-                    field: "charts.output_dir".to_string(),
-                    value: charts.output_dir.clone(),
-                    reason: "charts output_dir cannot be empty".to_string(),
-                }));
-            }
-            if charts.top_n == 0 {
-                return Err(Error::Config(ConfigError::InvalidValue {
-                    field: "charts.top_n".to_string(),
-                    value: "0".to_string(),
-                    reason: "top_n must be greater than 0".to_string(),
-                }));
-            }
-        }
-        Ok(())
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::config::{CsvExporterConfig, SqliteExporterConfig};
-    use crate::pipeline::{ChartsConfig, NormalizeConfig, OutputConfig, TemplateConfig};
+    use crate::pipeline::{NormalizeConfig, OutputConfig};
 
     fn default_config() -> Config {
         Config::default()
@@ -446,140 +416,6 @@ file = "out.csv"
         let cfg = default_config();
         assert!(cfg.validate().is_ok());
         assert!(cfg.validate_and_compile().is_ok());
-    }
-
-    // ── [charts] 跨字段依赖校验 ───────────────────
-    #[test]
-    fn test_validate_charts_requires_template_analysis() {
-        let toml = r#"
-[sqllog]
-path = "sqllogs"
-[charts]
-output_dir = "charts/"
-[template]
-enable = false
-[exporter.csv]
-file = "out.csv"
-"#;
-        let cfg: Config = toml::from_str(toml).unwrap();
-        let result = cfg.validate();
-        assert!(result.is_err());
-        let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("[charts]"), "actual: {err_msg}");
-        assert!(err_msg.contains("[template]"), "actual: {err_msg}");
-    }
-
-    #[test]
-    fn test_validate_charts_with_template_analysis_enabled_passes() {
-        let toml = r#"
-[sqllog]
-path = "sqllogs"
-[charts]
-output_dir = "charts/"
-[template]
-enable = true
-[exporter.csv]
-file = "out.csv"
-"#;
-        let cfg: Config = toml::from_str(toml).unwrap();
-        assert!(cfg.validate().is_ok());
-    }
-
-    #[test]
-    fn test_validate_and_compile_charts_requires_template_analysis() {
-        let toml = r#"
-[sqllog]
-path = "sqllogs"
-[charts]
-output_dir = "charts/"
-[exporter.csv]
-file = "out.csv"
-"#;
-        let cfg: Config = toml::from_str(toml).unwrap();
-        let result = cfg.validate_and_compile();
-        assert!(result.is_err());
-        let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("[charts]"), "actual: {err_msg}");
-    }
-
-    // ── output_dir 非空校验 ─────────────────────────────
-    #[test]
-    fn test_validate_charts_empty_output_dir_is_rejected() {
-        let mut cfg = default_config();
-        cfg.template = Some(TemplateConfig {
-            enable: true,
-            ..TemplateConfig::default()
-        });
-        cfg.charts = Some(ChartsConfig {
-            output_dir: String::new(),
-            ..ChartsConfig::default()
-        });
-        let result = cfg.validate();
-        assert!(result.is_err());
-        let msg = result.unwrap_err().to_string();
-        assert!(msg.contains("charts.output_dir"), "actual: {msg}");
-    }
-
-    #[test]
-    fn test_validate_charts_whitespace_output_dir_is_rejected() {
-        let mut cfg = default_config();
-        cfg.template = Some(TemplateConfig {
-            enable: true,
-            ..TemplateConfig::default()
-        });
-        cfg.charts = Some(ChartsConfig {
-            output_dir: "   ".into(),
-            ..ChartsConfig::default()
-        });
-        assert!(cfg.validate().is_err());
-    }
-
-    // ── top_n = 0 校验 ──────────────────────────────────
-    #[test]
-    fn test_validate_charts_top_n_zero_is_rejected() {
-        let mut cfg = default_config();
-        cfg.template = Some(TemplateConfig {
-            enable: true,
-            ..TemplateConfig::default()
-        });
-        cfg.charts = Some(ChartsConfig {
-            output_dir: "charts/".into(),
-            top_n: 0,
-            ..ChartsConfig::default()
-        });
-        let result = cfg.validate();
-        assert!(result.is_err());
-        let msg = result.unwrap_err().to_string();
-        assert!(msg.contains("charts.top_n"), "actual: {msg}");
-    }
-
-    #[test]
-    fn test_validate_and_compile_charts_empty_output_dir_is_rejected() {
-        let mut cfg = default_config();
-        cfg.template = Some(TemplateConfig {
-            enable: true,
-            ..TemplateConfig::default()
-        });
-        cfg.charts = Some(ChartsConfig {
-            output_dir: String::new(),
-            ..ChartsConfig::default()
-        });
-        assert!(cfg.validate_and_compile().is_err());
-    }
-
-    #[test]
-    fn test_validate_and_compile_charts_top_n_zero_is_rejected() {
-        let mut cfg = default_config();
-        cfg.template = Some(TemplateConfig {
-            enable: true,
-            ..TemplateConfig::default()
-        });
-        cfg.charts = Some(ChartsConfig {
-            output_dir: "charts/".into(),
-            top_n: 0,
-            ..ChartsConfig::default()
-        });
-        assert!(cfg.validate_and_compile().is_err());
     }
 
     #[test]

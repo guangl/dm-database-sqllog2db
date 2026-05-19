@@ -11,9 +11,7 @@ pub use resume::ResumeConfig;
 pub use sqllog::SqllogConfig;
 
 use crate::error::{ConfigError, Error, Result};
-use crate::pipeline::{
-    ChartsConfig, FiltersFeature, NormalizeConfig, OutputConfig, TemplateConfig,
-};
+use crate::pipeline::{FiltersFeature, NormalizeConfig, OutputConfig, TemplateConfig};
 use serde::Deserialize;
 use std::path::Path;
 
@@ -38,8 +36,6 @@ pub struct Config {
     pub template: Option<TemplateConfig>,
     #[serde(default)]
     pub filter: Option<FiltersFeature>,
-    #[serde(default)]
-    pub charts: Option<ChartsConfig>,
     #[serde(default)]
     pub output: Option<OutputConfig>,
     /// 旧路径检测：捕获 `[pipeline]` 表（若用户仍用旧格式）。
@@ -274,13 +270,12 @@ append = false
     }
 
     #[test]
-    fn test_config_has_5_top_level_optional_fields() {
-        // 确保 5 个顶层字段默认值为 None
+    fn test_config_has_4_top_level_optional_fields() {
+        // 确保 4 个顶层字段默认值为 None
         let cfg = default_config();
         assert!(cfg.replace_parameters.is_none());
         assert!(cfg.template.is_none());
         assert!(cfg.filter.is_none());
-        assert!(cfg.charts.is_none());
         assert!(cfg.output.is_none());
     }
 }

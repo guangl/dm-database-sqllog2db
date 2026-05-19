@@ -1193,10 +1193,6 @@ fn test_init_generates_new_nested_format() {
         "init template must contain [template]"
     );
     assert!(
-        content.contains("[charts]"),
-        "init template must contain [charts]"
-    );
-    assert!(
         content.contains("[replace_parameters]"),
         "init template must contain [replace_parameters]"
     );

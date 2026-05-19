@@ -10,7 +10,6 @@ pub(crate) use fingerprint::fingerprint;
 pub(crate) use fingerprint::normalize_template;
 
 pub mod aggregator;
-pub(crate) use aggregator::ChartEntry;
 pub(crate) use aggregator::TemplateAggregator;
 pub(crate) use aggregator::TemplateStats;
 
@@ -126,10 +125,6 @@ fn default_true() -> bool {
     true
 }
 
-fn default_top_n() -> usize {
-    10
-}
-
 /// `[template]` 配置段 — SQL 模板归一化与聚合
 #[derive(Debug, Deserialize, Clone, Default)]
 pub struct TemplateConfig {
@@ -195,42 +190,6 @@ pub(crate) fn derive_template_report_paths(
     let csv = parent.join(format!("{stem}_templates.csv"));
     let sqlite = parent.join(format!("{stem}_templates.db"));
     (Some(csv), Some(sqlite))
-}
-
-/// `[charts]` 配置段
-#[derive(Debug, Deserialize, Clone)]
-#[allow(clippy::struct_excessive_bools)]
-pub struct ChartsConfig {
-    /// 图表输出目录（必填，无默认值）
-    pub output_dir: String,
-    /// 频率 Top-N 数量（默认 10）
-    #[serde(default = "default_top_n")]
-    pub top_n: usize,
-    /// 是否生成频率柱状图（默认 true）
-    #[serde(default = "default_true")]
-    pub frequency_bar: bool,
-    /// 是否生成延迟直方图（默认 true）
-    #[serde(default = "default_true")]
-    pub latency_hist: bool,
-    /// 是否生成时间趋势折线图（默认 true）
-    #[serde(default = "default_true")]
-    pub trend_line: bool,
-    /// 是否生成用户占比饼图（默认 true）
-    #[serde(default = "default_true")]
-    pub user_pie: bool,
-}
-
-impl Default for ChartsConfig {
-    fn default() -> Self {
-        Self {
-            output_dir: "charts/".to_string(),
-            top_n: 10,
-            frequency_bar: true,
-            latency_hist: true,
-            trend_line: true,
-            user_pie: true,
-        }
-    }
 }
 
 /// `[output]` 配置段：字段投影
@@ -372,43 +331,6 @@ mod tests {
     }
 
     #[test]
-    fn test_charts_config_default_values() {
-        let cfg = ChartsConfig::default();
-        assert_eq!(cfg.output_dir, "charts/");
-        assert_eq!(cfg.top_n, 10);
-        assert!(cfg.frequency_bar);
-        assert!(cfg.latency_hist);
-        assert!(cfg.trend_line);
-        assert!(cfg.user_pie);
-    }
-
-    #[test]
-    fn test_charts_config_deserialize_only_output_dir() {
-        let cfg: ChartsConfig = toml::from_str(r#"output_dir = "out/""#).unwrap();
-        assert_eq!(cfg.output_dir, "out/");
-        assert_eq!(cfg.top_n, 10);
-        assert!(cfg.frequency_bar);
-        assert!(cfg.latency_hist);
-    }
-
-    #[test]
-    fn test_charts_config_deserialize_full() {
-        let toml = r#"
-output_dir = "custom/"
-top_n = 5
-frequency_bar = false
-latency_hist = false
-"#;
-        let cfg: ChartsConfig = toml::from_str(toml).unwrap();
-        assert_eq!(cfg.output_dir, "custom/");
-        assert_eq!(cfg.top_n, 5);
-        assert!(!cfg.frequency_bar);
-        assert!(!cfg.latency_hist);
-        assert!(cfg.trend_line);
-        assert!(cfg.user_pie);
-    }
-
-    #[test]
     fn test_template_config_default() {
         let cfg = TemplateConfig::default();
         assert!(!cfg.enable);
@@ -481,27 +403,6 @@ latency_hist = false
         let indices = cfg.ordered_field_indices();
         assert_eq!(indices.len(), 15);
         assert_eq!(indices, (0..15_usize).collect::<Vec<_>>());
-    }
-
-    #[test]
-    fn test_charts_config_deserialize_trend_user_flags() {
-        let toml_str = r#"
-output_dir = "out/"
-trend_line = false
-user_pie = false
-"#;
-        let cfg: ChartsConfig = toml::from_str(toml_str).unwrap();
-        assert!(!cfg.trend_line);
-        assert!(!cfg.user_pie);
-        assert!(cfg.frequency_bar);
-        assert!(cfg.latency_hist);
-    }
-
-    #[test]
-    fn test_charts_config_new_fields_default_true() {
-        let cfg: ChartsConfig = toml::from_str(r#"output_dir = "out/""#).unwrap();
-        assert!(cfg.trend_line);
-        assert!(cfg.user_pie);
     }
 
     #[test]
