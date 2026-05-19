@@ -118,7 +118,10 @@ Plans:
 1. CONTRIBUTING.md（中文）提供完整的环境搭建、编码规约和 PR 提交流程
 2. SECURITY.md（中文）提供漏洞报告联系方式和安全策略说明
 3. docs/architecture.md（中文）提供数据流、模块划分和关键设计的架构文档
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 25-01-PLAN.md — 创建 CONTRIBUTING.md、SECURITY.md、docs/architecture.md 三份中文文档
 
 ### Phase 26: GitHub Pages 多页文档站
 
@@ -129,7 +132,10 @@ Plans:
 1. GitHub Pages 显示多页文档站结构（导航栏、搜索功能），非单页落地页
 2. 所有已中文化文档（README、quickstart、config-reference、architecture）在文档站中可访问
 3. 文档站由 GitHub Actions 自动触发部署
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 25-01-PLAN.md — 创建 CONTRIBUTING.md、SECURITY.md、docs/architecture.md 三份中文文档
 **UI hint**: yes
 
 ### Phase 27: 模板报告独立输出
@@ -142,7 +148,10 @@ Plans:
 2. 启用模板分析时，输出目录生成 `*_templates.db` SQLite 独立报告文件
 3. 报告文件内容与 `--include-templates` 双路统计输出保持一致
 4. 禁用模板分析时，不生成任何额外的报告文件
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 25-01-PLAN.md — 创建 CONTRIBUTING.md、SECURITY.md、docs/architecture.md 三份中文文档
 
 ## Progress
 
