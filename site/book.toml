@@ -1,7 +1,7 @@
 [book]
 title = "sqllog2db"
 authors = ["guangl"]
-description = "High-performance CLI tool for parsing DaMeng database SQL logs and exporting to CSV/SQLite"
+description = "达梦数据库 SQL 日志高性能解析工具 — 流式处理，常量内存，支持 CSV/SQLite 导出"
 language = "zh"
 
 [output.html]
