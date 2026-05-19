@@ -40,26 +40,26 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| RM-01 | — | Pending |
-| RM-02 | — | Pending |
-| RM-03 | — | Pending |
-| RM-04 | — | Pending |
-| RM-05 | — | Pending |
-| RM-06 | — | Pending |
-| RM-07 | — | Pending |
-| RM-08 | — | Pending |
-| KEEP-01 | — | Pending |
-| KEEP-02 | — | Pending |
-| KEEP-03 | — | Pending |
-| KEEP-04 | — | Pending |
-| KEEP-05 | — | Pending |
-| KEEP-06 | — | Pending |
+| RM-01 | Phase 28 | Pending |
+| RM-02 | Phase 28 | Pending |
+| RM-03 | Phase 29 | Pending |
+| RM-04 | Phase 29 | Pending |
+| RM-05 | Phase 30 | Pending |
+| RM-06 | Phase 31 | Pending |
+| RM-07 | Phase 28 | Pending |
+| RM-08 | Phase 32 | Pending |
+| KEEP-01 | Phase 33 | Pending |
+| KEEP-02 | Phase 33 | Pending |
+| KEEP-03 | Phase 33 | Pending |
+| KEEP-04 | Phase 33 | Pending |
+| KEEP-05 | Phase 33 | Pending |
+| KEEP-06 | Phase 33 | Pending |
 
 **Coverage:**
 - v1.7 requirements: 14 total
-- Mapped to phases: 0
-- Unmapped: 14
+- Mapped to phases: 14
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-05-19*
-*Last updated: 2026-05-19 after initial definition*
+*Last updated: 2026-05-19 — traceability updated for v1.7 roadmap*

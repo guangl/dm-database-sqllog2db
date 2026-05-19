@@ -9,6 +9,7 @@
 - ✅ **v1.4 代码重构 & 质量深化** — Phases 17–20 (shipped 2026-05-18)
 - ✅ **v1.5 文档完善 & 项目展示** — Phases 21–23 (shipped 2026-05-19)
 - ✅ **v1.6 文档中文化 & 延后需求补全** — Phases 24–27 (shipped 2026-05-19)
+- 🚧 **v1.7 项目精简** — Phases 28–33 (in progress)
 
 ## Phases
 
@@ -95,6 +96,94 @@ Full details: `.planning/milestones/v1.6-ROADMAP.md`
 
 </details>
 
+<details open>
+<summary>🚧 v1.7 项目精简 (Phases 28–33) — IN PROGRESS</summary>
+
+- [ ] **Phase 28: 移除图表、自更新、补全** — 移除三个独立无依赖的外部功能模块
+- [ ] **Phase 29: 移除统计与摘要** — 移除 stats 和 digest 子命令及其依赖
+- [ ] **Phase 30: 移除模板分析** — 移除模板聚合、报告及相关配置
+- [ ] **Phase 31: 移除断点续传** — 移除 resume 模块、配置和 --resume 选项
+- [ ] **Phase 32: 项目结构清理** — 清理空目录、mod 声明、未使用代码
+- [ ] **Phase 33: 核心功能验证** — 验证精简后核心功能完整可用
+
+</details>
+
+## Phase Details
+
+### Phase 28: 移除图表、自更新、补全
+**Goal**: 移除 SVG 图表、self-update 和 Shell 补全三个独立无依赖的外部功能模块
+**Depends on**: Nothing (first removal phase)
+**Requirements**: RM-01, RM-02, RM-07
+**Success Criteria** (what must be TRUE):
+  1. `src/charts/` 目录已移除，`plotters` 依赖从 Cargo.toml 中删除
+  2. `src/cli/update.rs` 已移除，`self_update`/`reqwest`/`rustls` 依赖从 Cargo.toml 中删除
+  3. `sqllog2db --help` 不再显示 `self-update`、`completions`、`man` 子命令
+  4. `clap_complete`/`clap_mangen` 依赖从 Cargo.toml 中删除
+  5. `[charts]` 配置段被移除，包含该配置段的旧文件在 `validate` 时不再被接受（或被忽略）
+**Plans**: TBD
+
+### Phase 29: 移除统计与摘要
+**Goal**: 移除 stats 和 digest 两个子命令及其相关依赖和文件
+**Depends on**: Phase 28
+**Requirements**: RM-03, RM-04
+**Success Criteria** (what must be TRUE):
+  1. `sqllog2db --help` 不再显示 `stats` 子命令
+  2. `sqllog2db --help` 不再显示 `digest` 子命令
+  3. `src/cli/stats.rs` 和 `src/cli/digest.rs` 文件已移除
+  4. `src/features/fingerprint.rs` 已移除
+  5. `serde_json` 依赖从 Cargo.toml 中删除
+**Plans**: TBD
+
+### Phase 30: 移除模板分析
+**Goal**: 移除模板聚合器、模板报告器和相关配置段
+**Depends on**: Phase 29
+**Requirements**: RM-05
+**Success Criteria** (what must be TRUE):
+  1. `src/pipeline/aggregator.rs` 和 `src/pipeline/template_reporter.rs` 文件已移除
+  2. `hdrhistogram` 依赖从 Cargo.toml 中删除
+  3. `[template]` 和 `[template.report]` 配置段从 Config 结构体中移除
+  4. 运行 `sqllog2db run` 时不再生成 `*_templates.csv` 或 SQLite 模板报告文件
+  5. 核心 CSV/SQLite 导出在热循环中不受影响，`pipeline.is_empty()` 快路径保持零开销
+**Plans**: TBD
+
+### Phase 31: 移除断点续传
+**Goal**: 移除 resume/checkpoint 模块及相关配置和 CLI 选项
+**Depends on**: Phase 30
+**Requirements**: RM-06
+**Success Criteria** (what must be TRUE):
+  1. `src/resume.rs` 文件已移除
+  2. `[resume]` 配置段从 Config 结构体中移除
+  3. `sqllog2db --help` 不再显示 `--resume` CLI 选项
+  4. 运行 `sqllog2db run` 时不再读取或写入 checkpoint 状态文件
+  5. `cargo build --release` 编译成功
+**Plans**: TBD
+
+### Phase 32: 项目结构清理
+**Goal**: 清理之前移除操作遗留的空目录和未使用代码，简化项目结构
+**Depends on**: Phase 31
+**Requirements**: RM-08
+**Success Criteria** (what must be TRUE):
+  1. 不存在空目录（之前的移除操作后无残留空文件夹）
+  2. 所有 `mod.rs` 和 `lib.rs`/`main.rs` 中不再包含已被移除模块的声明
+  3. `Config` 结构体中不再包含 `[charts]`、`[template]`、`[resume]` 等已被移除的配置字段
+  4. `cargo build` 编译成功且 `cargo clippy --all-targets -- -D warnings` 无警告
+  5. Cargo.toml 中已清理所有未被使用的依赖
+**Plans**: TBD
+
+### Phase 33: 核心功能验证
+**Goal**: 验证精简后所有核心功能完整可用，构建、测试、lint 全部通过
+**Depends on**: Phase 32
+**Requirements**: KEEP-01, KEEP-02, KEEP-03, KEEP-04, KEEP-05, KEEP-06
+**Success Criteria** (what must be TRUE):
+  1. `cargo build --release` 成功编译，无错误
+  2. `cargo test` 全部测试通过（包括 CSV 和 SQLite 导出测试）
+  3. `cargo clippy --all-targets -- -D warnings` 无警告
+  4. CSV 导出功能正常工作，用户可以通过配置将日志导出为 CSV 文件
+  5. SQLite 导出功能正常工作，用户可以通过配置将日志导出为 SQLite 数据库
+  6. Pipeline 过滤器（include/exclude/indicators/sql）正常工作，过滤结果符合预期
+  7. `cargo fmt` 格式检查通过
+**Plans**: TBD
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -126,3 +215,9 @@ Full details: `.planning/milestones/v1.6-ROADMAP.md`
 | 25. 延后文档补全 | v1.6 | 1/1 | Complete   | 2026-05-19 |
 | 26. GitHub Pages 多页文档站 | v1.6 | 1/1 | Complete   | 2026-05-19 |
 | 27. 模板报告独立输出 | v1.6 | 2/2 | Complete   | 2026-05-19 |
+| 28. 移除图表、自更新、补全 | v1.7 | 0/0 | Not started | - |
+| 29. 移除统计与摘要 | v1.7 | 0/0 | Not started | - |
+| 30. 移除模板分析 | v1.7 | 0/0 | Not started | - |
+| 31. 移除断点续传 | v1.7 | 0/0 | Not started | - |
+| 32. 项目结构清理 | v1.7 | 0/0 | Not started | - |
+| 33. 核心功能验证 | v1.7 | 0/0 | Not started | - |
