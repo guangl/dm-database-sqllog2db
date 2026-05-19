@@ -44,6 +44,11 @@ jobs:
             --cache
             --max-cache-age 1d
             --exclude 'https://crates.io/crates/.*'
-            './**/*.md'
+            --exclude 'https://guangl\.github\.io/.*'
+            --exclude 'https://github\.com/guangl/sqllog2db/blob/main/docs/.*'
+            README.md
+            CHANGELOG.md
+            './docs/**/*.md'
+            './site/**/*.md'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
