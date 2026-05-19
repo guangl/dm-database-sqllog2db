@@ -5,6 +5,10 @@ on:
     branches: [main]
     paths: ["site/**"]
 
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -19,7 +23,7 @@ jobs:
       - name: Install mdBook
         uses: peaceiris/actions-mdbook@v2
         with:
-          mdbook-version: "latest"
+          mdbook-version: "0.4.45"
       - name: Build
         run: mdbook build site
       - name: Deploy to GitHub Pages

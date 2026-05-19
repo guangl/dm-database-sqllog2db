@@ -134,7 +134,7 @@ sqllog2db stats -c config.toml --top 10
 sqllog2db digest -c config.toml --sort exec --top 20
 ```
 
-See also the [QuickStart Guide](./docs/quickstart.md) _(Coming in Phase 23)_ for detailed usage.
+See also the [QuickStart Guide](./docs/quickstart.md) for detailed usage.
 
 ## Configuration
 
@@ -159,7 +159,7 @@ file = "outputs/sqllog.csv"
 overwrite = true
 ```
 
-A full configuration reference is available at [docs/config-reference.md](./docs/config-reference.md) _(Coming in Phase 23)_.
+A full configuration reference is available at [docs/config-reference.md](./docs/config-reference.md).
 
 ## Performance
 
@@ -197,8 +197,8 @@ Graceful shutdown via Ctrl+C stops after the current batch completes. Exit codes
 - [crates.io](https://crates.io/crates/dm-database-sqllog2db)
 - [Releases](https://github.com/guangl/sqllog2db/releases)
 - [CHANGELOG](./CHANGELOG.md)
-- [QuickStart Guide](./docs/quickstart.md) _(Coming in Phase 23)_
-- [Config Reference](./docs/config-reference.md) _(Coming in Phase 23)_
+- [QuickStart Guide](./docs/quickstart.md)
+- [Config Reference](./docs/config-reference.md)
 - [Contributing Guide](./CONTRIBUTING.md) _(Coming v1.6)_
 - [Security Policy](./SECURITY.md) _(Coming v1.6)_
 - [Architecture Documentation](./docs/architecture.md) _(Coming v1.6)_

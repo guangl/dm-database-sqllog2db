@@ -52,6 +52,9 @@ Record-level filtering with AND semantics for include rules and OR-veto for excl
 
 ```toml
 [filter]
+# Time range filter (at [filter] level, not inside include/exclude)
+start_ts = "2025-04-15 00:00:00"
+end_ts = "2025-04-16 23:59:59"
 max_record_limit = 0
 
 [filter.include]
@@ -74,8 +77,8 @@ USERNAME = "APP_USER"
 | `IP_ADDRESS` | String | `null` | Filter by client IP address |
 | `STMT_TYPE` | String | `null` | Filter by statement type (INS/UPD/DEL/SEL) |
 | `TAG` | String | `null` | Filter by log tag |
-| `start_ts` | String | `null` | Filter records after this timestamp |
-| `end_ts` | String | `null` | Filter records before this timestamp |
+| `start_ts` | String | `null` | Filter records after this timestamp (at `[filter]` level — not under include/exclude) |
+| `end_ts` | String | `null` | Filter records before this timestamp (at `[filter]` level — not under include/exclude) |
 | `max_record_limit` | usize | `0` | Max records to process (0 = unlimited, at `[filter]` level) |
 
 **Notes:** Include and exclude combine as `(include_AND) AND (NOT exclude_OR)`. All fields within one filter rule use AND semantics. Multiple include rules are AND-ed together. Exclude uses OR-veto: any match drops the record. Indicator and SQL content filters use a two-pass pre-scan for transaction boundary detection.
@@ -149,6 +152,8 @@ CSV export configuration. Higher priority than SQLite when both are configured.
 file = "output/sqllog.csv"
 # Overwrite existing file
 overwrite = true
+# Column separator character (default: ",")
+# delimiter = ";"
 # Optional: select specific columns by index (zero-based)
 # ordered_indices = [0, 1, 3, 5, 7]
 ```
@@ -232,6 +237,16 @@ Use `--set KEY=VALUE` to override config values from the command line without ed
 ```bash
 sqllog2db run -c config.toml --set exporter.csv.file=custom.csv
 ```
+
+### CLI Commands
+
+The sqllog2db binary provides several subcommands in addition to `run` and `validate`:
+
+**`sqllog2db stats [OPTIONS] <CSV_FILE>`** — Generate per-file parsing statistics and query analysis. Accepts a CSV export file as input. Supports `--top-slow <N>` (show top N slowest queries), `--group-by <FIELD>` (aggregate by `user`, `app`, or `ip`; repeatable), `--from` / `--to` (time range filter), `--json` (JSON output), and `--bucket <hour|minute>` (time bucket granularity).
+
+**`sqllog2db digest [OPTIONS] <SQLITE_FILE>`** — Fingerprint and aggregate SQL queries from a SQLite output database. Shows template counts, average latency, and percentile breakdowns (P50, P95, P99). Supports `--top <N>` (show only N fingerprints), `--from` / `--to` (time range filter), `--sort <count|exec>` (sort by count or total execution time), and `--min-count <N>` (filter rare templates).
+
+Examples are shown in the [QuickStart Guide](quickstart.md) (Scenarios 3 and 4).
 
 ### Field Order
 

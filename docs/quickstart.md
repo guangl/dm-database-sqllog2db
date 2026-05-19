@@ -196,6 +196,8 @@ sqllog2db stats output/sqllog.csv --group-by app
 sqllog2db stats output/sqllog.csv --from "2025-04-15" --to "2025-04-16"
 ```
 
+Note: The `--group-by` flag uses lowercase values (`user`, `app`, `ip`). This differs from the `[filter]` config section which uses uppercase field names (`USERNAME`, `APPGROUP`, `IP_ADDRESS`). Refer to the [Config Reference](config-reference.md) for filter field naming.
+
 Use this to identify performance bottlenecks, most active users, and error-prone log files.
 
 ---

@@ -279,23 +279,14 @@ SELECT productent0_.id_soft AS col_0_0_…
 <details>
 <summary><b>Latency Histogram</b> — Execution time distribution per template</summary>
 
-Shows the distribution of query execution times (log scale, microseconds). Use `sqllog2db stats --chart latency` to generate. Useful for identifying slow queries and latency outliers.
+Shows the distribution of query execution times (log scale, milliseconds). Use `sqllog2db stats --chart latency` to generate. Useful for identifying slow queries and latency outliers.
 
 <svg width="1200" height="600" viewBox="0 0 1200 600" xmlns="http://www.w3.org/2000/svg">
 <rect x="0" y="0" width="1200" height="600" opacity="1" fill="#FFFFFF" stroke="none"/>
 <text x="600" y="25" dy="0.76em" text-anchor="middle" font-family="sans-serif" font-size="14.516129032258064" opacity="1" fill="#000000">
-Latency: SELECT * FROM HI_BD_TASK_FU WHERE ID_TASK = ? AND DELETE_FLA (µs, log scale)
+Latency: SELECT * FROM HI_BD_TASK_FU WHERE ID_TASK = ? AND DELETE_FLA (ms, log scale)
 </text>
 <line opacity="0.1" stroke="#000000" stroke-width="1" x1="80" y1="539" x2="80" y2="45"/>
-<line opacity="0.1" stroke="#000000" stroke-width="1" x1="80" y1="539" x2="80" y2="45"/>
-<line opacity="0.1" stroke="#000000" stroke-width="1" x1="80" y1="539" x2="80" y2="45"/>
-<line opacity="0.1" stroke="#000000" stroke-width="1" x1="80" y1="539" x2="80" y2="45"/>
-<line opacity="0.1" stroke="#000000" stroke-width="1" x1="80" y1="539" x2="80" y2="45"/>
-<line opacity="0.1" stroke="#000000" stroke-width="1" x1="1179" y1="539" x2="1179" y2="45"/>
-<line opacity="0.1" stroke="#000000" stroke-width="1" x1="1179" y1="539" x2="1179" y2="45"/>
-<line opacity="0.1" stroke="#000000" stroke-width="1" x1="1179" y1="539" x2="1179" y2="45"/>
-<line opacity="0.1" stroke="#000000" stroke-width="1" x1="1179" y1="539" x2="1179" y2="45"/>
-<line opacity="0.1" stroke="#000000" stroke-width="1" x1="1179" y1="539" x2="1179" y2="45"/>
 <line opacity="0.1" stroke="#000000" stroke-width="1" x1="1179" y1="539" x2="1179" y2="45"/>
 <line opacity="0.1" stroke="#000000" stroke-width="1" x1="80" y1="539" x2="1179" y2="539"/>
 <line opacity="0.1" stroke="#000000" stroke-width="1" x1="80" y1="532" x2="1179" y2="532"/>
@@ -367,7 +358,7 @@ Latency: SELECT * FROM HI_BD_TASK_FU WHERE ID_TASK = ? AND DELETE_FLA (µs, log 
 Count
 </text>
 <text x="630" y="580" dy="-0.5ex" text-anchor="middle" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#000000">
-Latency (µs)
+Latency (ms)
 </text>
 <line opacity="0.2" stroke="#000000" stroke-width="1" x1="80" y1="539" x2="80" y2="45"/>
 <line opacity="0.2" stroke="#000000" stroke-width="1" x1="1179" y1="539" x2="1179" y2="45"/>
@@ -544,10 +535,6 @@ Hour
 09:00
 </text>
 <polyline fill="none" opacity="1" stroke="#000000" stroke-width="1" points="369,520 369,525 "/>
-<text x="909" y="530" dy="0.76em" text-anchor="middle" font-family="sans-serif" font-size="8.870967741935484" opacity="1" fill="#000000" transform="rotate(90, 909, 530)">
-
-</text>
-<polyline fill="none" opacity="1" stroke="#000000" stroke-width="1" points="909,520 909,525 "/>
 <polyline fill="none" opacity="1" stroke="#DC322F" stroke-width="2" points="369,89 "/>
 <circle cx="369" cy="89" r="4" opacity="1" fill="#DC322F" stroke="none" stroke-width="1"/>
 </svg>
@@ -621,8 +608,8 @@ GYS (0.0%)
 
 Watch a terminal recording of sqllog2db in action:
 
-<script src="https://cdn.jsdelivr.net/npm/asciinema-player@latest/dist/bundle/asciinema-player.min.js"></script>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@latest/dist/bundle/asciinema-player.css">
+<script src="https://cdn.jsdelivr.net/npm/asciinema-player@3.8.1/dist/bundle/asciinema-player.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.8.1/dist/bundle/asciinema-player.css">
 
 <asciinema-player src="asciicast/demo.cast" cols="120" rows="30"></asciinema-player>
 

@@ -78,3 +78,9 @@ code {
     border-color: rgba(255, 255, 255, 0.15);
   }
 }
+
+/* Responsive SVG — prevent overflow on narrow viewports */
+.content svg {
+  max-width: 100%;
+  height: auto;
+}

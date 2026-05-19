@@ -1,0 +1,12 @@
+{"version":3,"term":{"cols":80,"rows":24},"timestamp":1779150739,"command":"echo 'sqllog2db init -o config.toml --force' && sleep 0.5 && echo 'Config written to config.toml' && sleep 0.3 && echo '' && echo 'sqllog2db validate -c config.toml' && sleep 0.5 && echo 'Config validation passed' && sleep 0.3 && echo '' && echo 'sqllog2db run -c config.toml' && sleep 0.5 && echo '[INFO] Starting export...' && sleep 0.3 && echo '[INFO] Processing: sqllogs/DM_DMSQL_202504_01.log' && sleep 0.3 && echo '[INFO] Processed 2,372,459 records...' && sleep 0.3 && echo '[INFO] Export complete: 2,372,459 records in 8.87s (267,525 records/sec)'","env":{"SHELL":"/bin/zsh"}}
+[0.003, "o", "sqllog2db init -o config.toml --force\r\n"]
+[0.508, "o", "Config written to config.toml\r\n"]
+[0.309, "o", "\r\n"]
+[0.000, "o", "sqllog2db validate -c config.toml\r\n"]
+[0.507, "o", "Config validation passed\r\n"]
+[0.311, "o", "\r\nsqllog2db run -c config.toml\r\n"]
+[0.507, "o", "[INFO] Starting export...\r\n"]
+[0.308, "o", "[INFO] Processing: sqllogs/DM_DMSQL_202504_01.log\r\n"]
+[0.309, "o", "[INFO] Processed 2,372,459 records...\r\n"]
+[0.308, "o", "[INFO] Export complete: 2,372,459 records in 8.87s (267,525 records/sec)\r\n"]
+[0.001, "x", "0"]
