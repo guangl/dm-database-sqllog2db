@@ -8,7 +8,7 @@ use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 
 mod companion;
-mod writer;
+pub(crate) mod writer;
 
 pub(crate) use self::companion::write_companion_rows;
 use self::writer::{write_record, write_record_preparsed};

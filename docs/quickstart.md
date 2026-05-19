@@ -1,28 +1,28 @@
-# QuickStart Guide
+# 快速入门指南
 
-This guide walks you through common sqllog2db usage scenarios. Each scenario shows a complete workflow from config generation to output verification. For a minimal 3-command overview, see the [README](../README.md).
+本指南带你了解 sqllog2db 的常见使用场景。每个场景展示从配置生成到输出验证的完整工作流程。如需最简三命令概览，请参见 [README](../README.md)。
 
-## Environment Preparation
+## 环境准备
 
-Install Rust via rustup:
+通过 rustup 安装 Rust：
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
-Install sqllog2db:
+安装 sqllog2db：
 
 ```bash
 cargo install dm-database-sqllog2db
 ```
 
-Verify the installation:
+验证安装：
 
 ```bash
 sqllog2db --version
 ```
 
-Alternative: build from source:
+备选方案：从源码构建：
 
 ```bash
 git clone https://github.com/guangl/sqllog2db
@@ -30,31 +30,31 @@ cd sqllog2db
 cargo build --release
 ```
 
-The binary is ~5 MB, statically linked, and located at `target/release/sqllog2db`.
+二进制文件约 5 MB，静态链接，位于 `target/release/sqllog2db`。
 
-Sample log files are included in the `sqllogs/` directory when cloned from source. Use your own DM SQL logs for production workloads.
+从源码克隆时，`sqllogs/` 目录下包含示例日志文件。生产环境请使用你自己的达梦 SQL 日志。
 
 ---
 
-## Scenario 1: Export SQL Logs to CSV
+## 场景一：导出 SQL 日志到 CSV
 
-Export Dameng SQL logs to CSV for analysis or archival.
+将达梦 SQL 日志导出为 CSV 以供分析或归档。
 
-**Step 1: Generate a default config**
+**步骤 1：生成默认配置**
 
 ```bash
 sqllog2db init -o config.toml --force
 ```
 
-Expected output:
+预期输出：
 
 ```
 Config written to config.toml
 ```
 
-**Step 2: Configure CSV export**
+**步骤 2：配置 CSV 导出**
 
-Edit `config.toml`:
+编辑 `config.toml`：
 
 ```toml
 [sqllog]
@@ -65,25 +65,25 @@ file = "output/sqllog.csv"
 overwrite = true
 ```
 
-**Step 3: Validate the config**
+**步骤 3：验证配置**
 
 ```bash
 sqllog2db validate -c config.toml
 ```
 
-Expected output:
+预期输出：
 
 ```
 Config validation passed
 ```
 
-**Step 4: Run the export**
+**步骤 4：运行导出**
 
 ```bash
 sqllog2db run -c config.toml
 ```
 
-Expected output:
+预期输出：
 
 ```
 [INFO] Starting export...
@@ -93,24 +93,24 @@ Expected output:
 [INFO] Export complete: 2,372,459 records in 8.87s (267,525 records/sec)
 ```
 
-**Step 5: Verify the output**
+**步骤 5：验证输出**
 
 ```bash
 wc -l output/sqllog.csv
 head -5 output/sqllog.csv
 ```
 
-**Troubleshooting:** If you see "Config validation failed: sqllog.path", ensure the `path` points to an existing directory or file. Use absolute paths for automation scripts.
+**故障排查：** 如果看到 "Config validation failed: sqllog.path"，请确保 `path` 指向存在的目录或文件。自动化脚本中建议使用绝对路径。
 
 ---
 
-## Scenario 2: Export to SQLite Database
+## 场景二：导出到 SQLite 数据库
 
-Export to SQLite for SQL-based analysis.
+导出到 SQLite 以便使用 SQL 进行分析。
 
-**Step 1: Configure SQLite export**
+**步骤 1：配置 SQLite 导出**
 
-Edit `config.toml`:
+编辑 `config.toml`：
 
 ```toml
 [sqllog]
@@ -122,27 +122,27 @@ table = "sqllog_records"
 overwrite = true
 ```
 
-**Step 2: Validate and run**
+**步骤 2：验证并运行**
 
 ```bash
 sqllog2db validate -c config.toml
 sqllog2db run -c config.toml
 ```
 
-**Step 3: Verify and query**
+**步骤 3：验证并查询**
 
 ```bash
-# Count total records
+# 统计总记录数
 sqlite3 output/sqllog.db "SELECT COUNT(*) FROM sqllog_records;"
 
-# Top 5 users by query count
+# 按查询数量查看 Top 5 用户
 sqlite3 output/sqllog.db "SELECT USERNAME, COUNT(*) AS cnt FROM sqllog_records GROUP BY USERNAME ORDER BY cnt DESC LIMIT 5;"
 
-# Top 10 slowest queries
+# 查看 Top 10 最慢查询
 sqlite3 output/sqllog.db "SELECT SQL_TEXT, ELAPSED FROM sqllog_records ORDER BY ELAPSED DESC LIMIT 10;"
 ```
 
-Expected output for top users:
+预期用户排名输出：
 
 ```
 HIHIS|1748411
@@ -152,21 +152,21 @@ BLC|18342
 SYSDBA|5234
 ```
 
-**Troubleshooting:** If `sqlite3` is not found, install it with `brew install sqlite` (macOS) or your system package manager.
+**故障排查：** 如果找不到 `sqlite3`，请通过 `brew install sqlite`（macOS）或系统包管理器安装。
 
 ---
 
-## Scenario 3: Per-File Statistics and Slow-Query Analysis
+## 场景三：按文件统计与慢查询分析
 
-Analyze export results to identify performance patterns.
+分析导出结果以识别性能模式。
 
-**Step 1: Run the stats command**
+**步骤 1：运行 stats 命令**
 
 ```bash
 sqllog2db stats output/sqllog.csv --top-slow 10
 ```
 
-Expected per-file statistics table:
+预期按文件统计表：
 
 ```
 File                                          Lines      Parsed    Errors    Elapsed
@@ -175,7 +175,7 @@ sqllogs/DM_DMSQL_202504_03.log                1,487,233  1,487,233  8         3.
 sqllogs/DM_DMSQL_202504_05.log                1,521,876  1,521,876  15        3.35s
 ```
 
-Expected top-10 slowest queries:
+预期 Top 10 最慢查询：
 
 ```
 Rank  SQL_TEXT                         ELAPSED(ms)  USERNAME   START_TIME
@@ -183,30 +183,30 @@ Rank  SQL_TEXT                         ELAPSED(ms)  USERNAME   START_TIME
 2     INSERT INTO PAYMENTS ...         8,901        SYS_USER   2025-04-15 14:25:33
 ```
 
-**Step 2: Group by dimensions**
+**步骤 2：按维度分组**
 
 ```bash
-# Group by user
+# 按用户分组
 sqllog2db stats output/sqllog.csv --group-by user
 
-# Group by application
+# 按应用分组
 sqllog2db stats output/sqllog.csv --group-by app
 
-# Filter by time range
+# 按时间范围过滤
 sqllog2db stats output/sqllog.csv --from "2025-04-15" --to "2025-04-16"
 ```
 
-Note: The `--group-by` flag uses lowercase values (`user`, `app`, `ip`). This differs from the `[filter]` config section which uses uppercase field names (`USERNAME`, `APPGROUP`, `IP_ADDRESS`). Refer to the [Config Reference](config-reference.md) for filter field naming.
+注意：`--group-by` 标志使用小写值（`user`、`app`、`ip`）。这与 `[filter]` 配置节使用大写字段名（`USERNAME`、`APPGROUP`、`IP_ADDRESS`）不同。过滤器字段命名请参见[配置参考](config-reference.md)。
 
-Use this to identify performance bottlenecks, most active users, and error-prone log files.
+利用此功能识别性能瓶颈、最活跃用户和易出错的日志文件。
 
 ---
 
-## Scenario 4: SQL Template Aggregation and Chart Generation
+## 场景四：SQL 模板聚合与图表生成
 
-Normalize SQL queries to identify structural patterns and generate SVG charts.
+归一化 SQL 查询以识别结构模式并生成 SVG 图表。
 
-**Step 1: Enable template analysis and charts**
+**步骤 1：启用模板分析和图表**
 
 ```toml
 [sqllog]
@@ -231,13 +231,13 @@ file = "output/sqllog.csv"
 overwrite = true
 ```
 
-**Step 2: Run the export with template aggregation**
+**步骤 2：运行带模板聚合的导出**
 
 ```bash
 sqllog2db run -c config.toml
 ```
 
-Expected additional output:
+预期额外输出：
 
 ```
 [INFO] Template aggregation: 245 unique SQL fingerprints
@@ -247,14 +247,14 @@ Expected additional output:
 [INFO] Chart generated: charts/user_schema_pie.svg
 ```
 
-**Step 3: View the template summary**
+**步骤 3：查看模板摘要**
 
 ```bash
-# If using SQLite output
+# 如果使用 SQLite 输出
 sqllog2db digest output/sqllog.db
 ```
 
-Expected template summary:
+预期模板摘要：
 
 ```
 Template                                        Count   Avg(ms)   P50(ms)   P95(ms)   P99(ms)
@@ -262,47 +262,47 @@ SELECT * FROM HI_BD_TASK_FU WHERE ID_TASK = ?   12,345  342       215       891 
 INSERT INTO HI_BD_SIPA_FU_RULE ...              8,901   156       120       445       980
 ```
 
-**Step 4: Explore the output**
+**步骤 4：查看输出**
 
-- `output/template_summary.csv` — CSV summary (if CSV exporter)
-- `output/sqllog.db` — SQLite with `sqllog_records` and `_templates` tables
-- `charts/` — SVG chart files (frequency bar, latency histogram, trend line, user pie)
+- `output/template_summary.csv` — CSV 摘要（如果使用 CSV 导出器）
+- `output/sqllog.db` — SQLite，包含 `sqllog_records` 和 `_templates` 表
+- `charts/` — SVG 图表文件（频率柱状图、延迟直方图、趋势折线图、用户饼图）
 
-Use template aggregation to understand SQL execution patterns, identify hot queries, and visualize workload distribution.
+利用模板聚合理解 SQL 执行模式、识别热点查询并可视化工作负载分布。
 
 ---
 
-## Troubleshooting
+## 故障排查
 
-### Config validation failed
+### 配置验证失败
 
-- Run `sqllog2db validate -c config.toml` to see specific errors
-- Check that `sqllog.path` exists and is readable
-- Ensure output directories exist (sqllog2db does not create intermediate directories)
-- Verify TOML syntax: section headers use `[brackets]`, values use `=`
+- 运行 `sqllog2db validate -c config.toml` 查看具体错误
+- 检查 `sqllog.path` 是否存在且可读
+- 确保输出目录存在（sqllog2db 不会自动创建中间目录）
+- 验证 TOML 语法：节标题使用 `[方括号]`，值使用 `=`
 
-### "No .log files found"
+### "未找到 .log 文件"
 
-- Verify the path in `[sqllog].path` is correct
-- Use absolute paths: `/home/user/logs/` instead of `../logs/`
-- Check that files have the `.log` extension
+- 验证 `[sqllog].path` 中的路径是否正确
+- 使用绝对路径：`/home/user/logs/` 而非 `../logs/`
+- 检查文件是否具有 `.log` 扩展名
 
-### Slow export performance
+### 导出性能较慢
 
-- Ensure the pipeline is empty (no `[filter]`, `[template]`, or `[charts]` sections) for maximum speed
-- CSV export is faster than SQLite (~5.2M vs ~1.1M records/sec)
-- Use NVMe SSDs for best throughput
-- File I/O is the primary bottleneck for large datasets
+- 确保处理管道为空（无 `[filter]`、`[template]` 或 `[charts]` 节）以获得最大速度
+- CSV 导出比 SQLite 更快（约 520 万条/秒 vs 约 110 万条/秒）
+- 使用 NVMe SSD 获得最佳吞吐量
+- 对于大数据集，文件 I/O 是主要瓶颈
 
-### Parse errors in output
+### 输出中出现解析错误
 
-- Parse errors are non-fatal: the tool continues processing
-- Errors are logged to the application log (check `[logging]` config)
-- GB18030/GBK encoded files are automatically detected and decoded
-- Use `sqllog2db stats` to see per-file error counts
+- 解析错误是非致命的：工具继续处理后续记录
+- 错误记录到应用日志中（检查 `[logging]` 配置）
+- GB18030/GBK 编码的文件会自动检测和解码
+- 使用 `sqllog2db stats` 查看每个文件的错误计数
 
-### Template aggregation produces too many templates
+### 模板聚合产生过多模板
 
-- Increase `top_n` in `[charts]` to show more templates
-- Use `sqllog2db digest --min-count 100` to filter rare templates
-- Add filters to narrow the data before template aggregation
+- 增加 `[charts]` 中的 `top_n` 以显示更多模板
+- 使用 `sqllog2db digest --min-count 100` 过滤罕见模板
+- 在模板聚合前添加过滤器以缩小数据范围

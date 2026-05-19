@@ -8,6 +8,7 @@
 - ✅ **v1.3 SQL 模板分析 & 可视化** — Phases 12–16 (shipped 2026-05-17)
 - ✅ **v1.4 代码重构 & 质量深化** — Phases 17–20 (shipped 2026-05-18)
 - ✅ **v1.5 文档完善 & 项目展示** — Phases 21–23 (shipped 2026-05-19)
+- ✅ **v1.6 文档中文化 & 延后需求补全** — Phases 24–27 (shipped 2026-05-19)
 
 ## Phases
 
@@ -82,6 +83,18 @@ Full details: `.planning/milestones/v1.5-ROADMAP.md`
 
 </details>
 
+<details>
+<summary>✅ v1.6 文档中文化 & 延后需求补全 (Phases 24–27) — SHIPPED 2026-05-19</summary>
+
+- [x] Phase 24: 文档中文化 & 去 SVG 化 (3/3 plans) — completed 2026-05-19
+- [x] Phase 25: 延后文档补全 (1/1 plan) — completed 2026-05-19
+- [x] Phase 26: GitHub Pages 多页文档站 (1/1 plan) — completed 2026-05-19
+- [x] Phase 27: 模板报告独立输出 (2/2 plans) — completed 2026-05-19
+
+Full details: `.planning/milestones/v1.6-ROADMAP.md`
+
+</details>
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -102,10 +115,14 @@ Full details: `.planning/milestones/v1.5-ROADMAP.md`
 | 14. Exporter 集成输出 | v1.3 | 4/4 | Complete | 2026-05-16 |
 | 15. SVG 图表基础设施 + 前两类图表 | v1.3 | 5/5 | Complete | 2026-05-17 |
 | 16. 剩余图表 | v1.3 | 5/5 | Complete | 2026-05-17 |
-| 17. 过滤器配置嵌套化 | v1.4 | 2/2 | Complete | 2026-05-18 |
+| 17. 过滤器配置嵌套化 | v1.4 | 3/3 | Complete | 2026-05-18 |
 | 18. 模板 & 图表配置嵌套化 | v1.4 | 3/3 | Complete | 2026-05-18 |
 | 19. 代码结构重构 | v1.4 | 4/4 | Complete | 2026-05-18 |
 | 20. 测试覆盖深化 | v1.4 | 3/3 | Complete | 2026-05-18 |
-| 21. README 全面更新 + 根文档补全 | v1.5 | 2/2 | Complete    | 2026-05-19 |
-| 22. GitHub Pages 落地页 + 部署流水线 | v1.5 | 2/2 | Complete    | 2026-05-19 |
+| 21. README 全面更新 + 根文档补全 | v1.5 | 2/2 | Complete | 2026-05-19 |
+| 22. GitHub Pages 落地页 + 部署流水线 | v1.5 | 2/2 | Complete | 2026-05-19 |
 | 23. 补充文档 + CI 质量门禁 | v1.5 | 4/4 | Complete | 2026-05-19 |
+| 24. 文档中文化 & 去 SVG 化 | v1.6 | 3/3 | Complete   | 2026-05-19 |
+| 25. 延后文档补全 | v1.6 | 1/1 | Complete   | 2026-05-19 |
+| 26. GitHub Pages 多页文档站 | v1.6 | 1/1 | Complete   | 2026-05-19 |
+| 27. 模板报告独立输出 | v1.6 | 2/2 | Complete   | 2026-05-19 |

@@ -1427,8 +1427,7 @@ fn test_e2e_template_normalization() {
     let mut cfg = make_run_config(&log_dir, &csv_file);
     cfg.template = Some(TemplateConfig {
         enable: true,
-        output_csv_path: String::new(),
-        output_sqlite_table: String::new(),
+        report: None,
     });
 
     // Act

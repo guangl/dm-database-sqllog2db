@@ -7,58 +7,58 @@
 [![Release](https://img.shields.io/github/v/release/guangl/sqllog2db?style=flat-square&logo=github&logoColor=white&label=release)](https://github.com/guangl/sqllog2db/releases)
 [![Rust 1.85+](https://img.shields.io/badge/rust-1.85%2B-orange?style=flat-square&logo=rust&logoColor=white)](https://www.rust-lang.org/)
 
-Parse Dameng database SQL logs and export to CSV or SQLite.
+解析达梦数据库 SQL 日志并导出为 CSV 或 SQLite。
 
-A streaming CLI tool that processes Dameng SQL log files with constant memory usage, delivering ~5.2M records/sec CSV throughput from a zero-dependency static binary. No external runtime, no database client, no JVM -- just a single ~5 MB binary that runs anywhere Rust compiles.
+一款流式命令行工具，以恒定内存占用处理达梦 SQL 日志文件，从零依赖的静态二进制文件提供约 520 万条记录/秒的 CSV 吞吐量。无需外部运行时、无需数据库客户端、无需 JVM——只是一个约 5 MB 的二进制文件，可在 Rust 编译的任何平台上运行。
 
-Use cases: log archiving, audit trail extraction, analytics preprocessing, and DBA workload profiling. The tool handles Dameng-specific log encodings (GB18030/GBK), parses structured fields from each SQL record, and routes them through an optional filtering pipeline before writing to the configured exporter.
+适用场景：日志归档、审计追踪提取、分析预处理、DBA 工作负载画像。该工具处理达梦特有的日志编码（GB18030/GBK），从每条 SQL 记录中解析结构化字段，并通过可选的处理管道将其路由后写入配置的导出器。
 
-## Features
+## 功能特性
 
-### Parsing & Export
+### 解析与导出
 
-- **Streaming parser**: single-threaded sequential processing across one file, a directory of `.log` files, or glob patterns. Memory stays constant regardless of file size -- the tool streams records rather than loading them into RAM.
-- **Flexible input modes**: single file path, directory auto-scan (recursively finds `.log` files), or glob patterns like `./logs/2025-*.log`. Results sorted by path for deterministic ordering across runs.
-- **CSV exporter**: 16 MB `BufWriter` with `itoa` zero-allocation integer formatting for high-throughput, low-latency output. `memchr` SIMD-accelerated byte search handles CSV escaping.
-- **SQLite exporter**: batch transactions with performance `PRAGMA` tuning (synchronous off, mmap size, cache size) and prepared statements for bulk insert throughput.
-- **Priority-routed ExporterManager**: only one exporter active per run; CSV wins when both are configured. The `Exporter` trait lets benchmarks inject mock exporters without modifying production code.
-- **Resume/checkpoint support**: optional state file tracks processed files by size and modification time, enabling incremental exports that skip already-completed files on subsequent runs.
+- **流式解析器**：单线程顺序处理单个文件、目录中的 `.log` 文件或 glob 模式匹配的文件。无论文件大小，内存保持恒定——工具流式处理记录而非加载到内存中。
+- **灵活的输入模式**：支持单文件路径、目录自动扫描（递归查找 `.log` 文件）或 glob 模式（如 `./logs/2025-*.log`）。结果按路径排序以在多次运行间保持确定性顺序。
+- **CSV 导出器**：16 MB `BufWriter` 配合 `itoa` 零分配整数格式化，实现高吞吐、低延迟输出。`memchr` 的 SIMD 加速字节搜索处理 CSV 转义。
+- **SQLite 导出器**：批量事务配合性能 `PRAGMA` 调优（synchronous off、mmap size、cache size）和预编译语句实现批量插入吞吐量。
+- **优先级路由的 ExporterManager**：每次运行只有一个导出器处于活动状态；两者同时配置时 CSV 优先。`Exporter` trait 允许基准测试在不修改生产代码的情况下注入模拟导出器。
+- **断点续传支持**：可选的状态文件通过文件大小和修改时间跟踪已处理文件，实现增量导出，跳过后续运行中已完成的文件。
 
-### Filtering & Field Control
+### 过滤与字段控制
 
-- **Record-level include filters** (AND semantics): every configured field must match for the record to pass. Supports user, IP, session, thread, statement type (INS/UPD/DEL/SEL), application name, tag, and timestamp range via `start_ts`/`end_ts`.
-- **Record-level exclude filters** (OR-veto): any single match drops the record immediately without evaluating remaining exclude fields. Same field set as include. Include and exclude stack: include narrows the candidate set, exclude carves out exceptions.
-- **Transaction-level indicator filters**: match on `exec_id`, minimum runtime (`min_runtime_ms`), or minimum row count (`min_row_count`). When a statement in a transaction matches, the entire transaction is retained. Requires two-pass pre-scan for transaction boundary detection.
-- **Transaction-level SQL content filters**: string patterns in `includes` and `excludes` applied to SQL text content. Two-pass design: pre-scan collects matching transaction IDs, main pass applies the transaction set filter alongside record-level filters.
-- **Field projection**: `ordered_indices: Vec<usize>` lets you select exact column order and subset from the record schema. Passed from config through the pipeline to the exporter -- no field is written unless explicitly listed.
+- **记录级包含过滤器**（AND 语义）：每条记录必须匹配每个配置的字段才能通过。支持用户名、IP、会话、线程、语句类型（INS/UPD/DEL/SEL）、应用名称、标签以及通过 `start_ts`/`end_ts` 设定的时间戳范围。
+- **记录级排除过滤器**（OR 否决）：任意单次匹配立即丢弃记录，不继续评估剩余的排除字段。字段集与包含过滤器相同。包含和排除叠加：包含缩小候选集，排除剔除例外项。
+- **事务级指标过滤器**：匹配 `exec_id`、最小执行时长（`min_runtime_ms`）或最小行数（`min_row_count`）。当事务中某条语句匹配时，整个事务被保留。需要两遍预扫描以检测事务边界。
+- **事务级 SQL 内容过滤器**：应用于 SQL 文本内容的字符串模式（`includes` 和 `excludes`）。两遍设计：预扫描收集匹配的事务 ID，主遍将事务集过滤器与记录级过滤器一起应用。
+- **字段投影**：`ordered_indices: Vec<usize>` 允许你从记录模式中选择精确的列顺序和子集。从配置通过管道传递到导出器——未在列表中显式声明的字段不会被写入。
 
-### Template Analysis & Charts
+### 模板分析与图表
 
-- **SQL fingerprint normalization** (`normalize_template`): strips single-line and block comments, folds IN-list values to a single `?` placeholder, uppercases keywords, collapses whitespace. Produces a stable template key from structurally identical queries with different parameter values.
-- **TemplateAggregator**: streaming statistics engine that counts occurrences per template, accumulates execution time distribution via `hdrhistogram` (compact ~24 KB per template vs. ~40 MB for a raw Vec<u64>), and records first/last timestamps alongside a representative example SQL.
-- **Dual-stat output**: aggregated template data written to both a CSV summary file and a dedicated SQLite table (`sql_templates`) in a single run. No post-processing or secondary aggregation needed.
-- **Four SVG chart types**: frequency bar (top-N templates by occurrence count), latency histogram (execution time distribution per template using hdrhistogram bucket boundaries), trend line (normalized template frequency over time buckets), and user pie (proportional share of queries by database user). Rendered via plotters with SVG-only backend -- no system fonts or image libraries required.
-- **Config-driven chart generation**: enabled through `[template]` and `[charts]` TOML sections. Supports configurable top-N count, per-chart type toggles, and output directory.
+- **SQL 指纹归一化**（`normalize_template`）：去除单行和块注释，将 IN 列表值折叠为单个 `?` 占位符，关键字大写，合并空白字符。从结构相同但参数值不同的查询中生成稳定的模板键。
+- **TemplateAggregator**：流式统计引擎，统计每个模板的出现次数，通过 `hdrhistogram`（每个模板压缩后约 24 KB，相比原始 `Vec<u64>` 约 40 MB）累积执行时间分布，并记录首次/末次时间戳以及一条代表性 SQL 示例。
+- **双路统计输出**：聚合的模板数据在单次运行中同时写入 CSV 摘要文件和专用的 SQLite 表（`sql_templates`）。无需后处理或二次聚合。
+- **四类 SVG 图表**：频率柱状图（Top-N SQL 模板按执行次数排序）、延迟直方图（每个模板的执行时间分布，使用 hdrhistogram 桶边界）、趋势折线图（归一化模板在各时间桶中的频率变化）和用户饼图（按数据库用户的查询占比）。通过 plotters 渲染，仅使用 SVG 后端——不需要系统字体或图片库。
+- **配置驱动的图表生成**：通过 `[template]` 和 `[charts]` TOML 配置启用。支持配置 Top-N 数量、按图表类型开关和输出目录。
 
-### Configuration & Performance
+### 配置与性能
 
-- **TOML config with nested sub-tables**: v1.4+ format places `[filter.include]`, `[filter.exclude]`, `[template]`, `[charts]` as top-level sections (not nested under `[features]`). Old flat format supported through `RawFiltersFeature` intermediate struct and serde alias for backward compatibility. `validate_and_compile()` validates the final form and rejects legacy layouts.
-- **Zero-overhead fast path**: when the pipeline is empty (no filters, no templates, no replace_parameters), the hot loop skips all feature gates via a single `pipeline.is_empty()` check. No virtual dispatch, no conditional branches per record in the fast path.
-- **Pre-compiled filter pipeline**: `CompiledMetaFilters` and `CompiledSqlFilters` hold compiled `RegexSet` instances at startup. Each filter variant carries a type tag (include, exclude, indicator, SQL include, SQL exclude) for dispatch without string matching.
-- **Single-threaded streaming**: predictable performance regardless of data volume. Uses mimalloc as global allocator. Release profile: `opt-level=3`, LTO fat, codegen-units=1, panic=abort, strip=symbols -- yielding a ~5 MB binary.
-- **Benchmark results**: ~5.2M records/sec CSV (criterion, synthetic 50k-record dataset on Apple M-series), ~1.1M records/sec SQLite (batch + PRAGMA), ~1.55M records/sec on a real 1.1 GB file (~3M records, NVMe SSD).
-- **Additional CLI commands**: `stats` for per-file record statistics, slow-query ranking (`--top N`), and group-by aggregation (`--group-by user,app,ip`); `digest` for SQL fingerprint aggregation with sort/filter options; `show-config` for active config inspection; `completions` and `man` for shell integration (bash, zsh, fish).
+- **嵌套子表的 TOML 配置**：v1.4+ 格式将 `[filter.include]`、`[filter.exclude]`、`[template]`、`[charts]` 作为顶级节（而非嵌套在 `[features]` 下）。旧的扁平格式通过 `RawFiltersFeature` 中间结构和 serde 别名支持向后兼容。`validate_and_compile()` 验证最终形式并拒绝旧版布局。
+- **零开销快速路径**：当管道为空（无过滤器、无模板、无 replace_parameters）时，热循环通过单个 `pipeline.is_empty()` 检查跳过所有功能门控。快速路径中无虚函数调用、无逐记录的条件分支。
+- **预编译的过滤器处理管道**：`CompiledMetaFilters` 和 `CompiledSqlFilters` 在启动时持有编译好的 `RegexSet` 实例。每个过滤器变体带有类型标签（include、exclude、indicator、SQL include、SQL exclude），无需字符串匹配即可派发。
+- **单线程流式处理**：无论数据量大小，性能可预测。使用 mimalloc 作为全局分配器。Release 配置：`opt-level=3`、LTO fat、codegen-units=1、panic=abort、strip=symbols——生成约 5 MB 的二进制文件。
+- **基准测试结果**：~520 万条记录/秒 CSV（criterion，合成 50k 记录数据集，Apple M 系列芯片），~110 万条记录/秒 SQLite（batch + PRAGMA），~155 万条记录/秒（真实 1.1 GB 文件，约 300 万条记录，NVMe SSD）。
+- **额外的 CLI 命令**：`stats` 用于按文件统计记录数、慢查询排名（`--top N`）和分组聚合（`--group-by user,app,ip`）；`digest` 用于 SQL 指纹聚合并支持排序和过滤选项；`show-config` 用于查看当前配置；`completions` 和 `man` 用于 shell 集成（bash、zsh、fish）。
 
-## Architecture
+## 架构
 
-Data flows through the tool in four stages:
+数据通过四个阶段流经工具：
 
-1. **Discovery**: `SqllogParser` resolves the configured path (file, directory, or glob) and produces an ordered list of `.log` files.
-2. **Parsing**: Each file is streamed line by line through `dm-database-parser-sqllog`, which decodes GB18030/GBK records and extracts structured fields (user, SQL text, duration, row count, session ID, etc.).
-3. **Pipeline**: Parsed records pass through an optional processing pipeline. When empty (no filters, no templates), records bypass all feature logic via a zero-overhead fast path. When active, the pipeline runs compiled regex filters and/or template normalization.
-4. **Export**: The active exporter (CSV or SQLite, selected by priority) writes each record. An ExporterManager routes records to the single configured exporter.
+1. **发现**：`SqllogParser` 解析配置的路径（文件、目录或 glob）并生成有序的 `.log` 文件列表。
+2. **解析**：每个文件通过 `dm-database-parser-sqllog` 逐行流式读取，解码 GB18030/GBK 记录并提取结构化字段（用户、SQL 文本、执行时长、行数、会话 ID 等）。
+3. **处理管道**：解析后的记录通过可选的处理管道。当管道为空（无过滤器、无模板）时，记录通过零开销快速路径绕过所有功能逻辑。当管道活跃时，运行编译好的正则过滤器或模板归一化。
+4. **导出**：活跃的导出器（CSV 或 SQLite，按优先级选择）写入每条记录。ExporterManager 将记录路由到单一配置的导出器。
 
-This streaming design keeps memory usage constant -- a 100 MB log file and a 100 GB log file consume the same peak memory.
+这种流式设计保持内存使用恒定——100 MB 日志文件和 100 GB 日志文件消耗相同的峰值内存。
 
 ```mermaid
 graph LR
@@ -70,49 +70,49 @@ graph LR
     D --> F[CSV / SQLite]
 ```
 
-The same flow expressed textually:
+同样的流程以文本形式表达：
 
 ```
-Input .log files --> SqllogParser --> Pipeline --> ExporterManager --> CSV / SQLite
+输入 .log 文件 --> SqllogParser --> 处理管道 --> ExporterManager --> CSV / SQLite
 ```
 
-### Key Modules
+### 关键模块
 
-- **`cli/run.rs`**: main orchestration -- loads config, builds pipeline, pre-scans for transaction filters, streams records file by file.
-- **`exporter/mod.rs`**: `Exporter` trait and `ExporterManager` factory. Only one exporter active per run.
-- **`features/mod.rs`**: `LogProcessor` trait and `Pipeline`. `pipeline.is_empty()` enables the zero-overhead fast path.
-- **`features/filters.rs`**: two-pass filter design. Pre-scan finds matching transaction IDs using `CompiledMetaFilters` and `CompiledSqlFilters`.
-- **`config.rs`**: all config structs with serde deserialization, nested sub-table support, and `validate_and_compile()` for pre-validation.
+- **`cli/run.rs`**：主编排——加载配置、构建管道、预扫描事务过滤器、逐个文件流式处理记录。
+- **`exporter/mod.rs`**：`Exporter` trait 和 `ExporterManager` 工厂。每次运行只有一个导出器处于活动状态。
+- **`features/mod.rs`**：`LogProcessor` trait 和 `Pipeline`。`pipeline.is_empty()` 启用零开销快速路径。
+- **`features/filters.rs`**：两遍过滤器设计。预扫描使用 `CompiledMetaFilters` 和 `CompiledSqlFilters` 查找匹配的事务 ID。
+- **`config.rs`**：所有配置结构体，支持 serde 反序列化、嵌套子表支持和 `validate_and_compile()` 预验证。
 
-## Installation
+## 安装
 
-### From crates.io (recommended)
+### 从 crates.io 安装（推荐）
 
 ```bash
 cargo install dm-database-sqllog2db
 ```
 
-Requires Rust 1.85+. The release binary is ~5 MB (LTO fat, stripped, panic=abort, codegen-units=1).
+需要 Rust 1.85+。Release 二进制文件约 5 MB（LTO fat、stripped、panic=abort、codegen-units=1）。
 
-### Local build
+### 本地构建
 
 ```bash
 cargo build --release
 cargo install --path .
 ```
 
-### Verify the installed binary
+### 验证安装的二进制文件
 
 ```bash
 sqllog2db --version
 sqllog2db --help
 ```
 
-Check `sqllog2db completions bash`, `sqllog2db completions zsh`, or `sqllog2db completions fish` to install shell completions. Run `sqllog2db man` to generate a man page.
+使用 `sqllog2db completions bash`、`sqllog2db completions zsh` 或 `sqllog2db completions fish` 安装 shell 补全。运行 `sqllog2db man` 生成 man 手册页。
 
-## QuickStart
+## 快速入门
 
-Generate a default configuration, validate it, then run the export:
+生成默认配置，验证后运行导出：
 
 ```bash
 sqllog2db init -o config.toml
@@ -120,25 +120,25 @@ sqllog2db validate -c config.toml
 sqllog2db run -c config.toml
 ```
 
-Use `--limit N` for a quick dry-run sample and `--from`/`--to` for time-range filtering:
+使用 `--limit N` 快速试运行和 `--from`/`--to` 进行时间范围过滤：
 
 ```bash
 sqllog2db run -c config.toml --limit 1000
 sqllog2db run -c config.toml --from "2025-01-01" --to "2025-12-31"
 ```
 
-For per-file statistics, slow-query ranking, and SQL fingerprint aggregation:
+按文件统计、慢查询排名和 SQL 指纹聚合：
 
 ```bash
 sqllog2db stats -c config.toml --top 10
 sqllog2db digest -c config.toml --sort exec --top 20
 ```
 
-See also the [QuickStart Guide](./docs/quickstart.md) for detailed usage.
+详细用法参见[快速入门指南](./docs/quickstart.md)。
 
-## Configuration
+## 配置
 
-The default config generated by `sqllog2db init` uses nested TOML sub-tables for filter, template, and chart settings (v1.4+ format):
+`sqllog2db init` 生成的默认配置使用嵌套 TOML 子表来设置过滤器、模板和图表选项（v1.4+ 格式）：
 
 ```toml
 [sqllog]
@@ -159,50 +159,42 @@ file = "outputs/sqllog.csv"
 overwrite = true
 ```
 
-A full configuration reference is available at [docs/config-reference.md](./docs/config-reference.md).
+完整配置参考请参见 [docs/config-reference.md](./docs/config-reference.md)。
 
-## Performance
+## 性能
 
-### Benchmark Results
+### 基准测试结果
 
-| Mode | Throughput | Notes |
-|------|-----------|-------|
-| CSV (synthetic) | ~5.2M rec/s | criterion, Apple M-series |
-| SQLite (synthetic) | ~1.1M rec/s | batch + PRAGMA |
-| Real file (1.1 GB, NVMe) | ~1.55M rec/s | ~3M records, production log |
+| 模式 | 吞吐量 | 备注 |
+|------|--------|------|
+| CSV（合成数据） | ~520 万条/秒 | criterion，Apple M 系列芯片 |
+| SQLite（合成数据） | ~110 万条/秒 | batch + PRAGMA |
+| 真实文件（1.1 GB，NVMe） | ~155 万条/秒 | ~300 万条记录，生产日志 |
 
-Benchmarks measured with `cargo bench` on a Mac with Apple Silicon and NVMe SSD.
+基准测试使用 `cargo bench` 在搭载 Apple Silicon 和 NVMe SSD 的 Mac 上测量。
 
-## SVG Charts
+## 图表功能
 
-Two sample charts generated from real Dameng SQL logs using the built-in template analysis and chart generation pipeline:
+本工具内置 SQL 模板分析引擎，可自动生成四类图表：频率柱状图（Top-N SQL 模板按执行次数排序）、延迟直方图（每类模板的执行时间分布）、趋势折线图（SQL 执行频率随时间变化）、用户饼图（按数据库用户的查询占比）。图表以 SVG 格式输出，通过 `sqllog2db stats` 命令配合 `--chart` 参数生成，输出到配置的 charts/ 目录。
 
-![Frequency Bar Chart](docs/images/frequency_bar.png)
-*Top-10 SQL frequency bar chart -- most frequent query templates by occurrence count*
+## 错误处理
 
-![Latency Histogram](docs/images/latency_histogram.png)
-*Latency histogram -- execution time distribution for a selected query template*
+解析错误不是致命的。当日志行无法解析时，错误信息写入配置的错误日志文件（配置中的 `[error] file`），处理继续到下一条行。该工具使用结构化错误类型（通过 `thiserror`）为所有错误变体提供文件路径和原因上下文。
 
-All four chart types are available: frequency bar, latency histogram, trend line, and user pie. For additional chart samples from different datasets, see the [Gallery](https://guangl.github.io/sqllog2db/) on the project landing page (Phase 22).
+通过 Ctrl+C 优雅关闭会在当前批次完成后停止。退出码：0（成功）、2（配置错误）、3（文件/解析错误）、4（导出错误）、130（用户中断）。
 
-## Error Handling
+## 链接
 
-Parse errors are not fatal. When a log line cannot be parsed, the error is written to the configured error log file (`[error] file` in config) and processing continues with the next line. The tool uses structured error types (via `thiserror`) with file path and reason context for all error variants.
-
-Graceful shutdown via Ctrl+C stops after the current batch completes. Exit codes: 0 (success), 2 (config error), 3 (file/parse error), 4 (export error), 130 (user interrupt).
-
-## Links
-
-- [GitHub Repository](https://github.com/guangl/sqllog2db)
+- [GitHub 仓库](https://github.com/guangl/sqllog2db)
 - [crates.io](https://crates.io/crates/dm-database-sqllog2db)
-- [Releases](https://github.com/guangl/sqllog2db/releases)
-- [CHANGELOG](./CHANGELOG.md)
-- [QuickStart Guide](./docs/quickstart.md)
-- [Config Reference](./docs/config-reference.md)
-- Contributing Guide _(Coming v1.6)_
-- Security Policy _(Coming v1.6)_
-- Architecture Documentation _(Coming v1.6)_
+- [发布页](https://github.com/guangl/sqllog2db/releases)
+- [变更日志](./CHANGELOG.md)
+- [快速入门指南](./docs/quickstart.md)
+- [配置参考](./docs/config-reference.md)
+- 贡献指南（即将推出）
+- 安全策略（即将推出）
+- 架构文档（即将推出）
 
-## License
+## 许可证
 
-Licensed under the Apache License, Version 2.0. See [LICENSE](./LICENSE) for details.
+基于 Apache License, Version 2.0 许可。详见 [LICENSE](./LICENSE)。

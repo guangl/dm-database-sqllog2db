@@ -125,6 +125,7 @@ impl ExporterKind {
     }
 
     #[inline]
+    #[allow(dead_code)]
     fn write_template_stats(
         &mut self,
         stats: &[crate::pipeline::TemplateStats],
@@ -286,6 +287,7 @@ impl ExporterManager {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub(crate) fn write_template_stats(
         &mut self,
         stats: &[crate::pipeline::TemplateStats],
