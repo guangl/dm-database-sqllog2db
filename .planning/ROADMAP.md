@@ -123,9 +123,9 @@ Full details: `.planning/milestones/v1.6-ROADMAP.md`
 **Plans**: 3 plans
 ```
 Plans:
-- [ ] 28-01-PLAN.md — 移除 SVG 图表模块（RM-01）
-- [ ] 28-02-PLAN.md — 移除 self-update 自更新（RM-02）
-- [ ] 28-03-PLAN.md — 移除 Shell 补全和 Man page（RM-07）
+- [x] 28-01-PLAN.md — 移除 SVG 图表模块（RM-01）
+- [x] 28-02-PLAN.md — 移除 self-update 自更新（RM-02）
+- [x] 28-03-PLAN.md — 移除 Shell 补全和 Man page（RM-07）
 ```
 
 ### Phase 29: 移除统计与摘要
@@ -249,7 +249,7 @@ Plans:
 | 25. 延后文档补全 | v1.6 | 1/1 | Complete   | 2026-05-19 |
 | 26. GitHub Pages 多页文档站 | v1.6 | 1/1 | Complete   | 2026-05-19 |
 | 27. 模板报告独立输出 | v1.6 | 2/2 | Complete   | 2026-05-19 |
-| 28. 移除图表、自更新、补全 | v1.7 | 0/3 | Not started | - |
+| 28. 移除图表、自更新、补全 | v1.7 | 3/3 | Complete    | 2026-05-19 |
 | 29. 移除统计与摘要 | v1.7 | 0/2 | Planned | - |
 | 30. 移除模板分析 | v1.7 | 0/0 | Not started | - |
 | 31. 移除断点续传 | v1.7 | 0/2 | Planned | - |

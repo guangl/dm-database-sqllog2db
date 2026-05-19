@@ -2,15 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: 项目精简
-status: planned
-last_updated: "2026-05-19"
-last_activity: 2026-05-20
+status: ready_to_plan
+last_updated: 2026-05-19T22:46:21.737Z
+last_activity: 2026-05-19 -- Phase 28 execution started
 progress:
-  total_phases: 6
+  total_phases: 5
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 13
+  completed_plans: 3
   percent: 0
+stopped_at: Phase 28 complete (3/3) — ready to discuss Phase 29
 ---
 
 # Project State
@@ -20,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-19 after v1.6 milestone)
 
 **Core value:** 用户能够精确指定"导出哪些记录的哪些字段"——过滤逻辑清晰可配置，输出结果完全可控
-**Current focus:** v1.7 项目精简 — 移除低频和非核心功能，减少依赖体积和代码复杂度
+**Current focus:** Phase 29 — remove stats digest
 
 ## Current Position
 
-Phase: 28 (Roadmap Ready)
-Plan: —
-Status: Roadmap created, awaiting `/gsd:plan-phase 28`
-Last activity: 2026-05-19 — Roadmap created for v1.7
+Phase: 29
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-05-19
 
 ### Phase Sequence
 
