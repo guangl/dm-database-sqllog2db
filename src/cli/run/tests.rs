@@ -88,10 +88,7 @@ fn test_aggregator_disabled_none_path() {
         1,
         None,
     );
-    assert!(
-        result.is_ok(),
-        "handle_run 应在无 template_analysis 配置时成功: {result:?}"
-    );
+    assert!(result.is_ok(), "handle_run 应在默认配置时成功: {result:?}");
 }
 
 #[test]
@@ -106,7 +103,7 @@ fn test_parallel_merge_consistent() {
 
     let make_cfg = |csv_file: &str| {
         let toml = format!(
-            "[sqllog]\npath = \"{logdir}\"\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n[template]\nenable = true\n",
+            "[sqllog]\npath = \"{logdir}\"\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n",
             logdir = dir.path().to_string_lossy().replace('\\', "/"),
             errlog = error_log.to_string_lossy().replace('\\', "/"),
             applog = app_log.to_string_lossy().replace('\\', "/"),
