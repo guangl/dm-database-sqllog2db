@@ -88,7 +88,7 @@ Full details: `.planning/milestones/v1.5-ROADMAP.md`
 - [x] **Phase 24: 文档中文化 & 去 SVG 化** — 6 requirements (completed 2026-05-19)
 - [x] **Phase 25: 延后文档补全** — 3 requirements (completed 2026-05-19)
 - [x] **Phase 26: GitHub Pages 多页文档站** — 1 requirement (completed 2026-05-19)
-- [ ] **Phase 27: 模板报告独立输出** — 2 requirements
+- [x] **Phase 27: 模板报告独立输出** — 2 requirements (completed 2026-05-19)
 
 ## Phase Details
 
@@ -151,8 +151,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 27-01-PLAN.md — [templates] 配置段 + 自动派生文件名 + TemplateReporter CSV 报告
-- [ ] 27-02-PLAN.md — TemplateReporter SQLite 三表范式化报告
+- [x] 27-01-PLAN.md — [templates] 配置段 + 自动派生文件名 + TemplateReporter CSV 报告
+- [x] 27-02-PLAN.md — TemplateReporter SQLite 三表范式化报告
 
 ## Progress
 
@@ -184,4 +184,4 @@ Plans:
 | 24. 文档中文化 & 去 SVG 化 | v1.6 | 3/3 | Complete   | 2026-05-19 |
 | 25. 延后文档补全 | v1.6 | 1/1 | Complete   | 2026-05-19 |
 | 26. GitHub Pages 多页文档站 | v1.6 | 1/1 | Complete   | 2026-05-19 |
-| 27. 模板报告独立输出 | v1.6 | 0/2 | Not started | - |
+| 27. 模板报告独立输出 | v1.6 | 2/2 | Complete   | 2026-05-19 |
