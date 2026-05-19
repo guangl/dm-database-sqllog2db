@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: 文档完善 & 项目展示
-status: ready_to_plan
-stopped_at: Phase 21 complete (2/2) — ready to discuss Phase 22
-last_updated: 2026-05-19T00:22:27.960Z
+status: executing
+stopped_at: Phase 21 plans created
+last_updated: "2026-05-19T00:22:51.433Z"
 progress:
   total_phases: 3
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 8
   completed_plans: 2
-  percent: 0
+  percent: 25
 ---
 
 # Project State
@@ -20,13 +20,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-18 after v1.5 milestone start)
 
 **Core value:** 用户能够精确指定"导出哪些记录的哪些字段"——过滤逻辑清晰可配置，输出结果完全可控
-**Current focus:** Phase 22 — github pages
+**Current focus:** Phase 22 — GitHub Pages 落地页 + 部署流水线
 
 ## Current Position
 
-Phase: 22
-Plan: Not started
-Status: Ready to plan
+Phase: 22 (GitHub Pages 落地页 + 部署流水线) — EXECUTING
+Plan: 1 of 2
+Status: Executing Phase 22
 
 Progress: [                    ] 0%
 
