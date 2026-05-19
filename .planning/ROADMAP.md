@@ -158,9 +158,9 @@ Plans:
 **Plans**: 3 plans
 ```
 Plans:
-- [ ] 30-01-PLAN.md — ...（Phase 30 计划）
-- [ ] 30-02-PLAN.md — ...（Phase 30 计划）
-- [ ] 30-03-PLAN.md — ...（Phase 30 计划）
+- [ ] 30-01-PLAN.md — 配置层清理：删除 pipeline/mod.rs 中模块声明/TemplateConfig/辅助函数、config 层 template 引用、init/show_config template 段、Cargo.toml hdrhistogram
+- [ ] 30-02-PLAN.md — 运行时代码清理：删除 aggregator.rs/template_reporter.rs/companion.rs，清理 cli/run 热循环+导出器层的 write_template_stats
+- [ ] 30-03-PLAN.md — 测试清理+编译验证：删除 5 个测试文件中所有模板相关测试，全链路 cargo build+test+clippy+fmt 通过
 ```
 
 ### Phase 31: 移除断点续传
