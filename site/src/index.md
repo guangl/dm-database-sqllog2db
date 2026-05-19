@@ -624,6 +624,8 @@ The asciicast file is also available for download: [demo.cast](asciicast/demo.ca
 - [Changelog](https://github.com/guangl/sqllog2db/blob/main/CHANGELOG.md)
 - [License](https://github.com/guangl/sqllog2db/blob/main/LICENSE) — Apache-2.0
 - [README](https://github.com/guangl/sqllog2db) — Technical reference and QuickStart
+- [QuickStart Guide](https://github.com/guangl/sqllog2db/blob/main/docs/quickstart.md) — Step-by-step usage scenarios
+- [Config Reference](https://github.com/guangl/sqllog2db/blob/main/docs/config-reference.md) — All configuration options
 
 ---
 

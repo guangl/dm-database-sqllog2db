@@ -199,9 +199,9 @@ Graceful shutdown via Ctrl+C stops after the current batch completes. Exit codes
 - [CHANGELOG](./CHANGELOG.md)
 - [QuickStart Guide](./docs/quickstart.md)
 - [Config Reference](./docs/config-reference.md)
-- [Contributing Guide](./CONTRIBUTING.md) _(Coming v1.6)_
-- [Security Policy](./SECURITY.md) _(Coming v1.6)_
-- [Architecture Documentation](./docs/architecture.md) _(Coming v1.6)_
+- Contributing Guide _(Coming v1.6)_
+- Security Policy _(Coming v1.6)_
+- Architecture Documentation _(Coming v1.6)_
 
 ## License
 
