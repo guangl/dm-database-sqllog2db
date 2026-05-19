@@ -1,5 +1,4 @@
-use clap::{CommandFactory, Parser, Subcommand};
-use clap_complete::{Shell, generate};
+use clap::{Parser, Subcommand};
 
 /// SQL log exporter tool for DM database
 #[derive(Debug, Parser)]
@@ -194,22 +193,4 @@ pub(crate) enum Commands {
         #[arg(long = "state-file", value_name = "PATH", requires = "resume")]
         state_file: Option<String>,
     },
-    /// Generate shell completion scripts
-    Completions {
-        /// Shell type to generate completions for
-        #[arg(value_enum)]
-        shell: Shell,
-    },
-    /// Print the man page to stdout
-    Man,
-}
-
-impl Cli {
-    /// Generate shell completions
-    #[allow(dead_code)]
-    pub(crate) fn generate_completions(shell: Shell) {
-        let mut cmd = Cli::command();
-        let bin_name = cmd.get_name().to_string();
-        generate(shell, &mut cmd, bin_name, &mut std::io::stdout());
-    }
 }

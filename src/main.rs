@@ -42,7 +42,7 @@ fn exit_code_for(e: &error::Error) -> i32 {
     }
 }
 
-/// Initialize simple console logging for init/completions commands
+/// Initialize simple console logging for init commands
 fn init_simple_logging(verbose: bool, quiet: bool) {
     let level = if verbose {
         "debug"
@@ -137,17 +137,6 @@ fn run() -> Result<()> {
     match &cli.command {
         Some(cli::opts::Commands::Init { output, force }) => {
             cli::init::handle_init(output, *force, lang)
-        }
-        Some(cli::opts::Commands::Completions { shell }) => {
-            cli::opts::Cli::generate_completions(*shell);
-            Ok(())
-        }
-        Some(cli::opts::Commands::Man) => {
-            use clap::CommandFactory;
-            let cmd = cli::opts::Cli::command();
-            let man = clap_mangen::Man::new(cmd);
-            man.render(&mut std::io::stdout())?;
-            Ok(())
         }
         Some(cli::opts::Commands::Run {
             config,

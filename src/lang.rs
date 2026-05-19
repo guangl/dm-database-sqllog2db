@@ -93,11 +93,6 @@ pub(crate) fn apply_zh(cmd: Command) -> Command {
         .mut_subcommand("show-config", zh_show_config)
         .mut_subcommand("stats", zh_stats)
         .mut_subcommand("digest", zh_digest)
-        .mut_subcommand("completions", |s| {
-            s.about("生成 Shell 自动补全脚本")
-                .mut_arg("shell", |a| a.help("目标 Shell 类型"))
-        })
-        .mut_subcommand("man", |s| s.about("将 man page 输出到 stdout"))
 }
 
 fn zh_common_config_args(s: Command) -> Command {
