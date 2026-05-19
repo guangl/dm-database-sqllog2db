@@ -7,7 +7,7 @@ pub(crate) use normalizer::compute_normalized;
 
 pub mod fingerprint;
 pub(crate) use fingerprint::fingerprint;
-pub(crate) use fingerprint::normalize_template;
+pub(crate) use normalizer::normalize_template;
 
 pub mod aggregator;
 pub(crate) use aggregator::TemplateAggregator;

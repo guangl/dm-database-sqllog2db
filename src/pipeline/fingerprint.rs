@@ -1,3 +1,6 @@
+// 整个文件即将在 Task 2 删除（normalize_template 已迁移到 normalizer.rs）
+#![allow(dead_code)]
+
 /// 字节查找表：需要特殊处理的字节（单引号、ASCII 空白、ASCII 数字、`-`、`/`）。
 /// `-` 和 `/` 用于 normalize 路径的注释检测；fingerprint 路径下落入默认分支，行为不变。
 const NEEDS_SPECIAL_NORM: [bool; 256] = {
