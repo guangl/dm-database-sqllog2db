@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: 项目精简
-status: roadmapping
+status: planned
 last_updated: "2026-05-19"
-last_activity: 2026-05-19
+last_activity: 2026-05-20
 progress:
   total_phases: 6
   completed_phases: 0

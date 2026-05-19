@@ -193,9 +193,9 @@ Plans:
 **Plans**: 3 plans
 ```
 Plans:
-- [ ] 32-01-PLAN.md — ...（Phase 32 计划）
-- [ ] 32-02-PLAN.md — ...（Phase 32 计划）
-- [ ] 32-03-PLAN.md — ...（Phase 32 计划）
+- [ ] 32-01-PLAN.md — 清理 stale mod 声明 + Config 结构体字段 + Cargo.toml 依赖
+- [ ] 32-02-PLAN.md — 清理 Exporter trait 死代码 + CLI opts 变体 + run 模块残留
+- [ ] 32-03-PLAN.md — 清理测试死代码 + init/show_config 模板 + 全链路验证
 ```
 
 ### Phase 33: 核心功能验证
