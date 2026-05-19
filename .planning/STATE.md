@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.6
-milestone_name: 文档中文化 & 延后需求补全
-status: complete
-stopped_at: v1.6 milestone archived
-last_updated: "2026-05-19T14:20:00.000Z"
-last_activity: 2026-05-19 -- v1.6 milestone completed and archived
+milestone: v1.7
+milestone_name: 项目精简
+status: planning
+last_updated: "2026-05-19T14:40:57.027Z"
+last_activity: 2026-05-19
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 7
-  completed_plans: 7
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,7 +24,10 @@ See: .planning/PROJECT.md (updated 2026-05-19 after v1.6 milestone)
 
 ## Current Position
 
-All v1.6 phases complete. Milestone archived to `.planning/milestones/v1.6-ROADMAP.md`.
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-05-19 — Milestone v1.7 started
 
 ### Phase Sequence
 

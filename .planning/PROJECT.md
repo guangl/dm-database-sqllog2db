@@ -2,11 +2,20 @@
 
 ## Current State
 
-sqllog2db 完成七个里程碑迭代（v1.0–v1.6），具备完整的 SQL 模板分析、SVG 可视化、嵌套配置模型、模块化代码架构，全中文项目文档和 GitHub Pages mdBook 多页文档站。模板报告支持独立的 CSV 和 SQLite 三表范式化输出。
+sqllog2db 完成七个里程碑迭代（v1.0–v1.6），具备完整的 SQL 模板分析、SVG 可视化、嵌套配置模型、模块化代码架构，全中文项目文档和 GitHub Pages mdBook 多页文档站。v1.7 进入精简阶段。
 
-## Next Milestone
+## Current Milestone: v1.7 项目精简
 
-待规划。可能的延后需求：PAGES-F02 Playground / WASM 在线演示。
+**Goal:** 移除低频和非核心功能，减少依赖体积和代码复杂度，保留核心解析导出能力。
+
+**Target features:**
+- 移除 SVG 图表模块（charts/*, plotters）
+- 移除 self-update 自更新（update.rs, self_update, reqwest, rustls）
+- 移除 stats 统计命令（cli/stats.rs, serde_json）
+- 移除 digest 摘要命令（cli/digest.rs, pipeline/fingerprint.rs）
+- 移除模板分析+报告（aggregator, template_reporter, hdrhistogram）
+- 移除断点续传（resume.rs, [resume] 配置）
+- 移除 Shell 补全 + Man page（clap_complete, clap_mangen）
 
 ## Previous Milestones
 
@@ -143,4 +152,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-19 after v1.6 milestone*
+*Last updated: 2026-05-19 — v1.7 milestone started*
