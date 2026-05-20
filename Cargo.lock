@@ -448,7 +448,6 @@ dependencies = [
  "rayon",
  "regex",
  "rusqlite",
- "ryu",
  "serde",
  "smallvec",
  "tempfile",

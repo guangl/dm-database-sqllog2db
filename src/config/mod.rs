@@ -13,7 +13,7 @@ use crate::pipeline::{FiltersFeature, NormalizeConfig, OutputConfig};
 use serde::Deserialize;
 use std::path::Path;
 
-const PIPELINE_MIGRATION_HINT: &str = "配置格式已升级，请迁移以下字段：\n  [pipeline.charts] → [charts]\n  [pipeline.normalize] → [replace_parameters]\n  \
+const PIPELINE_MIGRATION_HINT: &str = "配置格式已升级，请迁移以下字段：\n  [pipeline.normalize] → [replace_parameters]\n  \
      [pipeline.filters.*] → [filter.*]\n  [pipeline.fields] → [output.fields]\n\
      详见 .planning/phases/18-template-chart-nesting/18-CONTEXT.md";
 

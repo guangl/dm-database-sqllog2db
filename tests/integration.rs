@@ -601,10 +601,6 @@ fn test_validate_rejects_legacy_pipeline_template_analysis() {
     );
     let err_msg = result.unwrap_err().to_string();
     assert!(
-        err_msg.contains("[pipeline.charts] → [charts]"),
-        "error must contain migration hint for charts; got: {err_msg}"
-    );
-    assert!(
         err_msg.contains("[pipeline.filters.*] → [filter.*]"),
         "error must contain migration hint for filters; got: {err_msg}"
     );
@@ -626,10 +622,6 @@ fn test_validate_rejects_legacy_pipeline_filters_section() {
         "legacy [pipeline.filters] must be rejected by validate()"
     );
     let err_msg = result.unwrap_err().to_string();
-    assert!(
-        err_msg.contains("[pipeline.charts] → [charts]"),
-        "error must contain migration hint for charts; got: {err_msg}"
-    );
     assert!(
         err_msg.contains("[pipeline.normalize] → [replace_parameters]"),
         "error must contain migration hint for normalize; got: {err_msg}"
