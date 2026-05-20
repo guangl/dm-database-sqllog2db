@@ -67,13 +67,11 @@ impl Config {
     fn validate_filter(&self) -> Result<()> {
         if let Some(filters) = &self.filter {
             if filters.enable {
-                crate::pipeline::filters::CompiledMetaFilters::try_from_include_exclude(
+                crate::pipeline::CompiledMetaFilters::try_from_include_exclude(
                     &filters.include,
                     &filters.exclude,
                 )?;
-                crate::pipeline::filters::CompiledSqlFilters::try_from_sql_filters(
-                    &filters.record_sql,
-                )?;
+                crate::pipeline::CompiledSqlFilters::try_from_sql_filters(&filters.record_sql)?;
             }
         }
         Ok(())
