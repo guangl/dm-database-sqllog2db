@@ -2,7 +2,7 @@
 
 ## Current State
 
-sqllog2db 完成七个里程碑迭代（v1.0–v1.6），具备完整的 SQL 模板分析、SVG 可视化、嵌套配置模型、模块化代码架构，全中文项目文档和 GitHub Pages mdBook 多页文档站。v1.7 进入精简阶段。Phase 28–29 完成，移除了 SVG 图表、self-update、Shell 补全、Man page、stats 和 digest。
+sqllog2db 完成七个里程碑迭代（v1.0–v1.6），具备完整的 SQL 模板分析、SVG 可视化、嵌套配置模型、模块化代码架构，全中文项目文档和 GitHub Pages mdBook 多页文档站。v1.7 进入精简阶段。Phase 28–31 完成，移除了 SVG 图表、self-update、Shell 补全、Man page、stats、digest 和断点续传。
 
 ## Current Milestone: v1.7 项目精简
 
@@ -14,8 +14,8 @@ sqllog2db 完成七个里程碑迭代（v1.0–v1.6），具备完整的 SQL 模
 - ✅ 移除 Shell 补全 + Man page（clap_complete, clap_mangen）— Phase 28
 - ✅ 移除 stats 统计命令（cli/stats.rs）— Phase 29
 - ✅ 移除 digest 摘要命令（cli/digest.rs, pipeline/fingerprint.rs, serde_json）— Phase 29
+- ✅ 移除断点续传（resume.rs, [resume] 配置）— Phase 31
 - 移除模板分析+报告（aggregator, template_reporter, hdrhistogram）
-- 移除断点续传（resume.rs, [resume] 配置）
 
 ## Previous Milestones
 
