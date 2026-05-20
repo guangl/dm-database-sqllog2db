@@ -72,6 +72,7 @@ fn cfg_pipeline_passthrough(sqllog_dir: &Path, bench_dir: &Path) -> Config {
         "{base}
 [filter]
 enable = true
+
 [filter.include]
 start_ts = \"2000-01-01\"
 ",
@@ -88,6 +89,7 @@ fn cfg_trxid_small(sqllog_dir: &Path, bench_dir: &Path) -> Config {
         "{base}
 [filter]
 enable = true
+
 [filter.include]
 trxids = [{ids}]
 ",
@@ -105,6 +107,7 @@ fn cfg_trxid_large(sqllog_dir: &Path, bench_dir: &Path) -> Config {
         "{base}
 [filter]
 enable = true
+
 [filter.include]
 trxids = [{ids}]
 ",
@@ -121,6 +124,7 @@ fn cfg_indicator_prescan(sqllog_dir: &Path, bench_dir: &Path) -> Config {
         "{base}
 [filter]
 enable = true
+
 [filter.indicators]
 min_runtime_ms = 2000
 ",
@@ -137,6 +141,7 @@ fn cfg_exclude_passthrough(sqllog_dir: &Path, bench_dir: &Path) -> Config {
         "{base}
 [filter]
 enable = true
+
 [filter.exclude]
 users = [\"BENCH_EXCLUDE\"]
 ",
@@ -152,6 +157,7 @@ fn cfg_exclude_active(sqllog_dir: &Path, bench_dir: &Path) -> Config {
         "{base}
 [filter]
 enable = true
+
 [filter.exclude]
 users = [\"BENCH\"]
 ",

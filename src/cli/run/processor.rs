@@ -12,7 +12,7 @@ use std::time::Instant;
 
 /// 处理单个日志文件，返回本文件实际导出的记录数。
 ///
-/// `limit`: 最多再导出多少条记录（跨文件的剩余配额），`None` 表示不限制。
+/// `remaining`: 最多再导出多少条记录（跨文件的剩余配额），`None` 表示不限制。
 /// `reset_pb`: 是否在文件开始时重置进度条计数；并行模式传 `false`，避免多线程互相重置。
 pub(super) fn process_log_file(
     file_path: &str,
@@ -21,7 +21,7 @@ pub(super) fn process_log_file(
     exporter_manager: &mut ExporterManager,
     pipeline: &Pipeline,
     pb: &ProgressBar,
-    limit: Option<usize>,
+    remaining: Option<usize>,
     interrupted: &Arc<AtomicBool>,
     do_normalize: bool,
     placeholder_override: Option<bool>,
@@ -120,7 +120,7 @@ pub(super) fn process_log_file(
                             };
 
                             // 先检查配额，再聚合（CR-02：避免对未导出记录计入统计）
-                            if let Some(remaining) = limit {
+                            if let Some(remaining) = remaining {
                                 if records_in_file >= remaining {
                                     break 'outer;
                                 }
