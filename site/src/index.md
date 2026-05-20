@@ -6,7 +6,7 @@
 [![Release](https://img.shields.io/github/v/release/guangl/sqllog2db?style=flat-square&logo=github&logoColor=white&label=release)](https://github.com/guangl/sqllog2db/releases)
 [![Rust 1.85+](https://img.shields.io/badge/rust-1.85%2B-orange?style=flat-square&logo=rust&logoColor=white)](https://www.rust-lang.org/)
 
-**达梦数据库 SQL 日志高性能解析工具** — 流式处理百万级记录，常量内存占用，支持 CSV/SQLite 导出，内置 SQL 模板分析与图表。
+**达梦数据库 SQL 日志高性能解析工具** — 流式处理百万级记录，常量内存占用，支持 CSV/SQLite 导出。
 
 ---
 

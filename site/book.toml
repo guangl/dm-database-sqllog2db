@@ -7,7 +7,6 @@ language = "zh"
 [output.html]
 default-theme = "ayu"
 preferred-dark-theme = "ayu"
-additional-css = ["theme/custom.css"]
 git-repository-url = "https://github.com/guangl/sqllog2db"
 
 [output.html.fold]
