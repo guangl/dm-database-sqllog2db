@@ -9,7 +9,7 @@ use std::path::Path;
 use std::sync::{Arc, LazyLock, Mutex};
 
 // 使用 LazyLock 缓存日志级别映射表，避免每次查找时重新构建
-// 仅在 binary crate (main.rs) 和 #[cfg(test)] 中使用；lib crate 生产代码不直接引用。
+// 仅在 #[cfg(test)] 和 main.rs 中使用。
 #[allow(dead_code)]
 static LOG_LEVEL_MAP: LazyLock<HashMap<&'static str, LevelFilter>> = LazyLock::new(|| {
     let mut map = HashMap::with_capacity(5);
@@ -25,7 +25,7 @@ static LOG_LEVEL_MAP: LazyLock<HashMap<&'static str, LevelFilter>> = LazyLock::n
 ///
 /// `log_to_stdout`: 是否同时向 stdout 输出日志。进度条模式下应传 `false`，
 /// 避免日志输出干扰进度条渲染。
-/// 仅在 binary crate (main.rs) 和 #[cfg(test)] 中使用；lib crate 生产代码不直接调用。
+/// 仅在 #[cfg(test)] 和 main.rs 中使用。
 #[allow(dead_code)]
 pub fn init_logging(config: &LoggingConfig, log_to_stdout: bool) -> Result<()> {
     // 解析日志级别
@@ -154,7 +154,7 @@ pub fn init_logging(config: &LoggingConfig, log_to_stdout: bool) -> Result<()> {
 }
 
 /// 解析日志级别字符串
-/// 仅在 `init_logging` 中被调用；`init_logging` 本身只在 binary crate 和 `#[cfg(test)]` 中使用。
+/// 仅在 `init_logging` 中被调用；`init_logging` 本身只在 main.rs 和 `#[cfg(test)]` 中使用。
 #[allow(dead_code)]
 fn parse_log_level(level_str: &str) -> Result<LevelFilter> {
     let lower = level_str.to_lowercase();
