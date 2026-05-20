@@ -213,9 +213,9 @@ Plans:
 **Plans**: 3 plans (all Wave 1, parallel)
 ```
 Plans:
-- [ ] 33-01-PLAN.md — 静态检查（cargo check + build --release + clippy + fmt）
-- [ ] 33-02-PLAN.md — 自动化测试（cargo test + cargo bench + baseline 对比）
-- [ ] 33-03-PLAN.md — CLI 冒烟验证（Shell 编排 + 数据校验 + VERIFICATION-CHECKLIST.md）
+- [x] 33-01-PLAN.md — 静态检查（cargo check + build --release + clippy + fmt）
+- [x] 33-02-PLAN.md — 自动化测试（cargo test + cargo bench + baseline 对比）
+- [x] 33-03-PLAN.md — CLI 冒烟验证（Shell 编排 + 数据校验 + VERIFICATION-CHECKLIST.md）
 ```
 
 ## Progress
@@ -254,4 +254,4 @@ Plans:
 | 30. 移除模板分析 | v1.7 | 0/0 | Not started | - |
 | 31. 移除断点续传 | v1.7 | 2/2 | Complete    | 2026-05-20 |
 | 32. 项目结构清理 | v1.7 | 3/3 | Complete    | 2026-05-20 |
-| 33. 核心功能验证 | v1.7 | 0/3 | Planned | - |
+| 33. 核心功能验证 | v1.7 | 3/3 | Complete   | 2026-05-20 |
