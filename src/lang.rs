@@ -6,9 +6,7 @@
 //!   3. System `LANG` / `LC_ALL` / `LANGUAGE` environment variables
 //!   4. Default: English
 //!
-//! `detect`, `apply_zh` 及各个 `zh_*` 辅助函数仅在 binary crate (main.rs) 中使用；
-//! lib crate 生产代码不调用。`#[cfg(test)]` 中的单元测试直接引用当前模块 items，编译不受影响。
-#![allow(dead_code)]
+//! `detect`, `apply_zh` 及各个 `zh_*` 辅助函数仅在 binary crate (main.rs) 中使用。
 
 use clap::Command;
 
@@ -31,6 +29,7 @@ impl Lang {
 }
 
 /// Detect language from environment variables only (no CLI args).
+#[allow(dead_code)]
 fn from_env() -> Lang {
     if let Ok(v) = std::env::var("SQLLOG2DB_LANG") {
         if let Some(lang) = Lang::parse(&v) {
@@ -49,6 +48,7 @@ fn from_env() -> Lang {
 }
 
 /// Pre-scan raw CLI args for `--lang <value>` before clap parses.
+#[allow(dead_code)]
 fn from_args(args: &[String]) -> Option<Lang> {
     let mut iter = args.iter().peekable();
     while let Some(arg) = iter.next() {
@@ -64,6 +64,7 @@ fn from_args(args: &[String]) -> Option<Lang> {
 
 /// Determine the effective language: CLI flag > env var > system locale > English.
 #[must_use]
+#[allow(dead_code)]
 pub(crate) fn detect(args: &[String]) -> Lang {
     from_args(args).unwrap_or_else(from_env)
 }
@@ -73,6 +74,7 @@ pub(crate) fn detect(args: &[String]) -> Lang {
 /// Apply Chinese help strings to the clap `Command` tree.
 /// Called only when `lang == Lang::Zh`; the default command is already English.
 #[must_use]
+#[allow(dead_code)]
 pub(crate) fn apply_zh(cmd: Command) -> Command {
     cmd.about("解析达梦数据库 SQL 日志并导出到 CSV / SQLite")
         .long_about(
@@ -93,6 +95,7 @@ pub(crate) fn apply_zh(cmd: Command) -> Command {
         .mut_subcommand("show-config", zh_show_config)
 }
 
+#[allow(dead_code)]
 fn zh_common_config_args(s: Command) -> Command {
     s.mut_arg("config", |a| a.help("配置文件路径"))
         .mut_arg("set", |a| {
@@ -100,6 +103,7 @@ fn zh_common_config_args(s: Command) -> Command {
         })
 }
 
+#[allow(dead_code)]
 fn zh_run(s: Command) -> Command {
     zh_common_config_args(s)
         .about("运行日志导出任务")
@@ -115,16 +119,19 @@ fn zh_run(s: Command) -> Command {
         })
 }
 
+#[allow(dead_code)]
 fn zh_init(s: Command) -> Command {
     s.about("生成默认配置文件")
         .mut_arg("output", |a| a.help("输出配置文件路径"))
         .mut_arg("force", |a| a.help("若文件已存在则强制覆盖"))
 }
 
+#[allow(dead_code)]
 fn zh_validate(s: Command) -> Command {
     zh_common_config_args(s).about("验证配置文件是否合法")
 }
 
+#[allow(dead_code)]
 fn zh_show_config(s: Command) -> Command {
     zh_common_config_args(s)
         .about("显示当前生效配置（含 --set 覆盖后的值）")
