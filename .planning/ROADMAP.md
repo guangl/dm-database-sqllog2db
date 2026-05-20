@@ -193,7 +193,7 @@ Plans:
 **Plans**: 3 plans
 ```
 Plans:
-- [ ] 32-01-PLAN.md — 清理 stale mod 声明 + Config 结构体字段 + Cargo.toml 依赖
+- [x] 32-01-PLAN.md — 清理 stale mod 声明 + Config 结构体字段 + Cargo.toml 依赖
 - [ ] 32-02-PLAN.md — 清理 Exporter trait 死代码 + CLI opts 变体 + run 模块残留
 - [ ] 32-03-PLAN.md — 清理测试死代码 + init/show_config 模板 + 全链路验证
 ```
@@ -253,5 +253,5 @@ Plans:
 | 29. 移除统计与摘要 | v1.7 | 2/2 | Complete    | 2026-05-19 |
 | 30. 移除模板分析 | v1.7 | 0/0 | Not started | - |
 | 31. 移除断点续传 | v1.7 | 2/2 | Complete    | 2026-05-20 |
-| 32. 项目结构清理 | v1.7 | 0/0 | Not started | - |
+| 32. 项目结构清理 | v1.7 | 1/3 | In Progress|  |
 | 33. 核心功能验证 | v1.7 | 0/0 | Not started | - |
