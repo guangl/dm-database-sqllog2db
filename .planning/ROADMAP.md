@@ -97,14 +97,15 @@ Full details: `.planning/milestones/v1.6-ROADMAP.md`
 </details>
 
 <details open>
-<summary>🚧 v1.7 项目精简 (Phases 28–33) — IN PROGRESS</summary>
+<summary>🚧 v1.7 项目精简 (Phases 28–34) — IN PROGRESS</summary>
 
 - [x] **Phase 28: 移除图表、自更新、补全** — 移除三个独立无依赖的外部功能模块
 - [x] **Phase 29: 移除统计与摘要** — 移除 stats 和 digest 子命令及其依赖
 - [x] **Phase 30: 移除模板分析** — 移除模板聚合、报告及相关配置
 - [x] **Phase 31: 移除断点续传** — 移除 resume 模块、配置和 --resume 选项
 - [x] **Phase 32: 项目结构清理** — 清理空目录、mod 声明、未使用代码
-- [ ] **Phase 33: 核心功能验证** — 验证精简后核心功能完整可用
+- [x] **Phase 33: 核心功能验证** — 验证精简后核心功能完整可用
+- [ ] **Phase 34: 修复审计缺口** — 关闭 v1.7 审计发现的遗留问题
 
 </details>
 
@@ -218,6 +219,20 @@ Plans:
 - [x] 33-03-PLAN.md — CLI 冒烟验证（Shell 编排 + 数据校验 + VERIFICATION-CHECKLIST.md）
 ```
 
+### Phase 34: 修复审计缺口
+**Goal**: 关闭 v1.7-MILESTONE-AUDIT.md 发现的所有遗留问题：死代码移除、配置验证、缺失的 VERIFICATION.md
+**Depends on**: Phase 33
+**Requirements**: RM-05, RM-08
+**Success Criteria** (what must be TRUE):
+  1. `normalize_template` 死代码（normalizer.rs:462）及关联测试已移除
+  2. `[template]` 配置段被显式拒绝（与 `[pipeline]` 行为一致）
+  3. Phase 30 创建 VERIFICATION.md 验证移除结果
+  4. RM-05 和 RM-08 要求全部满足
+  5. `cargo build --release` 通过
+  6. `cargo clippy --all-targets -- -D warnings` 零警告
+  7. `cargo test` 全部通过
+**Plans**: TBD
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -255,3 +270,4 @@ Plans:
 | 31. 移除断点续传 | v1.7 | 2/2 | Complete    | 2026-05-20 |
 | 32. 项目结构清理 | v1.7 | 3/3 | Complete    | 2026-05-20 |
 | 33. 核心功能验证 | v1.7 | 3/3 | Complete    | 2026-05-20 |
+| 34. 修复审计缺口 | v1.7 | 0/0 | Not started | - |
