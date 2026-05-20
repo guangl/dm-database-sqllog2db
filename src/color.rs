@@ -5,7 +5,7 @@ static USE_COLOR: OnceLock<bool> = OnceLock::new();
 
 /// 在解析完 CLI flags 后调用一次，明确设置颜色开关。
 /// 若已初始化（例如测试环境）则忽略。
-/// 仅在 binary crate (main.rs) 中调用；lib crate 生产代码不会直接引用此函数。
+/// init 仅在 binary crate (main.rs) 中使用；lib crate 编译时视为 dead code。
 #[allow(dead_code)]
 pub fn init(no_color: bool) {
     let _ = USE_COLOR.set(

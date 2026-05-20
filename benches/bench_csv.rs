@@ -35,9 +35,6 @@ fn make_config(sqllog_dir: &Path, bench_dir: &Path) -> Config {
 [sqllog]
 directory = "{sqllog}"
 
-[error]
-file = "{dir}/errors.log"
-
 [logging]
 file = "{dir}/app.log"
 level = "warn"
