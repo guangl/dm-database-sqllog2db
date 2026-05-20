@@ -30,8 +30,6 @@ fn test_include_performance_metrics_false_csv_excludes_pm_columns() {
         true,
         &Arc::new(AtomicBool::new(false)),
         80,
-        false,
-        None,
         1,
         None,
     )
@@ -83,8 +81,6 @@ fn test_aggregator_disabled_none_path() {
         true,
         &Arc::new(AtomicBool::new(false)),
         80,
-        false,
-        None,
         1,
         None,
     );
@@ -125,8 +121,6 @@ fn test_parallel_merge_consistent() {
         true,
         &Arc::new(AtomicBool::new(false)),
         80,
-        false,
-        None,
         1,
         None,
     );
@@ -145,8 +139,6 @@ fn test_parallel_merge_consistent() {
         true,
         &Arc::new(AtomicBool::new(false)),
         80,
-        false,
-        None,
         4,
         None,
     );
@@ -187,8 +179,6 @@ fn test_no_template_stats_when_disabled() {
         true,
         &Arc::new(AtomicBool::new(false)),
         80,
-        false,
-        None,
         1,
         None,
     )

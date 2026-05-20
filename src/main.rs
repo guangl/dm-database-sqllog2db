@@ -12,7 +12,6 @@ mod lang;
 mod logging;
 mod parser;
 mod pipeline;
-mod resume;
 
 use config::Config;
 use error::Result;
@@ -140,8 +139,6 @@ fn run() -> Result<()> {
             to,
             output,
             progress_interval,
-            resume,
-            state_file,
             jobs,
         }) => {
             let mut cfg = load_config(config)?;
@@ -188,8 +185,6 @@ fn run() -> Result<()> {
                 cli.quiet,
                 &interrupted,
                 *progress_interval,
-                *resume,
-                state_file.as_deref(),
                 jobs,
                 compiled_filters, // 新增：传递预编译结果
             )

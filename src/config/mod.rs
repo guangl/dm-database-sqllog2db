@@ -1,13 +1,11 @@
 mod apply_one;
 pub mod exporter;
 pub mod logging;
-pub mod resume;
 pub mod sqllog;
 mod validate;
 
 pub use exporter::{CsvExporterConfig, ExporterConfig, SqliteExporterConfig};
 pub use logging::{LOG_LEVELS, LoggingConfig};
-pub use resume::ResumeConfig;
 pub use sqllog::SqllogConfig;
 
 use crate::error::{ConfigError, Error, Result};
@@ -27,8 +25,6 @@ pub struct Config {
     pub logging: LoggingConfig,
     #[serde(default)]
     pub exporter: ExporterConfig,
-    #[serde(default)]
-    pub resume: ResumeConfig,
     #[serde(default)]
     pub replace_parameters: Option<NormalizeConfig>,
     #[serde(default)]

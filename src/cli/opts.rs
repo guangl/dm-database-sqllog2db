@@ -67,12 +67,6 @@ pub(crate) enum Commands {
         /// Progress bar refresh interval in milliseconds
         #[arg(long = "progress-interval", default_value = "80", value_name = "MS")]
         progress_interval: u64,
-        /// Skip files already processed in a previous run (tracked by state file)
-        #[arg(long = "resume")]
-        resume: bool,
-        /// Override the state file path used by --resume (default: `.sqllog2db_state.toml`)
-        #[arg(long = "state-file", value_name = "PATH", requires = "resume")]
-        state_file: Option<String>,
         /// Number of parallel threads for processing multiple files (default: CPU count)
         #[arg(short = 'j', long = "jobs", value_name = "N")]
         jobs: Option<usize>,

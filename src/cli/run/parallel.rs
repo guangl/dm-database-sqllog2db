@@ -1,4 +1,3 @@
-use crate::color;
 use crate::error::{Error, Result};
 use crate::exporter::{CsvExporter, ExporterManager};
 use crate::pipeline::normalizer::ParamBuffer;
@@ -22,8 +21,7 @@ pub(super) fn concat_csv_parts(
     use std::fs::OpenOptions;
     use std::io::BufReader;
 
-    // 无任何 part（如 resume 模式下全部文件已跳过）时不触碰输出文件，
-    // 避免 overwrite=true 把已有数据清空。
+    // 无任何 part 时不触碰输出文件，避免 overwrite=true 把已有数据清空。
     if parts.is_empty() {
         return Ok(());
     }
@@ -76,8 +74,7 @@ pub(super) fn process_csv_parallel(
     jobs: usize,
     pb: &ProgressBar,
     interrupted: &Arc<AtomicBool>,
-    resume_state: Option<&crate::resume::ResumeState>,
-    quiet: bool,
+    _quiet: bool,
     do_normalize: bool,
     placeholder_override: Option<bool>,
     field_mask: FieldMask,
@@ -132,21 +129,6 @@ pub(super) fn process_csv_parallel(
             .par_iter()
             .enumerate()
             .map(|(idx, file)| {
-                if let Some(state) = resume_state {
-                    if state.is_processed(file) {
-                        if !quiet {
-                            pb.println(format!(
-                                "{} [{}/{}] {} — skipped (already processed)",
-                                color::dim("⏭"),
-                                idx + 1,
-                                total_files,
-                                file.display(),
-                            ));
-                        }
-                        return Ok(None);
-                    }
-                }
-
                 if interrupted.load(Ordering::Relaxed) {
                     return Ok(None);
                 }

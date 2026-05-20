@@ -113,10 +113,6 @@ fn zh_run(s: Command) -> Command {
         .mut_arg("progress_interval", |a| {
             a.help("进度条刷新间隔（毫秒，默认 80）")
         })
-        .mut_arg("resume", |a| a.help("跳过上次已完整处理的文件（断点续传）"))
-        .mut_arg("state_file", |a| {
-            a.help("覆盖 --resume 使用的状态文件路径（默认：.sqllog2db_state.toml）")
-        })
 }
 
 fn zh_init(s: Command) -> Command {

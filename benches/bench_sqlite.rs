@@ -84,8 +84,6 @@ fn bench_sqlite_export(c: &mut Criterion) {
                     true, // quiet=true: 排除进度条 I/O 对吞吐量测量的干扰
                     &Arc::new(AtomicBool::new(false)),
                     80,
-                    false,
-                    None,
                     1,
                     None, // compiled_filters
                 )
@@ -123,8 +121,6 @@ fn bench_sqlite_real_file(c: &mut Criterion) {
                 true, // quiet=true：排除进度条 I/O
                 &Arc::new(AtomicBool::new(false)),
                 80,
-                false,
-                None,
                 1,
                 None, // compiled_filters
             )
@@ -158,8 +154,6 @@ fn bench_sqlite_single_row(c: &mut Criterion) {
                     true,
                     &Arc::new(AtomicBool::new(false)),
                     80,
-                    false,
-                    None,
                     1,
                     None, // compiled_filters
                 )

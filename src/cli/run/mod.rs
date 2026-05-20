@@ -30,8 +30,6 @@ pub fn handle_run(
     quiet: bool,
     interrupted: &Arc<AtomicBool>,
     progress_interval: u64,
-    resume: bool,
-    state_file_override: Option<&str>,
     jobs: usize,
     compiled_filters: Option<(CompiledMetaFilters, CompiledSqlFilters)>,
 ) -> Result<()> {
@@ -45,19 +43,6 @@ pub fn handle_run(
         warn!("No log files found");
         return Ok(());
     }
-    let state_path =
-        std::path::PathBuf::from(state_file_override.unwrap_or(&cfg.resume.state_file));
-    let mut resume_state = if resume {
-        let state = crate::resume::ResumeState::load(&state_path);
-        info!(
-            "Resume mode: state file {}, {} files previously processed",
-            state_path.display(),
-            state.processed_count()
-        );
-        Some(state)
-    } else {
-        None
-    };
     // 仅当有事务级过滤器时才克隆配置（避免常规路径的额外分配）
     let owned_cfg;
     let final_cfg: &Config = if cfg
@@ -119,7 +104,6 @@ pub fn handle_run(
             jobs,
             &pb,
             interrupted,
-            resume_state.as_ref(),
             quiet,
             do_normalize,
             placeholder_override,
@@ -129,14 +113,6 @@ pub fn handle_run(
         )?;
         total_records = processed_files.iter().map(|(_, c)| *c).sum();
         skipped_files = parallel_skipped;
-        if !interrupted.load(Ordering::Relaxed) {
-            if let Some(state) = &mut resume_state {
-                for (file, count) in &processed_files {
-                    state.mark_processed(file, *count as u64)?;
-                }
-                state.save(&state_path)?;
-            }
-        }
     } else {
         let mut exporter_manager = if dry_run {
             ExporterManager::dry_run()
@@ -162,19 +138,6 @@ pub fn handle_run(
             if remaining == Some(0) {
                 break;
             }
-            if let Some(state) = &resume_state {
-                if state.is_processed(log_file) {
-                    skipped_files += 1;
-                    pb.println(format!(
-                        "{} [{}/{}] {} — skipped (already processed)",
-                        color::dim("⏭"),
-                        idx + 1,
-                        log_files.len(),
-                        log_file.display()
-                    ));
-                    continue;
-                }
-            }
             let processed = process_log_file(
                 &log_file.to_string_lossy(),
                 idx + 1,
@@ -191,12 +154,6 @@ pub fn handle_run(
                 true,
                 sql_record_filter,
             )?;
-            if !dry_run {
-                if let Some(state) = &mut resume_state {
-                    state.mark_processed(log_file, processed as u64)?;
-                    state.save(&state_path)?;
-                }
-            }
             total_records += processed;
             if limit.is_some_and(|l| total_records >= l) {
                 break;

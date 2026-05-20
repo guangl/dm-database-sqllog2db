@@ -56,6 +56,7 @@ pub enum FileError {
     AlreadyExists { path: PathBuf },
 
     #[error("Failed to read file {path}: {reason}")]
+    #[allow(dead_code)] // TODO: Phase 32 统一清理
     ReadFailed { path: PathBuf, reason: String },
 
     #[error("Failed to write file {path}: {reason}")]
