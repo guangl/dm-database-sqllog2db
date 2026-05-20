@@ -46,7 +46,7 @@
 - **预编译的过滤器处理管道**：`CompiledMetaFilters` 和 `CompiledSqlFilters` 在启动时持有编译好的 `RegexSet` 实例。每个过滤器变体带有类型标签（include、exclude、indicator、SQL include、SQL exclude），无需字符串匹配即可派发。
 - **单线程流式处理**：无论数据量大小，性能可预测。使用 mimalloc 作为全局分配器。Release 配置：`opt-level=3`、LTO fat、codegen-units=1、panic=abort、strip=symbols——生成约 5 MB 的二进制文件。
 - **基准测试结果**：~520 万条记录/秒 CSV（criterion，合成 50k 记录数据集，Apple M 系列芯片），~110 万条记录/秒 SQLite（batch + PRAGMA），~155 万条记录/秒（真实 1.1 GB 文件，约 300 万条记录，NVMe SSD）。
-- **额外的 CLI 命令**：`stats` 用于按文件统计记录数、慢查询排名（`--top N`）和分组聚合（`--group-by user,app,ip`）；`digest` 用于 SQL 指纹聚合并支持排序和过滤选项；`show-config` 用于查看当前配置；`completions` 和 `man` 用于 shell 集成（bash、zsh、fish）。
+- **额外的 CLI 命令**：`show-config` 用于查看当前配置；`completions` 和 `man` 用于 shell 集成（bash、zsh、fish）。
 
 ## 架构
 
@@ -126,11 +126,11 @@ sqllog2db run -c config.toml --limit 1000
 sqllog2db run -c config.toml --from "2025-01-01" --to "2025-12-31"
 ```
 
-按文件统计、慢查询排名和 SQL 指纹聚合：
+查看配置校验和当前配置：
 
 ```bash
-sqllog2db stats -c config.toml --top 10
-sqllog2db digest -c config.toml --sort exec --top 20
+sqllog2db validate -c config.toml
+sqllog2db show-config -c config.toml
 ```
 
 详细用法参见[快速入门指南](./docs/quickstart.md)。
@@ -174,7 +174,7 @@ overwrite = true
 
 ## 图表功能
 
-本工具内置 SQL 模板分析引擎，可自动生成四类图表：频率柱状图（Top-N SQL 模板按执行次数排序）、延迟直方图（每类模板的执行时间分布）、趋势折线图（SQL 执行频率随时间变化）、用户饼图（按数据库用户的查询占比）。图表以 SVG 格式输出，通过 `sqllog2db stats` 命令配合 `--chart` 参数生成，输出到配置的 charts/ 目录。
+本工具内置 SQL 模板分析引擎，可自动生成四类图表：频率柱状图（Top-N SQL 模板按执行次数排序）、延迟直方图（每类模板的执行时间分布）、趋势折线图（SQL 执行频率随时间变化）、用户饼图（按数据库用户的查询占比）。图表以 SVG 格式输出，通过配置中的 `[charts]` 节控制启用和输出目录。
 
 ## 错误处理
 
