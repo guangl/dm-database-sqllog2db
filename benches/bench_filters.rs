@@ -73,7 +73,7 @@ fn cfg_no_pipeline(sqllog_dir: &Path, bench_dir: &Path) -> Config {
 fn cfg_pipeline_passthrough(sqllog_dir: &Path, bench_dir: &Path) -> Config {
     let toml = format!(
         "{base}
-[features.filters]
+[filter]
 enable = true
 start_ts = \"2000-01-01\"
 ",
@@ -88,7 +88,7 @@ fn cfg_trxid_small(sqllog_dir: &Path, bench_dir: &Path) -> Config {
     let ids: Vec<String> = (0..10).map(|i: usize| format!("\"{i}\"")).collect();
     let toml = format!(
         "{base}
-[features.filters]
+[filter]
 enable = true
 trxids = [{ids}]
 ",
@@ -104,7 +104,7 @@ fn cfg_trxid_large(sqllog_dir: &Path, bench_dir: &Path) -> Config {
     let ids: Vec<String> = (0..1_000).map(|i: usize| format!("\"{i}\"")).collect();
     let toml = format!(
         "{base}
-[features.filters]
+[filter]
 enable = true
 trxids = [{ids}]
 ",
@@ -119,7 +119,7 @@ trxids = [{ids}]
 fn cfg_indicator_prescan(sqllog_dir: &Path, bench_dir: &Path) -> Config {
     let toml = format!(
         "{base}
-[features.filters]
+[filter]
 enable = true
 min_runtime_ms = 2000
 ",
@@ -134,7 +134,7 @@ min_runtime_ms = 2000
 fn cfg_exclude_passthrough(sqllog_dir: &Path, bench_dir: &Path) -> Config {
     let toml = format!(
         "{base}
-[features.filters]
+[filter]
 enable = true
 exclude_usernames = [\"BENCH_EXCLUDE\"]
 ",
@@ -148,7 +148,7 @@ exclude_usernames = [\"BENCH_EXCLUDE\"]
 fn cfg_exclude_active(sqllog_dir: &Path, bench_dir: &Path) -> Config {
     let toml = format!(
         "{base}
-[features.filters]
+[filter]
 enable = true
 exclude_usernames = [\"BENCH\"]
 ",
