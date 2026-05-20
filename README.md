@@ -77,10 +77,10 @@ graph LR
 
 ### 关键模块
 
-- **`cli/run.rs`**：主编排——加载配置、构建管道、预扫描事务过滤器、逐个文件流式处理记录。
+- **`cli/run/mod.rs`**：主编排——加载配置、构建管道、预扫描事务过滤器、逐个文件流式处理记录。
 - **`exporter/mod.rs`**：`Exporter` trait 和 `ExporterManager` 工厂。每次运行只有一个导出器处于活动状态。
-- **`features/mod.rs`**：`LogProcessor` trait 和 `Pipeline`。`pipeline.is_empty()` 启用零开销快速路径。
-- **`features/filters.rs`**：两遍过滤器设计。预扫描使用 `CompiledMetaFilters` 和 `CompiledSqlFilters` 查找匹配的事务 ID。
+- **`pipeline/mod.rs`**：`LogProcessor` trait 和 `Pipeline`。`pipeline.is_empty()` 启用零开销快速路径。
+- **`pipeline/filters/mod.rs`**：两遍过滤器设计。预扫描使用 `CompiledMetaFilters` 和 `CompiledSqlFilters` 查找匹配的事务 ID。
 - **`config.rs`**：所有配置结构体，支持 serde 反序列化、嵌套子表支持和 `validate_and_compile()` 预验证。
 
 ## 安装

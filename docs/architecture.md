@@ -11,7 +11,7 @@ SQL 日志文件 (.log)
     ↓ SqllogParser — 文件发现与排序（src/parser.rs）
     ↓ dm-database-parser-sqllog — 逐行解析（外部 crate）
     ↓ Sqllog 记录
-    ↓ Pipeline — 可选过滤器/处理器链（src/features/）
+    ↓ Pipeline — 可选过滤器/处理器链（src/pipeline/）
     │ ├─ (空) ───────────────────── 零开销快速路径
     │ └─ FilterProcessor ────────── 过滤器/模板处理
     ↓ ExporterManager — 路由到活跃导出器（src/exporter/）
@@ -47,7 +47,7 @@ CSV 输出（src/exporter/csv.rs）或 SQLite 输出（src/exporter/sqlite.rs）
 **职责：** 解析命令行参数，分派子命令，编排整体工作流。
 
 **结构：**
-- `run.rs` — `handle_run()`：主编排逻辑（加载配置 → 构建管道 → 预扫描 → 流式导出）
+- `run/mod.rs` — `handle_run()`：主编排逻辑（加载配置 → 构建管道 → 预扫描 → 流式导出）
 - `stats.rs` — 按文件统计与慢查询分析
 - `digest.rs` — SQL 指纹聚合
 - `init.rs` — 生成默认配置
@@ -56,7 +56,7 @@ CSV 输出（src/exporter/csv.rs）或 SQLite 输出（src/exporter/sqlite.rs）
 
 **模式：** CLI handler 函数以 `handle_` 为前缀（`handle_run`、`handle_stats` 等）。
 
-### Pipeline / 特性层 — `src/features/`
+### Pipeline / 特性层 — `src/pipeline/`
 
 **职责：** 实现可选的记录处理链——包括过滤器、SQL 参数归一化和模板聚合。
 
