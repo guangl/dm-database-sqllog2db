@@ -102,7 +102,6 @@ CSV 输出（src/exporter/csv.rs）或 SQLite 输出（src/exporter/sqlite.rs）
 |------|------|------|
 | 错误处理 | `src/error.rs` | 类型化错误枚举 `Error`、`pub type Result<T>` |
 | 解析器 | `src/parser.rs` | 日志文件发现、排序、迭代 |
-| 断点续传 | `src/resume.rs` | 文件指纹追踪、增量处理状态 |
 | 日志 | `src/logging.rs` | 应用日志和错误日志 |
 | 工具库 | `src/lib.rs` | 模块注册和公共导出 |
 
@@ -124,9 +123,6 @@ CSV 输出（src/exporter/csv.rs）或 SQLite 输出（src/exporter/sqlite.rs）
 
 流式模板统计引擎。累积每个模板的出现次数、首末时间戳和代表性 SQL 示例。使用 `hdrhistogram`（高动态范围直方图）以约 24 KB/模板的紧凑存储保存执行延迟分布，相比原始 `Vec<u64>` 节省约 1600 倍空间。通过 `finalize()` 产出最终统计结果。
 
-### ResumeState
-
-断点续传文件追踪。将已处理文件的指纹（路径 + 文件大小 + 修改时间）持久化到 TOML 状态文件。后续运行时跳过指纹匹配的文件，实现增量导出。仅在 `[sqllog]` 配置中显式启用时生效。
 
 ## 性能设计
 

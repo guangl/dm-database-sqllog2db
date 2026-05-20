@@ -133,11 +133,6 @@ enable = false
 # 排除模式列表（SQL 包含任一模式则剔除）
 # excludes = ["SELECT 1", "DUAL"]
 
-# ===================== 断点续传 =====================
-# 使用 --resume 标志时，sqllog2db 会跳过已成功处理的文件（通过文件大小和修改时间判断）。
-# [resume]
-# state_file = ".sqllog2db_state.toml"
-
 # ===================== 导出器配置 =====================
 # 只能配置一个导出器，同时配置多个时按优先级使用：csv > sqlite
 
@@ -211,12 +206,6 @@ enable = false
 [filter.sql]
 # includes = ["FROM USER_TABLES", "DELETE FROM"]
 # excludes = ["SELECT 1", "DUAL"]
-
-# ===================== Resume / Checkpoint =====================
-# With --resume, sqllog2db skips files already successfully processed
-# (tracked by file size and modification time).
-# [resume]
-# state_file = ".sqllog2db_state.toml"
 
 # ===================== Exporter Configuration =====================
 # Only one exporter can be active at a time. Priority: csv > sqlite
