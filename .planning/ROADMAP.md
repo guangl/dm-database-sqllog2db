@@ -176,8 +176,8 @@ Plans:
 **Plans**: 2 plans
 ```
 Plans:
-- [ ] 31-01-PLAN.md — 删除 resume 源文件、清理 config/CLI 层、移除 run 循环中的 resume_state 逻辑
-- [ ] 31-02-PLAN.md — 更新测试文件、清理 init 模板和文档、全链路验证
+- [x] 31-01-PLAN.md — 删除 resume 源文件、清理 config/CLI 层、移除 run 循环中的 resume_state 逻辑
+- [x] 31-02-PLAN.md — 更新测试文件、清理 init 模板和文档、全链路验证
 ```
 
 ### Phase 32: 项目结构清理
@@ -252,6 +252,6 @@ Plans:
 | 28. 移除图表、自更新、补全 | v1.7 | 3/3 | Complete    | 2026-05-19 |
 | 29. 移除统计与摘要 | v1.7 | 2/2 | Complete    | 2026-05-19 |
 | 30. 移除模板分析 | v1.7 | 0/0 | Not started | - |
-| 31. 移除断点续传 | v1.7 | 0/2 | Planned | - |
+| 31. 移除断点续传 | v1.7 | 2/2 | Complete    | 2026-05-20 |
 | 32. 项目结构清理 | v1.7 | 0/0 | Not started | - |
 | 33. 核心功能验证 | v1.7 | 0/0 | Not started | - |
