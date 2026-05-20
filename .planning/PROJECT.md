@@ -2,23 +2,11 @@
 
 ## Current State
 
-sqllog2db 完成七个里程碑迭代（v1.0–v1.6），具备完整的 SQL 模板分析、SVG 可视化、嵌套配置模型、模块化代码架构，全中文项目文档和 GitHub Pages mdBook 多页文档站。v1.7 进入精简阶段。Phase 28–31 完成，移除了 SVG 图表、self-update、Shell 补全、Man page、stats、digest 和断点续传。
-
-## Current Milestone: v1.7 项目精简
-
-**Goal:** 移除低频和非核心功能，减少依赖体积和代码复杂度，保留核心解析导出能力。
-
-**Target features:**
-- ✅ 移除 SVG 图表模块（charts/*, plotters）— Phase 28
-- ✅ 移除 self-update 自更新（update.rs, self_update, reqwest, rustls）— Phase 28
-- ✅ 移除 Shell 补全 + Man page（clap_complete, clap_mangen）— Phase 28
-- ✅ 移除 stats 统计命令（cli/stats.rs）— Phase 29
-- ✅ 移除 digest 摘要命令（cli/digest.rs, pipeline/fingerprint.rs, serde_json）— Phase 29
-- ✅ 移除断点续传（resume.rs, [resume] 配置）— Phase 31
-- 移除模板分析+报告（aggregator, template_reporter, hdrhistogram）
+sqllog2db 完成八个里程碑迭代（v1.0–v1.7），具备完整的 SQL 参数归一化、嵌套配置模型、模块化代码架构和全中文项目文档。v1.7 精简阶段完成，移除了 SVG 图表、self-update、Shell 补全、Man page、stats、digest、模板分析、断点续传和所有相关残留代码，项目结构大幅简化。
 
 ## Previous Milestones
 
+- ✅ **v1.7** (2026-05-20) — 项目精简：移除 SVG 图表、self-update、Shell 补全、stats、digest、模板分析、断点续传及所有残留代码（Phases 28–32）
 - ✅ **v1.6** (2026-05-19) — 文档中文化 & 延后需求补全（Phases 24–27）
 - ✅ **v1.5** (2026-05-19) — 文档完善 & 项目展示（Phases 21–23）
 - ✅ **v1.4** (2026-05-18) — 代码重构 & 质量深化（Phases 17–20）
@@ -155,4 +143,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-20 — v1.7 Phase 29 complete*
+*Last updated: 2026-05-20 — v1.7 Phase 32 complete (milestone complete)*
