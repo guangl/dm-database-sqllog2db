@@ -3,18 +3,9 @@ use crate::error::{ConfigError, Error, Result};
 
 impl Config {
     pub fn validate(&self) -> Result<()> {
-        if self.pipeline_deprecated.is_some() {
-            return Err(Error::Config(ConfigError::InvalidValue {
-                field: "[pipeline]".to_string(),
-                value: String::new(),
-                reason: PIPELINE_MIGRATION_HINT.to_string(),
-            }));
-        }
-        self.logging.validate()?;
-        self.exporter.validate()?;
-        self.sqllog.validate()?;
-        self.validate_filter()?;
-        self.validate_output_fields()?;
+        // validate_and_compile() 执行所有相同的校验（logging、exporter、sqllog、filter、output_fields）
+        // 并返回编译结果。validate 子命令不需要编译结果，直接丢弃。
+        self.validate_and_compile()?;
         Ok(())
     }
 
@@ -62,21 +53,6 @@ impl Config {
 
         self.validate_output_fields()?;
         Ok(compiled)
-    }
-
-    fn validate_filter(&self) -> Result<()> {
-        if let Some(filters) = &self.filter {
-            if filters.enable {
-                crate::pipeline::filters::CompiledMetaFilters::try_from_include_exclude(
-                    &filters.include,
-                    &filters.exclude,
-                )?;
-                crate::pipeline::filters::CompiledSqlFilters::try_from_sql_filters(
-                    &filters.record_sql,
-                )?;
-            }
-        }
-        Ok(())
     }
 
     fn validate_output_fields(&self) -> Result<()> {
