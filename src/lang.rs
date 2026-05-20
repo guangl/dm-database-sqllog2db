@@ -8,7 +8,6 @@
 //!
 //! `detect`, `apply_zh` 及各个 `zh_*` 辅助函数仅在 binary crate (main.rs) 中使用；
 //! lib crate 生产代码不调用。`#[cfg(test)]` 中的单元测试直接引用当前模块 items，编译不受影响。
-#![allow(dead_code)]
 
 use clap::Command;
 
@@ -64,6 +63,7 @@ fn from_args(args: &[String]) -> Option<Lang> {
 
 /// Determine the effective language: CLI flag > env var > system locale > English.
 #[must_use]
+#[allow(dead_code)]
 pub(crate) fn detect(args: &[String]) -> Lang {
     from_args(args).unwrap_or_else(from_env)
 }
@@ -73,6 +73,7 @@ pub(crate) fn detect(args: &[String]) -> Lang {
 /// Apply Chinese help strings to the clap `Command` tree.
 /// Called only when `lang == Lang::Zh`; the default command is already English.
 #[must_use]
+#[allow(dead_code)]
 pub(crate) fn apply_zh(cmd: Command) -> Command {
     cmd.about("解析达梦数据库 SQL 日志并导出到 CSV / SQLite")
         .long_about(
