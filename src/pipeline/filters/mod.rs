@@ -1,6 +1,6 @@
 mod compiled;
 mod serde_helpers;
-mod types;
+pub mod types;
 
 use compact_str::CompactString;
 use serde_helpers::TrxidSet;
@@ -8,10 +8,10 @@ use serde_helpers::TrxidSet;
 // 仅在 crate 内部使用（validate_and_compile 返回类型），integration tests 不直接引用。
 pub(crate) use compiled::{CompiledMetaFilters, CompiledSqlFilters};
 
+#[cfg(test)]
+use types::{ExcludeFilters, IncludeFilters};
+
 // pub: required by tests/integration.rs
-// ExcludeFilters and IncludeFilters are only used in tests; allow unused for this public re-export
-#[allow(unused_imports)]
-pub use types::{ExcludeFilters, IncludeFilters};
 pub use types::{IndicatorFilters, SqlFilters};
 
 // FiltersFeature: pub because integration tests directly construct it and access cfg.filter

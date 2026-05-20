@@ -67,12 +67,8 @@ fn bench_csv_export(c: &mut Criterion) {
             b.iter(|| {
                 handle_run(
                     cfg,
-                    None,
-                    false,
-                    true, // quiet=true: 排除进度条 I/O 对吞吐量测量的干扰
+                    true,
                     &Arc::new(AtomicBool::new(false)),
-                    80,
-                    1,
                     None, // compiled_filters
                 )
                 .unwrap();
@@ -103,12 +99,8 @@ fn bench_csv_real_file(c: &mut Criterion) {
         b.iter(|| {
             handle_run(
                 &cfg,
-                None,
-                false,
-                true, // quiet=true：排除进度条 I/O
+                true,
                 &Arc::new(AtomicBool::new(false)),
-                80,
-                1,
                 None, // compiled_filters
             )
             .unwrap();

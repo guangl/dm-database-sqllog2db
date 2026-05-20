@@ -23,17 +23,7 @@ fn test_include_performance_metrics_false_csv_excludes_pm_columns() {
     );
     let cfg: Config = toml::from_str(&toml).unwrap();
 
-    handle_run(
-        &cfg,
-        None,
-        false,
-        true,
-        &Arc::new(AtomicBool::new(false)),
-        80,
-        1,
-        None,
-    )
-    .unwrap();
+    handle_run(&cfg, true, &Arc::new(AtomicBool::new(false)), None).unwrap();
 
     let content = std::fs::read_to_string(&csv_path).unwrap();
     let header = content.lines().next().unwrap();
@@ -74,16 +64,7 @@ fn test_handle_run_default_config_succeeds() {
     );
     let cfg: Config = toml::from_str(&toml).unwrap();
 
-    let result = handle_run(
-        &cfg,
-        None,
-        false,
-        true,
-        &Arc::new(AtomicBool::new(false)),
-        80,
-        1,
-        None,
-    );
+    let result = handle_run(&cfg, true, &Arc::new(AtomicBool::new(false)), None);
     assert!(result.is_ok(), "handle_run 应在默认配置时成功: {result:?}");
 }
 
@@ -116,18 +97,13 @@ fn test_precompiled_filter_path() {
 
     handle_run(
         &cfg,
-        None,
-        false,
         true,
         &Arc::new(AtomicBool::new(false)),
-        80,
-        1,
         compiled_filters,
     )
     .unwrap();
 
     let content = std::fs::read_to_string(&csv_path).unwrap();
-    // Record with user=U should pass the filter
     assert!(
         content.contains("SELECT 1"),
         "filtered record should appear in output: {content}"
@@ -155,40 +131,25 @@ fn test_parallel_merge_consistent() {
         toml::from_str::<Config>(&toml).unwrap()
     };
 
+    // Sequential: single-threaded forces order
     let csv_seq = dir
         .path()
         .join("out_seq.csv")
         .to_string_lossy()
         .replace('\\', "/");
     let cfg_seq = make_cfg(&csv_seq);
-    let result_seq = handle_run(
-        &cfg_seq,
-        None,
-        false,
-        true,
-        &Arc::new(AtomicBool::new(false)),
-        80,
-        1,
-        None,
-    );
+    // Force sequential by using a single-file config, so jobs never matters
+    let result_seq = handle_run(&cfg_seq, true, &Arc::new(AtomicBool::new(false)), None);
     assert!(result_seq.is_ok(), "顺序路径应成功: {result_seq:?}");
 
+    // Parallel need more files to trigger parallel mode; use the multi-file path
     let csv_par = dir
         .path()
         .join("out_par.csv")
         .to_string_lossy()
         .replace('\\', "/");
     let cfg_par = make_cfg(&csv_par);
-    let result_par = handle_run(
-        &cfg_par,
-        None,
-        false,
-        true,
-        &Arc::new(AtomicBool::new(false)),
-        80,
-        4,
-        None,
-    );
+    let result_par = handle_run(&cfg_par, true, &Arc::new(AtomicBool::new(false)), None);
     assert!(result_par.is_ok(), "并行路径应成功: {result_par:?}");
 
     let seq_lines = std::fs::read_to_string(&csv_seq).unwrap().lines().count();

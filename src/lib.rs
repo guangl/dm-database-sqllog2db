@@ -1,9 +1,7 @@
 pub mod cli;
-pub(crate) mod color;
 pub mod config;
 pub(crate) mod error;
 pub mod exporter;
-pub mod lang;
-pub(crate) mod logging;
+pub mod logging;
 pub(crate) mod parser;
 pub mod pipeline;

@@ -52,7 +52,6 @@ pub trait Exporter {
 pub(crate) enum ExporterKind {
     Csv(CsvExporter),
     Sqlite(SqliteExporter),
-    DryRun { stats: ExportStats },
 }
 
 impl ExporterKind {
@@ -60,7 +59,6 @@ impl ExporterKind {
         match self {
             Self::Csv(_) => "CSV",
             Self::Sqlite(_) => "SQLite",
-            Self::DryRun { .. } => "dry-run",
         }
     }
 
@@ -69,8 +67,8 @@ impl ExporterKind {
     pub fn csv_include_performance_metrics(&self) -> bool {
         match self {
             Self::Csv(exporter) => exporter.include_performance_metrics,
-            // SQLite/DryRun 永远需要完整 pm（schema 固定）
-            _ => true,
+            // SQLite 永远需要完整 pm（schema 固定）
+            Self::Sqlite(_) => true,
         }
     }
 
@@ -78,7 +76,6 @@ impl ExporterKind {
         match self {
             Self::Csv(e) => e.initialize(),
             Self::Sqlite(e) => e.initialize(),
-            Self::DryRun { .. } => Ok(()),
         }
     }
 
@@ -93,10 +90,6 @@ impl ExporterKind {
         match self {
             Self::Csv(e) => e.export_one_preparsed(sqllog, meta, pm, normalized),
             Self::Sqlite(e) => e.export_one_preparsed(sqllog, meta, pm, normalized),
-            Self::DryRun { stats } => {
-                stats.exported += 1;
-                Ok(())
-            }
         }
     }
 
@@ -104,7 +97,6 @@ impl ExporterKind {
         match self {
             Self::Csv(e) => e.finalize(),
             Self::Sqlite(e) => e.finalize(),
-            Self::DryRun { .. } => Ok(()),
         }
     }
 
@@ -112,7 +104,6 @@ impl ExporterKind {
         match self {
             Self::Csv(e) => e.stats_snapshot(),
             Self::Sqlite(e) => e.stats_snapshot(),
-            Self::DryRun { stats } => Some(*stats),
         }
     }
 }
@@ -162,17 +153,6 @@ impl ExporterManager {
     pub(crate) fn from_csv(exporter: CsvExporter) -> Self {
         Self {
             exporter: ExporterKind::Csv(exporter),
-        }
-    }
-
-    /// 创建空运行导出器，只统计记录数不写文件
-    #[must_use]
-    pub(crate) fn dry_run() -> Self {
-        info!("Dry-run mode: no output will be written");
-        Self {
-            exporter: ExporterKind::DryRun {
-                stats: ExportStats::default(),
-            },
         }
     }
 
