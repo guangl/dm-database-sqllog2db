@@ -470,8 +470,6 @@ file = "out.csv"
         let toml = r#"
 [sqllog]
 path = "sqllogs"
-[template]
-enable = true
 [filter]
 enable = false
 [output]
