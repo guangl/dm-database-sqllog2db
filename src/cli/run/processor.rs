@@ -1,4 +1,3 @@
-use crate::color;
 use crate::error::Result;
 use crate::exporter::ExporterManager;
 use crate::pipeline::normalizer::ParamBuffer;
@@ -176,14 +175,13 @@ pub(super) fn process_log_file(
     );
 
     let errors_label = if errors_in_file > 0 {
-        color::yellow(format!(", {errors_in_file} errors"))
+        format!(", {errors_in_file} errors")
     } else {
         String::new()
     };
     pb.println(format!(
-        "{} [{file_index}/{total_files}] {file_path} — {}{errors_label}, {elapsed:.2}s",
-        color::green("✓"),
-        color::green(HumanCount(records_in_file as u64)),
+        "✓ [{file_index}/{total_files}] {file_path} — {}{errors_label}, {elapsed:.2}s",
+        HumanCount(records_in_file as u64),
     ));
 
     Ok(records_in_file)

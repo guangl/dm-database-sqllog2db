@@ -4,14 +4,13 @@ use mimalloc::MiMalloc;
 static GLOBAL: MiMalloc = MiMalloc;
 
 mod cli;
-mod color;
 mod config;
 mod error;
 mod exporter;
-mod lang;
 mod logging;
 mod parser;
 mod pipeline;
+mod preflight;
 
 use config::Config;
 use error::Result;
@@ -41,9 +40,11 @@ fn exit_code_for(e: &error::Error) -> i32 {
     }
 }
 
-/// Initialize simple console logging for init commands
-fn init_simple_logging(verbose: bool, quiet: bool) {
-    let level = if verbose {
+/// Initialize simple console logging for non-run commands
+fn init_simple_logging(verbose: u8, quiet: bool) {
+    let level = if verbose >= 2 {
+        "trace"
+    } else if verbose >= 1 {
         "debug"
     } else if quiet {
         "error"
@@ -52,6 +53,7 @@ fn init_simple_logging(verbose: bool, quiet: bool) {
     };
 
     let filter = match level {
+        "trace" => log::LevelFilter::Trace,
         "debug" => log::LevelFilter::Debug,
         "error" => log::LevelFilter::Error,
         _ => log::LevelFilter::Info,
@@ -62,27 +64,12 @@ fn init_simple_logging(verbose: bool, quiet: bool) {
         .try_init();
 }
 
-/// Apply CLI flags (verbose/quiet) to configuration
-fn apply_cli_flags_to_config(cfg: &mut Config, verbose: bool, quiet: bool) {
-    if verbose {
+/// Apply CLI verbosity flags to configuration
+fn apply_verbosity_to_config(cfg: &mut Config, verbose: u8, quiet: bool) {
+    if verbose >= 1 {
         cfg.logging.level = "debug".to_string();
     } else if quiet {
         cfg.logging.level = "error".to_string();
-    }
-}
-
-/// Apply --from / --to date range to filters config
-fn apply_date_range(cfg: &mut Config, from: Option<&str>, to: Option<&str>) {
-    if from.is_none() && to.is_none() {
-        return;
-    }
-    let filters = cfg.filter.get_or_insert_with(Default::default);
-    filters.enable = true;
-    if let Some(f) = from {
-        filters.include.start_ts = Some(f.to_string());
-    }
-    if let Some(t) = to {
-        filters.include.end_ts = Some(t.to_string());
     }
 }
 
@@ -91,9 +78,8 @@ fn main() {
         Ok(()) => {}
         Err(e) => {
             let code = exit_code_for(&e);
-            // Interrupted：静默退出，进度条已清除，用户清楚自己按了 Ctrl+C
             if code != EXIT_INTERRUPTED {
-                eprintln!("{} {e}", color::red("Error:"));
+                eprintln!("Error: {e}");
             }
             std::process::exit(code);
         }
@@ -103,71 +89,31 @@ fn main() {
 fn run() -> Result<()> {
     use clap::{CommandFactory, FromArgMatches, Parser};
 
-    // Pre-scan raw args to detect language before building the command, so
-    // that `--help` output is already in the right language.
-    let raw_args: Vec<String> = std::env::args().collect();
-    let lang = lang::detect(&raw_args);
-
-    let base_cmd = cli::opts::Cli::command();
-    let cmd = if lang == lang::Lang::Zh {
-        lang::apply_zh(base_cmd)
-    } else {
-        base_cmd
-    };
+    let cmd = cli::opts::Cli::command();
     let matches = cmd.get_matches();
     let cli = cli::opts::Cli::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
 
-    // 尽早初始化颜色开关，后续所有输出均依赖此状态
-    color::init(cli.no_color);
-
-    // run 命令不走 env_logger，避免与进度条冲突；其他命令用 env_logger 输出到终端
     let needs_simple_logging = !matches!(&cli.command, Some(cli::opts::Commands::Run { .. }));
     if needs_simple_logging {
         init_simple_logging(cli.verbose, cli.quiet);
     }
 
     match &cli.command {
-        Some(cli::opts::Commands::Init { output, force }) => {
-            cli::init::handle_init(output, *force, lang)
-        }
-        Some(cli::opts::Commands::Run {
-            config,
-            limit,
-            dry_run,
-            set,
-            from,
-            to,
-            output,
-            progress_interval,
-            jobs,
-        }) => {
+        Some(cli::opts::Commands::Init { output, force }) => cli::init::handle_init(output, *force),
+        Some(cli::opts::Commands::Run { config }) => {
             let mut cfg = load_config(config)?;
-            // --output is a shorthand applied before --set so --set can override
-            let mut all_set = Vec::new();
-            if let Some(out) = output {
-                all_set.push(format!("exporter.csv.file={out}"));
-            }
-            all_set.extend_from_slice(set);
-            cfg.apply_overrides(&all_set)?;
-            apply_date_range(&mut cfg, from.as_deref(), to.as_deref());
-            // 替换：validate() → validate_and_compile()，消除 run 路径中的双重 regex 编译（SC-2）
             let compiled_filters = cfg.validate_and_compile()?;
 
-            apply_cli_flags_to_config(&mut cfg, cli.verbose, cli.quiet);
-            // run 命令使用进度条，日志只写文件不写 stdout
+            apply_verbosity_to_config(&mut cfg, cli.verbose, cli.quiet);
             logging::init_logging(&cfg.logging, false)?;
             info!("Application started");
             info!("Configuration validation passed");
 
-            // preflight：日志目录 + 输出可写性
-            if !*dry_run {
-                let pf = cli::preflight::check(&cfg);
-                if pf.print_and_check() {
-                    std::process::exit(EXIT_CONFIG);
-                }
+            let pf = preflight::check(&cfg);
+            if pf.print_and_check() {
+                std::process::exit(EXIT_CONFIG);
             }
 
-            // 注册 Ctrl+C 处理器：设置中断标志，让处理循环在下一个 batch 结束时优雅退出
             let interrupted = Arc::new(AtomicBool::new(false));
             let interrupted_flag = Arc::clone(&interrupted);
             ctrlc::set_handler(move || {
@@ -175,38 +121,18 @@ fn run() -> Result<()> {
             })
             .ok();
 
-            let jobs = jobs.unwrap_or_else(|| {
-                std::thread::available_parallelism().map_or(1, std::num::NonZero::get)
-            });
-            cli::run::handle_run(
-                &cfg,
-                *limit,
-                *dry_run,
-                cli.quiet,
-                &interrupted,
-                *progress_interval,
-                jobs,
-                compiled_filters, // 新增：传递预编译结果
-            )
+            cli::run::handle_run(&cfg, cli.quiet, &interrupted, compiled_filters)
         }
-        Some(cli::opts::Commands::Validate { config, set }) => {
+        Some(cli::opts::Commands::Validate { config }) => {
             let mut cfg = load_config(config)?;
-            cfg.apply_overrides(set)?;
             cfg.validate()?;
 
-            apply_cli_flags_to_config(&mut cfg, cli.verbose, cli.quiet);
-            // validate 命令无进度条，日志同时输出到 stdout
+            apply_verbosity_to_config(&mut cfg, cli.verbose, cli.quiet);
             logging::init_logging(&cfg.logging, true)?;
             info!("Application started");
             info!("Configuration validation passed");
 
             cli::validate::handle_validate(&cfg);
-            Ok(())
-        }
-        Some(cli::opts::Commands::ShowConfig { config, set, diff }) => {
-            let mut cfg = load_config(config)?;
-            cfg.apply_overrides(set)?;
-            cli::show_config::handle_show_config(&cfg, config, *diff);
             Ok(())
         }
         None => {
@@ -283,60 +209,32 @@ mod tests {
     }
 
     #[test]
-    fn test_apply_cli_flags_verbose() {
+    fn test_apply_verbosity_verbose() {
         let mut cfg = Config::default();
-        apply_cli_flags_to_config(&mut cfg, true, false);
+        apply_verbosity_to_config(&mut cfg, 1, false);
         assert_eq!(cfg.logging.level, "debug");
     }
 
     #[test]
-    fn test_apply_cli_flags_quiet() {
+    fn test_apply_verbosity_quiet() {
         let mut cfg = Config::default();
-        apply_cli_flags_to_config(&mut cfg, false, true);
+        apply_verbosity_to_config(&mut cfg, 0, true);
         assert_eq!(cfg.logging.level, "error");
     }
 
     #[test]
-    fn test_apply_cli_flags_neither() {
+    fn test_apply_verbosity_neither() {
         let mut cfg = Config::default();
         let original = cfg.logging.level.clone();
-        apply_cli_flags_to_config(&mut cfg, false, false);
+        apply_verbosity_to_config(&mut cfg, 0, false);
         assert_eq!(cfg.logging.level, original);
     }
 
     #[test]
-    fn test_apply_date_range_both() {
+    fn test_apply_verbosity_trace() {
         let mut cfg = Config::default();
-        apply_date_range(&mut cfg, Some("2025-01-01"), Some("2025-12-31"));
-        let f = cfg.filter.unwrap();
-        assert_eq!(f.include.start_ts.as_deref(), Some("2025-01-01"));
-        assert_eq!(f.include.end_ts.as_deref(), Some("2025-12-31"));
-        assert!(f.enable);
-    }
-
-    #[test]
-    fn test_apply_date_range_from_only() {
-        let mut cfg = Config::default();
-        apply_date_range(&mut cfg, Some("2025-06-01"), None);
-        let f = cfg.filter.unwrap();
-        assert_eq!(f.include.start_ts.as_deref(), Some("2025-06-01"));
-        assert!(f.include.end_ts.is_none());
-    }
-
-    #[test]
-    fn test_apply_date_range_to_only() {
-        let mut cfg = Config::default();
-        apply_date_range(&mut cfg, None, Some("2025-06-30"));
-        let f = cfg.filter.unwrap();
-        assert!(f.include.start_ts.is_none());
-        assert_eq!(f.include.end_ts.as_deref(), Some("2025-06-30"));
-    }
-
-    #[test]
-    fn test_apply_date_range_neither() {
-        let mut cfg = Config::default();
-        apply_date_range(&mut cfg, None, None);
-        assert!(cfg.filter.is_none());
+        apply_verbosity_to_config(&mut cfg, 2, false);
+        assert_eq!(cfg.logging.level, "debug");
     }
 
     #[test]
@@ -356,17 +254,21 @@ mod tests {
 
     #[test]
     fn test_init_simple_logging_info() {
-        // May silently fail if logger already set — that is fine
-        init_simple_logging(false, false);
+        init_simple_logging(0, false);
     }
 
     #[test]
     fn test_init_simple_logging_verbose() {
-        init_simple_logging(true, false);
+        init_simple_logging(1, false);
     }
 
     #[test]
     fn test_init_simple_logging_quiet() {
-        init_simple_logging(false, true);
+        init_simple_logging(0, true);
+    }
+
+    #[test]
+    fn test_init_simple_logging_trace() {
+        init_simple_logging(2, false);
     }
 }

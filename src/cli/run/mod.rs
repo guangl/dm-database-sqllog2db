@@ -1,4 +1,3 @@
-use crate::color;
 use crate::config::Config;
 use crate::error::{Error, Result};
 use crate::exporter::ExporterManager;
@@ -22,15 +21,11 @@ use processor::process_log_file;
 
 /// 主编排函数：解析日志文件并导出到配置的导出器。
 /// `compiled_filters` 由调用方预编译（`Config::validate_and_compile`），避免重复编译正则。
-/// 并行路径：CSV + 多文件 + 无 limit + jobs > 1；顺序路径：其他情况。
+/// 并行路径：CSV + 多文件 + jobs > 1；顺序路径：其他情况。
 pub fn handle_run(
     cfg: &Config,
-    limit: Option<usize>,
-    dry_run: bool,
     quiet: bool,
     interrupted: &Arc<AtomicBool>,
-    progress_interval: u64,
-    jobs: usize,
     compiled_filters: Option<(CompiledMetaFilters, CompiledSqlFilters)>,
 ) -> Result<()> {
     let (compiled_meta, compiled_sql) = match compiled_filters {
@@ -43,6 +38,8 @@ pub fn handle_run(
         warn!("No log files found");
         return Ok(());
     }
+    let jobs = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
+
     // 仅当有事务级过滤器时才克隆配置（避免常规路径的额外分配）
     let owned_cfg;
     let final_cfg: &Config = if cfg
@@ -86,14 +83,10 @@ pub fn handle_run(
             .is_some_and(|f| f.enable && f.record_sql.has_filters())
     });
     let sql_record_filter = compiled_record_sql.as_ref();
-    let pb = make_progress_bar(quiet, progress_interval);
+    let pb = make_progress_bar(quiet, 80);
     let mut total_records = 0usize;
     let mut skipped_files = 0usize;
-    let use_parallel = !dry_run
-        && jobs > 1
-        && log_files.len() > 1
-        && limit.is_none()
-        && final_cfg.exporter.csv.is_some();
+    let use_parallel = jobs > 1 && log_files.len() > 1 && final_cfg.exporter.csv.is_some();
 
     if use_parallel {
         info!("Parsing and exporting SQL logs (parallel, {jobs} jobs)...");
@@ -113,28 +106,13 @@ pub fn handle_run(
         total_records = processed_files.iter().map(|(_, c)| *c).sum();
         skipped_files = parallel_skipped;
     } else {
-        let mut exporter_manager = if dry_run {
-            ExporterManager::dry_run()
-        } else {
-            ExporterManager::from_config(final_cfg)?
-        };
+        let mut exporter_manager = ExporterManager::from_config(final_cfg)?;
         exporter_manager.initialize()?;
-        info!(
-            "{}",
-            if dry_run {
-                "Dry-run: parsing SQL logs without writing output..."
-            } else {
-                "Parsing and exporting SQL logs..."
-            }
-        );
+        info!("Parsing and exporting SQL logs...");
         let mut params_buffer = crate::pipeline::normalizer::ParamBuffer::default();
         let mut ns_scratch: Vec<u8> = Vec::with_capacity(4096);
         for (idx, log_file) in log_files.iter().enumerate() {
             if interrupted.load(Ordering::Relaxed) {
-                break;
-            }
-            let remaining = limit.map(|l| l.saturating_sub(total_records));
-            if remaining == Some(0) {
                 break;
             }
             let processed = process_log_file(
@@ -144,7 +122,7 @@ pub fn handle_run(
                 &mut exporter_manager,
                 &pipeline,
                 &pb,
-                remaining,
+                None,
                 interrupted,
                 do_normalize,
                 placeholder_override,
@@ -154,9 +132,6 @@ pub fn handle_run(
                 sql_record_filter,
             )?;
             total_records += processed;
-            if limit.is_some_and(|l| total_records >= l) {
-                break;
-            }
         }
         exporter_manager.finalize()?;
         if !quiet {
@@ -166,22 +141,15 @@ pub fn handle_run(
     pb.finish_and_clear();
     if !quiet {
         let elapsed = total_start.elapsed().as_secs_f64();
-        let mode_label = if dry_run {
-            " [dry-run]"
-        } else if use_parallel {
-            " [parallel]"
-        } else {
-            ""
-        };
+        let mode_label = if use_parallel { " [parallel]" } else { "" };
         let skip_label = if skipped_files > 0 {
-            format!(", {} skipped", color::dim(HumanCount(skipped_files as u64)))
+            format!(", {} skipped", HumanCount(skipped_files as u64))
         } else {
             String::new()
         };
         eprintln!(
-            "\n{} SQL Log Export Task Completed{mode_label} in {elapsed:.2}s — {} records total{skip_label}",
-            color::green("✓"),
-            color::green(HumanCount(total_records as u64)),
+            "\n✓ SQL Log Export Task Completed{mode_label} in {elapsed:.2}s — {} records total{skip_label}",
+            HumanCount(total_records as u64),
         );
     }
     if interrupted.load(Ordering::Relaxed) {

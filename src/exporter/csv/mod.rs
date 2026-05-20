@@ -11,11 +11,18 @@ pub(crate) mod writer;
 
 use self::writer::{write_record, write_record_preparsed};
 
-#[allow(clippy::struct_excessive_bools)]
+/// 文件打开模式
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WriteMode {
+    /// 新建或截断文件（默认）
+    Truncate,
+    /// 追加到已有文件末尾
+    Append,
+}
+
 pub struct CsvExporter {
     path: PathBuf,
-    overwrite: bool,
-    append: bool,
+    write_mode: WriteMode,
     writer: Option<BufWriter<File>>,
     stats: ExportStats,
     itoa_buf: itoa::Buffer,
@@ -42,8 +49,7 @@ impl CsvExporter {
     pub fn new(path: impl AsRef<Path>) -> Self {
         Self {
             path: path.as_ref().to_path_buf(),
-            overwrite: false,
-            append: false,
+            write_mode: WriteMode::Truncate,
             writer: None,
             stats: ExportStats::new(),
             itoa_buf: itoa::Buffer::new(),
@@ -61,9 +67,9 @@ impl CsvExporter {
     pub fn from_config(config: &config::CsvExporterConfig) -> Self {
         let mut e = Self::new(&config.file);
         if config.append {
-            e.append = true;
-        } else {
-            e.overwrite = config.overwrite;
+            e.write_mode = WriteMode::Append;
+        } else if config.overwrite {
+            e.write_mode = WriteMode::Truncate;
         }
         e.include_performance_metrics = config.include_performance_metrics;
         e
@@ -103,7 +109,7 @@ impl Exporter for CsvExporter {
             })
         })?;
 
-        let append_mode = self.append;
+        let append_mode = self.write_mode == WriteMode::Append;
         let file_exists = self.path.exists();
 
         let file = if append_mode {
@@ -115,7 +121,7 @@ impl Exporter for CsvExporter {
             OpenOptions::new()
                 .create(true)
                 .write(true)
-                .truncate(self.overwrite)
+                .truncate(self.write_mode == WriteMode::Truncate)
                 .open(&self.path)
         }
         .map_err(|e| {

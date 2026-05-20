@@ -1,8 +1,6 @@
 // 整个模块仅在 binary crate (main.rs) 中使用；lib crate 生产代码不调用。
 // 其 `#[cfg(test)]` 单元测试直接引用当前模块中的 items，编译不受影响。
-#![allow(dead_code)]
 
-use crate::color;
 use crate::config::Config;
 use crate::parser::SqllogParser;
 use std::path::Path;
@@ -98,10 +96,10 @@ impl PreflightResult {
     #[must_use]
     pub(crate) fn print_and_check(&self) -> bool {
         for warn in &self.warnings {
-            eprintln!("{} {warn}", color::yellow("Warning:"));
+            eprintln!("Warning: {warn}");
         }
         for err in &self.errors {
-            eprintln!("{} {err}", color::red("Error:"));
+            eprintln!("Error: {err}");
         }
         self.has_errors()
     }

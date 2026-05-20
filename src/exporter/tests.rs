@@ -100,33 +100,12 @@ fn test_ensure_parent_dir_creates_new() {
     assert!(dir.path().join("sub/dir").exists());
 }
 
-// ── ExporterKind DryRun ────────────────────────────────────
-#[test]
-fn test_dry_run_exporter_counts_records() {
-    let mut e = ExporterKind::DryRun {
-        stats: ExportStats::default(),
-    };
-    e.initialize().unwrap();
-    // Manually add some counts
-    if let ExporterKind::DryRun { ref mut stats } = e {
-        stats.exported = 5;
-    }
-    let snap = e.stats_snapshot().unwrap();
-    assert_eq!(snap.exported, 5);
-}
-
 // ── ExporterManager constructors ───────────────────────────
 #[test]
 fn test_from_csv_constructor() {
     let exporter = CsvExporter::new(std::path::PathBuf::from("/tmp/test.csv"));
     let manager = ExporterManager::from_csv(exporter);
     assert_eq!(manager.name(), "CSV");
-}
-
-#[test]
-fn test_dry_run_constructor() {
-    let manager = ExporterManager::dry_run();
-    assert_eq!(manager.name(), "dry-run");
 }
 
 #[test]
@@ -171,53 +150,18 @@ fn test_from_config_no_exporters_error() {
 }
 
 #[test]
-fn test_log_stats_with_flush_operations() {
-    let mut stats = ExportStats::new();
-    stats.exported = 10;
-    stats.flush_operations = 2;
-    stats.last_flush_size = 5;
-    // Use ExporterKind::DryRun to test stats_snapshot
-    let e = ExporterKind::DryRun { stats };
-    let snap = e.stats_snapshot().unwrap();
-    assert_eq!(snap.flush_operations, 2);
-    assert_eq!(snap.last_flush_size, 5);
-}
-
-#[test]
 fn test_exporter_manager_log_stats_no_panic() {
-    let manager = ExporterManager::dry_run();
-    // Just verify it doesn't panic
+    let exporter = CsvExporter::new(std::path::PathBuf::from("/tmp/test.csv"));
+    let manager = ExporterManager::from_csv(exporter);
     manager.log_stats();
 }
 
 #[test]
 fn test_exporter_manager_debug_format() {
-    let manager = ExporterManager::dry_run();
+    let exporter = CsvExporter::new(std::path::PathBuf::from("/tmp/test.csv"));
+    let manager = ExporterManager::from_csv(exporter);
     let s = format!("{manager:?}");
     assert!(s.contains("ExporterManager"));
-}
-
-#[test]
-fn test_dry_run_export_via_trait() {
-    use dm_database_parser_sqllog::LogParser;
-    let dir = tempfile::TempDir::new().unwrap();
-    let log = dir.path().join("t.log");
-    std::fs::write(&log, "2025-01-15 10:30:28.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:App ip:10.0.0.1) [SEL] SELECT 1. EXECTIME: 1(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.\n").unwrap();
-    let parser = LogParser::from_path(log.to_str().unwrap()).unwrap();
-    let records: Vec<_> = parser.iter().flatten().collect();
-
-    let mut e = ExporterKind::DryRun {
-        stats: ExportStats::default(),
-    };
-    e.initialize().unwrap();
-    for r in &records {
-        let meta = r.parse_meta();
-        let pm = r.parse_performance_metrics();
-        e.export_one_preparsed(r, &meta, &pm, None).unwrap();
-    }
-    // ExporterKind has no finalize — use internal finalize
-    let snap = e.stats_snapshot().unwrap();
-    assert_eq!(snap.exported, records.len());
 }
 
 #[test]

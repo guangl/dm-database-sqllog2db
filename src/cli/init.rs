@@ -1,11 +1,10 @@
 use crate::error::{Error, FileError, Result};
-use crate::lang::Lang;
 use log::{debug, error, info, warn};
 use std::fs;
 use std::path::Path;
 
 /// 生成默认配置文件
-pub fn handle_init(output_path: &str, force: bool, lang: Lang) -> Result<()> {
+pub fn handle_init(output_path: &str, force: bool) -> Result<()> {
     let path = Path::new(output_path);
 
     info!("Preparing to generate configuration file: {output_path}");
@@ -23,10 +22,7 @@ pub fn handle_init(output_path: &str, force: bool, lang: Lang) -> Result<()> {
     }
 
     debug!("Generating default configuration content...");
-    let content = match lang {
-        Lang::Zh => CONFIG_TEMPLATE_ZH,
-        Lang::En => CONFIG_TEMPLATE_EN,
-    };
+    let content = CONFIG_TEMPLATE_EN;
 
     if let Some(parent) = path.parent().filter(|p| !p.exists()) {
         info!("Creating directory: {}", parent.display());
@@ -61,94 +57,6 @@ pub fn handle_init(output_path: &str, force: bool, lang: Lang) -> Result<()> {
 }
 
 // ── Templates ────────────────────────────────────────────────────────────────
-
-const CONFIG_TEMPLATE_ZH: &str = r#"# SQL 日志导出工具默认配置文件（请根据需要修改）
-
-[sqllog]
-# SQL 日志路径：目录、单文件或 glob 模式（如 "./logs/2025-*.log"）
-path = "sqllogs"
-
-[logging]
-# 应用日志文件路径
-file = "logs/sqllog2db.log"
-# 日志级别: trace | debug | info | warn | error
-level = "info"
-# 日志保留天数 (1-365)
-retention_days = 7
-
-[replace_parameters]
-# 是否在导出结果中写入 normalized_sql 列（默认 true）
-# 对 INS/DEL/UPD/ORA 类型的记录，将 PARAMS 参数值填入 SQL 的占位符
-enable = true
-
-[filter]
-# 是否启用过滤器
-enable = false
-
-# --- 包含过滤器（Record-level，AND 语义：所有已配置字段都必须匹配才保留）---
-[filter.include]
-# 过滤指定的用户名（支持正则匹配）
-# users = ["SYSDBA"]
-# 过滤指定的客户端 IP（支持正则匹配）
-# ips = ["127.0.0.1", "192\\.168"]
-# 过滤指定的会话 ID（支持正则匹配）
-# sessions = ["0x7f41435437a8"]
-# 过滤指定的线程 ID（支持正则匹配）
-# threads = ["2188515"]
-# 过滤指定的语句类型（支持正则匹配）
-# statements = ["INS", "UPD", "DEL"]
-# 过滤指定的应用名称（支持正则匹配）
-# apps = ["DMSQL"]
-# 过滤指定的 tag（支持正则匹配）
-# tags = ["\\[SEL\\]"]
-# 过滤时间范围（格式：2023-01-01 00:00:00）
-# start_ts = "2023-01-01 00:00:00"
-# end_ts   = "2023-01-01 23:59:59"
-# 过滤指定的事务 ID
-# trxids = ["257809109", "257809110"]
-
-# --- 排除过滤器（Record-level，OR-veto：任一命中则丢弃）---
-[filter.exclude]
-# users = ["guest", "^anon"]
-# ips = ["^10\\.0", "^172\\.16"]
-# sessions = ["^0x0000"]
-# threads = ["^0$"]
-# statements = ["SEL", "SET"]
-# apps = ["monitor", "health"]
-# tags = ["\\[SET\\]", "\\[OTH\\]"]
-
-# --- 指标过滤器（Transaction-level：满足条件则保留包含该语句的整个事务，需要预扫描）---
-[filter.indicators]
-# 过滤指定的执行 ID（保留整个事务）
-# exec_ids = [257809109, 257809110]
-# 过滤最小执行时长（毫秒）
-# min_runtime_ms = 1000
-# 过滤最小影响行数
-# min_row_count = 100
-
-# --- SQL 过滤器（Transaction-level：满足模式则保留整个事务，需要预扫描）---
-[filter.sql]
-# 包含模式列表（SQL 包含任一模式则匹配）
-# includes = ["FROM USER_TABLES", "DELETE FROM"]
-# 排除模式列表（SQL 包含任一模式则剔除）
-# excludes = ["SELECT 1", "DUAL"]
-
-# ===================== 导出器配置 =====================
-# 只能配置一个导出器，同时配置多个时按优先级使用：csv > sqlite
-
-# 方案 1：CSV 导出（默认）
-[exporter.csv]
-file = "outputs/sqllog.csv"
-overwrite = true
-append = false
-
-# 方案 2：SQLite 数据库导出
-# [exporter.sqlite]
-# database_url = "export/sqllog2db.db"
-# table_name = "sqllog_records"
-# overwrite = true
-# append = false
-"#;
 
 const CONFIG_TEMPLATE_EN: &str = r#"# sqllog2db default configuration file (edit as needed)
 
