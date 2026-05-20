@@ -233,7 +233,7 @@ Plans:
 **Plans**: 2 plans
 ```
 Plans:
-- [ ] 34-01-PLAN.md -- 添加 [template] 配置段显式拒绝逻辑
+- [x] 34-01-PLAN.md -- 添加 [template] 配置段显式拒绝逻辑
 - [ ] 34-02-PLAN.md -- 创建 Phase 30 VERIFICATION.md，确认所有审计缺口关闭
 ```
 
@@ -274,4 +274,4 @@ Plans:
 | 31. 移除断点续传 | v1.7 | 2/2 | Complete    | 2026-05-20 |
 | 32. 项目结构清理 | v1.7 | 3/3 | Complete    | 2026-05-20 |
 | 33. 核心功能验证 | v1.7 | 3/3 | Complete    | 2026-05-20 |
-| 34. 修复审计缺口 | v1.7 | 0/0 | Not started | - |
+| 34. 修复审计缺口 | v1.7 | 1/2 | In Progress|  |
