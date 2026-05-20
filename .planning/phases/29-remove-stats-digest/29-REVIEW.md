@@ -1,165 +1,202 @@
 ---
 phase: 29-remove-stats-digest
-reviewed: 2026-05-20T10:30:00Z
+reviewed: 2026-05-20T12:00:00Z
 depth: standard
-files_reviewed: 7
+files_reviewed: 36
 files_reviewed_list:
+  - benches/bench_csv.rs
+  - benches/bench_filters.rs
+  - benches/bench_sqlite.rs
+  - Cargo.toml
+  - docs/architecture.md
+  - README.md
+  - src/cli/init.rs
   - src/cli/mod.rs
   - src/cli/opts.rs
+  - src/cli/run/mod.rs
+  - src/cli/run/parallel.rs
+  - src/cli/run/processor.rs
+  - src/cli/run/tests.rs
+  - src/cli/show_config.rs
+  - src/config/apply_one.rs
+  - src/config/exporter.rs
+  - src/config/logging.rs
+  - src/config/mod.rs
+  - src/config/sqllog.rs
+  - src/config/validate.rs
+  - src/error.rs
+  - src/exporter/csv/mod.rs
+  - src/exporter/csv/tests.rs
+  - src/exporter/csv/writer.rs
+  - src/exporter/mod.rs
+  - src/exporter/projection.rs
+  - src/exporter/sqlite/mod.rs
+  - src/exporter/sqlite/sql_builder.rs
+  - src/exporter/sqlite/tests.rs
+  - src/exporter/sqlite/write.rs
+  - src/exporter/tests.rs
   - src/lang.rs
+  - src/lib.rs
   - src/main.rs
   - src/pipeline/mod.rs
   - src/pipeline/normalizer.rs
+  - src/pipeline/filters/mod.rs
+  - src/pipeline/filters/types.rs
+  - src/pipeline/filters/compiled.rs
   - tests/integration.rs
 findings:
   critical: 1
-  warning: 3
-  info: 2
-  total: 6
+  warning: 5
+  info: 3
+  total: 9
 status: issues_found
 ---
 
 # Phase 29: Code Review Report
 
-**Reviewed:** 2026-05-20T10:30:00Z
+**Reviewed:** 2026-05-20T12:00:00Z
 **Depth:** standard
-**Files Reviewed:** 7
+**Files Reviewed:** 36 (28 source, 8 non-source)
 **Status:** issues_found
 
 ## Summary
 
-Reviewed 7 source files related to the removal of stats/digest modules. The code is generally well-structured with good error handling patterns. Two issues stand out: a silent-exit bug on the no-subcommand path, and a keyword-set gap in the SQL normalizer that can produce inconsistent normalization for DDL statements. Several tests have weak assertions that would not catch regressions.
+Phase 29 removed the `stats` and `digest` CLI subcommands, removed `fingerprint.rs`, and migrated `normalize_template` to `normalizer.rs`. The code migration itself (normalizer.rs, cli/mod.rs, cli/opts.rs, main.rs) is structurally sound -- no dangling imports, no missing module references, no compilation regressions.
 
----
+However, two significant findings were discovered:
+
+1. **Critical: `benches/bench_filters.rs` uses the wrong TOML section name** for all filter benchmark configurations. Every scenario uses `[features.filters]` which is silently ignored by serde because the current `Config` struct has no `features` field. All 7 benchmarks measure the no-filter fast path, producing invalid benchmark results.
+
+2. **Multiple stale documentation references** to the removed `stats`/`digest` commands in README.md and docs/architecture.md will cause confusion for users following the examples.
+
+The remaining findings are dead code preservation (`open_connection_only`, `normalize_template`, `FileError::ReadFailed`) and gaps in test coverage.
 
 ## Critical Issues
 
-### BL-01: Help output silently discarded when no subcommand provided
+### CR-01: bench_filters.rs uses `[features.filters]` instead of `[filter]` -- all benchmarks silently test no-filter path
 
-**File:** `src/main.rs:217-219`
+**File:** `benches/bench_filters.rs:76,91,107,122,136,151`
 
-**Issue:**
-When `sqllog2db` is run without any subcommand, `cli.command` is `None` (the field is `Option<Commands>`). The fallback branch tries to display help by calling `Cli::try_parse_from(["sqllog2db", "--help"])`, but the returned `Result` is silently discarded with `let _ = ...`. Neither clap's `try_parse_from` nor `try_parse_from` automatically print help on error — they return `Err(clap::Error)` which must be explicitly handled. The result is that the user sees zero output (no help, no error) and the process exits with code 1.
+**Issue:** All seven benchmark scenarios construct TOML configurations using `[features.filters]` as the section name for filter settings. The current `Config` struct in `src/config/mod.rs` has a `filter: Option<FiltersFeature>` field but no `features` field. Serde silently ignores unknown table keys (no `deny_unknown_fields` on Config). Consequently:
 
-**Fix:**
-Replace the silent discard with `unwrap_or_else(|e| e.exit())` to properly display help:
+- `[features.filters] enable = true` is silently ignored -- `cfg.filter` remains `None`
+- `validate_and_compile()` returns `Ok(None)` for every scenario
+- `handle_run` builds an empty pipeline every time
+- All 7 benchmarks measure only the no-filter fast path, not the intended filter overhead
+
+The affected config builder functions are:
+- `cfg_pipeline_passthrough` (line 73)
+- `cfg_trxid_small` (line 87)
+- `cfg_trxid_large` (line 103)
+- `cfg_indicator_prescan` (line 119)
+- `cfg_exclude_passthrough` (line 134)
+- `cfg_exclude_active` (line 148)
+
+**Impact:** The entire bench_filters benchmark suite produces invalid results. This is especially dangerous because the benchmark outputs look plausible (they complete successfully) but measure nothing close to what their names imply. `pipeline_passthrough`, `trxid_small`, `trxid_large`, `indicator_prescan`, `exclude_passthrough`, and `exclude_active` all produce identical (or near-identical) results to `no_pipeline`. Any regression in the filter path would be invisible.
+
+**Fix:** Replace `[features.filters]` with `[filter]` and update the filter configurations to use the current nested sub-table format or the backward-compatible flat format but under the correct section name. Example for `cfg_pipeline_passthrough`:
 
 ```rust
-None => {
-    cli::opts::Cli::try_parse_from(["sqllog2db", "--help"])
-        .unwrap_or_else(|e| e.exit());
-    std::process::exit(1);
+fn cfg_pipeline_passthrough(sqllog_dir: &Path, bench_dir: &Path) -> Config {
+    let toml = format!(
+        "{base}
+[filter]
+enable = true
+start_ts = \"2000-01-01\"
+",
+        base = base_toml(sqllog_dir, bench_dir)
+    );
+    toml::from_str(&toml).unwrap()
 }
 ```
 
-Alternatively, directly call `cmd.print_help()` using the already-constructed command at line 112, which avoids a redundant parse:
-
-```rust
-None => {
-    use std::io::Write as _;
-    let _ = write!(std::io::stdout(), "{}", cmd.render_help());
-    std::process::exit(0);
-}
-```
-
----
+Note: The old flat format IS supported by `FiltersFeature` via `RawFiltersFeature` for backward compatibility, but the section name must be `[filter]`, not `[features.filters]`. Each benchmark config must be verified to use the correct key from the old flat format (e.g., `exclude_usernames` stays as-is once under `[filter]`; no nested sub-table needed for backward compat).
 
 ## Warnings
 
-### WR-01: Inconsistent fallback between `field_mask()` and `ordered_field_indices()`
+### WR-01: README.md contains stale references to removed `stats` and `digest` commands
 
-**File:** `src/pipeline/mod.rs:204-223`
+**File:** `README.md:49,131-134,177`
 
-**Issue:**
-When the user specifies unknown field names in `[output.fields]`, `field_mask()` (line 204) falls back to `FieldMask::ALL` (export all 15 fields). But `ordered_field_indices()` (line 212) silently drops unknown names via `filter_map` and returns only the valid subset. This creates an inconsistency: the mask says "export everything" but the exporter uses the much smaller ordered list. If `validate()` is not called before these methods, the mismatch causes data corruption (wrong number of fields exported).
+**Issue:** Three locations reference CLI commands that were removed in Phase 29:
 
-**Fix:**
-Make `ordered_field_indices()` consistent with `field_mask()` by falling back to all indices on error:
+- Line 49: Lists `stats` (按文件统计记录数) and `digest` (SQL 指纹聚合) as available CLI commands
+- Lines 131-134: Provides usage examples including `sqllog2db stats -c config.toml --top 10` and `sqllog2db digest -c config.toml --sort exec --top 20`
+- Line 177: Mentions `sqllog2db stats` command for SVG chart generation
 
-```rust
-pub fn ordered_field_indices(&self) -> Vec<usize> {
-    match &self.fields {
-        None => (0..FIELD_NAMES.len()).collect(),
-        Some(names) if names.is_empty() => (0..FIELD_NAMES.len()).collect(),
-        Some(names) => {
-            let result: Vec<usize> = names.iter()
-                .filter_map(|name| FIELD_NAMES.iter().position(|&n| n == name.as_str()))
-                .collect();
-            // If any name was unknown, fall back to all fields to match field_mask()
-            if result.len() != names.len() {
-                (0..FIELD_NAMES.len()).collect()
-            } else {
-                result
-            }
-        }
-    }
-}
-```
+These examples will produce `error: unrecognized subcommand` for any user who follows them.
 
-### WR-02: Missing DDL keywords in `is_keyword` causes inconsistent normalization
+**Fix:** Remove the `stats`/`digest` bullet from line 49. Remove or replace the examples at lines 131-134 with valid commands (`show-config`, `validate`). Remove the chart/SVG paragraph at line 177 which was gated behind the `stats` command.
 
-**File:** `src/pipeline/normalizer.rs:666-714`
+### WR-02: docs/architecture.md contains stale references to removed modules
+
+**File:** `docs/architecture.md:26,51-52`
 
 **Issue:**
-The `is_keyword` function only recognizes a limited set of SQL keywords (max length 8). Common DDL keywords are missing, including: `TABLE`, `INDEX`, `VIEW`, `SCHEMA`, `COLUMN`, `CONSTRAINT`, `PRIMARY`, `FOREIGN`, `UNIQUE`, `CHECK`, `DEFAULT`, `KEY`, `ADD`, `MODIFY`, `TRUNCATE`, `RENAME`, `COMMENT`, `CASCADE`, `RESTRICT`, `AUTO_INCREMENT`, `DATABASE`, `SEQUENCE`, `TRIGGER`, `PROCEDURE`, `FUNCTION`, `PACKAGE`, `TYPE`, `BEFORE`, `AFTER`, `EACH`, `ROW`, `STATEMENT`, `BEGIN`, `COMMIT`, `ROLLBACK`, `SAVEPOINT`, `GRANT`, `REVOKE`, `EXECUTE`, `DECLARE`, `CURSOR`, `LOOP`, `EXIT`, `CONTINUE`, `WHILE`, `FOR`, `IF`, `THEN`, `ELSE`, `ELSIF`, `GOTO`, `RETURN`, `RAISE`, `PRAGMA`, `AUTHID`, `DETERMINISTIC`, `LANGUAGE`, `WRAPPED`, `COMPILE`, `REUSE`, `SETTINGS`, `NOT`, `AND`, `OR`, `XOR`, `ALL`, `ANY`, `SOME`, `EXISTS`, `UNIQUE`, `DISTINCT`, `ASC`, `DESC`, `NULLS`, `FIRST`, `LAST`, `FETCH`, `NEXT`, `ROWS`, `ONLY`, `WITH`, `TIES`, `TABLESAMPLE`, `SYSTEM`, `BERNOULLI`, `PIVOT`, `UNPIVOT`, `MATCHED`, `MERGE`, `WHEN`, `THEN`, `ELSE`, `SOURCE`, `TARGET`, `USING`.
+- Line 26: "stats 和 digest 命令读取已导出的输出文件" -- both commands no longer exist
+- Lines 51-52: Lists `stats.rs` and `digest.rs` as existing source files under `src/cli/`
 
-Because these are missing, `CREATE TABLE t` normalizes to `CREATE table t` (case-preserved), while `CREATE TABLE T` normalizes correctly to `CREATE TABLE T`. Two structurally identical SQL statements get different template keys, defeating the purpose of normalization.
+**Fix:** Remove the `stats`/`digest` mention from line 26. Remove the bullet points listing `stats.rs` and `digest.rs` from lines 51-52.
 
-**Fix:**
-Expand the keyword set. Either add the most common missing keywords, or switch to a dynamic approach (uppercase any word that consists entirely of uppercase letters in the original SQL):
+### WR-03: `SqliteExporter::open_connection_only()` is dead code
 
-One pragmatic approach is to treat all-uppercase words of any length as keywords (not just the explicit list), since normalization is about CASE-FOLDING — not semantic keyword detection:
+**File:** `src/exporter/sqlite/mod.rs:131`
+
+**Issue:** The function `open_connection_only()` is annotated with `#[allow(dead_code)]`. It was part of the stats/digest template analysis path that was removed in Phase 29. The function opens a SQLite connection and sets PRAGMAs without creating the main data table. Since the stats/digest path is gone, this function has no callers.
+
+**Fix:** Remove the function and its `#[allow(dead_code)]` annotation. If it is likely to be needed in the future, add a documented TODO explaining the intended use case.
+
+### WR-04: `normalize_template()` is dead code in normalizer.rs
+
+**File:** `src/pipeline/normalizer.rs:462`
+
+**Issue:** The `normalize_template` function (including all supporting functions: `scan_sql_bytes`, `dispatch_byte`, `handle_quote`, `handle_line_comment`, `handle_block_comment`, `handle_word`, `try_fold_in_list`, `skip_quoted`, `is_subquery`, `is_keyword`, `is_ident_byte`, `prev_is_ident_byte`, plus the `NEEDS_SPECIAL_NORM` lookup table) is annotated with `#[allow(dead_code)]`. These ~280 lines of code were migrated from `fingerprint.rs` to preserve them, but the template analysis pipeline they served was also removed in Phase 29. The extensive test suite (lines 944-1021 of normalizer.rs) tests dead functionality.
+
+**Fix:** If the template pipeline is not planned for restoration, remove `normalize_template` and all supporting private functions plus the associated tests. If it IS planned for restoration, remove `#[allow(dead_code)]` and add a clear TODO comment explaining the intended re-integration point.
+
+### WR-05: No test coverage for pre-compiled filter path
+
+**File:** `src/cli/run/tests.rs`
+
+**Issue:** All tests in this file pass `None` for the `compiled_filters` argument to `handle_run` (the 8th parameter introduced together with `validate_and_compile`). The pre-compiled path -- where callers explicitly compile filters via `cfg.validate_and_compile()` and pass `Some((CompiledMetaFilters, CompiledSqlFilters))` -- has zero test coverage in the unit tests. A regression in the pre-compiled path (e.g., `recompile_meta_if_needed` modifying filter state incorrectly, or `build_pipeline` handling pre-compiled meta filters differently) would go undetected.
+
+**Fix:** Add at least one test that exercises the explicit pre-compiled path:
 
 ```rust
-fn is_keyword(word: &[u8]) -> bool {
-    // All-uppercase words are treated as keywords for case normalization
-    if word.iter().all(|&b| b.is_ascii_uppercase()) {
-        return true;
-    }
-    // ... existing list for mixed/lowercase common keywords ...
-}
+let compiled_filters = cfg.validate_and_compile().unwrap();
+handle_run(&cfg, None, true, true, &interrupted, 80, 1, compiled_filters).unwrap();
 ```
-
-### WR-03: Weak assertion in `test_resume_reprocesses_changed_file`
-
-**File:** `tests/integration.rs:338-340`
-
-**Issue:**
-The assertion `rows >= 1` is too weak. After reprocessing a file that grew from 5 to 10 records, the test checks only that output exists but not the expected count. Even if the reprocessing logic is broken and produces 0 data rows (just a header), the assertion passes because the CSV header line makes `rows >= 1` true.
-
-**Fix:**
-Assert the exact expected line count (header + 10 data rows = 11):
-
-```rust
-let rows = std::fs::read_to_string(&csv2).unwrap().lines().count();
-assert_eq!(
-    rows, 11,
-    "expected header + 10 data rows from reprocessed file, got {rows}"
-);
-```
-
----
 
 ## Info
 
-### IN-01: `#![allow(dead_code)]` in lang.rs suppresses warnings unnecessarily
+### IN-01: `FileError::ReadFailed` dead code (scheduled for Phase 32)
 
-**File:** `src/lang.rs:11`
+**File:** `src/error.rs:59`
 
-**Issue:**
-The `#![allow(dead_code)]` attribute is applied at the module level. All public/crate-visible items in this module appear to be used within the crate (`detect`, `apply_zh`, `Lang`). If the attribute exists to silence warnings during incremental development, it should be removed after confirming no dead code remains. Keeping it risks masking real dead code that should be cleaned up.
+**Issue:** `FileError::ReadFailed` variant is annotated `#[allow(dead_code)]` with a TODO comment scheduling cleanup for Phase 32. This is known tracked debt. Phase 29 would have been a natural cleanup point since stats/digest were its likely consumers.
 
-### IN-02: Fragile `split(',')` for CSV field counting in tests
+### IN-02: Migration comments reference removed `fingerprint.rs`
 
-**File:** `tests/integration.rs:1117, 1170`
+**File:** `src/pipeline/normalizer.rs:460,944`
 
-**Issue:**
-Two tests (`test_e2e_template_normalization` line 1117, `test_e2e_field_projection` line 1170) use `data_line.split(',').count()` to count CSV fields. This approach is fragile — if the SQL statement in test data ever contains a comma, the field count will be wrong and assertions could silently pass or fail for the wrong reason. The comments at lines 1119-1120 and 1171-1172 acknowledge this limitation.
+**Issue:** Two comments document the migration history:
+- Line 460: "原位于 `fingerprint.rs`，为保留模板管道功能迁移至此。"
+- Line 944: "// ---- normalize_template 测试（从 fingerprint.rs 迁移）"
 
-Using a proper CSV parser like the `csv` crate would make these tests robust against future changes to test data.
+These are accurate historical notes but refer to a file that no longer exists in the codebase.
+
+### IN-03: Inconsistent import paths in validate.rs
+
+**File:** `src/config/validate.rs:49,70`
+
+**Issue:** Two methods use different paths for the same type:
+- `validate_and_compile` (line 49): `crate::pipeline::CompiledMetaFilters`
+- `validate_filter` (line 70): `crate::pipeline::filters::CompiledMetaFilters`
+
+Both resolve to the same type (re-exported in `pipeline/mod.rs`). Prefer the shorter path or add a `use` import for consistency.
 
 ---
 
-_Reviewed: 2026-05-20T10:30:00Z_
+_Reviewed: 2026-05-20T12:00:00Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
