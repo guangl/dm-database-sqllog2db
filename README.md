@@ -31,22 +31,14 @@
 - **事务级 SQL 内容过滤器**：应用于 SQL 文本内容的字符串模式（`includes` 和 `excludes`）。两遍设计：预扫描收集匹配的事务 ID，主遍将事务集过滤器与记录级过滤器一起应用。
 - **字段投影**：`ordered_indices: Vec<usize>` 允许你从记录模式中选择精确的列顺序和子集。从配置通过管道传递到导出器——未在列表中显式声明的字段不会被写入。
 
-### 模板分析与图表
-
-- **SQL 指纹归一化**（`normalize_template`）：去除单行和块注释，将 IN 列表值折叠为单个 `?` 占位符，关键字大写，合并空白字符。从结构相同但参数值不同的查询中生成稳定的模板键。
-- **TemplateAggregator**：流式统计引擎，统计每个模板的出现次数，通过 `hdrhistogram`（每个模板压缩后约 24 KB，相比原始 `Vec<u64>` 约 40 MB）累积执行时间分布，并记录首次/末次时间戳以及一条代表性 SQL 示例。
-- **双路统计输出**：聚合的模板数据在单次运行中同时写入 CSV 摘要文件和专用的 SQLite 表（`sql_templates`）。无需后处理或二次聚合。
-- **四类 SVG 图表**：频率柱状图（Top-N SQL 模板按执行次数排序）、延迟直方图（每个模板的执行时间分布，使用 hdrhistogram 桶边界）、趋势折线图（归一化模板在各时间桶中的频率变化）和用户饼图（按数据库用户的查询占比）。通过 plotters 渲染，仅使用 SVG 后端——不需要系统字体或图片库。
-- **配置驱动的图表生成**：通过 `[template]` 和 `[charts]` TOML 配置启用。支持配置 Top-N 数量、按图表类型开关和输出目录。
-
 ### 配置与性能
 
-- **嵌套子表的 TOML 配置**：v1.4+ 格式将 `[filter.include]`、`[filter.exclude]`、`[template]`、`[charts]` 作为顶级节（而非嵌套在 `[features]` 下）。旧的扁平格式通过 `RawFiltersFeature` 中间结构和 serde 别名支持向后兼容。`validate_and_compile()` 验证最终形式并拒绝旧版布局。
-- **零开销快速路径**：当管道为空（无过滤器、无模板、无 replace_parameters）时，热循环通过单个 `pipeline.is_empty()` 检查跳过所有功能门控。快速路径中无虚函数调用、无逐记录的条件分支。
+- **嵌套子表的 TOML 配置**：v1.4+ 格式将 `[filter.include]`、`[filter.exclude]` 作为顶级节（而非嵌套在 `[features]` 下）。旧的扁平格式通过 `RawFiltersFeature` 中间结构和 serde 别名支持向后兼容。`validate_and_compile()` 验证最终形式并拒绝旧版布局。
+- **零开销快速路径**：当管道为空（无过滤器、无 replace_parameters）时，热循环通过单个 `pipeline.is_empty()` 检查跳过所有功能门控。快速路径中无虚函数调用、无逐记录的条件分支。
 - **预编译的过滤器处理管道**：`CompiledMetaFilters` 和 `CompiledSqlFilters` 在启动时持有编译好的 `RegexSet` 实例。每个过滤器变体带有类型标签（include、exclude、indicator、SQL include、SQL exclude），无需字符串匹配即可派发。
 - **单线程流式处理**：无论数据量大小，性能可预测。使用 mimalloc 作为全局分配器。Release 配置：`opt-level=3`、LTO fat、codegen-units=1、panic=abort、strip=symbols——生成约 5 MB 的二进制文件。
 - **基准测试结果**：~520 万条记录/秒 CSV（criterion，合成 50k 记录数据集，Apple M 系列芯片），~110 万条记录/秒 SQLite（batch + PRAGMA），~155 万条记录/秒（真实 1.1 GB 文件，约 300 万条记录，NVMe SSD）。
-- **额外的 CLI 命令**：`stats` 用于按文件统计记录数、慢查询排名（`--top N`）和分组聚合（`--group-by user,app,ip`）；`digest` 用于 SQL 指纹聚合并支持排序和过滤选项；`show-config` 用于查看当前配置；`completions` 和 `man` 用于 shell 集成（bash、zsh、fish）。
+- **额外的 CLI 命令**：`stats` 用于按文件统计记录数、慢查询排名（`--top N`）和分组聚合（`--group-by user,app,ip`）；`show-config` 用于查看当前配置。
 
 ## 架构
 
@@ -54,7 +46,7 @@
 
 1. **发现**：`SqllogParser` 解析配置的路径（文件、目录或 glob）并生成有序的 `.log` 文件列表。
 2. **解析**：每个文件通过 `dm-database-parser-sqllog` 逐行流式读取，解码 GB18030/GBK 记录并提取结构化字段（用户、SQL 文本、执行时长、行数、会话 ID 等）。
-3. **处理管道**：解析后的记录通过可选的处理管道。当管道为空（无过滤器、无模板）时，记录通过零开销快速路径绕过所有功能逻辑。当管道活跃时，运行编译好的正则过滤器或模板归一化。
+3. **处理管道**：解析后的记录通过可选的处理管道。当管道为空（无过滤器）时，记录通过零开销快速路径绕过所有功能逻辑。当管道活跃时，运行编译好的正则过滤器。
 4. **导出**：活跃的导出器（CSV 或 SQLite，按优先级选择）写入每条记录。ExporterManager 将记录路由到单一配置的导出器。
 
 这种流式设计保持内存使用恒定——100 MB 日志文件和 100 GB 日志文件消耗相同的峰值内存。
@@ -107,8 +99,6 @@ sqllog2db --version
 sqllog2db --help
 ```
 
-使用 `sqllog2db completions bash`、`sqllog2db completions zsh` 或 `sqllog2db completions fish` 安装 shell 补全。运行 `sqllog2db man` 生成 man 手册页。
-
 ## 快速入门
 
 生成默认配置，验证后运行导出：
@@ -126,25 +116,15 @@ sqllog2db run -c config.toml --limit 1000
 sqllog2db run -c config.toml --from "2025-01-01" --to "2025-12-31"
 ```
 
-按文件统计、慢查询排名和 SQL 指纹聚合：
-
-```bash
-sqllog2db stats -c config.toml --top 10
-sqllog2db digest -c config.toml --sort exec --top 20
-```
-
 详细用法参见[快速入门指南](./docs/quickstart.md)。
 
 ## 配置
 
-`sqllog2db init` 生成的默认配置使用嵌套 TOML 子表来设置过滤器、模板和图表选项（v1.4+ 格式）：
+`sqllog2db init` 生成的默认配置使用嵌套 TOML 子表来设置过滤器选项（v1.4+ 格式）：
 
 ```toml
 [sqllog]
 path = "sqllogs"
-
-[template]
-enable = false
 
 [filter]
 enable = false
@@ -171,10 +151,6 @@ overwrite = true
 | 真实文件（1.1 GB，NVMe） | ~155 万条/秒 | ~300 万条记录，生产日志 |
 
 基准测试使用 `cargo bench` 在搭载 Apple Silicon 和 NVMe SSD 的 Mac 上测量。
-
-## 图表功能
-
-本工具内置 SQL 模板分析引擎，可自动生成四类图表：频率柱状图（Top-N SQL 模板按执行次数排序）、延迟直方图（每类模板的执行时间分布）、趋势折线图（SQL 执行频率随时间变化）、用户饼图（按数据库用户的查询占比）。图表以 SVG 格式输出，通过 `sqllog2db stats` 命令配合 `--chart` 参数生成，输出到配置的 charts/ 目录。
 
 ## 错误处理
 
