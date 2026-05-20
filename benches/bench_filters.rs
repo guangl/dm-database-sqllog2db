@@ -47,9 +47,6 @@ fn base_toml(sqllog_dir: &Path, bench_dir: &Path) -> String {
 [sqllog]
 directory = "{sqllog}"
 
-[error]
-file = "{dir}/errors.log"
-
 [logging]
 file = "{dir}/app.log"
 level = "warn"
