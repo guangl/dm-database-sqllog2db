@@ -224,14 +224,18 @@ Plans:
 **Depends on**: Phase 33
 **Requirements**: RM-05, RM-08
 **Success Criteria** (what must be TRUE):
-  1. `normalize_template` 死代码（normalizer.rs:462）及关联测试已移除
-  2. `[template]` 配置段被显式拒绝（与 `[pipeline]` 行为一致）
-  3. Phase 30 创建 VERIFICATION.md 验证移除结果
-  4. RM-05 和 RM-08 要求全部满足
-  5. `cargo build --release` 通过
-  6. `cargo clippy --all-targets -- -D warnings` 零警告
-  7. `cargo test` 全部通过
-**Plans**: TBD
+  1. `[template]` 配置段被显式拒绝（与 `[pipeline]` 行为一致）
+  2. Phase 30 创建 VERIFICATION.md 验证移除结果
+  3. RM-05 和 RM-08 要求全部满足
+  4. `cargo build --release` 通过
+  5. `cargo clippy --all-targets -- -D warnings` 零警告
+  6. `cargo test` 全部通过
+**Plans**: 2 plans
+```
+Plans:
+- [ ] 34-01-PLAN.md -- 添加 [template] 配置段显式拒绝逻辑
+- [ ] 34-02-PLAN.md -- 创建 Phase 30 VERIFICATION.md，确认所有审计缺口关闭
+```
 
 ## Progress
 
@@ -266,7 +270,7 @@ Plans:
 | 27. 模板报告独立输出 | v1.6 | 2/2 | Complete   | 2026-05-19 |
 | 28. 移除图表、自更新、补全 | v1.7 | 3/3 | Complete    | 2026-05-19 |
 | 29. 移除统计与摘要 | v1.7 | 2/2 | Complete    | 2026-05-19 |
-| 30. 移除模板分析 | v1.7 | 0/0 | Not started | - |
+| 30. 移除模板分析 | v1.7 | 3/3 | Complete    | 2026-05-20 |
 | 31. 移除断点续传 | v1.7 | 2/2 | Complete    | 2026-05-20 |
 | 32. 项目结构清理 | v1.7 | 3/3 | Complete    | 2026-05-20 |
 | 33. 核心功能验证 | v1.7 | 3/3 | Complete    | 2026-05-20 |
