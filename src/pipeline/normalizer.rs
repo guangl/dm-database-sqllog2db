@@ -457,7 +457,8 @@ const NEEDS_SPECIAL_NORM: [bool; 256] = {
 /// 将 SQL 字符串归一化为模板 key：去除注释、折叠 IN 列表、统一关键字大小写、折叠空白。
 ///
 /// 结构相同的 SQL（无论字面量值或数量）将得到同一模板 key，用于模板聚合统计。
-/// 原位于 `fingerprint.rs`，为保留模板管道功能迁移至此。
+/// TODO: 重新集成到模板处理管线中——当前 `normalize_template` 已迁移至此
+///       但尚未被 `Pipeline` 或 `TemplateAggregator` 调用。待模板管道对接完成后移除此注释。
 #[must_use]
 #[allow(dead_code)]
 pub fn normalize_template(sql: &str) -> String {
@@ -941,7 +942,7 @@ mod tests {
         assert_eq!(result, "SELECT 'unclosed");
     }
 
-    // ── normalize_template 测试（从 fingerprint.rs 迁移） ───────────────────
+    // ── normalize_template 测试（模板管道保留，待重新集成） ───────────────────
 
     #[test]
     fn test_normalize_line_comment_removed() {
