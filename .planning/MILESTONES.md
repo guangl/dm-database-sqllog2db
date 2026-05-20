@@ -1,5 +1,42 @@
 # Milestones
 
+## v1.7 — 项目精简
+
+**Shipped:** 2026-05-20
+**Phases:** 28–34 | **Plans:** 18 | **Commits:** ~50
+
+### Delivered
+
+系统性精简项目：移除 SVG 图表生成（plotters）、自更新（self_update/reqwest/rustls）、Shell 补全（clap_complete/clap_mangen）、统计摘要（stats/digest/serde_json）、模板分析（template/hdrhistogram）、断点续传（resume）六大外部功能模块，清理所有残留代码和依赖，通过全链路 604 测试验证核心功能完整性，补签 Phase 30 验证报告，关闭所有审计缺口。
+
+### Key Accomplishments
+
+1. **六大功能模块移除** — 删除 SVG 图表 + self-update + Shell 补全 + stats/digest + 模板分析 + 断点续传共 ~8,000 行代码，消除 plotters/self_update/reqwest/rustls/clap_complete/clap_mangen/serde_json/hdrhistogram 8 个依赖
+2. **项目结构清理** — 清理空目录、stale mod 声明、Config 残留字段、Cargo.toml 未使用依赖，Exporter trait 死代码移除，错误类型冗余变体清理
+3. **配置安全加固** — `[pipeline]` 和 `[template]` 废弃配置段显式拒绝，给出中文迁移错误消息，防止用户静默使用旧配置
+4. **核心功能全链路验证** — 604 测试全部通过，CSV/SQLite 导出、四类过滤器、参数归一化、并行 CSV 全部 11/11 冒烟测试通过，benchmark 零 v1.7 回归 >10%
+5. **审计缺口闭环** — Phase 30 补签 VERIFICATION.md，INT-01/INT-02/INT-03 三个集成警告全部关闭，RM-05/RM-08 需求验证完整
+
+### Stats
+
+- Timeline: 1 day (2026-05-19 → 2026-05-20)
+- Rust LOC: ~8,500 (精简后)
+- Test suite: 604 tests passing (275 unit + 293 doc + 36 integration)
+- Dependencies removed: 8 crates
+- Benchmark: zero regression >10% vs v1.0 baseline
+
+### Known Deferred Items at Close
+
+- Nyquist VALIDATION.md 补签（Phase 28/29/31/32）— 4 个 MISSING，非功能差距（见 v1.7-MILESTONE-AUDIT.md）
+
+### Archive
+
+- `.planning/milestones/v1.7-ROADMAP.md`
+- `.planning/milestones/v1.7-REQUIREMENTS.md`
+- `.planning/v1.7-MILESTONE-AUDIT.md`
+
+---
+
 ## v1.6 — 文档中文化 & 延后需求补全
 
 **Shipped:** 2026-05-19

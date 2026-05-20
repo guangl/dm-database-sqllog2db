@@ -2,11 +2,11 @@
 
 ## Current State
 
-sqllog2db 完成八个里程碑迭代（v1.0–v1.7），具备完整的 SQL 参数归一化、嵌套配置模型、模块化代码架构和全中文项目文档。v1.7 精简阶段完成，移除了 SVG 图表、self-update、Shell 补全、Man page、stats、digest、模板分析、断点续传和所有相关残留代码，项目结构大幅简化。
+sqllog2db 完成八个里程碑迭代（v1.0–v1.7），具备完整的 SQL 参数归一化、嵌套配置模型、模块化代码架构和全中文项目文档。v1.7 精简阶段完成，移除了 SVG 图表、self-update、Shell 补全、Man page、stats、digest、模板分析、断点续传和所有相关残留代码，项目结构大幅简化。604 测试全部通过，benchmark 零回归 >10%，全部审计缺口已关闭。
 
 ## Previous Milestones
 
-- ✅ **v1.7** (2026-05-20) — 项目精简：移除 SVG 图表、self-update、Shell 补全、stats、digest、模板分析、断点续传及所有残留代码（Phases 28–32）
+- ✅ **v1.7** (2026-05-20) — 项目精简：移除 SVG 图表、self-update、Shell 补全、stats、digest、模板分析、断点续传及所有残留代码，核心功能全链路验证，审计缺口闭环（Phases 28–34）
 - ✅ **v1.6** (2026-05-19) — 文档中文化 & 延后需求补全（Phases 24–27）
 - ✅ **v1.5** (2026-05-19) — 文档完善 & 项目展示（Phases 21–23）
 - ✅ **v1.4** (2026-05-18) — 代码重构 & 质量深化（Phases 17–20）
