@@ -3,12 +3,9 @@ use crate::config::Config;
 use crate::error::{Error, Result};
 use crate::exporter::ExporterManager;
 use crate::parser::SqllogParser;
-use crate::pipeline::template_reporter::TemplateReporter;
-use crate::pipeline::{CompiledMetaFilters, CompiledSqlFilters, TemplateAggregator};
-use crate::pipeline::{derive_template_report_paths, template_report_enabled};
+use crate::pipeline::{CompiledMetaFilters, CompiledSqlFilters};
 use indicatif::HumanCount;
 use log::{info, warn};
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
@@ -23,40 +20,6 @@ use parallel::process_csv_parallel;
 use prescan::{recompile_meta_if_needed, scan_for_trxids_by_transaction_filters};
 use processor::process_log_file;
 
-/// 将模板统计报告写入独立文件（`[template.report]` 配置段路径）
-fn write_template_reports(cfg: &Config, stats: &[crate::pipeline::TemplateStats]) -> Result<()> {
-    if !template_report_enabled(cfg) {
-        return Ok(());
-    }
-    let report = cfg.template.as_ref().and_then(|t| t.report.as_ref());
-    let (derived_csv, derived_sqlite) = derive_template_report_paths(cfg);
-    let csv_path = report
-        .and_then(|r| {
-            if r.csv_report_path.trim().is_empty() {
-                None
-            } else {
-                Some(PathBuf::from(&r.csv_report_path))
-            }
-        })
-        .or(derived_csv);
-    let sqlite_path = report
-        .and_then(|r| {
-            if r.sqlite_report_path.trim().is_empty() {
-                None
-            } else {
-                Some(PathBuf::from(&r.sqlite_report_path))
-            }
-        })
-        .or(derived_sqlite);
-    if let Some(ref path) = csv_path {
-        TemplateReporter::write_csv(path, stats)?;
-    }
-    if let Some(ref path) = sqlite_path {
-        TemplateReporter::write_sqlite(path, stats)?;
-    }
-    Ok(())
-}
-
 /// 主编排函数：解析日志文件并导出到配置的导出器。
 /// `compiled_filters` 由调用方预编译（`Config::validate_and_compile`），避免重复编译正则。
 /// 并行路径：CSV + 多文件 + 无 limit + jobs > 1；顺序路径：其他情况。
@@ -67,8 +30,6 @@ pub fn handle_run(
     quiet: bool,
     interrupted: &Arc<AtomicBool>,
     progress_interval: u64,
-    resume: bool,
-    state_file_override: Option<&str>,
     jobs: usize,
     compiled_filters: Option<(CompiledMetaFilters, CompiledSqlFilters)>,
 ) -> Result<()> {
@@ -82,19 +43,6 @@ pub fn handle_run(
         warn!("No log files found");
         return Ok(());
     }
-    let state_path =
-        std::path::PathBuf::from(state_file_override.unwrap_or(&cfg.resume.state_file));
-    let mut resume_state = if resume {
-        let state = crate::resume::ResumeState::load(&state_path);
-        info!(
-            "Resume mode: state file {}, {} files previously processed",
-            state_path.display(),
-            state.processed_count()
-        );
-        Some(state)
-    } else {
-        None
-    };
     // 仅当有事务级过滤器时才克隆配置（避免常规路径的额外分配）
     let owned_cfg;
     let final_cfg: &Config = if cfg
@@ -127,7 +75,6 @@ pub fn handle_run(
             .replace_parameters
             .as_ref()
             .is_none_or(|r| r.enable);
-    let do_template = final_cfg.template.as_ref().is_some_and(|t| t.enable);
     let placeholder_override = final_cfg
         .replace_parameters
         .as_ref()
@@ -150,17 +97,14 @@ pub fn handle_run(
 
     if use_parallel {
         info!("Parsing and exporting SQL logs (parallel, {jobs} jobs)...");
-        let (processed_files, parallel_skipped, parallel_agg) = process_csv_parallel(
+        let (processed_files, parallel_skipped) = process_csv_parallel(
             &log_files,
             final_cfg,
             &pipeline,
             jobs,
             &pb,
             interrupted,
-            resume_state.as_ref(),
-            quiet,
             do_normalize,
-            do_template,
             placeholder_override,
             field_mask,
             &ordered_indices,
@@ -168,25 +112,6 @@ pub fn handle_run(
         )?;
         total_records = processed_files.iter().map(|(_, c)| *c).sum();
         skipped_files = parallel_skipped;
-        if let Some(ref agg) = parallel_agg {
-            if let Some(charts_cfg) = final_cfg.charts.as_ref() {
-                crate::charts::generate_charts(agg, charts_cfg)?;
-            }
-        }
-        let template_stats = parallel_agg.map(TemplateAggregator::finalize);
-        if let Some(ref stats) = template_stats {
-            info!("Template analysis: {} unique templates", stats.len());
-
-            write_template_reports(final_cfg, stats)?;
-        }
-        if !interrupted.load(Ordering::Relaxed) {
-            if let Some(state) = &mut resume_state {
-                for (file, count) in &processed_files {
-                    state.mark_processed(file, *count as u64)?;
-                }
-                state.save(&state_path)?;
-            }
-        }
     } else {
         let mut exporter_manager = if dry_run {
             ExporterManager::dry_run()
@@ -204,7 +129,6 @@ pub fn handle_run(
         );
         let mut params_buffer = crate::pipeline::normalizer::ParamBuffer::default();
         let mut ns_scratch: Vec<u8> = Vec::with_capacity(4096);
-        let mut template_agg = do_template.then(TemplateAggregator::new);
         for (idx, log_file) in log_files.iter().enumerate() {
             if interrupted.load(Ordering::Relaxed) {
                 break;
@@ -212,19 +136,6 @@ pub fn handle_run(
             let remaining = limit.map(|l| l.saturating_sub(total_records));
             if remaining == Some(0) {
                 break;
-            }
-            if let Some(state) = &resume_state {
-                if state.is_processed(log_file) {
-                    skipped_files += 1;
-                    pb.println(format!(
-                        "{} [{}/{}] {} — skipped (already processed)",
-                        color::dim("⏭"),
-                        idx + 1,
-                        log_files.len(),
-                        log_file.display()
-                    ));
-                    continue;
-                }
             }
             let processed = process_log_file(
                 &log_file.to_string_lossy(),
@@ -236,38 +147,20 @@ pub fn handle_run(
                 remaining,
                 interrupted,
                 do_normalize,
-                template_agg.as_mut(),
                 placeholder_override,
                 &mut params_buffer,
                 &mut ns_scratch,
                 true,
                 sql_record_filter,
             )?;
-            if !dry_run {
-                if let Some(state) = &mut resume_state {
-                    state.mark_processed(log_file, processed as u64)?;
-                    state.save(&state_path)?;
-                }
-            }
             total_records += processed;
             if limit.is_some_and(|l| total_records >= l) {
                 break;
             }
         }
-        if let Some(ref agg) = template_agg {
-            if let Some(charts_cfg) = final_cfg.charts.as_ref() {
-                crate::charts::generate_charts(agg, charts_cfg)?;
-            }
-        }
         exporter_manager.finalize()?;
         if !quiet {
             exporter_manager.log_stats();
-        }
-        let template_stats = template_agg.map(TemplateAggregator::finalize);
-        if let Some(ref stats) = template_stats {
-            info!("Template analysis: {} unique templates", stats.len());
-
-            write_template_reports(final_cfg, stats)?;
         }
     }
     pb.finish_and_clear();

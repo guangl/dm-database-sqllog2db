@@ -1,24 +1,19 @@
 mod apply_one;
 pub mod exporter;
 pub mod logging;
-pub mod resume;
 pub mod sqllog;
 mod validate;
 
 pub use exporter::{CsvExporterConfig, ExporterConfig, SqliteExporterConfig};
 pub use logging::{LOG_LEVELS, LoggingConfig};
-pub use resume::ResumeConfig;
 pub use sqllog::SqllogConfig;
 
 use crate::error::{ConfigError, Error, Result};
-use crate::pipeline::{
-    ChartsConfig, FiltersFeature, NormalizeConfig, OutputConfig, TemplateConfig,
-};
+use crate::pipeline::{FiltersFeature, NormalizeConfig, OutputConfig};
 use serde::Deserialize;
 use std::path::Path;
 
-const PIPELINE_MIGRATION_HINT: &str = "配置格式已升级，请迁移以下字段：\n  [pipeline.template_analysis] → [template]\n  \
-     [pipeline.charts] → [charts]\n  [pipeline.normalize] → [replace_parameters]\n  \
+const PIPELINE_MIGRATION_HINT: &str = "配置格式已升级，请迁移以下字段：\n  [pipeline.normalize] → [replace_parameters]\n  \
      [pipeline.filters.*] → [filter.*]\n  [pipeline.fields] → [output.fields]\n\
      详见 .planning/phases/18-template-chart-nesting/18-CONTEXT.md";
 
@@ -31,15 +26,9 @@ pub struct Config {
     #[serde(default)]
     pub exporter: ExporterConfig,
     #[serde(default)]
-    pub resume: ResumeConfig,
-    #[serde(default)]
     pub replace_parameters: Option<NormalizeConfig>,
     #[serde(default)]
-    pub template: Option<TemplateConfig>,
-    #[serde(default)]
     pub filter: Option<FiltersFeature>,
-    #[serde(default)]
-    pub charts: Option<ChartsConfig>,
     #[serde(default)]
     pub output: Option<OutputConfig>,
     /// 旧路径检测：捕获 `[pipeline]` 表（若用户仍用旧格式）。
@@ -47,6 +36,11 @@ pub struct Config {
     #[doc(hidden)]
     #[serde(rename = "pipeline", default)]
     pub pipeline_deprecated: Option<toml::Value>,
+    /// 旧路径检测：捕获 `[template]` 表（若用户仍用旧格式）。
+    /// 非 None 时 validate() 会返回废弃错误，用户不应直接使用此字段。
+    #[doc(hidden)]
+    #[serde(rename = "template", default)]
+    pub template_deprecated: Option<toml::Value>,
 }
 
 impl Config {
@@ -274,13 +268,11 @@ append = false
     }
 
     #[test]
-    fn test_config_has_5_top_level_optional_fields() {
-        // 确保 5 个顶层字段默认值为 None
+    fn test_config_has_3_top_level_optional_fields() {
+        // 确保 3 个顶层字段默认值为 None
         let cfg = default_config();
         assert!(cfg.replace_parameters.is_none());
-        assert!(cfg.template.is_none());
         assert!(cfg.filter.is_none());
-        assert!(cfg.charts.is_none());
         assert!(cfg.output.is_none());
     }
 }

@@ -5,20 +5,8 @@ pub(crate) use filters::{CompiledMetaFilters, CompiledSqlFilters};
 pub mod normalizer;
 pub(crate) use normalizer::compute_normalized;
 
-pub mod fingerprint;
-pub(crate) use fingerprint::fingerprint;
-pub(crate) use fingerprint::normalize_template;
-
-pub mod aggregator;
-pub(crate) use aggregator::ChartEntry;
-pub(crate) use aggregator::TemplateAggregator;
-pub(crate) use aggregator::TemplateStats;
-
-pub(crate) mod template_reporter;
-
 use dm_database_parser_sqllog::{MetaParts, Sqllog};
 use serde::Deserialize;
-use std::path::PathBuf;
 
 /// 导出字段名列表（顺序与 CSV/SQLite 列顺序一致，共 15 个字段）
 pub const FIELD_NAMES: &[&str] = &[
@@ -124,113 +112,6 @@ impl NormalizeConfig {
 
 fn default_true() -> bool {
     true
-}
-
-fn default_top_n() -> usize {
-    10
-}
-
-/// `[template]` 配置段 — SQL 模板归一化与聚合
-#[derive(Debug, Deserialize, Clone, Default)]
-pub struct TemplateConfig {
-    /// 是否启用 SQL 模板归一化（默认 false）
-    #[serde(default)]
-    pub enable: bool,
-    /// `[template.report]` 子配置段 — 独立报告输出
-    #[serde(default)]
-    pub report: Option<TemplateReportConfig>,
-}
-
-/// `[template.report]` 子配置段 — 独立模板报告输出（D-05）
-#[derive(Debug, Deserialize, Clone)]
-pub struct TemplateReportConfig {
-    /// 是否启用独立模板报告（默认 `true`）
-    #[serde(default = "default_true")]
-    pub enabled: bool,
-    /// CSV 报告路径；空字符串 = 从 exporter 路径自动派生
-    #[serde(default)]
-    pub csv_report_path: String,
-    /// `SQLite` 报告路径；空字符串 = 从 exporter 路径自动派生
-    #[serde(default)]
-    pub sqlite_report_path: String,
-}
-
-impl Default for TemplateReportConfig {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            csv_report_path: String::new(),
-            sqlite_report_path: String::new(),
-        }
-    }
-}
-
-/// 检查是否应生成独立模板报告文件
-/// 当 `[template.report]` 存在时使用其 `enabled` 值，否则跟随 `template.enable`
-pub(crate) fn template_report_enabled(cfg: &crate::config::Config) -> bool {
-    cfg.template
-        .as_ref()
-        .and_then(|t| t.report.as_ref().map(|r| r.enabled))
-        .unwrap_or_else(|| cfg.template.as_ref().is_some_and(|t| t.enable))
-}
-
-/// 自动派生模板报告文件路径（D-04）
-pub(crate) fn derive_template_report_paths(
-    cfg: &crate::config::Config,
-) -> (Option<PathBuf>, Option<PathBuf>) {
-    let dot = PathBuf::from(".");
-    let (parent, stem) = if let Some(ref csv) = cfg.exporter.csv {
-        let p = PathBuf::from(&csv.file);
-        let dir = p.parent().unwrap_or(&dot);
-        let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("sqllog");
-        (dir.to_path_buf(), stem.to_string())
-    } else if let Some(ref sqlite) = cfg.exporter.sqlite {
-        let p = PathBuf::from(&sqlite.database_url);
-        let dir = p.parent().unwrap_or(&dot);
-        let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("sqllog");
-        (dir.to_path_buf(), stem.to_string())
-    } else {
-        return (None, None);
-    };
-    let csv = parent.join(format!("{stem}_templates.csv"));
-    let sqlite = parent.join(format!("{stem}_templates.db"));
-    (Some(csv), Some(sqlite))
-}
-
-/// `[charts]` 配置段
-#[derive(Debug, Deserialize, Clone)]
-#[allow(clippy::struct_excessive_bools)]
-pub struct ChartsConfig {
-    /// 图表输出目录（必填，无默认值）
-    pub output_dir: String,
-    /// 频率 Top-N 数量（默认 10）
-    #[serde(default = "default_top_n")]
-    pub top_n: usize,
-    /// 是否生成频率柱状图（默认 true）
-    #[serde(default = "default_true")]
-    pub frequency_bar: bool,
-    /// 是否生成延迟直方图（默认 true）
-    #[serde(default = "default_true")]
-    pub latency_hist: bool,
-    /// 是否生成时间趋势折线图（默认 true）
-    #[serde(default = "default_true")]
-    pub trend_line: bool,
-    /// 是否生成用户占比饼图（默认 true）
-    #[serde(default = "default_true")]
-    pub user_pie: bool,
-}
-
-impl Default for ChartsConfig {
-    fn default() -> Self {
-        Self {
-            output_dir: "charts/".to_string(),
-            top_n: 10,
-            frequency_bar: true,
-            latency_hist: true,
-            trend_line: true,
-            user_pie: true,
-        }
-    }
 }
 
 /// `[output]` 配置段：字段投影
@@ -372,67 +253,6 @@ mod tests {
     }
 
     #[test]
-    fn test_charts_config_default_values() {
-        let cfg = ChartsConfig::default();
-        assert_eq!(cfg.output_dir, "charts/");
-        assert_eq!(cfg.top_n, 10);
-        assert!(cfg.frequency_bar);
-        assert!(cfg.latency_hist);
-        assert!(cfg.trend_line);
-        assert!(cfg.user_pie);
-    }
-
-    #[test]
-    fn test_charts_config_deserialize_only_output_dir() {
-        let cfg: ChartsConfig = toml::from_str(r#"output_dir = "out/""#).unwrap();
-        assert_eq!(cfg.output_dir, "out/");
-        assert_eq!(cfg.top_n, 10);
-        assert!(cfg.frequency_bar);
-        assert!(cfg.latency_hist);
-    }
-
-    #[test]
-    fn test_charts_config_deserialize_full() {
-        let toml = r#"
-output_dir = "custom/"
-top_n = 5
-frequency_bar = false
-latency_hist = false
-"#;
-        let cfg: ChartsConfig = toml::from_str(toml).unwrap();
-        assert_eq!(cfg.output_dir, "custom/");
-        assert_eq!(cfg.top_n, 5);
-        assert!(!cfg.frequency_bar);
-        assert!(!cfg.latency_hist);
-        assert!(cfg.trend_line);
-        assert!(cfg.user_pie);
-    }
-
-    #[test]
-    fn test_template_config_default() {
-        let cfg = TemplateConfig::default();
-        assert!(!cfg.enable);
-        assert!(cfg.report.is_none());
-    }
-
-    #[test]
-    fn test_template_config_deserialize_with_report() {
-        let toml = "enable = true\n[report]\nenabled = true\ncsv_report_path = \"out.csv\"";
-        let cfg: TemplateConfig = toml::from_str(toml).unwrap();
-        assert!(cfg.enable);
-        let r = cfg.report.unwrap();
-        assert!(r.enabled);
-        assert_eq!(r.csv_report_path, "out.csv");
-    }
-
-    #[test]
-    fn test_template_config_deserialize_empty_is_default() {
-        let cfg: TemplateConfig = toml::from_str("").unwrap();
-        assert!(!cfg.enable);
-        assert!(cfg.report.is_none());
-    }
-
-    #[test]
     fn test_normalize_config_default() {
         let cfg = NormalizeConfig::default();
         assert!(cfg.enable);
@@ -481,27 +301,6 @@ latency_hist = false
         let indices = cfg.ordered_field_indices();
         assert_eq!(indices.len(), 15);
         assert_eq!(indices, (0..15_usize).collect::<Vec<_>>());
-    }
-
-    #[test]
-    fn test_charts_config_deserialize_trend_user_flags() {
-        let toml_str = r#"
-output_dir = "out/"
-trend_line = false
-user_pie = false
-"#;
-        let cfg: ChartsConfig = toml::from_str(toml_str).unwrap();
-        assert!(!cfg.trend_line);
-        assert!(!cfg.user_pie);
-        assert!(cfg.frequency_bar);
-        assert!(cfg.latency_hist);
-    }
-
-    #[test]
-    fn test_charts_config_new_fields_default_true() {
-        let cfg: ChartsConfig = toml::from_str(r#"output_dir = "out/""#).unwrap();
-        assert!(cfg.trend_line);
-        assert!(cfg.user_pie);
     }
 
     #[test]

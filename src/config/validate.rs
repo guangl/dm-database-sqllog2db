@@ -3,19 +3,9 @@ use crate::error::{ConfigError, Error, Result};
 
 impl Config {
     pub fn validate(&self) -> Result<()> {
-        if self.pipeline_deprecated.is_some() {
-            return Err(Error::Config(ConfigError::InvalidValue {
-                field: "[pipeline]".to_string(),
-                value: String::new(),
-                reason: PIPELINE_MIGRATION_HINT.to_string(),
-            }));
-        }
-        self.logging.validate()?;
-        self.exporter.validate()?;
-        self.sqllog.validate()?;
-        self.validate_filter()?;
-        self.validate_output_fields()?;
-        self.validate_charts()?;
+        // validate_and_compile() 执行所有相同的校验（logging、exporter、sqllog、filter、output_fields）
+        // 并返回编译结果。validate 子命令不需要编译结果，直接丢弃。
+        self.validate_and_compile()?;
         Ok(())
     }
 
@@ -41,6 +31,13 @@ impl Config {
                 reason: PIPELINE_MIGRATION_HINT.to_string(),
             }));
         }
+        if self.template_deprecated.is_some() {
+            return Err(Error::Config(ConfigError::InvalidValue {
+                field: "[template]".to_string(),
+                value: String::new(),
+                reason: "配置段 [template] 已废弃，请移除此配置段".to_string(),
+            }));
+        }
         self.logging.validate()?;
         self.exporter.validate()?;
         self.sqllog.validate()?;
@@ -62,23 +59,7 @@ impl Config {
         };
 
         self.validate_output_fields()?;
-        self.validate_charts()?;
         Ok(compiled)
-    }
-
-    fn validate_filter(&self) -> Result<()> {
-        if let Some(filters) = &self.filter {
-            if filters.enable {
-                crate::pipeline::filters::CompiledMetaFilters::try_from_include_exclude(
-                    &filters.include,
-                    &filters.exclude,
-                )?;
-                crate::pipeline::filters::CompiledSqlFilters::try_from_sql_filters(
-                    &filters.record_sql,
-                )?;
-            }
-        }
-        Ok(())
     }
 
     fn validate_output_fields(&self) -> Result<()> {
@@ -98,41 +79,13 @@ impl Config {
         }
         Ok(())
     }
-
-    fn validate_charts(&self) -> Result<()> {
-        if let Some(charts) = &self.charts {
-            let template_enabled = self.template.as_ref().is_some_and(|t| t.enable);
-            if !template_enabled {
-                return Err(Error::Config(ConfigError::InvalidValue {
-                    field: "[charts]".to_string(),
-                    value: String::new(),
-                    reason: "启用 [charts] 需要先设置 [template]\nenable = true".to_string(),
-                }));
-            }
-            if charts.output_dir.trim().is_empty() {
-                return Err(Error::Config(ConfigError::InvalidValue {
-                    field: "charts.output_dir".to_string(),
-                    value: charts.output_dir.clone(),
-                    reason: "charts output_dir cannot be empty".to_string(),
-                }));
-            }
-            if charts.top_n == 0 {
-                return Err(Error::Config(ConfigError::InvalidValue {
-                    field: "charts.top_n".to_string(),
-                    value: "0".to_string(),
-                    reason: "top_n must be greater than 0".to_string(),
-                }));
-            }
-        }
-        Ok(())
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::config::{CsvExporterConfig, SqliteExporterConfig};
-    use crate::pipeline::{ChartsConfig, NormalizeConfig, OutputConfig, TemplateConfig};
+    use crate::pipeline::{NormalizeConfig, OutputConfig};
 
     fn default_config() -> Config {
         Config::default()
@@ -448,140 +401,6 @@ file = "out.csv"
         assert!(cfg.validate_and_compile().is_ok());
     }
 
-    // ── [charts] 跨字段依赖校验 ───────────────────
-    #[test]
-    fn test_validate_charts_requires_template_analysis() {
-        let toml = r#"
-[sqllog]
-path = "sqllogs"
-[charts]
-output_dir = "charts/"
-[template]
-enable = false
-[exporter.csv]
-file = "out.csv"
-"#;
-        let cfg: Config = toml::from_str(toml).unwrap();
-        let result = cfg.validate();
-        assert!(result.is_err());
-        let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("[charts]"), "actual: {err_msg}");
-        assert!(err_msg.contains("[template]"), "actual: {err_msg}");
-    }
-
-    #[test]
-    fn test_validate_charts_with_template_analysis_enabled_passes() {
-        let toml = r#"
-[sqllog]
-path = "sqllogs"
-[charts]
-output_dir = "charts/"
-[template]
-enable = true
-[exporter.csv]
-file = "out.csv"
-"#;
-        let cfg: Config = toml::from_str(toml).unwrap();
-        assert!(cfg.validate().is_ok());
-    }
-
-    #[test]
-    fn test_validate_and_compile_charts_requires_template_analysis() {
-        let toml = r#"
-[sqllog]
-path = "sqllogs"
-[charts]
-output_dir = "charts/"
-[exporter.csv]
-file = "out.csv"
-"#;
-        let cfg: Config = toml::from_str(toml).unwrap();
-        let result = cfg.validate_and_compile();
-        assert!(result.is_err());
-        let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("[charts]"), "actual: {err_msg}");
-    }
-
-    // ── output_dir 非空校验 ─────────────────────────────
-    #[test]
-    fn test_validate_charts_empty_output_dir_is_rejected() {
-        let mut cfg = default_config();
-        cfg.template = Some(TemplateConfig {
-            enable: true,
-            ..TemplateConfig::default()
-        });
-        cfg.charts = Some(ChartsConfig {
-            output_dir: String::new(),
-            ..ChartsConfig::default()
-        });
-        let result = cfg.validate();
-        assert!(result.is_err());
-        let msg = result.unwrap_err().to_string();
-        assert!(msg.contains("charts.output_dir"), "actual: {msg}");
-    }
-
-    #[test]
-    fn test_validate_charts_whitespace_output_dir_is_rejected() {
-        let mut cfg = default_config();
-        cfg.template = Some(TemplateConfig {
-            enable: true,
-            ..TemplateConfig::default()
-        });
-        cfg.charts = Some(ChartsConfig {
-            output_dir: "   ".into(),
-            ..ChartsConfig::default()
-        });
-        assert!(cfg.validate().is_err());
-    }
-
-    // ── top_n = 0 校验 ──────────────────────────────────
-    #[test]
-    fn test_validate_charts_top_n_zero_is_rejected() {
-        let mut cfg = default_config();
-        cfg.template = Some(TemplateConfig {
-            enable: true,
-            ..TemplateConfig::default()
-        });
-        cfg.charts = Some(ChartsConfig {
-            output_dir: "charts/".into(),
-            top_n: 0,
-            ..ChartsConfig::default()
-        });
-        let result = cfg.validate();
-        assert!(result.is_err());
-        let msg = result.unwrap_err().to_string();
-        assert!(msg.contains("charts.top_n"), "actual: {msg}");
-    }
-
-    #[test]
-    fn test_validate_and_compile_charts_empty_output_dir_is_rejected() {
-        let mut cfg = default_config();
-        cfg.template = Some(TemplateConfig {
-            enable: true,
-            ..TemplateConfig::default()
-        });
-        cfg.charts = Some(ChartsConfig {
-            output_dir: String::new(),
-            ..ChartsConfig::default()
-        });
-        assert!(cfg.validate_and_compile().is_err());
-    }
-
-    #[test]
-    fn test_validate_and_compile_charts_top_n_zero_is_rejected() {
-        let mut cfg = default_config();
-        cfg.template = Some(TemplateConfig {
-            enable: true,
-            ..TemplateConfig::default()
-        });
-        cfg.charts = Some(ChartsConfig {
-            output_dir: "charts/".into(),
-            top_n: 0,
-            ..ChartsConfig::default()
-        });
-        assert!(cfg.validate_and_compile().is_err());
-    }
-
     #[test]
     fn test_validate_new_nested_format_passes() {
         let toml = r#"
@@ -616,14 +435,6 @@ file = "out.csv"
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(
-            err_msg.contains("[pipeline.template_analysis] → [template]"),
-            "actual: {err_msg}"
-        );
-        assert!(
-            err_msg.contains("[pipeline.charts] → [charts]"),
-            "actual: {err_msg}"
-        );
-        assert!(
             err_msg.contains("[pipeline.normalize] → [replace_parameters]"),
             "actual: {err_msg}"
         );
@@ -642,8 +453,6 @@ file = "out.csv"
         let toml = r#"
 [sqllog]
 path = "sqllogs"
-[template]
-enable = true
 [filter]
 enable = false
 [output]
@@ -653,6 +462,26 @@ file = "out.csv"
 "#;
         let cfg: Config = toml::from_str(toml).unwrap();
         assert!(cfg.validate().is_ok());
+    }
+
+    #[test]
+    fn test_validate_rejects_template_section() {
+        let toml = r#"
+[sqllog]
+path = "sqllogs"
+[template]
+enable = true
+[filter]
+enable = false
+[exporter.csv]
+file = "out.csv"
+"#;
+        let cfg: Config = toml::from_str(toml).unwrap();
+        let result = cfg.validate();
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("[template]"), "actual: {err_msg}");
+        assert!(err_msg.contains("已废弃"), "actual: {err_msg}");
     }
 
     // ── output.fields 校验 ───────────────────────────────────

@@ -3,7 +3,6 @@ use mimalloc::MiMalloc;
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
-mod charts;
 mod cli;
 mod color;
 mod config;
@@ -13,7 +12,6 @@ mod lang;
 mod logging;
 mod parser;
 mod pipeline;
-mod resume;
 
 use config::Config;
 use error::Result;
@@ -40,11 +38,10 @@ fn exit_code_for(e: &error::Error) -> i32 {
         error::Error::File(_) | error::Error::Parser(_) | error::Error::Io(_) => EXIT_IO,
         error::Error::Export(_) => EXIT_EXPORT,
         error::Error::Interrupted => EXIT_INTERRUPTED,
-        error::Error::Update(_) => 1,
     }
 }
 
-/// Initialize simple console logging for init/completions/update commands
+/// Initialize simple console logging for init commands
 fn init_simple_logging(verbose: bool, quiet: bool) {
     let level = if verbose {
         "debug"
@@ -123,44 +120,15 @@ fn run() -> Result<()> {
     // 尽早初始化颜色开关，后续所有输出均依赖此状态
     color::init(cli.no_color);
 
-    // run/stats/digest 命令不走 env_logger，避免与进度条冲突；其他命令用 env_logger 输出到终端
-    let needs_simple_logging = !matches!(
-        &cli.command,
-        Some(
-            cli::opts::Commands::Run { .. }
-                | cli::opts::Commands::Stats { .. }
-                | cli::opts::Commands::Digest { .. }
-        )
-    );
+    // run 命令不走 env_logger，避免与进度条冲突；其他命令用 env_logger 输出到终端
+    let needs_simple_logging = !matches!(&cli.command, Some(cli::opts::Commands::Run { .. }));
     if needs_simple_logging {
         init_simple_logging(cli.verbose, cli.quiet);
-    }
-
-    // Check for updates at startup unless we are already running self-update or quiet
-    if !cli.quiet
-        && !matches!(
-            &cli.command,
-            Some(cli::opts::Commands::SelfUpdate { .. } | cli::opts::Commands::Completions { .. })
-        )
-    {
-        cli::update::check_for_updates_at_startup();
     }
 
     match &cli.command {
         Some(cli::opts::Commands::Init { output, force }) => {
             cli::init::handle_init(output, *force, lang)
-        }
-        Some(cli::opts::Commands::Completions { shell }) => {
-            cli::opts::Cli::generate_completions(*shell);
-            Ok(())
-        }
-        Some(cli::opts::Commands::SelfUpdate { check }) => cli::update::handle_update(*check),
-        Some(cli::opts::Commands::Man) => {
-            use clap::CommandFactory;
-            let cmd = cli::opts::Cli::command();
-            let man = clap_mangen::Man::new(cmd);
-            man.render(&mut std::io::stdout())?;
-            Ok(())
         }
         Some(cli::opts::Commands::Run {
             config,
@@ -171,8 +139,6 @@ fn run() -> Result<()> {
             to,
             output,
             progress_interval,
-            resume,
-            state_file,
             jobs,
         }) => {
             let mut cfg = load_config(config)?;
@@ -219,8 +185,6 @@ fn run() -> Result<()> {
                 cli.quiet,
                 &interrupted,
                 *progress_interval,
-                *resume,
-                state_file.as_deref(),
                 jobs,
                 compiled_filters, // 新增：传递预编译结果
             )
@@ -243,85 +207,6 @@ fn run() -> Result<()> {
             let mut cfg = load_config(config)?;
             cfg.apply_overrides(set)?;
             cli::show_config::handle_show_config(&cfg, config, *diff);
-            Ok(())
-        }
-        Some(cli::opts::Commands::Stats {
-            config,
-            set,
-            from,
-            to,
-            top,
-            json,
-            group_by,
-            bucket,
-            resume,
-            state_file,
-        }) => {
-            let mut cfg = load_config(config)?;
-            cfg.apply_overrides(set)?;
-            apply_date_range(&mut cfg, from.as_deref(), to.as_deref());
-            let resume_state_file = if *resume {
-                Some(
-                    state_file
-                        .as_deref()
-                        .unwrap_or(cli::stats::DEFAULT_STATS_STATE),
-                )
-            } else {
-                None
-            };
-            cli::stats::handle_stats(
-                &cfg,
-                cli.quiet,
-                cli.verbose,
-                *top,
-                *json,
-                group_by,
-                bucket.as_deref(),
-                resume_state_file,
-            );
-            Ok(())
-        }
-        Some(cli::opts::Commands::Digest {
-            config,
-            set,
-            from,
-            to,
-            top,
-            sort,
-            min_count,
-            json,
-            resume,
-            state_file,
-        }) => {
-            let mut cfg = load_config(config)?;
-            cfg.apply_overrides(set)?;
-            apply_date_range(&mut cfg, from.as_deref(), to.as_deref());
-            let Some(sort_by) = cli::digest::SortBy::parse(sort) else {
-                eprintln!(
-                    "{} Unknown sort field '{}'. Valid values: count, exec",
-                    color::red("Error:"),
-                    sort
-                );
-                std::process::exit(EXIT_CONFIG);
-            };
-            let resume_state_file = if *resume {
-                Some(
-                    state_file
-                        .as_deref()
-                        .unwrap_or(cli::digest::DEFAULT_DIGEST_STATE),
-                )
-            } else {
-                None
-            };
-            cli::digest::handle_digest(
-                &cfg,
-                cli.quiet,
-                *top,
-                sort_by,
-                *min_count,
-                *json,
-                resume_state_file,
-            );
             Ok(())
         }
         None => {
@@ -353,7 +238,7 @@ fn load_config(config_path: &str) -> Result<Config> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::error::{ConfigError, ExportError, FileError, ParserError, UpdateError};
+    use crate::error::{ConfigError, ExportError, FileError, ParserError};
 
     #[test]
     fn test_exit_code_config_error() {
@@ -395,12 +280,6 @@ mod tests {
     #[test]
     fn test_exit_code_interrupted() {
         assert_eq!(exit_code_for(&error::Error::Interrupted), EXIT_INTERRUPTED);
-    }
-
-    #[test]
-    fn test_exit_code_update_error() {
-        let e = error::Error::Update(UpdateError::UpdateFailed("test".into()));
-        assert_eq!(exit_code_for(&e), 1);
     }
 
     #[test]

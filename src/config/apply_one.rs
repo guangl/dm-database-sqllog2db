@@ -120,74 +120,6 @@ impl Config {
                     .get_or_insert_with(Default::default)
                     .enable = parse_bool(value)?;
             }
-            "template.enable" => {
-                self.template.get_or_insert_with(Default::default).enable = parse_bool(value)?;
-            }
-            "template.report.enabled" => {
-                self.template
-                    .get_or_insert_with(Default::default)
-                    .report
-                    .get_or_insert_with(Default::default)
-                    .enabled = parse_bool(value)?;
-            }
-            "template.report.csv_report_path" => {
-                self.template
-                    .get_or_insert_with(Default::default)
-                    .report
-                    .get_or_insert_with(Default::default)
-                    .csv_report_path = value.to_string();
-            }
-            "template.report.sqlite_report_path" => {
-                self.template
-                    .get_or_insert_with(Default::default)
-                    .report
-                    .get_or_insert_with(Default::default)
-                    .sqlite_report_path = value.to_string();
-            }
-
-            "charts.output_dir" => {
-                if value.trim().is_empty() {
-                    return Err(Error::Config(ConfigError::InvalidValue {
-                        field: key.to_string(),
-                        value: value.to_string(),
-                        reason: "charts output_dir cannot be empty".to_string(),
-                    }));
-                }
-                self.charts.get_or_insert_with(Default::default).output_dir = value.to_string();
-            }
-            "charts.top_n" => {
-                let parsed = value.parse::<usize>().map_err(|_| {
-                    Error::Config(ConfigError::InvalidValue {
-                        field: key.to_string(),
-                        value: value.to_string(),
-                        reason: "expected a positive integer".to_string(),
-                    })
-                })?;
-                if parsed == 0 {
-                    return Err(Error::Config(ConfigError::InvalidValue {
-                        field: key.to_string(),
-                        value: "0".to_string(),
-                        reason: "top_n must be greater than 0".to_string(),
-                    }));
-                }
-                self.charts.get_or_insert_with(Default::default).top_n = parsed;
-            }
-            "charts.frequency_bar" => {
-                self.charts
-                    .get_or_insert_with(Default::default)
-                    .frequency_bar = parse_bool(value)?;
-            }
-            "charts.latency_hist" => {
-                self.charts
-                    .get_or_insert_with(Default::default)
-                    .latency_hist = parse_bool(value)?;
-            }
-            "charts.trend_line" => {
-                self.charts.get_or_insert_with(Default::default).trend_line = parse_bool(value)?;
-            }
-            "charts.user_pie" => {
-                self.charts.get_or_insert_with(Default::default).user_pie = parse_bool(value)?;
-            }
 
             "output.fields" => {
                 let parsed: Vec<String> = value
@@ -231,96 +163,6 @@ mod tests {
     }
 
     #[test]
-    fn test_apply_one_charts_output_dir() {
-        let mut cfg = Config::default();
-        cfg.apply_one("charts.output_dir", "mydir")
-            .expect("apply_one should succeed");
-        assert_eq!(cfg.charts.unwrap().output_dir, "mydir");
-    }
-
-    #[test]
-    fn test_apply_one_charts_top_n() {
-        let mut cfg = Config::default();
-        cfg.apply_one("charts.top_n", "20")
-            .expect("apply_one should succeed");
-        assert_eq!(cfg.charts.unwrap().top_n, 20);
-    }
-
-    #[test]
-    fn test_apply_one_charts_top_n_invalid() {
-        let mut cfg = Config::default();
-        let result = cfg.apply_one("charts.top_n", "abc");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_apply_one_charts_frequency_bar_false() {
-        let mut cfg = Config::default();
-        cfg.apply_one("charts.frequency_bar", "false")
-            .expect("apply_one should succeed");
-        assert!(!cfg.charts.unwrap().frequency_bar);
-    }
-
-    #[test]
-    fn test_apply_one_charts_latency_hist_false() {
-        let mut cfg = Config::default();
-        cfg.apply_one("charts.latency_hist", "false")
-            .expect("apply_one should succeed");
-        assert!(!cfg.charts.unwrap().latency_hist);
-    }
-
-    #[test]
-    fn test_apply_one_charts_output_dir_empty_is_rejected() {
-        let mut cfg = Config::default();
-        let result = cfg.apply_one("charts.output_dir", "");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_apply_one_charts_output_dir_whitespace_is_rejected() {
-        let mut cfg = Config::default();
-        let result = cfg.apply_one("charts.output_dir", "   ");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_apply_one_charts_top_n_zero_is_rejected() {
-        let mut cfg = Config::default();
-        let result = cfg.apply_one("charts.top_n", "0");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_apply_one_template_enable() {
-        let mut cfg = Config::default();
-        cfg.apply_one("template.enable", "true")
-            .expect("apply_one should succeed");
-        assert!(cfg.template.unwrap().enable);
-    }
-
-    #[test]
-    fn test_apply_one_template_report_csv_path() {
-        let mut cfg = Config::default();
-        cfg.apply_one("template.report.csv_report_path", "/tmp/a.csv")
-            .expect("apply_one should succeed");
-        assert_eq!(
-            cfg.template.unwrap().report.unwrap().csv_report_path,
-            "/tmp/a.csv"
-        );
-    }
-
-    #[test]
-    fn test_apply_one_template_report_sqlite_path() {
-        let mut cfg = Config::default();
-        cfg.apply_one("template.report.sqlite_report_path", "tpl.db")
-            .expect("apply_one should succeed");
-        assert_eq!(
-            cfg.template.unwrap().report.unwrap().sqlite_report_path,
-            "tpl.db"
-        );
-    }
-
-    #[test]
     fn test_apply_one_replace_parameters_enable() {
         let mut cfg = Config::default();
         cfg.apply_one("replace_parameters.enable", "false")
@@ -349,23 +191,11 @@ mod tests {
     fn test_apply_one_rejects_legacy_pipeline_paths() {
         let mut cfg = Config::default();
         assert!(cfg.apply_one("pipeline.filters.enable", "true").is_err());
-        assert!(cfg.apply_one("pipeline.charts.output_dir", "out/").is_err());
         assert!(
             cfg.apply_one("pipeline.template_analysis.enabled", "true")
                 .is_err()
         );
         assert!(cfg.apply_one("pipeline.normalize.enable", "true").is_err());
         assert!(cfg.apply_one("pipeline.fields", "sql,ts").is_err());
-    }
-
-    #[test]
-    fn test_apply_one_charts_all_bool_fields() {
-        let mut cfg = Config::default();
-        cfg.apply_one("charts.trend_line", "false")
-            .expect("apply_one should succeed");
-        assert!(!cfg.charts.as_ref().unwrap().trend_line);
-        cfg.apply_one("charts.user_pie", "false")
-            .expect("apply_one should succeed");
-        assert!(!cfg.charts.as_ref().unwrap().user_pie);
     }
 }

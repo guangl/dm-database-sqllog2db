@@ -1,5 +1,4 @@
-use clap::{CommandFactory, Parser, Subcommand};
-use clap_complete::{Shell, generate};
+use clap::{Parser, Subcommand};
 
 /// SQL log exporter tool for DM database
 #[derive(Debug, Parser)]
@@ -68,12 +67,6 @@ pub(crate) enum Commands {
         /// Progress bar refresh interval in milliseconds
         #[arg(long = "progress-interval", default_value = "80", value_name = "MS")]
         progress_interval: u64,
-        /// Skip files already processed in a previous run (tracked by state file)
-        #[arg(long = "resume")]
-        resume: bool,
-        /// Override the state file path used by --resume (default: `.sqllog2db_state.toml`)
-        #[arg(long = "state-file", value_name = "PATH", requires = "resume")]
-        state_file: Option<String>,
         /// Number of parallel threads for processing multiple files (default: CPU count)
         #[arg(short = 'j', long = "jobs", value_name = "N")]
         jobs: Option<usize>,
@@ -118,104 +111,4 @@ pub(crate) enum Commands {
         #[arg(long = "diff")]
         diff: bool,
     },
-    /// Count records in log files without exporting
-    Stats {
-        /// Configuration file path
-        #[arg(
-            short = 'c',
-            long = "config",
-            default_value = "config.toml",
-            env = "SQLLOG2DB_CONFIG"
-        )]
-        config: String,
-        /// Override config values, e.g. --set sqllog.path=./logs
-        #[arg(long = "set", value_name = "KEY=VALUE")]
-        set: Vec<String>,
-        /// Keep only records at or after this timestamp
-        #[arg(long = "from", value_name = "DATETIME")]
-        from: Option<String>,
-        /// Keep only records at or before this timestamp
-        #[arg(long = "to", value_name = "DATETIME")]
-        to: Option<String>,
-        /// Show top N slowest queries ranked by execution time
-        #[arg(long = "top", value_name = "N")]
-        top: Option<usize>,
-        /// Output statistics as JSON (goes to stdout)
-        #[arg(long = "json")]
-        json: bool,
-        /// Aggregate records by field(s): user, app, ip (repeatable, or comma-separated)
-        #[arg(long = "group-by", value_name = "FIELD", value_delimiter = ',')]
-        group_by: Vec<String>,
-        /// Aggregate records into time buckets: hour, minute
-        #[arg(long = "bucket", value_name = "GRANULARITY")]
-        bucket: Option<String>,
-        /// Skip files already processed in a previous run
-        #[arg(long = "resume")]
-        resume: bool,
-        /// Override the state file path used by --resume (default: `.sqllog2db_stats_state.toml`)
-        #[arg(long = "state-file", value_name = "PATH", requires = "resume")]
-        state_file: Option<String>,
-    },
-    /// Fingerprint SQL queries and aggregate by structure
-    Digest {
-        /// Configuration file path
-        #[arg(
-            short = 'c',
-            long = "config",
-            default_value = "config.toml",
-            env = "SQLLOG2DB_CONFIG"
-        )]
-        config: String,
-        /// Override config values, e.g. --set sqllog.path=./logs
-        #[arg(long = "set", value_name = "KEY=VALUE")]
-        set: Vec<String>,
-        /// Keep only records at or after this timestamp
-        #[arg(long = "from", value_name = "DATETIME")]
-        from: Option<String>,
-        /// Keep only records at or before this timestamp
-        #[arg(long = "to", value_name = "DATETIME")]
-        to: Option<String>,
-        /// Show only top N fingerprints
-        #[arg(long = "top", value_name = "N")]
-        top: Option<usize>,
-        /// Sort results by: count (default) or exec (total execution time)
-        #[arg(long = "sort", value_name = "FIELD", default_value = "count")]
-        sort: String,
-        /// Skip fingerprints with fewer than N occurrences
-        #[arg(long = "min-count", value_name = "N", default_value = "1")]
-        min_count: u64,
-        /// Output results as JSON (goes to stdout)
-        #[arg(long = "json")]
-        json: bool,
-        /// Skip files already processed in a previous run
-        #[arg(long = "resume")]
-        resume: bool,
-        /// Override the state file path used by --resume (default: `.sqllog2db_digest_state.toml`)
-        #[arg(long = "state-file", value_name = "PATH", requires = "resume")]
-        state_file: Option<String>,
-    },
-    /// Generate shell completion scripts
-    Completions {
-        /// Shell type to generate completions for
-        #[arg(value_enum)]
-        shell: Shell,
-    },
-    /// Self-update the application to the latest version
-    SelfUpdate {
-        /// Check for updates without performing the update
-        #[arg(short = 'k', long = "check")]
-        check: bool,
-    },
-    /// Print the man page to stdout
-    Man,
-}
-
-impl Cli {
-    /// Generate shell completions
-    #[allow(dead_code)]
-    pub(crate) fn generate_completions(shell: Shell) {
-        let mut cmd = Cli::command();
-        let bin_name = cmd.get_name().to_string();
-        generate(shell, &mut cmd, bin_name, &mut std::io::stdout());
-    }
 }

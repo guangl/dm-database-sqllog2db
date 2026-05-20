@@ -126,17 +126,6 @@ impl SqliteExporter {
         }
     }
 
-    /// 仅打开数据库连接并设置 pragmas，不创建主数据表。
-    /// 用于并行 CSV 路径中写入模板统计的场景，避免创建空的主数据表。
-    #[allow(dead_code)]
-    pub(crate) fn open_connection_only(&mut self) -> Result<()> {
-        let conn = Connection::open(&self.database_url)
-            .map_err(|e| Self::db_err(format!("open failed: {e}")))?;
-        initialize_pragmas(&conn).map_err(|e| Self::db_err(format!("set PRAGMAs failed: {e}")))?;
-        self.conn = Some(conn);
-        Ok(())
-    }
-
     /// 根据 overwrite/append 模式准备目标表
     fn prepare_target_table(&self) -> Result<()> {
         if self.overwrite {
@@ -243,77 +232,6 @@ impl Exporter for SqliteExporter {
         info!(
             "SQLite export finished: {} (success: {}, failed: {})",
             self.database_url, self.stats.exported, self.stats.failed
-        );
-        Ok(())
-    }
-
-    fn write_template_stats(
-        &mut self,
-        stats: &[crate::pipeline::TemplateStats],
-        _csv_output_path: Option<&str>,
-        sqlite_table_name: Option<&str>,
-    ) -> Result<()> {
-        let Some(table_name) = sqlite_table_name else {
-            return Ok(());
-        };
-        if table_name.trim().is_empty() {
-            return Ok(());
-        }
-        let mut ident_chars = table_name.chars();
-        let valid_ident = ident_chars
-            .next()
-            .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
-            && ident_chars.all(|c| c.is_ascii_alphanumeric() || c == '_');
-        if !valid_ident {
-            return Err(Error::Config(crate::error::ConfigError::InvalidValue {
-                field: "template.output_sqlite_table".to_string(),
-                value: table_name.to_string(),
-                reason: "table name must start with a letter or underscore \
-                         and contain only ASCII alphanumeric or underscore"
-                    .to_string(),
-            }));
-        }
-        let conn = self.conn_ref()?;
-        conn.execute_batch("BEGIN;")
-            .map_err(|e| Self::db_err(format!("begin failed: {e}")))?;
-        if self.overwrite {
-            conn.execute(&format!("DROP TABLE IF EXISTS \"{table_name}\""), [])
-                .map_err(|e| Self::db_err(format!("drop {table_name} failed: {e}")))?;
-        }
-        conn.execute(
-            &format!(
-                "CREATE TABLE IF NOT EXISTS \"{table_name}\" \
-                 (template_key TEXT NOT NULL PRIMARY KEY, \
-                  count INTEGER NOT NULL, \
-                  avg_us INTEGER NOT NULL, \
-                  min_us INTEGER NOT NULL, \
-                  max_us INTEGER NOT NULL, \
-                  p50_us INTEGER NOT NULL, \
-                  p95_us INTEGER NOT NULL, \
-                  p99_us INTEGER NOT NULL, \
-                  first_seen TEXT NOT NULL, \
-                  last_seen TEXT NOT NULL)"
-            ),
-            [],
-        )
-        .map_err(|e| Self::db_err(format!("create {table_name} failed: {e}")))?;
-        #[allow(clippy::cast_possible_wrap)]
-        for s in stats {
-            #[rustfmt::skip]
-            let p = rusqlite::params![s.template_key, s.count as i64, s.avg_us as i64, s.min_us as i64, s.max_us as i64, s.p50_us as i64, s.p95_us as i64, s.p99_us as i64, s.first_seen, s.last_seen];
-            conn.execute(
-                &format!("INSERT INTO \"{table_name}\" VALUES (?,?,?,?,?,?,?,?,?,?)"),
-                p,
-            )
-            .map_err(|e| Self::db_err(format!("insert {table_name} failed: {e}")))?;
-        }
-        conn.execute_batch("COMMIT;")
-            .map_err(|e| Self::db_err(format!("commit {table_name} failed: {e}")))?;
-        info!(
-            "{}: {} rows written to {}",
-            table_name,
-            stats.len(),
-            self.database_url
         );
         Ok(())
     }

@@ -211,13 +211,6 @@ impl CompiledSqlFilters {
         })
     }
 
-    /// 是否有任何已编译的过滤条件。
-    #[must_use]
-    #[allow(dead_code)]
-    pub(crate) fn has_filters(&self) -> bool {
-        self.include_patterns.is_some() || self.exclude_patterns.is_some()
-    }
-
     /// 判断 SQL 是否通过过滤：
     /// - include：必须命中其中之一（未配置 = 通过）
     /// - exclude：不能命中任何一个

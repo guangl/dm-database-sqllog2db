@@ -44,22 +44,6 @@ pub trait Exporter {
     fn stats_snapshot(&self) -> Option<ExportStats> {
         None
     }
-
-    /// 将 SQL 模板聚合统计写入导出目标。
-    ///
-    /// - `csv_output_path`: `None` 或空串 → 跳过 CSV 写入；否则写入到该路径（显式，不再推导）。
-    /// - `sqlite_table_name`: `None` 或空串 → 跳过 `SQLite` 建表；否则以该名称建表。
-    ///
-    /// 默认实现为 no-op，向后兼容现有 exporter。
-    fn write_template_stats(
-        &mut self,
-        stats: &[crate::pipeline::TemplateStats],
-        csv_output_path: Option<&str>,
-        sqlite_table_name: Option<&str>,
-    ) -> Result<()> {
-        let _ = (stats, csv_output_path, sqlite_table_name);
-        Ok(())
-    }
 }
 
 /// 具体导出器的枚举包装，消除 `Box<dyn Exporter>` 的虚表分发开销，
@@ -121,29 +105,6 @@ impl ExporterKind {
             Self::Csv(e) => e.finalize(),
             Self::Sqlite(e) => e.finalize(),
             Self::DryRun { .. } => Ok(()),
-        }
-    }
-
-    #[inline]
-    #[allow(dead_code)]
-    fn write_template_stats(
-        &mut self,
-        stats: &[crate::pipeline::TemplateStats],
-        csv_output_path: Option<&str>,
-        sqlite_table_name: Option<&str>,
-    ) -> Result<()> {
-        match self {
-            Self::Csv(e) => e.write_template_stats(stats, csv_output_path, sqlite_table_name),
-            Self::Sqlite(e) => e.write_template_stats(stats, csv_output_path, sqlite_table_name),
-            Self::DryRun { .. } => {
-                info!(
-                    "Dry-run: would write {} template stats (csv={:?}, sqlite_table={:?})",
-                    stats.len(),
-                    csv_output_path,
-                    sqlite_table_name,
-                );
-                Ok(())
-            }
         }
     }
 
@@ -285,17 +246,6 @@ impl ExporterManager {
         self.exporter.finalize()?;
         info!("Exporters finished");
         Ok(())
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn write_template_stats(
-        &mut self,
-        stats: &[crate::pipeline::TemplateStats],
-        csv_output_path: Option<&str>,
-        sqlite_table_name: Option<&str>,
-    ) -> Result<()> {
-        self.exporter
-            .write_template_stats(stats, csv_output_path, sqlite_table_name)
     }
 
     #[must_use]

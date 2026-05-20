@@ -35,9 +35,6 @@ fn make_config(sqllog_dir: &Path, bench_dir: &Path) -> Config {
 [sqllog]
 directory = "{sqllog}"
 
-[error]
-file = "{dir}/errors.log"
-
 [logging]
 file = "{dir}/app.log"
 level = "warn"
@@ -75,8 +72,6 @@ fn bench_csv_export(c: &mut Criterion) {
                     true, // quiet=true: 排除进度条 I/O 对吞吐量测量的干扰
                     &Arc::new(AtomicBool::new(false)),
                     80,
-                    false,
-                    None,
                     1,
                     None, // compiled_filters
                 )
@@ -113,8 +108,6 @@ fn bench_csv_real_file(c: &mut Criterion) {
                 true, // quiet=true：排除进度条 I/O
                 &Arc::new(AtomicBool::new(false)),
                 80,
-                false,
-                None,
                 1,
                 None, // compiled_filters
             )

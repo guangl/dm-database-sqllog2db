@@ -1,19 +1,15 @@
 //! Integration tests for CLI handlers and the run pipeline.
 
-use dm_database_sqllog2db::cli::digest::{SortBy, handle_digest};
 use dm_database_sqllog2db::cli::init::handle_init;
 use dm_database_sqllog2db::cli::run::handle_run;
 use dm_database_sqllog2db::cli::show_config::handle_show_config;
-use dm_database_sqllog2db::cli::stats::handle_stats;
 use dm_database_sqllog2db::cli::validate::handle_validate;
 use dm_database_sqllog2db::config::{
     Config, CsvExporterConfig, ExporterConfig, SqliteExporterConfig, SqllogConfig,
 };
 use dm_database_sqllog2db::lang::Lang;
 use dm_database_sqllog2db::pipeline::filters::{ExcludeFilters, IncludeFilters};
-use dm_database_sqllog2db::pipeline::{
-    FiltersFeature, NormalizeConfig, OutputConfig, TemplateConfig,
-};
+use dm_database_sqllog2db::pipeline::{FiltersFeature, NormalizeConfig, OutputConfig};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
@@ -67,19 +63,7 @@ fn test_handle_run_dry_run_empty_dir() {
         ..Default::default()
     };
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(
-        &cfg,
-        None,
-        true,
-        true,
-        &interrupted,
-        80,
-        false,
-        None,
-        1,
-        None,
-    )
-    .unwrap();
+    handle_run(&cfg, None, true, true, &interrupted, 80, 1, None).unwrap();
 }
 
 #[test]
@@ -98,19 +82,7 @@ fn test_handle_run_dry_run_with_log_files() {
     };
 
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(
-        &cfg,
-        None,
-        true,
-        true,
-        &interrupted,
-        80,
-        false,
-        None,
-        1,
-        None,
-    )
-    .unwrap();
+    handle_run(&cfg, None, true, true, &interrupted, 80, 1, None).unwrap();
 }
 
 #[test]
@@ -129,19 +101,7 @@ fn test_handle_run_dry_run_with_limit() {
 
     let interrupted = Arc::new(AtomicBool::new(false));
     // limit to 5 records
-    handle_run(
-        &cfg,
-        Some(5),
-        true,
-        true,
-        &interrupted,
-        80,
-        false,
-        None,
-        1,
-        None,
-    )
-    .unwrap();
+    handle_run(&cfg, Some(5), true, true, &interrupted, 80, 1, None).unwrap();
 }
 
 #[test]
@@ -155,19 +115,7 @@ fn test_handle_run_real_csv_export() {
     let cfg = make_run_config(&log_dir, &csv_file);
 
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(
-        &cfg,
-        None,
-        false,
-        true,
-        &interrupted,
-        80,
-        false,
-        None,
-        1,
-        None,
-    )
-    .unwrap();
+    handle_run(&cfg, None, false, true, &interrupted, 80, 1, None).unwrap();
 
     let content = std::fs::read_to_string(&csv_file).unwrap();
     // header + 10 data rows = 11 lines
@@ -195,487 +143,11 @@ fn test_handle_run_interrupted() {
 
     // Pre-set interrupted flag — run returns Err(Interrupted) when flag is set before processing
     let interrupted = Arc::new(AtomicBool::new(true));
-    let result = handle_run(
-        &cfg,
-        None,
-        true,
-        true,
-        &interrupted,
-        80,
-        false,
-        None,
-        1,
-        None,
-    );
+    let result = handle_run(&cfg, None, true, true, &interrupted, 80, 1, None);
     assert!(
         result.is_err(),
         "handle_run should return Err(Interrupted) when interrupt flag is pre-set: {result:?}"
     );
-}
-
-// ── resume tests ─────────────────────────────────────────────────────────────
-
-#[test]
-fn test_resume_skips_processed_files() {
-    let dir = tempfile::TempDir::new().unwrap();
-    let log_dir = dir.path().join("logs");
-    std::fs::create_dir_all(&log_dir).unwrap();
-
-    // Two files: a.log (10 records) + b.log (10 records)
-    write_test_log(&log_dir.join("a.log"), 10);
-    write_test_log(&log_dir.join("b.log"), 10);
-
-    let state_path = dir.path().join("state.toml");
-    let csv1 = dir.path().join("out1.csv");
-    let cfg = make_run_config(&log_dir, &csv1);
-    let interrupted = Arc::new(AtomicBool::new(false));
-
-    // First run with --resume: processes both files, writes state
-    handle_run(
-        &cfg,
-        None,
-        false,
-        true,
-        &interrupted,
-        80,
-        true,
-        Some(state_path.to_str().unwrap()),
-        1,
-        None, // compiled_filters
-    )
-    .unwrap();
-    let rows_first = std::fs::read_to_string(&csv1).unwrap().lines().count();
-    // 2 files × 10 records = 20 data rows + header = 21 lines
-    assert_eq!(
-        rows_first, 21,
-        "expected header + 20 data rows, got {rows_first}"
-    );
-
-    // State file must exist after first run
-    assert!(state_path.exists(), "state file should be created");
-
-    // Second run with --resume + append: already-processed files are skipped → no new rows
-    let csv2 = dir.path().join("out2.csv");
-    let mut cfg2 = make_run_config(&log_dir, &csv2);
-    cfg2.exporter.csv.as_mut().unwrap().append = true;
-    cfg2.exporter.csv.as_mut().unwrap().overwrite = false;
-
-    handle_run(
-        &cfg2,
-        None,
-        false,
-        true,
-        &interrupted,
-        80,
-        true,
-        Some(state_path.to_str().unwrap()),
-        1,
-        None, // compiled_filters
-    )
-    .unwrap();
-
-    // csv2 should have at most a header row (no data rows) because all files were skipped
-    let rows_second = if csv2.exists() {
-        std::fs::read_to_string(&csv2).unwrap().lines().count()
-    } else {
-        0
-    };
-    assert!(
-        rows_second <= 1,
-        "second run should skip all files; got {rows_second} rows (expected header only)"
-    );
-}
-
-#[test]
-fn test_resume_reprocesses_changed_file() {
-    let dir = tempfile::TempDir::new().unwrap();
-    let log_dir = dir.path().join("logs");
-    std::fs::create_dir_all(&log_dir).unwrap();
-
-    let log_file = log_dir.join("a.log");
-    write_test_log(&log_file, 5);
-
-    let state_path = dir.path().join("state.toml");
-    let csv = dir.path().join("out.csv");
-    let cfg = make_run_config(&log_dir, &csv);
-    let interrupted = Arc::new(AtomicBool::new(false));
-
-    // First run: process and record state
-    handle_run(
-        &cfg,
-        None,
-        false,
-        true,
-        &interrupted,
-        80,
-        true,
-        Some(state_path.to_str().unwrap()),
-        1,
-        None, // compiled_filters
-    )
-    .unwrap();
-    assert!(state_path.exists());
-
-    // Simulate file growing (append more records)
-    write_test_log(&log_file, 10);
-
-    // Second run with --resume: file fingerprint changed → must reprocess
-    let csv2 = dir.path().join("out2.csv");
-    let cfg2 = make_run_config(&log_dir, &csv2);
-    handle_run(
-        &cfg2,
-        None,
-        false,
-        true,
-        &interrupted,
-        80,
-        true,
-        Some(state_path.to_str().unwrap()),
-        1,
-        None, // compiled_filters
-    )
-    .unwrap();
-
-    // csv2 should have data (file was reprocessed)
-    assert!(csv2.exists(), "changed file should be reprocessed");
-    let rows = std::fs::read_to_string(&csv2).unwrap().lines().count();
-    assert!(rows >= 1, "expected rows from reprocessed file");
-}
-
-// ── handle_stats tests ───────────────────────────────────────────────────────
-
-#[test]
-fn test_handle_stats_empty_dir() {
-    let dir = tempfile::TempDir::new().unwrap();
-    let log_dir = dir.path().join("logs");
-    std::fs::create_dir_all(&log_dir).unwrap();
-    let cfg = Config {
-        sqllog: SqllogConfig {
-            path: log_dir.to_str().unwrap().to_string(),
-        },
-        ..Default::default()
-    };
-    // Smoke test: handle_stats returns () — verifies no panic; no return value assertion
-    handle_stats(&cfg, true, false, None, false, &[], None, None);
-}
-
-#[test]
-fn test_handle_stats_with_log_files() {
-    let dir = tempfile::TempDir::new().unwrap();
-    let log_dir = dir.path().join("logs");
-    std::fs::create_dir_all(&log_dir).unwrap();
-    write_test_log(&log_dir.join("data.log"), 15);
-
-    let cfg = Config {
-        sqllog: SqllogConfig {
-            path: log_dir.to_str().unwrap().to_string(),
-        },
-        ..Default::default()
-    };
-    handle_stats(&cfg, true, false, None, false, &[], None, None); // quiet=true to suppress progress bar
-}
-
-#[test]
-fn test_handle_stats_nonexistent_dir() {
-    // Use a path from a deleted tempdir — guaranteed not to exist on any platform
-    let nonexistent = {
-        let d = tempfile::TempDir::new().unwrap();
-        d.path().join("nonexistent_subdir")
-    };
-    let cfg = Config {
-        sqllog: SqllogConfig {
-            path: nonexistent.to_str().unwrap().to_string(),
-        },
-        ..Default::default()
-    };
-    // Smoke test: handle_stats returns () — should not panic on nonexistent dir
-    handle_stats(&cfg, true, false, None, false, &[], None, None);
-}
-
-fn write_test_log_multi_ts(path: &std::path::Path, timestamps: &[&str]) {
-    use std::fmt::Write as _;
-    let mut buf = String::new();
-    for (i, ts) in timestamps.iter().enumerate() {
-        writeln!(
-            buf,
-            "{ts} (EP[0] sess:0x{i:04x} user:USER{u} trxid:{i} stmt:0x1 appname:App{a} ip:10.0.0.{ip}) [SEL] SELECT * FROM t WHERE id={i}. EXECTIME: {exec}(ms) ROWCOUNT: 1(rows) EXEC_ID: {i}.",
-            u = i % 3,
-            a = i % 2,
-            ip = (i % 3) + 1,
-            exec = (i * 13 + 5) % 500,
-        ).unwrap();
-    }
-    std::fs::write(path, buf).unwrap();
-}
-
-fn make_stats_cfg(log_dir: &std::path::Path) -> Config {
-    Config {
-        sqllog: SqllogConfig {
-            path: log_dir.to_str().unwrap().to_string(),
-        },
-        ..Default::default()
-    }
-}
-
-// Smoke tests: handle_stats returns (), no return value assertions
-#[test]
-fn test_handle_stats_group_by_user() {
-    let dir = tempfile::TempDir::new().unwrap();
-    std::fs::create_dir_all(dir.path()).unwrap();
-    write_test_log(&dir.path().join("data.log"), 20);
-    let cfg = make_stats_cfg(dir.path());
-    handle_stats(
-        &cfg,
-        true,
-        false,
-        None,
-        false,
-        &["user".to_string()],
-        None,
-        None,
-    );
-}
-
-#[test]
-fn test_handle_stats_group_by_multiple() {
-    let dir = tempfile::TempDir::new().unwrap();
-    std::fs::create_dir_all(dir.path()).unwrap();
-    write_test_log(&dir.path().join("data.log"), 20);
-    let cfg = make_stats_cfg(dir.path());
-    let fields = vec!["user".to_string(), "app".to_string(), "ip".to_string()];
-    handle_stats(&cfg, true, false, None, false, &fields, None, None);
-}
-
-#[test]
-fn test_handle_stats_group_by_invalid() {
-    let dir = tempfile::TempDir::new().unwrap();
-    std::fs::create_dir_all(dir.path()).unwrap();
-    write_test_log(&dir.path().join("data.log"), 5);
-    let cfg = make_stats_cfg(dir.path());
-    // invalid field — should print error and return without panic
-    handle_stats(
-        &cfg,
-        true,
-        false,
-        None,
-        false,
-        &["badfield".to_string()],
-        None,
-        None,
-    );
-}
-
-#[test]
-fn test_handle_stats_top_slow() {
-    let dir = tempfile::TempDir::new().unwrap();
-    std::fs::create_dir_all(dir.path()).unwrap();
-    write_test_log(&dir.path().join("data.log"), 30);
-    let cfg = make_stats_cfg(dir.path());
-    handle_stats(&cfg, true, false, Some(5), false, &[], None, None);
-}
-
-#[test]
-fn test_handle_stats_bucket_hour() {
-    let dir = tempfile::TempDir::new().unwrap();
-    std::fs::create_dir_all(dir.path()).unwrap();
-    let ts = &[
-        "2025-01-15 08:10:00.000",
-        "2025-01-15 08:20:00.000",
-        "2025-01-15 09:05:00.000",
-        "2025-01-15 10:00:00.000",
-        "2025-01-15 10:30:00.000",
-        "2025-01-15 10:59:00.000",
-    ];
-    write_test_log_multi_ts(&dir.path().join("data.log"), ts);
-    let cfg = make_stats_cfg(dir.path());
-    handle_stats(&cfg, true, false, None, false, &[], Some("hour"), None);
-}
-
-#[test]
-fn test_handle_stats_bucket_minute() {
-    let dir = tempfile::TempDir::new().unwrap();
-    std::fs::create_dir_all(dir.path()).unwrap();
-    let ts = &[
-        "2025-01-15 10:00:00.000",
-        "2025-01-15 10:00:30.000",
-        "2025-01-15 10:01:00.000",
-        "2025-01-15 10:02:00.000",
-    ];
-    write_test_log_multi_ts(&dir.path().join("data.log"), ts);
-    let cfg = make_stats_cfg(dir.path());
-    handle_stats(&cfg, true, false, None, false, &[], Some("minute"), None);
-}
-
-#[test]
-fn test_handle_stats_bucket_invalid() {
-    let dir = tempfile::TempDir::new().unwrap();
-    std::fs::create_dir_all(dir.path()).unwrap();
-    write_test_log(&dir.path().join("data.log"), 5);
-    let cfg = make_stats_cfg(dir.path());
-    // invalid granularity — should print error and return without panic
-    handle_stats(&cfg, true, false, None, false, &[], Some("week"), None);
-}
-
-#[test]
-fn test_handle_stats_json_basic() {
-    let dir = tempfile::TempDir::new().unwrap();
-    std::fs::create_dir_all(dir.path()).unwrap();
-    write_test_log(&dir.path().join("data.log"), 10);
-    let cfg = make_stats_cfg(dir.path());
-    handle_stats(&cfg, true, false, None, true, &[], None, None);
-}
-
-#[test]
-fn test_handle_stats_json_with_group_and_bucket() {
-    let dir = tempfile::TempDir::new().unwrap();
-    std::fs::create_dir_all(dir.path()).unwrap();
-    let ts = &[
-        "2025-01-15 08:00:00.000",
-        "2025-01-15 08:30:00.000",
-        "2025-01-15 09:00:00.000",
-        "2025-01-15 09:15:00.000",
-    ];
-    write_test_log_multi_ts(&dir.path().join("data.log"), ts);
-    let cfg = make_stats_cfg(dir.path());
-    let fields = vec!["user".to_string(), "ip".to_string()];
-    handle_stats(
-        &cfg,
-        true,
-        false,
-        Some(3),
-        true,
-        &fields,
-        Some("hour"),
-        None,
-    );
-}
-
-#[test]
-fn test_handle_stats_verbose() {
-    let dir = tempfile::TempDir::new().unwrap();
-    std::fs::create_dir_all(dir.path()).unwrap();
-    write_test_log(&dir.path().join("data.log"), 10);
-    let cfg = make_stats_cfg(dir.path());
-    // quiet=false, verbose=true — exercises the file table path
-    handle_stats(&cfg, false, true, None, false, &[], None, None);
-}
-
-#[test]
-fn test_handle_stats_group_and_bucket_non_quiet() {
-    let dir = tempfile::TempDir::new().unwrap();
-    std::fs::create_dir_all(dir.path()).unwrap();
-    let ts = &[
-        "2025-01-15 08:00:00.000",
-        "2025-01-15 09:00:00.000",
-        "2025-01-15 10:00:00.000",
-    ];
-    write_test_log_multi_ts(&dir.path().join("data.log"), ts);
-    let cfg = make_stats_cfg(dir.path());
-    let fields = vec!["user".to_string()];
-    // quiet=false — exercises print_group_table and print_bucket_table
-    handle_stats(
-        &cfg,
-        false,
-        false,
-        Some(2),
-        false,
-        &fields,
-        Some("hour"),
-        None,
-    );
-}
-
-// ── handle_digest tests (smoke tests — handle_digest returns (), no return value assertion) ───────────────────
-
-#[test]
-fn test_handle_digest_empty_dir() {
-    let dir = tempfile::TempDir::new().unwrap();
-    let log_dir = dir.path().join("nologs");
-    let cfg = Config {
-        sqllog: SqllogConfig {
-            path: log_dir.to_str().unwrap().to_string(),
-        },
-        ..Default::default()
-    };
-    // No log files → prints message and returns without panic
-    handle_digest(&cfg, true, None, SortBy::Count, 1, false, None);
-}
-
-#[test]
-fn test_handle_digest_basic() {
-    let dir = tempfile::TempDir::new().unwrap();
-    std::fs::create_dir_all(dir.path()).unwrap();
-    write_test_log(&dir.path().join("data.log"), 20);
-    let cfg = make_stats_cfg(dir.path());
-    handle_digest(&cfg, true, None, SortBy::Count, 1, false, None);
-}
-
-#[test]
-fn test_handle_digest_sort_exec() {
-    let dir = tempfile::TempDir::new().unwrap();
-    std::fs::create_dir_all(dir.path()).unwrap();
-    write_test_log(&dir.path().join("data.log"), 20);
-    let cfg = make_stats_cfg(dir.path());
-    handle_digest(&cfg, true, None, SortBy::Exec, 1, false, None);
-}
-
-#[test]
-fn test_handle_digest_top_n() {
-    let dir = tempfile::TempDir::new().unwrap();
-    std::fs::create_dir_all(dir.path()).unwrap();
-    write_test_log(&dir.path().join("data.log"), 30);
-    let cfg = make_stats_cfg(dir.path());
-    handle_digest(&cfg, true, Some(5), SortBy::Count, 1, false, None);
-}
-
-#[test]
-fn test_handle_digest_min_count() {
-    let dir = tempfile::TempDir::new().unwrap();
-    std::fs::create_dir_all(dir.path()).unwrap();
-    write_test_log(&dir.path().join("data.log"), 20);
-    let cfg = make_stats_cfg(dir.path());
-    // min_count=100 filters out everything — should print "No SQL fingerprints found."
-    handle_digest(&cfg, true, None, SortBy::Count, 100, false, None);
-}
-
-#[test]
-fn test_handle_digest_json() {
-    let dir = tempfile::TempDir::new().unwrap();
-    std::fs::create_dir_all(dir.path()).unwrap();
-    write_test_log(&dir.path().join("data.log"), 10);
-    let cfg = make_stats_cfg(dir.path());
-    handle_digest(&cfg, true, None, SortBy::Count, 1, true, None);
-}
-
-#[test]
-fn test_handle_digest_nonexistent_dir() {
-    let cfg = Config {
-        sqllog: SqllogConfig {
-            path: "/nonexistent_dir_xyz".to_string(),
-        },
-        ..Default::default()
-    };
-    // Should not panic
-    handle_digest(&cfg, true, None, SortBy::Count, 1, false, None);
-}
-
-#[test]
-fn test_handle_digest_aggregates_same_fingerprint() {
-    let dir = tempfile::TempDir::new().unwrap();
-    std::fs::create_dir_all(dir.path()).unwrap();
-    // Write records with identical SQL structure but different literal values
-    // These should collapse into one fingerprint
-    let mut buf = String::new();
-    use std::fmt::Write as _;
-    for i in 0..5 {
-        writeln!(
-            buf,
-            "2025-01-15 10:30:28.001 (EP[0] sess:0x{i:04x} user:U trxid:{i} stmt:0x1 appname:App ip:10.0.0.1) [SEL] SELECT * FROM tbl WHERE id={i}. EXECTIME: 10(ms) ROWCOUNT: 1(rows) EXEC_ID: {i}.",
-        ).unwrap();
-    }
-    std::fs::write(dir.path().join("data.log"), buf).unwrap();
-    let cfg = make_stats_cfg(dir.path());
-    handle_digest(&cfg, true, None, SortBy::Count, 1, true, None);
 }
 
 // ── handle_init tests ────────────────────────────────────────────────────────
@@ -853,19 +325,7 @@ fn test_handle_run_non_quiet_prints_summary() {
     let cfg = make_run_config(&log_dir, &csv_file);
     let interrupted = Arc::new(AtomicBool::new(false));
     // quiet=false exercises the summary print path
-    handle_run(
-        &cfg,
-        None,
-        true,
-        false,
-        &interrupted,
-        80,
-        false,
-        None,
-        1,
-        None,
-    )
-    .unwrap();
+    handle_run(&cfg, None, true, false, &interrupted, 80, 1, None).unwrap();
 }
 
 #[test]
@@ -896,8 +356,6 @@ fn test_handle_run_with_filters_builds_pipeline() {
         true,
         &interrupted,
         80,
-        false,
-        None,
         1,
         compiled_filters,
     )
@@ -914,19 +372,7 @@ fn test_handle_run_with_limit_mid_file() {
     let cfg = make_run_config(&log_dir, &csv_file);
     let interrupted = Arc::new(AtomicBool::new(false));
     // limit=5 stops partway through the file — exercises the limit check in process_log_file
-    handle_run(
-        &cfg,
-        Some(5),
-        false,
-        true,
-        &interrupted,
-        80,
-        false,
-        None,
-        1,
-        None,
-    )
-    .unwrap();
+    handle_run(&cfg, Some(5), false, true, &interrupted, 80, 1, None).unwrap();
     let content = std::fs::read_to_string(&csv_file).unwrap();
     let data_lines = content.lines().count().saturating_sub(1); // minus header
     assert!(data_lines <= 5, "expected ≤5 records, got {data_lines}");
@@ -954,19 +400,7 @@ fn test_handle_run_with_transaction_filters_prescans() {
         ..Default::default()
     });
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(
-        &cfg,
-        None,
-        true,
-        true,
-        &interrupted,
-        80,
-        false,
-        None,
-        1,
-        None,
-    )
-    .unwrap();
+    handle_run(&cfg, None, true, true, &interrupted, 80, 1, None).unwrap();
 }
 
 #[test]
@@ -991,19 +425,7 @@ fn test_handle_run_with_min_runtime_filter() {
         ..Default::default()
     });
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(
-        &cfg,
-        None,
-        true,
-        true,
-        &interrupted,
-        80,
-        false,
-        None,
-        1,
-        None,
-    )
-    .unwrap();
+    handle_run(&cfg, None, true, true, &interrupted, 80, 1, None).unwrap();
 }
 
 // ── handle_show_config tests (via integration) ───────────────────────────────
@@ -1032,79 +454,11 @@ fn test_handle_run_parallel_csv_multiple_files() {
     let interrupted = Arc::new(AtomicBool::new(false));
 
     // jobs=2, multiple files, no limit, CSV exporter → triggers process_csv_parallel
-    handle_run(
-        &cfg,
-        None,
-        false,
-        true,
-        &interrupted,
-        80,
-        false,
-        None,
-        2,
-        None,
-    )
-    .unwrap();
+    handle_run(&cfg, None, false, true, &interrupted, 80, 2, None).unwrap();
 
     let content = std::fs::read_to_string(&csv_file).unwrap();
     let data_lines = content.lines().count().saturating_sub(1);
     assert_eq!(data_lines, 30, "expected 30 records from 3 × 10");
-}
-
-#[test]
-fn test_handle_run_parallel_csv_with_resume() {
-    let dir = tempfile::TempDir::new().unwrap();
-    let log_dir = dir.path().join("logs");
-    std::fs::create_dir_all(&log_dir).unwrap();
-    write_test_log(&log_dir.join("a.log"), 5);
-    write_test_log(&log_dir.join("b.log"), 5);
-
-    let csv_file = dir.path().join("out.csv");
-    let state_file = dir.path().join("state.toml");
-    let cfg = make_run_config(&log_dir, &csv_file);
-    let interrupted = Arc::new(AtomicBool::new(false));
-
-    // First parallel run: processes both files and records state
-    handle_run(
-        &cfg,
-        None,
-        false,
-        true,
-        &interrupted,
-        80,
-        true,
-        Some(state_file.to_str().unwrap()),
-        2,
-        None, // compiled_filters
-    )
-    .unwrap();
-    assert!(state_file.exists());
-
-    // Second run: all files already processed → output empty (no data rows)
-    let csv2 = dir.path().join("out2.csv");
-    let mut cfg2 = make_run_config(&log_dir, &csv2);
-    cfg2.exporter.csv.as_mut().unwrap().append = true;
-    cfg2.exporter.csv.as_mut().unwrap().overwrite = false;
-    handle_run(
-        &cfg2,
-        None,
-        false,
-        true,
-        &interrupted,
-        80,
-        true,
-        Some(state_file.to_str().unwrap()),
-        2,
-        None, // compiled_filters
-    )
-    .unwrap();
-    // csv2 should have at most a header (all files skipped)
-    let rows = if csv2.exists() {
-        std::fs::read_to_string(&csv2).unwrap().lines().count()
-    } else {
-        0
-    };
-    assert!(rows <= 1, "expected ≤1 rows in second run, got {rows}");
 }
 
 // ── performance baseline ─────────────────────────────────────────────────────
@@ -1136,19 +490,7 @@ fn test_csv_throughput_baseline() {
 
     let interrupted = Arc::new(AtomicBool::new(false));
     let start = std::time::Instant::now();
-    handle_run(
-        &cfg,
-        None,
-        false,
-        true,
-        &interrupted,
-        80,
-        false,
-        None,
-        1,
-        None,
-    )
-    .unwrap();
+    handle_run(&cfg, None, false, true, &interrupted, 80, 1, None).unwrap();
     let elapsed = start.elapsed().as_secs_f64();
 
     #[allow(clippy::cast_precision_loss)]
@@ -1187,14 +529,6 @@ fn test_init_generates_new_nested_format() {
     assert!(
         content.contains("[filter.sql]"),
         "init template must contain [filter.sql]"
-    );
-    assert!(
-        content.contains("[template]"),
-        "init template must contain [template]"
-    );
-    assert!(
-        content.contains("[charts]"),
-        "init template must contain [charts]"
     );
     assert!(
         content.contains("[replace_parameters]"),
@@ -1267,14 +601,6 @@ fn test_validate_rejects_legacy_pipeline_template_analysis() {
     );
     let err_msg = result.unwrap_err().to_string();
     assert!(
-        err_msg.contains("[pipeline.template_analysis] → [template]"),
-        "error must contain migration hint for template_analysis; got: {err_msg}"
-    );
-    assert!(
-        err_msg.contains("[pipeline.charts] → [charts]"),
-        "error must contain migration hint for charts; got: {err_msg}"
-    );
-    assert!(
         err_msg.contains("[pipeline.filters.*] → [filter.*]"),
         "error must contain migration hint for filters; got: {err_msg}"
     );
@@ -1296,14 +622,6 @@ fn test_validate_rejects_legacy_pipeline_filters_section() {
         "legacy [pipeline.filters] must be rejected by validate()"
     );
     let err_msg = result.unwrap_err().to_string();
-    assert!(
-        err_msg.contains("[pipeline.template_analysis] → [template]"),
-        "error must contain migration hint for template_analysis; got: {err_msg}"
-    );
-    assert!(
-        err_msg.contains("[pipeline.charts] → [charts]"),
-        "error must contain migration hint for charts; got: {err_msg}"
-    );
     assert!(
         err_msg.contains("[pipeline.normalize] → [replace_parameters]"),
         "error must contain migration hint for normalize; got: {err_msg}"
@@ -1343,19 +661,7 @@ fn test_e2e_filter_pipeline() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(
-        &cfg,
-        None,
-        false,
-        true,
-        &interrupted,
-        80,
-        false,
-        None,
-        1,
-        None,
-    )
-    .unwrap();
+    handle_run(&cfg, None, false, true, &interrupted, 80, 1, None).unwrap();
 
     // Assert: header + 10 条数据行 = 11 行
     let content = std::fs::read_to_string(&csv_file).unwrap();
@@ -1399,8 +705,6 @@ fn test_e2e_filter_pipeline() {
         true,
         &Arc::new(AtomicBool::new(false)),
         80,
-        false,
-        None,
         1,
         None,
     )
@@ -1412,58 +716,6 @@ fn test_e2e_filter_pipeline() {
         1,
         "expected only header row when all records filtered out, got {}",
         content2.lines().count()
-    );
-}
-
-#[test]
-fn test_e2e_template_normalization() {
-    // Arrange: 5 条记录，启用模板归一化
-    let dir = tempfile::TempDir::new().unwrap();
-    let log_dir = dir.path().join("logs");
-    std::fs::create_dir_all(&log_dir).unwrap();
-    write_test_log(&log_dir.join("test.log"), 5);
-
-    let csv_file = dir.path().join("out.csv");
-    let mut cfg = make_run_config(&log_dir, &csv_file);
-    cfg.template = Some(TemplateConfig {
-        enable: true,
-        report: None,
-    });
-
-    // Act
-    let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(
-        &cfg,
-        None,
-        false,
-        true,
-        &interrupted,
-        80,
-        false,
-        None,
-        1,
-        None,
-    )
-    .unwrap();
-
-    // Assert: header 包含 normalized_sql，且第一条数据行的 normalized_sql 列非空
-    let content = std::fs::read_to_string(&csv_file).unwrap();
-    let header = content.lines().next().unwrap();
-    assert!(
-        header.contains("normalized_sql"),
-        "CSV header should contain 'normalized_sql', got: {header}"
-    );
-    // 第一条数据行（索引 14 = normalized_sql）应非空
-    let data_line = content.lines().nth(1).unwrap();
-    // normalized_sql 是第 15 个字段（索引 14），用逗号分割取第 14 个字段
-    // 注意：SQL 格式为 "SELECT * FROM t WHERE id=N" 不含逗号，因此 split(',') 安全
-    // 如果测试 SQL 未来包含逗号，需改用 csv crate 正确解析带引号的字段
-    assert!(!data_line.is_empty(), "first data line should not be empty");
-    // 验证 normalized_sql 列存在内容：整行中字段数至少为 15
-    let field_count = data_line.split(',').count();
-    assert!(
-        field_count >= 15,
-        "expected at least 15 fields in data line, got {field_count}: {data_line}"
     );
 }
 
@@ -1487,19 +739,7 @@ fn test_e2e_field_projection() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(
-        &cfg,
-        None,
-        false,
-        true,
-        &interrupted,
-        80,
-        false,
-        None,
-        1,
-        None,
-    )
-    .unwrap();
+    handle_run(&cfg, None, false, true, &interrupted, 80, 1, None).unwrap();
 
     // Assert: header 精确为 "ts,username,sql"，数据行 split(',').count() == 3
     let content = std::fs::read_to_string(&csv_file).unwrap();
@@ -1542,19 +782,7 @@ fn test_boundary_empty_log_file() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(
-        &cfg,
-        None,
-        false,
-        true,
-        &interrupted,
-        80,
-        false,
-        None,
-        1,
-        None,
-    )
-    .unwrap();
+    handle_run(&cfg, None, false, true, &interrupted, 80, 1, None).unwrap();
 
     // Assert: CSV 文件存在且只有 header（1 行）
     assert!(
@@ -1592,19 +820,7 @@ fn test_boundary_all_filtered() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(
-        &cfg,
-        None,
-        false,
-        true,
-        &interrupted,
-        80,
-        false,
-        None,
-        1,
-        None,
-    )
-    .unwrap();
+    handle_run(&cfg, None, false, true, &interrupted, 80, 1, None).unwrap();
 
     // Assert: CSV 只有 header（全部记录被过滤）
     let content = std::fs::read_to_string(&csv_file).unwrap();
@@ -1642,19 +858,7 @@ fn test_boundary_malformed_line() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(
-        &cfg,
-        None,
-        false,
-        true,
-        &interrupted,
-        80,
-        false,
-        None,
-        1,
-        None,
-    )
-    .unwrap();
+    handle_run(&cfg, None, false, true, &interrupted, 80, 1, None).unwrap();
 
     // Assert: 无效行被跳过，4 条正常记录导出 → header + 4 data = 5 行
     let csv_content = std::fs::read_to_string(&csv_file).unwrap();
@@ -1684,19 +888,7 @@ fn test_boundary_long_sql() {
 
     // Act: 不应 panic，不应 OOM
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(
-        &cfg,
-        None,
-        false,
-        true,
-        &interrupted,
-        80,
-        false,
-        None,
-        1,
-        None,
-    )
-    .unwrap();
+    handle_run(&cfg, None, false, true, &interrupted, 80, 1, None).unwrap();
 
     // Assert: 1 条记录正常导出 → header + 1 data = 2 行
     let csv_content = std::fs::read_to_string(&csv_file).unwrap();

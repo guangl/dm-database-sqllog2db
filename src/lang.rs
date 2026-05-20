@@ -8,7 +8,6 @@
 //!
 //! `detect`, `apply_zh` 及各个 `zh_*` 辅助函数仅在 binary crate (main.rs) 中使用；
 //! lib crate 生产代码不调用。`#[cfg(test)]` 中的单元测试直接引用当前模块 items，编译不受影响。
-#![allow(dead_code)]
 
 use clap::Command;
 
@@ -64,6 +63,7 @@ fn from_args(args: &[String]) -> Option<Lang> {
 
 /// Determine the effective language: CLI flag > env var > system locale > English.
 #[must_use]
+#[allow(dead_code)]
 pub(crate) fn detect(args: &[String]) -> Lang {
     from_args(args).unwrap_or_else(from_env)
 }
@@ -73,6 +73,7 @@ pub(crate) fn detect(args: &[String]) -> Lang {
 /// Apply Chinese help strings to the clap `Command` tree.
 /// Called only when `lang == Lang::Zh`; the default command is already English.
 #[must_use]
+#[allow(dead_code)]
 pub(crate) fn apply_zh(cmd: Command) -> Command {
     cmd.about("解析达梦数据库 SQL 日志并导出到 CSV / SQLite")
         .long_about(
@@ -91,17 +92,6 @@ pub(crate) fn apply_zh(cmd: Command) -> Command {
         .mut_subcommand("init", zh_init)
         .mut_subcommand("validate", zh_validate)
         .mut_subcommand("show-config", zh_show_config)
-        .mut_subcommand("stats", zh_stats)
-        .mut_subcommand("digest", zh_digest)
-        .mut_subcommand("completions", |s| {
-            s.about("生成 Shell 自动补全脚本")
-                .mut_arg("shell", |a| a.help("目标 Shell 类型"))
-        })
-        .mut_subcommand("self-update", |s| {
-            s.about("将工具自更新到最新版本")
-                .mut_arg("check", |a| a.help("只检查是否有新版本（不执行更新）"))
-        })
-        .mut_subcommand("man", |s| s.about("将 man page 输出到 stdout"))
 }
 
 fn zh_common_config_args(s: Command) -> Command {
@@ -124,10 +114,6 @@ fn zh_run(s: Command) -> Command {
         .mut_arg("progress_interval", |a| {
             a.help("进度条刷新间隔（毫秒，默认 80）")
         })
-        .mut_arg("resume", |a| a.help("跳过上次已完整处理的文件（断点续传）"))
-        .mut_arg("state_file", |a| {
-            a.help("覆盖 --resume 使用的状态文件路径（默认：.sqllog2db_state.toml）")
-        })
 }
 
 fn zh_init(s: Command) -> Command {
@@ -144,34 +130,6 @@ fn zh_show_config(s: Command) -> Command {
     zh_common_config_args(s)
         .about("显示当前生效配置（含 --set 覆盖后的值）")
         .mut_arg("diff", |a| a.help("高亮与默认配置不同的字段"))
-}
-
-fn zh_stats(s: Command) -> Command {
-    zh_common_config_args(s)
-        .about("统计日志记录数（无需导出）")
-        .mut_arg("from", |a| a.help("只统计此时间戳之后的记录"))
-        .mut_arg("to", |a| a.help("只统计此时间戳之前的记录"))
-        .mut_arg("top", |a| a.help("显示前 N 条最慢查询（按执行时间排序）"))
-        .mut_arg("json", |a| a.help("以 JSON 格式输出统计结果（到 stdout）"))
-        .mut_arg("group_by", |a| {
-            a.help("按字段聚合统计：user、app、ip（可叠加，逗号分隔）")
-        })
-        .mut_arg("bucket", |a| a.help("按时间粒度分桶统计：hour 或 minute"))
-}
-
-fn zh_digest(s: Command) -> Command {
-    zh_common_config_args(s)
-        .about("SQL 指纹聚合：按查询结构归类统计执行次数与耗时")
-        .mut_arg("from", |a| a.help("只处理此时间戳之后的记录"))
-        .mut_arg("to", |a| a.help("只处理此时间戳之前的记录"))
-        .mut_arg("top", |a| a.help("只显示前 N 条指纹"))
-        .mut_arg("sort", |a| {
-            a.help("排序方式：count（执行次数，默认）或 exec（总执行时间）")
-        })
-        .mut_arg("min_count", |a| {
-            a.help("忽略出现次数低于 N 的指纹（默认 1）")
-        })
-        .mut_arg("json", |a| a.help("以 JSON 格式输出结果（到 stdout）"))
 }
 
 #[cfg(test)]

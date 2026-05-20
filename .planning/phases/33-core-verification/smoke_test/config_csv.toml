@@ -1,0 +1,15 @@
+[sqllog]
+path = "test_logs/"
+
+[error]
+file = "work/errors.log"
+
+[logging]
+file = "work/app.log"
+level = "warn"
+retention_days = 1
+
+[exporter.csv]
+file = "work/output.csv"
+overwrite = true
+include_performance_metrics = true

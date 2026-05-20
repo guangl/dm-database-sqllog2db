@@ -18,23 +18,11 @@ pub enum Error {
     #[error("Export error: {0}")]
     Export(#[from] ExportError),
 
-    #[error("Update error: {0}")]
-    Update(#[from] UpdateError),
-
     #[error("IO error: {0}")]
     Io(#[from] io::Error),
 
     #[error("Interrupted by user")]
     Interrupted,
-}
-
-#[derive(Debug, Error)]
-pub enum UpdateError {
-    #[error("Update failed: {0}")]
-    UpdateFailed(String),
-
-    #[error("Check for updates failed: {0}")]
-    CheckFailed(String),
 }
 
 #[derive(Debug, Error)]
@@ -67,9 +55,6 @@ pub enum FileError {
     #[error("File already exists: {path} (set overwrite=true to replace)")]
     AlreadyExists { path: PathBuf },
 
-    #[error("Failed to read file {path}: {reason}")]
-    ReadFailed { path: PathBuf, reason: String },
-
     #[error("Failed to write file {path}: {reason}")]
     WriteFailed { path: PathBuf, reason: String },
 
@@ -91,7 +76,7 @@ pub enum ParserError {
 
 #[derive(Debug, Error)]
 pub enum ExportError {
-    /// 文件写入失败（CSV、JSONL、错误日志等所有文件型导出器通用）
+    /// 文件写入失败（CSV、错误日志等所有文件型导出器通用）
     #[error("Write failed {path}: {reason}")]
     WriteFailed { path: PathBuf, reason: String },
 

@@ -81,18 +81,6 @@ retention_days = 7
 # 对 INS/DEL/UPD/ORA 类型的记录，将 PARAMS 参数值填入 SQL 的占位符
 enable = true
 
-[template]
-# SQL 模板归一化（v1.4 新增顶层配置）
-# 启用后对 sql_text 执行注释去除、IN 列表折叠、关键字大写、空白折叠四项变换，生成稳定的模板 key
-# 默认 false（不影响热循环性能）
-enable = false
-
-# 模板报告独立输出（可选配置，跟随 template.enable 自动启用）
-# [template.report]
-# enabled = true
-# csv_report_path = ""                # 留空 = 自动派生 (out.csv → out_templates.csv)
-# sqlite_report_path = ""             # 留空 = 自动派生 (out.db → out_templates.db)
-
 [filter]
 # 是否启用过滤器
 enable = false
@@ -145,21 +133,6 @@ enable = false
 # 排除模式列表（SQL 包含任一模式则剔除）
 # excludes = ["SELECT 1", "DUAL"]
 
-# ===================== 图表生成（可选）=====================
-# 启用图表功能需取消注释下方 [charts] 段并至少填写 output_dir
-# [charts]
-# output_dir = "charts/"   # 图表输出目录（必填）
-# top_n = 10               # Top-N 频率显示数量
-# frequency_bar = true     # 生成频率柱状图
-# latency_hist = true      # 生成延迟直方图
-# trend_line = true        # 生成时间趋势折线图
-# user_pie = true          # 生成用户占比饼图
-
-# ===================== 断点续传 =====================
-# 使用 --resume 标志时，sqllog2db 会跳过已成功处理的文件（通过文件大小和修改时间判断）。
-# [resume]
-# state_file = ".sqllog2db_state.toml"
-
 # ===================== 导出器配置 =====================
 # 只能配置一个导出器，同时配置多个时按优先级使用：csv > sqlite
 
@@ -195,18 +168,6 @@ retention_days = 7
 # Write a normalized_sql column in export output (default: true).
 # For INS/DEL/UPD/ORA records, parameter values are substituted into SQL placeholders.
 enable = true
-
-[template]
-# SQL template normalization (new in v1.4, top-level config)
-# Strips comments, folds IN lists, uppercases keywords, collapses whitespace to produce a stable template key
-# Default false (zero overhead in hot loop when disabled)
-enable = false
-
-# Template report independent output (optional, auto-enabled when template.enable = true)
-# [template.report]
-# enabled = true
-# csv_report_path = ""                # leave empty to auto-derive (out.csv → out_templates.csv)
-# sqlite_report_path = ""             # leave empty to auto-derive (out.db → out_templates.db)
 
 [filter]
 # Enable the filter pipeline
@@ -245,22 +206,6 @@ enable = false
 [filter.sql]
 # includes = ["FROM USER_TABLES", "DELETE FROM"]
 # excludes = ["SELECT 1", "DUAL"]
-
-# ===================== Chart Generation (optional) =====================
-# To enable charts, uncomment the [charts] section below and set at least output_dir
-# [charts]
-# output_dir = "charts/"   # Chart output directory (required)
-# top_n = 10               # Top-N frequency count
-# frequency_bar = true     # Generate frequency bar chart
-# latency_hist = true      # Generate latency histogram
-# trend_line = true        # Generate time-trend line chart
-# user_pie = true          # Generate user-share pie chart
-
-# ===================== Resume / Checkpoint =====================
-# With --resume, sqllog2db skips files already successfully processed
-# (tracked by file size and modification time).
-# [resume]
-# state_file = ".sqllog2db_state.toml"
 
 # ===================== Exporter Configuration =====================
 # Only one exporter can be active at a time. Priority: csv > sqlite

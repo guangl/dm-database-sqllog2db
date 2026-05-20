@@ -11,9 +11,9 @@ SQL 日志文件 (.log)
     ↓ SqllogParser — 文件发现与排序（src/parser.rs）
     ↓ dm-database-parser-sqllog — 逐行解析（外部 crate）
     ↓ Sqllog 记录
-    ↓ Pipeline — 可选过滤器/处理器链（src/features/）
+    ↓ Pipeline — 可选过滤器/处理器链（src/pipeline/）
     │ ├─ (空) ───────────────────── 零开销快速路径
-    │ └─ FilterProcessor ────────── 过滤器/模板处理
+    │ └─ FilterProcessor ────────── 过滤器处理
     ↓ ExporterManager — 路由到活跃导出器（src/exporter/）
     ▼
 CSV 输出（src/exporter/csv.rs）或 SQLite 输出（src/exporter/sqlite.rs）
@@ -22,12 +22,11 @@ CSV 输出（src/exporter/csv.rs）或 SQLite 输出（src/exporter/sqlite.rs）
 **设计要点：**
 
 - 流式处理：记录逐行读取，内存占用恒定，不受文件大小影响——100 MB 和 100 GB 日志文件消耗相同的峰值内存。
-- 当管道（Pipeline）为空（无过滤器、模板或图表）时，热循环通过 `pipeline.is_empty()` 检查跳过所有功能逻辑，实现零开销快速路径。
-- stats 和 digest 命令读取已导出的输出文件（CSV 或 SQLite），经过简化的分析路径，不再重新解析原始日志。
+- 当管道（Pipeline）为空（无过滤器）时，热循环通过 `pipeline.is_empty()` 检查跳过所有功能逻辑，实现零开销快速路径。
 
 ## 模块划分
 
-项目按职责分为 5 大核心模块和若干支撑模块。
+项目按职责分为 4 大核心模块和若干支撑模块。
 
 ### 配置层 — `src/config.rs`
 
@@ -38,7 +37,7 @@ CSV 输出（src/exporter/csv.rs）或 SQLite 输出（src/exporter/sqlite.rs）
 - `validate_and_compile()`：验证配置并编译正则表达式
 
 **特性：**
-- 嵌套子表支持（v1.4+）：`[filter.include]`、`[filter.exclude]`、`[template]`、`[charts]` 为顶级段
+- 嵌套子表支持（v1.4+）：`[filter.include]`、`[filter.exclude]` 为顶级段
 - 命令行覆盖：`--set KEY=VALUE` 无需编辑文件
 - 向后兼容：通过 `RawFiltersFeature` 中间结构支持旧版扁平格式
 
@@ -47,24 +46,21 @@ CSV 输出（src/exporter/csv.rs）或 SQLite 输出（src/exporter/sqlite.rs）
 **职责：** 解析命令行参数，分派子命令，编排整体工作流。
 
 **结构：**
-- `run.rs` — `handle_run()`：主编排逻辑（加载配置 → 构建管道 → 预扫描 → 流式导出）
-- `stats.rs` — 按文件统计与慢查询分析
-- `digest.rs` — SQL 指纹聚合
+- `run/mod.rs` — `handle_run()`：主编排逻辑（加载配置 → 构建管道 → 预扫描 → 流式导出）
 - `init.rs` — 生成默认配置
 - `validate.rs` — 验证配置文件
 - `show_config.rs` — 查看当前配置
 
-**模式：** CLI handler 函数以 `handle_` 为前缀（`handle_run`、`handle_stats` 等）。
+**模式：** CLI handler 函数以 `handle_` 为前缀（`handle_run` 等）。
 
-### Pipeline / 特性层 — `src/features/`
+### Pipeline / 特性层 — `src/pipeline/`
 
-**职责：** 实现可选的记录处理链——包括过滤器、SQL 参数归一化和模板聚合。
+**职责：** 实现可选的记录处理链——包括过滤器和 SQL 参数归一化。
 
 **关键抽象：**
 - `LogProcessor` trait：可插拔的记录处理接口，定义 `process_with_meta()` 方法
 - `Pipeline`：记录处理器的有序链，`is_empty()` 判断是否需要处理
 - `FiltersFeature`：包含/排除过滤器（AND/OR 语义）
-- `normalize_template`：SQL 指纹归一化（去除注释、折叠 IN-list、关键字大写、合并空白）
 
 **模式：**
 - 短路语义：任一 processor 返回跳过信号即停止链
@@ -84,25 +80,12 @@ CSV 输出（src/exporter/csv.rs）或 SQLite 输出（src/exporter/sqlite.rs）
 
 **优先级：** CSV > SQLite。同时配置时仅 CSV 生效。
 
-### 图表层 — `src/charts/`
-
-**职责：** 从模板聚合数据生成四类 SVG 图表。
-
-**图表类型：**
-- 频率柱状图（`frequency_bar.rs`）— Top-N SQL 模板按执行次数排序
-- 延迟直方图（`latency_hist.rs`）— 每类模板的执行时间分布
-- 趋势折线图（`trend_line.rs`）— 模板执行频率随时间变化
-- 用户饼图（`user_pie.rs`）— 按数据库用户的查询占比
-
-**技术栈：** plotters 库，SVG-only 后端（不需要系统字体或图片库）。
-
 ### 支撑模块
 
 | 模块 | 路径 | 职责 |
 |------|------|------|
 | 错误处理 | `src/error.rs` | 类型化错误枚举 `Error`、`pub type Result<T>` |
 | 解析器 | `src/parser.rs` | 日志文件发现、排序、迭代 |
-| 断点续传 | `src/resume.rs` | 文件指纹追踪、增量处理状态 |
 | 日志 | `src/logging.rs` | 应用日志和错误日志 |
 | 工具库 | `src/lib.rs` | 模块注册和公共导出 |
 
@@ -114,19 +97,11 @@ CSV 输出（src/exporter/csv.rs）或 SQLite 输出（src/exporter/sqlite.rs）
 
 ### LogProcessor trait + Pipeline
 
-可插拔的记录处理链。每个 `LogProcessor` 实现 `process_with_meta()` 方法处理单条日志记录。`Pipeline` 将多个处理器串联为有序链。关键设计：`is_empty()` 允许在配置无过滤/模板需求时完全绕过管道，实现零开销。
+可插拔的记录处理链。每个 `LogProcessor` 实现 `process_with_meta()` 方法处理单条日志记录。`Pipeline` 将多个处理器串联为有序链。关键设计：`is_empty()` 允许在配置无过滤器需求时完全绕过管道，实现零开销。
 
 ### FieldMask
 
 `u16` 位掩码用于字段投影。16 个位对应 15 个输出字段（位 15 保留）。在整个管道中传递，控制每个字段是否被写入。提供 `contains(index)` 和 `set(index)` 方法，编译期内联。
-
-### TemplateAggregator
-
-流式模板统计引擎。累积每个模板的出现次数、首末时间戳和代表性 SQL 示例。使用 `hdrhistogram`（高动态范围直方图）以约 24 KB/模板的紧凑存储保存执行延迟分布，相比原始 `Vec<u64>` 节省约 1600 倍空间。通过 `finalize()` 产出最终统计结果。
-
-### ResumeState
-
-断点续传文件追踪。将已处理文件的指纹（路径 + 文件大小 + 修改时间）持久化到 TOML 状态文件。后续运行时跳过指纹匹配的文件，实现增量导出。仅在 `[sqllog]` 配置中显式启用时生效。
 
 ## 性能设计
 
@@ -136,7 +111,7 @@ CSV 输出（src/exporter/csv.rs）或 SQLite 输出（src/exporter/sqlite.rs）
 
 ### 零开销快路径
 
-当没有配置任何过滤器、模板或图表时，热循环中的 `pipeline.is_empty()` 检查确保所有功能逻辑被跳过。此时记录不经处理直接流式写入导出器，性能接近裸文件复制的水平。
+当没有配置任何过滤器时，热循环中的 `pipeline.is_empty()` 检查确保所有功能逻辑被跳过。此时记录不经处理直接流式写入导出器，性能接近裸文件复制的水平。
 
 ### CSV 导出优化
 
@@ -200,13 +175,11 @@ Release 构建采用激进优化：
 
 ```
 src/error.rs ←──────────────── 所有模块（横切关注点）
-src/config.rs ←─ src/cli/ ←─ src/features/ ←─ src/exporter/
-                                   ↑
-                              src/charts/
+src/config.rs ←─ src/cli/ ←─ src/pipeline/ ←─ src/exporter/
 ```
 
-配置层（config）被 CLI 层引用，CLI 层协调 Pipeline 和 Exporter 的具体实例。图表层（charts）作为 Pipeline 的下游消费者，仅在模板聚合完成后被触发。
+配置层（config）被 CLI 层引用，CLI 层协调 Pipeline 和 Exporter 的具体实例。
 
 ---
 
-*架构文档在 Phase 25 中编写，反映项目 v1.6 的代码结构。模块级概述，不深入特定 struct 字段或 trait 方法签名。*
+*架构文档在 Phase 28 中更新，反映项目 v1.7 的代码结构。模块级概述，不深入特定 struct 字段或 trait 方法签名。*

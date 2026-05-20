@@ -1,4 +1,3 @@
-pub(crate) mod charts;
 pub mod cli;
 pub(crate) mod color;
 pub mod config;
@@ -8,4 +7,3 @@ pub mod lang;
 pub(crate) mod logging;
 pub(crate) mod parser;
 pub mod pipeline;
-pub(crate) mod resume;

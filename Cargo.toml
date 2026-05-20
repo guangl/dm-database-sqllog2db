@@ -4,7 +4,7 @@ version = "1.4.0"
 edition = "2024"
 rust-version = "1.85"
 authors = ["guangl <guangl@example.com>"]
-description = "高性能 CLI 工具：流式解析达梦数据库 SQL 日志并导出到 CSV/JSONL/SQLite"
+description = "高性能 CLI 工具：流式解析达梦数据库 SQL 日志并导出到 CSV 或 SQLite"
 documentation = "https://guangl.github.io/sqllog2db/"
 homepage = "https://github.com/guangl/sqllog2db"
 repository = "https://github.com/guangl/sqllog2db"
@@ -38,31 +38,16 @@ thiserror = "2.0.18"
 itoa = "1.0"
 
 clap = { version = "4.6.1", features = ["derive", "env"] }
-clap_complete = "4.6"
 serde = { version = "1.0.228", features = ["derive"] }
 toml = { version = "1.1.2", features = ["serde"] }
 chrono = { version = "0.4.44", features = ["clock"] }
-self_update = { version = "0.44.0", default-features = false, features = [
-  "reqwest",
-  "rustls",
-  "compression-flate2",
-] }
 indicatif = "0.18"
 ctrlc = "3"
 glob = "0.3"
-clap_mangen = "0.3"
 
-serde_json = "1.0.149"
-ryu = "1"
 rayon = "1.12"
 regex = "1"
 ahash = "0.8"
-hdrhistogram = "7.5.4"
-plotters = { version = "0.3.7", default-features = false, features = [
-  "svg_backend",
-  "all_series",
-  "all_elements",
-] }
 memchr = "2"
 encoding_rs = "0.8"
 compact_str = "0.9"
