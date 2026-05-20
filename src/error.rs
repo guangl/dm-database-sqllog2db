@@ -76,7 +76,7 @@ pub enum ParserError {
 
 #[derive(Debug, Error)]
 pub enum ExportError {
-    /// 文件写入失败（CSV、JSONL、错误日志等所有文件型导出器通用）
+    /// 文件写入失败（CSV、错误日志等所有文件型导出器通用）
     #[error("Write failed {path}: {reason}")]
     WriteFailed { path: PathBuf, reason: String },
 
