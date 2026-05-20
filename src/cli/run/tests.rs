@@ -53,7 +53,7 @@ fn test_include_performance_metrics_false_csv_excludes_pm_columns() {
 }
 
 #[test]
-fn test_aggregator_disabled_none_path() {
+fn test_handle_run_default_config_succeeds() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_path = dir.path().join("t.log");
     std::fs::write(
