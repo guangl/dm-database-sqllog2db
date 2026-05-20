@@ -23,7 +23,6 @@ CSV 输出（src/exporter/csv.rs）或 SQLite 输出（src/exporter/sqlite.rs）
 
 - 流式处理：记录逐行读取，内存占用恒定，不受文件大小影响——100 MB 和 100 GB 日志文件消耗相同的峰值内存。
 - 当管道（Pipeline）为空（无过滤器、模板或图表）时，热循环通过 `pipeline.is_empty()` 检查跳过所有功能逻辑，实现零开销快速路径。
-- stats 和 digest 命令读取已导出的输出文件（CSV 或 SQLite），经过简化的分析路径，不再重新解析原始日志。
 
 ## 模块划分
 
@@ -48,13 +47,11 @@ CSV 输出（src/exporter/csv.rs）或 SQLite 输出（src/exporter/sqlite.rs）
 
 **结构：**
 - `run.rs` — `handle_run()`：主编排逻辑（加载配置 → 构建管道 → 预扫描 → 流式导出）
-- `stats.rs` — 按文件统计与慢查询分析
-- `digest.rs` — SQL 指纹聚合
 - `init.rs` — 生成默认配置
 - `validate.rs` — 验证配置文件
 - `show_config.rs` — 查看当前配置
 
-**模式：** CLI handler 函数以 `handle_` 为前缀（`handle_run`、`handle_stats` 等）。
+**模式：** CLI handler 函数以 `handle_` 为前缀（`handle_run`、`handle_validate` 等）。
 
 ### Pipeline / 特性层 — `src/features/`
 
