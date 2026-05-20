@@ -99,11 +99,11 @@ Full details: `.planning/milestones/v1.6-ROADMAP.md`
 <details open>
 <summary>🚧 v1.7 项目精简 (Phases 28–33) — IN PROGRESS</summary>
 
-- [ ] **Phase 28: 移除图表、自更新、补全** — 移除三个独立无依赖的外部功能模块
-- [ ] **Phase 29: 移除统计与摘要** — 移除 stats 和 digest 子命令及其依赖
-- [ ] **Phase 30: 移除模板分析** — 移除模板聚合、报告及相关配置
-- [ ] **Phase 31: 移除断点续传** — 移除 resume 模块、配置和 --resume 选项
-- [ ] **Phase 32: 项目结构清理** — 清理空目录、mod 声明、未使用代码
+- [x] **Phase 28: 移除图表、自更新、补全** — 移除三个独立无依赖的外部功能模块
+- [x] **Phase 29: 移除统计与摘要** — 移除 stats 和 digest 子命令及其依赖
+- [x] **Phase 30: 移除模板分析** — 移除模板聚合、报告及相关配置
+- [x] **Phase 31: 移除断点续传** — 移除 resume 模块、配置和 --resume 选项
+- [x] **Phase 32: 项目结构清理** — 清理空目录、mod 声明、未使用代码
 - [ ] **Phase 33: 核心功能验证** — 验证精简后核心功能完整可用
 
 </details>
@@ -158,9 +158,9 @@ Plans:
 **Plans**: 3 plans
 ```
 Plans:
-- [ ] 30-01-PLAN.md — 配置层清理：删除 pipeline/mod.rs 中模块声明/TemplateConfig/辅助函数、config 层 template 引用、init/show_config template 段、Cargo.toml hdrhistogram
-- [ ] 30-02-PLAN.md — 运行时代码清理：删除 aggregator.rs/template_reporter.rs/companion.rs，清理 cli/run 热循环+导出器层的 write_template_stats
-- [ ] 30-03-PLAN.md — 测试清理+编译验证：删除 5 个测试文件中所有模板相关测试，全链路 cargo build+test+clippy+fmt 通过
+- [x] 30-01-PLAN.md — 配置层清理：删除 pipeline/mod.rs 中模块声明/TemplateConfig/辅助函数、config 层 template 引用、init/show_config template 段、Cargo.toml hdrhistogram
+- [x] 30-02-PLAN.md — 运行时代码清理：删除 aggregator.rs/template_reporter.rs/companion.rs，清理 cli/run 热循环+导出器层的 write_template_stats
+- [x] 30-03-PLAN.md — 测试清理+编译验证：删除 5 个测试文件中所有模板相关测试，全链路 cargo build+test+clippy+fmt 通过
 ```
 
 ### Phase 31: 移除断点续传
@@ -210,12 +210,12 @@ Plans:
   5. SQLite 导出功能正常工作，用户可以通过配置将日志导出为 SQLite 数据库
   6. Pipeline 过滤器（include/exclude/indicators/sql）正常工作，过滤结果符合预期
   7. `cargo fmt` 格式检查通过
-**Plans**: 3 plans
+**Plans**: 3 plans (all Wave 1, parallel)
 ```
 Plans:
-- [ ] 33-01-PLAN.md — ...（Phase 33 计划）
-- [ ] 33-02-PLAN.md — ...（Phase 33 计划）
-- [ ] 33-03-PLAN.md — ...（Phase 33 计划）
+- [ ] 33-01-PLAN.md — 静态检查（cargo check + build --release + clippy + fmt）
+- [ ] 33-02-PLAN.md — 自动化测试（cargo test + cargo bench + baseline 对比）
+- [ ] 33-03-PLAN.md — CLI 冒烟验证（Shell 编排 + 数据校验 + VERIFICATION-CHECKLIST.md）
 ```
 
 ## Progress
@@ -254,4 +254,4 @@ Plans:
 | 30. 移除模板分析 | v1.7 | 0/0 | Not started | - |
 | 31. 移除断点续传 | v1.7 | 2/2 | Complete    | 2026-05-20 |
 | 32. 项目结构清理 | v1.7 | 3/3 | Complete    | 2026-05-20 |
-| 33. 核心功能验证 | v1.7 | 0/0 | Not started | - |
+| 33. 核心功能验证 | v1.7 | 0/3 | Planned | - |

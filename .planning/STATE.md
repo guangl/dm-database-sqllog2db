@@ -2,16 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: 项目精简
-status: milestone_complete
-last_updated: 2026-05-20T04:57:41.742Z
-last_activity: 2026-05-20 -- Phase 32 execution started
+status: in_progress
+last_updated: "2026-05-20T07:30:00.000Z"
+last_activity: 2026-05-20
 progress:
-  total_phases: 9
-  completed_phases: 7
-  total_plans: 17
+  total_phases: 10
+  completed_phases: 8
+  total_plans: 20
   completed_plans: 20
-  percent: 78
-stopped_at: Milestone complete (Phase 32 was final phase)
+  percent: 80
 ---
 
 # Project State
@@ -25,9 +24,9 @@ See: .planning/PROJECT.md (updated 2026-05-19 after v1.6 milestone)
 
 ## Current Position
 
-Phase: 32
-Plan: Not started
-Status: Milestone complete
+Phase: 33
+Plan: Planned
+Status: Phase 33 plans created (3 plans, Wave 1 parallel)
 Last activity: 2026-05-20
 
 ### Phase Sequence
@@ -38,12 +37,12 @@ Last activity: 2026-05-20
 | 25 | 延后文档补全 | DOC-01, DOC-02, DOC-03 | Complete |
 | 26 | GitHub Pages 多页文档站 | PAGES-01 | Complete |
 | 27 | 模板报告独立输出 | TMPL-03, TMPL-03b | Complete |
-| 28 | 移除图表、自更新、补全 | RM-01, RM-02, RM-07 | Not started |
-| 29 | 移除统计与摘要 | RM-03, RM-04 | Not started |
-| 30 | 移除模板分析 | RM-05 | Not started |
-| 31 | 移除断点续传 | RM-06 | Not started |
-| 32 | 项目结构清理 | RM-08 | Not started |
-| 33 | 核心功能验证 | KEEP-01~06 | Not started |
+| 28 | 移除图表、自更新、补全 | RM-01, RM-02, RM-07 | Complete |
+| 29 | 移除统计与摘要 | RM-03, RM-04 | Complete |
+| 30 | 移除模板分析 | RM-05 | Complete |
+| 31 | 移除断点续传 | RM-06 | Complete |
+| 32 | 项目结构清理 | RM-08 | Complete |
+| 33 | 核心功能验证 | KEEP-01~06 | Planned |
 
 ## Performance Metrics
 
@@ -63,14 +62,16 @@ Last activity: 2026-05-20
 - [v1.7 Roadmap]: RM-03/RM-04 grouped as Phase 29 — both CLI subcommand removals, independent of each other
 - [v1.7 Roadmap]: RM-05 (template) before RM-06 (resume) — both may touch run loop; template removal first reduces surface for resume removal
 - [v1.7 Roadmap]: KEEP-01~06 are post-removal verification — no code changes, only build/test/lint confirmation
+- [Phase 33]: D-15 — 3 plans by verification type: Plan 1 (static), Plan 2 (tests+bench), Plan 3 (smoke+checklist)
+- [Phase 33]: D-16 — Three plans are parallel (Wave 1), no dependencies
 
 ### Pending Todos
 
-- `/gsd:plan-phase 28` — 开始 Phase 28 的计划和执行
+- `/gsd:execute-phase 33` — 执行 Phase 33 验证（3 个 plan 并行执行）
 
 ### Blockers/Concerns
 
-None. Roadmap is ready for execution.
+None. Plans created and ready for execution.
 
 ## Deferred Items
 
