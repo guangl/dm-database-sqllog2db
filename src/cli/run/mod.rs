@@ -104,7 +104,6 @@ pub fn handle_run(
             jobs,
             &pb,
             interrupted,
-            quiet,
             do_normalize,
             placeholder_override,
             field_mask,

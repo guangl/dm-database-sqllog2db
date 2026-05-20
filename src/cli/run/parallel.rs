@@ -74,7 +74,6 @@ pub(super) fn process_csv_parallel(
     jobs: usize,
     pb: &ProgressBar,
     interrupted: &Arc<AtomicBool>,
-    _quiet: bool,
     do_normalize: bool,
     placeholder_override: Option<bool>,
     field_mask: FieldMask,
