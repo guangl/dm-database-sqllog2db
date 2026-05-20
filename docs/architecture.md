@@ -16,7 +16,7 @@ SQL 日志文件 (.log)
     │ └─ FilterProcessor ────────── 过滤器处理
     ↓ ExporterManager — 路由到活跃导出器（src/exporter/）
     ▼
-CSV 输出（src/exporter/csv.rs）或 SQLite 输出（src/exporter/sqlite.rs）
+CSV 输出（src/exporter/csv/mod.rs）或 SQLite 输出（src/exporter/sqlite/mod.rs）
 ```
 
 **设计要点：**
@@ -28,9 +28,9 @@ CSV 输出（src/exporter/csv.rs）或 SQLite 输出（src/exporter/sqlite.rs）
 
 项目按职责分为 4 大核心模块和若干支撑模块。
 
-### 配置层 — `src/config.rs`
+### 配置层 — `src/config/`
 
-**职责：** 加载 TOML 配置文件，验证配置完整性，应用命令行覆盖。
+**职责：** 加载 TOML 配置文件，验证配置完整性。支持嵌套子表格式（v1.4+）。
 
 **关键抽象：**
 - `Config`：顶层配置结构，包含所有子配置段
@@ -38,7 +38,6 @@ CSV 输出（src/exporter/csv.rs）或 SQLite 输出（src/exporter/sqlite.rs）
 
 **特性：**
 - 嵌套子表支持（v1.4+）：`[filter.include]`、`[filter.exclude]` 为顶级段
-- 命令行覆盖：`--set KEY=VALUE` 无需编辑文件
 - 向后兼容：通过 `RawFiltersFeature` 中间结构支持旧版扁平格式
 
 ### CLI / 编排层 — `src/cli/`
@@ -49,7 +48,6 @@ CSV 输出（src/exporter/csv.rs）或 SQLite 输出（src/exporter/sqlite.rs）
 - `run/mod.rs` — `handle_run()`：主编排逻辑（加载配置 → 构建管道 → 预扫描 → 流式导出）
 - `init.rs` — 生成默认配置
 - `validate.rs` — 验证配置文件
-- `show_config.rs` — 查看当前配置
 
 **模式：** CLI handler 函数以 `handle_` 为前缀（`handle_run` 等）。
 
@@ -60,7 +58,6 @@ CSV 输出（src/exporter/csv.rs）或 SQLite 输出（src/exporter/sqlite.rs）
 **关键抽象：**
 - `LogProcessor` trait：可插拔的记录处理接口，定义 `process_with_meta()` 方法
 - `Pipeline`：记录处理器的有序链，`is_empty()` 判断是否需要处理
-- `FiltersFeature`：包含/排除过滤器（AND/OR 语义）
 
 **模式：**
 - 短路语义：任一 processor 返回跳过信号即停止链
@@ -87,6 +84,7 @@ CSV 输出（src/exporter/csv.rs）或 SQLite 输出（src/exporter/sqlite.rs）
 | 错误处理 | `src/error.rs` | 类型化错误枚举 `Error`、`pub type Result<T>` |
 | 解析器 | `src/parser.rs` | 日志文件发现、排序、迭代 |
 | 日志 | `src/logging.rs` | 应用日志和错误日志 |
+| 预检 | `src/preflight.rs` | 运行前环境检查 |
 | 工具库 | `src/lib.rs` | 模块注册和公共导出 |
 
 ## 关键抽象
@@ -175,7 +173,7 @@ Release 构建采用激进优化：
 
 ```
 src/error.rs ←──────────────── 所有模块（横切关注点）
-src/config.rs ←─ src/cli/ ←─ src/pipeline/ ←─ src/exporter/
+src/config/ ←─ src/cli/ ←─ src/pipeline/ ←─ src/exporter/
 ```
 
 配置层（config）被 CLI 层引用，CLI 层协调 Pipeline 和 Exporter 的具体实例。

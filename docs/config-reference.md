@@ -81,64 +81,7 @@ USERNAME = "APP_USER"
 | `end_ts` | String | `null` | 过滤此时间戳之前的记录（位于 `[filter]` 级——不在 include/exclude 下） |
 | `max_record_limit` | usize | `0` | 最多处理的记录数（0 = 无限制，位于 `[filter]` 级） |
 
-**说明：** include 和 exclude 组合规则为 `(include_AND) AND (NOT exclude_OR)`。同一过滤规则内的所有字段使用 AND 语义。多条 include 规则之间也使用 AND。exclude 使用 OR 否决：任意匹配即丢弃记录。指标和 SQL 内容过滤器使用两遍预扫描检测事务边界。
-
----
-
-## [template]
-
-SQL 模板归一化和聚合引擎。
-
-```toml
-[template]
-# 启用模板指纹和聚合
-enable = true
-# 通过去除字面量和合并空白归一化 SQL
-normalize_template = true
-# 聚合模式（目前仅支持 "hdrhistogram"）
-aggregator_mode = "hdrhistogram"
-# 延迟桶边界，单位毫秒
-latency_buckets = [1, 5, 10, 50, 100, 500, 1000, 5000]
-```
-
-| 字段 | 类型 | 默认值 | 描述 |
-|------|------|--------|------|
-| `enable` | bool | `false` | 启用模板分析 |
-| `normalize_template` | bool | `false` | 启用 SQL 指纹归一化 |
-| `aggregator_mode` | String | `"hdrhistogram"` | 统计聚合方法 |
-| `latency_buckets` | [usize] | `[1,5,10,50,...]` | 延迟直方图桶边界（毫秒） |
-
-**说明：** 模板分析需要同时启用 `enable = true` 和 `[charts]` 配置才能生成可视化输出。当两个导出器都配置时，自动双路输出到 CSV 和 SQLite。`normalize_template` 去除注释、折叠 IN 列表值、关键字大写并合并空白。
-
----
-
-## [charts]
-
-SVG 图表生成配置。需要 `[template].enable = true`。
-
-```toml
-[charts]
-# SVG 图表文件输出目录
-output_dir = "charts/"
-# 每类图表显示的 Top 模板数量
-top_n = 10
-# 各图表类型开关
-frequency_bar = true
-latency_hist = true
-trend_line = true
-user_pie = true
-```
-
-| 字段 | 类型 | 默认值 | 描述 |
-|------|------|--------|------|
-| `output_dir` | String | `"charts/"` | SVG 图表输出目录 |
-| `top_n` | usize | `10` | 每类图表显示的模板数量 |
-| `frequency_bar` | bool | `false` | 生成频率柱状图 |
-| `latency_hist` | bool | `false` | 生成延迟直方图 |
-| `trend_line` | bool | `false` | 生成执行趋势折线图 |
-| `user_pie` | bool | `false` | 生成用户分布饼图 |
-
-**说明：** 图表在模板聚合后生成。输出文件名固定：`top_n_frequency.svg`、`latency_histogram_{key}.svg`、`frequency_trend.svg`、`user_schema_pie.svg`。所有图表使用 plotters 的 SVG-only 后端——不需要系统字体或图片库。
+**说明：** include 和 exclude 组合规则为 `(include_AND) AND (NOT exclude_OR)`。同一过滤规则内的所有字段使用 AND 语义。多条 include 规则之间也使用 AND。exclude 使用 OR 否决：任意匹配即丢弃记录。事务级指标和 SQL 内容过滤器使用两遍预扫描检测事务边界。
 
 ---
 
@@ -192,27 +135,7 @@ overwrite = true
 | `overwrite` | bool | `false` | 删除并重建已存在的表 |
 | `ordered_indices` | [usize] | `[]`（所有字段） | 字段投影——从零开始的列索引 |
 
-**说明：** 使用批量 INSERT 配合 PRAGMA 优化（synchronous=OFF、mmap_size、cache_size），实现约 110 万条记录/秒的吞吐量。启用模板聚合时同时创建 `sqllog_records` 和 `_templates` 表。
-
----
-
-## [features.replace_parameters]
-
-遗留的 SQL 参数替换功能。在 v1.4+ 中，请改用 `[template].normalize_template`。
-
-```toml
-[features.replace_parameters]
-# 遗留参数替换（v1.4+ 中请改用 [template]）
-# enable = false
-# placeholders = ["?", ":N"]
-```
-
-| 字段 | 类型 | 默认值 | 描述 |
-|------|------|--------|------|
-| `enable` | bool | `false` | 启用参数替换（遗留功能） |
-| `placeholders` | [String] | `["?"]` | 要匹配的占位符样式 |
-
-**说明：** 此节仅为向后兼容 v1.4 之前的配置而保留。在 v1.4+ 中，SQL 参数归一化由 `[template].normalize_template` 处理。新配置请使用 `[template]` 节。
+**说明：** 使用批量 INSERT 配合 PRAGMA 优化（synchronous=OFF、mmap_size、cache_size），实现约 110 万条记录/秒的吞吐量。
 
 ---
 
@@ -224,29 +147,23 @@ overwrite = true
 
 ### 处理管道快速路径
 
-当没有启用任何过滤器、模板分析或图表时，整个处理管道通过单个 `pipeline.is_empty()` 检查绕过。这意味着可选功能在禁用时不会增加任何运行时开销。
+当没有启用任何过滤器时，整个处理管道通过单个 `pipeline.is_empty()` 检查绕过。这意味着可选功能在禁用时不会增加任何运行时开销。
 
 ### 配置验证
 
 运行前使用 `sqllog2db validate -c config.toml` 检查配置。验证会一次性报告所有错误（而非遇错即停）。常见问题：缺少必填字段、无效路径、TOML 语法错误。
 
-### 命令行覆盖
-
-使用 `--set KEY=VALUE` 从命令行覆盖配置值，无需编辑文件：
-
-```bash
-sqllog2db run -c config.toml --set exporter.csv.file=custom.csv
-```
-
 ### 命令行子命令
 
-sqllog2db 二进制文件除 `run` 和 `validate` 外还提供了若干子命令：
+sqllog2db 提供三个子命令：
 
-**`sqllog2db stats [OPTIONS] <CSV_FILE>`** — 生成按文件的解析统计和查询分析。接受 CSV 导出文件作为输入。支持 `--top-slow <N>`（显示 Top N 最慢查询）、`--group-by <FIELD>`（按 `user`、`app` 或 `ip` 聚合；可重复使用）、`--from` / `--to`（时间范围过滤）、`--json`（JSON 输出）和 `--bucket <hour|minute>`（时间桶粒度）。
+**`sqllog2db init`** — 生成默认配置文件。支持 `-o` 指定输出路径、`-f` 强制覆盖。
 
-**`sqllog2db digest [OPTIONS] <SQLITE_FILE>`** — 对 SQLite 输出数据库中的 SQL 查询做指纹提取和聚合。显示模板计数、平均延迟和百分位分布（P50、P95、P99）。支持 `--top <N>`（仅显示 N 个指纹）、`--from` / `--to`（时间范围过滤）、`--sort <count|exec>`（按计数或总执行时间排序）和 `--min-count <N>`（过滤罕见模板）。
+**`sqllog2db validate`** — 校验配置文件。`-c` 指定配置文件路径，一次性报告所有校验错误。
 
-示例见[快速入门指南](quickstart.md)（场景三和场景四）。
+**`sqllog2db run`** — 执行日志导出。`-c` 指定配置文件路径，`-q` 静默模式。
+
+示例见[快速入门指南](quickstart.md)。
 
 ### 字段顺序
 

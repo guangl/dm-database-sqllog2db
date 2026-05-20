@@ -33,18 +33,18 @@ cargo run -- run -c config.toml
 Input .log files (sqllogs/)
     ↓ SqllogParser        — discovers files (src/parser.rs)
     ↓ dm-database-parser-sqllog  — parses each line into Sqllog records
-    ↓ Pipeline            — optional filters (src/features/)
+    ↓ Pipeline            — optional filters and normalization (src/pipeline/)
     ↓ ExporterManager     — routes to active exporter (src/exporter/)
     ↓ Output (CSV / SQLite)
 ```
 
 ### Key Modules
 
-- **`cli/run.rs`** — main orchestration: loads config, builds pipeline, pre-scans for transaction filters, streams records file by file
+- **`cli/run/mod.rs`** — main orchestration: loads config, builds pipeline, pre-scans for transaction filters, streams records file by file
 - **`exporter/mod.rs`** — `Exporter` trait + `ExporterManager` factory; only one exporter is active per run (priority: CSV > SQLite)
-- **`features/mod.rs`** — `LogProcessor` trait + `Pipeline`; `pipeline.is_empty()` enables a zero-overhead fast path when no filters are configured
-- **`features/filters.rs`** — two-pass design: pre-scan finds matching transaction IDs, main pass applies all filters
-- **`config.rs`** — all config structs with serde deserialization and validation
+- **`pipeline/mod.rs`** — `LogProcessor` trait + `Pipeline`; `pipeline.is_empty()` enables a zero-overhead fast path when no filters are configured
+- **`pipeline/filters/mod.rs`** — two-pass design: pre-scan finds matching transaction IDs, main pass applies all filters
+- **`config/mod.rs`** — all config structs with serde deserialization and validation
 
 ### Performance Design
 

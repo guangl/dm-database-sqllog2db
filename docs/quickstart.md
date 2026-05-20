@@ -156,119 +156,94 @@ SYSDBA|5234
 
 ---
 
-## 场景三：按文件统计与慢查询分析
+## 场景三：使用过滤器精确导出
 
-分析导出结果以识别性能模式。
+应用记录级和事务级过滤器，仅导出符合条件的 SQL 记录。
 
-**步骤 1：运行 stats 命令**
+**步骤 1：配置过滤器**
 
-```bash
-sqllog2db stats output/sqllog.csv --top-slow 10
-```
-
-预期按文件统计表：
-
-```
-File                                          Lines      Parsed    Errors    Elapsed
-sqllogs/DM_DMSQL_202504_01.log                1,523,421  1,523,421  12        3.42s
-sqllogs/DM_DMSQL_202504_03.log                1,487,233  1,487,233  8         3.21s
-sqllogs/DM_DMSQL_202504_05.log                1,521,876  1,521,876  15        3.35s
-```
-
-预期 Top 10 最慢查询：
-
-```
-Rank  SQL_TEXT                         ELAPSED(ms)  USERNAME   START_TIME
-1     SELECT * FROM ORDERS WHERE ...   12,345       APP_USER   2025-04-15 14:23:01
-2     INSERT INTO PAYMENTS ...         8,901        SYS_USER   2025-04-15 14:25:33
-```
-
-**步骤 2：按维度分组**
-
-```bash
-# 按用户分组
-sqllog2db stats output/sqllog.csv --group-by user
-
-# 按应用分组
-sqllog2db stats output/sqllog.csv --group-by app
-
-# 按时间范围过滤
-sqllog2db stats output/sqllog.csv --from "2025-04-15" --to "2025-04-16"
-```
-
-注意：`--group-by` 标志使用小写值（`user`、`app`、`ip`）。这与 `[filter]` 配置节使用大写字段名（`USERNAME`、`APPGROUP`、`IP_ADDRESS`）不同。过滤器字段命名请参见[配置参考](config-reference.md)。
-
-利用此功能识别性能瓶颈、最活跃用户和易出错的日志文件。
-
----
-
-## 场景四：SQL 模板聚合与图表生成
-
-归一化 SQL 查询以识别结构模式并生成 SVG 图表。
-
-**步骤 1：启用模板分析和图表**
+编辑 `config.toml`：
 
 ```toml
 [sqllog]
 path = "sqllogs"
 
-[template]
+[filter]
 enable = true
-normalize_template = true
-aggregator_mode = "hdrhistogram"
-latency_buckets = [1, 5, 10, 50, 100, 500, 1000, 5000]
 
-[charts]
-output_dir = "charts/"
-top_n = 10
-frequency_bar = true
-latency_hist = true
-trend_line = true
-user_pie = true
+[filter.include]
+statements = ["INS", "UPD", "DEL"]
+min_runtime_ms = 100
+
+[filter.exclude]
+users = ["SYSDBA", "MONITOR"]
+
+[exporter.csv]
+file = "output/filtered.csv"
+overwrite = true
+```
+
+**步骤 2：验证并运行**
+
+```bash
+sqllog2db validate -c config.toml
+sqllog2db run -c config.toml
+```
+
+**步骤 3：使用 SQL 内容过滤器**
+
+事务级 SQL 内容过滤需要两遍预扫描：
+
+```toml
+[filter.sql_filter]
+includes = ["FROM ORDERS", "JOIN PAYMENTS"]
+excludes = ["pg_catalog", "information_schema"]
+min_runtime_ms = 500
+```
+
+工具先扫描所有文件收集匹配的事务 ID，再于第二遍中应用全部过滤器。
+
+**通过外部工具分析输出：**
+
+```bash
+# 使用 sqlite3 查询 Top 5 最慢的写操作
+sqlite3 output/filtered.db "SELECT SQL_TEXT, ELAPSED FROM sqllog_records WHERE STMT_TYPE IN ('INS','UPD','DEL') ORDER BY ELAPSED DESC LIMIT 5;"
+
+# 使用 csvkit 工具
+csvstat output/filtered.csv
+```
+
+---
+
+## 场景四：并行处理多文件
+
+当数据目录包含多个日志文件时，启用并行 CSV 导出以充分利用多核 CPU。
+
+**步骤 1：配置并行导出**
+
+编辑 `config.toml`：
+
+```toml
+[sqllog]
+path = "sqllogs"
 
 [exporter.csv]
 file = "output/sqllog.csv"
 overwrite = true
+
+[parallel]
+jobs = 4
 ```
 
-**步骤 2：运行带模板聚合的导出**
+**步骤 2：运行并行导出**
 
 ```bash
 sqllog2db run -c config.toml
 ```
 
-预期额外输出：
+每个文件在独立的 rayon 线程中处理，输出临时 CSV，最后按文件顺序拼接为最终 CSV 文件。
 
-```
-[INFO] Template aggregation: 245 unique SQL fingerprints
-[INFO] Chart generated: charts/top_n_frequency.svg
-[INFO] Chart generated: charts/latency_histogram_*.svg
-[INFO] Chart generated: charts/frequency_trend.svg
-[INFO] Chart generated: charts/user_schema_pie.svg
-```
-
-**步骤 3：查看模板摘要**
-
-```bash
-# 如果使用 SQLite 输出
-sqllog2db digest output/sqllog.db
-```
-
-预期模板摘要：
-
-```
-Template                                        Count   Avg(ms)   P50(ms)   P95(ms)   P99(ms)
-SELECT * FROM HI_BD_TASK_FU WHERE ID_TASK = ?   12,345  342       215       891       2,341
-INSERT INTO HI_BD_SIPA_FU_RULE ...              8,901   156       120       445       980
-```
-
-**步骤 4：查看输出**
-
-- `output/template_summary.csv` — CSV 摘要（如果使用 CSV 导出器）
-- `output/sqllog.db` — SQLite，包含 `sqllog_records` 和 `_templates` 表
-- `charts/` — SVG 图表文件（频率柱状图、延迟直方图、趋势折线图、用户饼图）
-
-利用模板聚合理解 SQL 执行模式、识别热点查询并可视化工作负载分布。
+**注意：** 并行模式仅在 CSV 导出 + 多文件 + `jobs > 1` 且无限流（无 `--limit`）时生效。SQLite 导出使用单线程流式处理。
 
 ---
 
@@ -289,7 +264,7 @@ INSERT INTO HI_BD_SIPA_FU_RULE ...              8,901   156       120       445 
 
 ### 导出性能较慢
 
-- 确保处理管道为空（无 `[filter]`、`[template]` 或 `[charts]` 节）以获得最大速度
+- 确保处理管道为空（无 `[filter]` 节）以获得最大速度
 - CSV 导出比 SQLite 更快（约 520 万条/秒 vs 约 110 万条/秒）
 - 使用 NVMe SSD 获得最佳吞吐量
 - 对于大数据集，文件 I/O 是主要瓶颈
@@ -299,10 +274,3 @@ INSERT INTO HI_BD_SIPA_FU_RULE ...              8,901   156       120       445 
 - 解析错误是非致命的：工具继续处理后续记录
 - 错误记录到应用日志中（检查 `[logging]` 配置）
 - GB18030/GBK 编码的文件会自动检测和解码
-- 使用 `sqllog2db stats` 查看每个文件的错误计数
-
-### 模板聚合产生过多模板
-
-- 增加 `[charts]` 中的 `top_n` 以显示更多模板
-- 使用 `sqllog2db digest --min-count 100` 过滤罕见模板
-- 在模板聚合前添加过滤器以缩小数据范围

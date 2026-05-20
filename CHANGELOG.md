@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7] - 2026-05-19
+
+### Removed
+
+- **Dead code elimination**: removed `show_config`, `stats`, `digest`, `update` CLI commands. Only `init`, `validate`, `run` remain.
+- **Removed modules**: `color.rs`, `lang.rs`, `apply_one.rs`, `resume.rs`, `template_reporter.rs`, `fingerprint.rs`, `aggregator.rs`, `companion.rs`.
+- **Removed test files**: `exporter/csv/tests.rs`, `exporter/sqlite/tests.rs`, `exporter/tests.rs` (consolidated into in-module tests).
+
+### Changed
+
+- **CLI slimmed**: command surface reduced to 3 subcommands (`init`, `validate`, `run`).
+- **Config simplified**: removed legacy `apply_one` normalization, deprecated config fields.
+- **Error module trimmed**: removed unused error variants.
+- **Test consolidation**: tests migrated from standalone test modules into parent modules with `#[cfg(test)]`.
+- **Dependency hygiene**: removed unused `proptest` dev-dependency.
+
+---
+
+## [1.6] - 2026-05-19
+
+### Added
+
+- **Template reporter** (`template_reporter.rs`): structured SQL template analysis with output aggregation.
+- **Configuration enhancements**: extended validation and template-related config fields.
+
+### Changed
+
+- Updated `cli/init.rs` template generation.
+- Improved `pipeline/mod.rs` with template reporter integration.
+- Documentation site refinements (mdBook structure, architecture page).
+
+---
+
+## [1.5] - 2026-05-18
+
+### Added
+
+- **Documentation site**: mdBook-based site with architecture docs, config reference, quickstart guide, and security policy.
+- **Chart gallery**: SVG chart examples for template frequency, latency histograms, and user distribution.
+- **Quickstart guide** (`docs/quickstart.md`): step-by-step getting started with examples.
+- **Config reference** (`docs/config-reference.md`): full configuration field documentation.
+
+---
+
 ## [1.4] - 2026-05-18
 
 ### Changed
@@ -110,6 +154,9 @@ The 0.x series (0.1.0 through 0.10.7) covered the initial development of sqllog2
 
 See git history for full details.
 
+[1.7]: https://github.com/guangl/sqllog2db/releases/tag/v1.7
+[1.6]: https://github.com/guangl/sqllog2db/releases/tag/v1.6
+[1.5]: https://github.com/guangl/sqllog2db/releases/tag/v1.5
 [1.4]: https://github.com/guangl/sqllog2db/releases/tag/v1.4
 [1.3]: https://github.com/guangl/sqllog2db/releases/tag/v1.3
 [1.2.1]: https://github.com/guangl/sqllog2db/releases/tag/v1.2.1
