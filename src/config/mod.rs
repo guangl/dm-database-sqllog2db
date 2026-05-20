@@ -36,6 +36,11 @@ pub struct Config {
     #[doc(hidden)]
     #[serde(rename = "pipeline", default)]
     pub pipeline_deprecated: Option<toml::Value>,
+    /// 旧路径检测：捕获 `[template]` 表（若用户仍用旧格式）。
+    /// 非 None 时 validate() 会返回废弃错误，用户不应直接使用此字段。
+    #[doc(hidden)]
+    #[serde(rename = "template", default)]
+    pub template_deprecated: Option<toml::Value>,
 }
 
 impl Config {

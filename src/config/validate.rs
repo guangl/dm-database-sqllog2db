@@ -31,6 +31,13 @@ impl Config {
                 reason: PIPELINE_MIGRATION_HINT.to_string(),
             }));
         }
+        if self.template_deprecated.is_some() {
+            return Err(Error::Config(ConfigError::InvalidValue {
+                field: "[template]".to_string(),
+                value: String::new(),
+                reason: "配置段 [template] 已废弃，请移除此配置段".to_string(),
+            }));
+        }
         self.logging.validate()?;
         self.exporter.validate()?;
         self.sqllog.validate()?;
@@ -446,8 +453,6 @@ file = "out.csv"
         let toml = r#"
 [sqllog]
 path = "sqllogs"
-[template]
-enable = true
 [filter]
 enable = false
 [output]
@@ -457,6 +462,26 @@ file = "out.csv"
 "#;
         let cfg: Config = toml::from_str(toml).unwrap();
         assert!(cfg.validate().is_ok());
+    }
+
+    #[test]
+    fn test_validate_rejects_template_section() {
+        let toml = r#"
+[sqllog]
+path = "sqllogs"
+[template]
+enable = true
+[filter]
+enable = false
+[exporter.csv]
+file = "out.csv"
+"#;
+        let cfg: Config = toml::from_str(toml).unwrap();
+        let result = cfg.validate();
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("[template]"), "actual: {err_msg}");
+        assert!(err_msg.contains("已废弃"), "actual: {err_msg}");
     }
 
     // ── output.fields 校验 ───────────────────────────────────
