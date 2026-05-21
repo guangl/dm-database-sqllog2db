@@ -5,7 +5,7 @@ pub(crate) use filters::{CompiledMetaFilters, CompiledSqlFilters};
 pub mod normalizer;
 pub(crate) use normalizer::compute_normalized;
 
-use dm_database_parser_sqllog::{MetaParts, Sqllog};
+use dm_database_parser_sqllog::Sqllog;
 use serde::Deserialize;
 
 /// 导出字段名列表（顺序与 CSV/SQLite 列顺序一致，共 15 个字段）
@@ -152,10 +152,9 @@ impl OutputConfig {
 pub trait LogProcessor: Send + Sync + std::fmt::Debug {
     fn process(&self, record: &Sqllog) -> bool;
 
-    /// 使用调用方已预解析的 `MetaParts` 运行过滤逻辑，
-    /// 消除 `parse_meta()` 的重复调用。
+    /// 使用已解析的 `Sqllog` 字段运行过滤逻辑（v1.1.0 后所有字段均为栈上数据）。
     /// 默认实现退化为 `process()`。
-    fn process_with_meta(&self, record: &Sqllog, _meta: &MetaParts<'_>) -> bool {
+    fn process_with_meta(&self, record: &Sqllog) -> bool {
         self.process(record)
     }
 }
@@ -183,10 +182,8 @@ impl Pipeline {
 
     #[inline]
     #[must_use]
-    pub fn run_with_meta(&self, record: &Sqllog, meta: &MetaParts<'_>) -> bool {
-        self.processors
-            .iter()
-            .all(|p| p.process_with_meta(record, meta))
+    pub fn run_with_meta(&self, record: &Sqllog) -> bool {
+        self.processors.iter().all(|p| p.process_with_meta(record))
     }
 }
 
@@ -311,7 +308,7 @@ mod tests {
 
     #[test]
     fn test_process_with_meta_default_delegates_to_process() {
-        use dm_database_parser_sqllog::LogParser;
+        use dm_database_parser_sqllog::LogParserBuilder;
 
         #[derive(Debug)]
         struct AlwaysPass;
@@ -332,19 +329,20 @@ mod tests {
         let dir = tempfile::TempDir::new().unwrap();
         let log = dir.path().join("t.log");
         std::fs::write(&log, "2025-01-15 10:30:28.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT 1. EXECTIME: 1(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.\n").unwrap();
-        let parser = LogParser::from_path(log.to_str().unwrap()).unwrap();
+        let parser = LogParserBuilder::new(log.to_str().unwrap())
+            .build()
+            .unwrap();
         let records: Vec<_> = parser.iter().flatten().collect();
         assert!(!records.is_empty());
 
         let record = &records[0];
-        let meta = record.parse_meta();
 
         let mut p = Pipeline::new();
         p.add(Box::new(AlwaysPass));
-        assert!(p.run_with_meta(record, &meta));
+        assert!(p.run_with_meta(record));
 
         let mut p2 = Pipeline::new();
         p2.add(Box::new(AlwaysFail));
-        assert!(!p2.run_with_meta(record, &meta));
+        assert!(!p2.run_with_meta(record));
     }
 }

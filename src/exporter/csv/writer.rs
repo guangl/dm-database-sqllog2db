@@ -1,32 +1,28 @@
 use super::super::{f32_ms_to_i64, strip_ip_prefix};
 use crate::error::{Error, ExportError, Result};
-use dm_database_parser_sqllog::{MetaParts, PerformanceMetrics, Sqllog};
+use dm_database_parser_sqllog::Sqllog;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::Path;
 
-/// 将字节序列写入 `buf`，对其中的 `"` 字符进行 CSV 转义（变为 `""`）。
-/// 使用 memchr 跳过无引号的大段内容，避免逐字节循环。
+/// 将字节序列写入 `buf`，对其中的 `"` 字符进行 CSV 转义。
 #[inline]
 pub(crate) fn write_csv_escaped(buf: &mut Vec<u8>, bytes: &[u8]) {
     let mut remaining = bytes;
     while let Some(pos) = memchr::memchr(b'"', remaining) {
-        buf.extend_from_slice(&remaining[..=pos]); // 含引号本身
-        buf.push(b'"'); // 转义第二个引号
+        buf.extend_from_slice(&remaining[..=pos]);
+        buf.push(b'"');
         remaining = &remaining[pos + 1..];
     }
     buf.extend_from_slice(remaining);
 }
 
-/// 热路径：使用预解析的 `MetaParts` 和 `PerformanceMetrics` 直接格式化并写入。
-/// 接收各字段的独立可变引用，允许 Rust 同时分开借用 self 的多个字段。
+/// 热路径：使用已解析的 `Sqllog` 直接格式化并写入。
 #[inline]
 pub(super) fn write_record_preparsed(
     itoa_buf: &mut itoa::Buffer,
     line_buf: &mut Vec<u8>,
-    sqllog: &Sqllog<'_>,
-    meta: &MetaParts<'_>,
-    pm: &PerformanceMetrics<'_>,
+    sqllog: &Sqllog,
     writer: &mut BufWriter<File>,
     path: &Path,
     normalize: bool,
@@ -36,7 +32,7 @@ pub(super) fn write_record_preparsed(
     include_performance_metrics: bool,
 ) -> Result<()> {
     line_buf.clear();
-    let sql_len = pm.sql.len();
+    let sql_len = sqllog.sql.len();
     let ns_len = if normalize {
         normalized_sql.map_or(0, str::len)
     } else {
@@ -47,41 +43,41 @@ pub(super) fn write_record_preparsed(
         line_buf.reserve(needed - line_buf.len());
     }
 
-    // 全量掩码快速路径：所有字段直接顺序写入，无分支判断
     if field_mask == crate::pipeline::FieldMask::ALL {
-        line_buf.extend_from_slice(sqllog.ts.as_ref().as_bytes());
+        line_buf.extend_from_slice(sqllog.ts.as_bytes());
         line_buf.push(b',');
-        line_buf.extend_from_slice(itoa_buf.format(meta.ep).as_bytes());
+        line_buf.extend_from_slice(itoa_buf.format(sqllog.ep).as_bytes());
         line_buf.push(b',');
-        line_buf.extend_from_slice(meta.sess_id.as_ref().as_bytes());
+        line_buf.extend_from_slice(sqllog.sess_id.as_bytes());
         line_buf.push(b',');
-        line_buf.extend_from_slice(meta.thrd_id.as_ref().as_bytes());
+        line_buf.extend_from_slice(sqllog.thrd_id.as_bytes());
         line_buf.push(b',');
-        line_buf.extend_from_slice(meta.username.as_ref().as_bytes());
+        line_buf.extend_from_slice(sqllog.username.as_bytes());
         line_buf.push(b',');
-        line_buf.extend_from_slice(meta.trxid.as_ref().as_bytes());
+        line_buf.extend_from_slice(sqllog.trxid.as_bytes());
         line_buf.push(b',');
-        line_buf.extend_from_slice(meta.statement.as_ref().as_bytes());
+        line_buf.extend_from_slice(sqllog.statement.as_bytes());
         line_buf.push(b',');
-        line_buf.extend_from_slice(meta.appname.as_ref().as_bytes());
+        line_buf.extend_from_slice(sqllog.appname.as_bytes());
         line_buf.push(b',');
-        line_buf.extend_from_slice(strip_ip_prefix(meta.client_ip.as_ref()).as_bytes());
+        line_buf.extend_from_slice(strip_ip_prefix(&sqllog.client_ip).as_bytes());
         line_buf.push(b',');
-        if let Some(tag) = &sqllog.tag {
-            line_buf.extend_from_slice(tag.as_ref().as_bytes());
+        if let Some(ref tag) = sqllog.tag {
+            line_buf.extend_from_slice(tag.as_bytes());
         }
         line_buf.push(b',');
         line_buf.push(b'"');
-        write_csv_escaped(line_buf, pm.sql.as_bytes());
+        write_csv_escaped(line_buf, sqllog.sql.as_bytes());
         line_buf.push(b'"');
         if include_performance_metrics {
             line_buf.push(b',');
-            if pm.exec_id != 0 || pm.exectime > 0.0 {
-                line_buf.extend_from_slice(itoa_buf.format(f32_ms_to_i64(pm.exectime)).as_bytes());
+            if sqllog.exec_id != 0 || sqllog.exectime > 0.0 {
+                line_buf
+                    .extend_from_slice(itoa_buf.format(f32_ms_to_i64(sqllog.exectime)).as_bytes());
                 line_buf.push(b',');
-                line_buf.extend_from_slice(itoa_buf.format(i64::from(pm.rowcount)).as_bytes());
+                line_buf.extend_from_slice(itoa_buf.format(i64::from(sqllog.rowcount)).as_bytes());
                 line_buf.push(b',');
-                line_buf.extend_from_slice(itoa_buf.format(pm.exec_id).as_bytes());
+                line_buf.extend_from_slice(itoa_buf.format(sqllog.exec_id).as_bytes());
             } else {
                 line_buf.extend_from_slice(b",,");
             }
@@ -95,7 +91,6 @@ pub(super) fn write_record_preparsed(
             }
         }
     } else {
-        // 投影路径：按 ordered_indices 指定的字段顺序写入
         let mut need_sep = false;
 
         macro_rules! w_sep {
@@ -107,55 +102,55 @@ pub(super) fn write_record_preparsed(
             };
         }
 
-        let has_metrics = pm.exec_id != 0 || pm.exectime > 0.0;
+        let has_metrics = sqllog.exec_id != 0 || sqllog.exectime > 0.0;
         for &idx in ordered_indices {
             match idx {
                 0 => {
                     w_sep!();
-                    line_buf.extend_from_slice(sqllog.ts.as_ref().as_bytes());
+                    line_buf.extend_from_slice(sqllog.ts.as_bytes());
                 }
                 1 => {
                     w_sep!();
-                    line_buf.extend_from_slice(itoa_buf.format(meta.ep).as_bytes());
+                    line_buf.extend_from_slice(itoa_buf.format(sqllog.ep).as_bytes());
                 }
                 2 => {
                     w_sep!();
-                    line_buf.extend_from_slice(meta.sess_id.as_ref().as_bytes());
+                    line_buf.extend_from_slice(sqllog.sess_id.as_bytes());
                 }
                 3 => {
                     w_sep!();
-                    line_buf.extend_from_slice(meta.thrd_id.as_ref().as_bytes());
+                    line_buf.extend_from_slice(sqllog.thrd_id.as_bytes());
                 }
                 4 => {
                     w_sep!();
-                    line_buf.extend_from_slice(meta.username.as_ref().as_bytes());
+                    line_buf.extend_from_slice(sqllog.username.as_bytes());
                 }
                 5 => {
                     w_sep!();
-                    line_buf.extend_from_slice(meta.trxid.as_ref().as_bytes());
+                    line_buf.extend_from_slice(sqllog.trxid.as_bytes());
                 }
                 6 => {
                     w_sep!();
-                    line_buf.extend_from_slice(meta.statement.as_ref().as_bytes());
+                    line_buf.extend_from_slice(sqllog.statement.as_bytes());
                 }
                 7 => {
                     w_sep!();
-                    line_buf.extend_from_slice(meta.appname.as_ref().as_bytes());
+                    line_buf.extend_from_slice(sqllog.appname.as_bytes());
                 }
                 8 => {
                     w_sep!();
-                    line_buf.extend_from_slice(strip_ip_prefix(meta.client_ip.as_ref()).as_bytes());
+                    line_buf.extend_from_slice(strip_ip_prefix(&sqllog.client_ip).as_bytes());
                 }
                 9 => {
                     w_sep!();
-                    if let Some(tag) = &sqllog.tag {
-                        line_buf.extend_from_slice(tag.as_ref().as_bytes());
+                    if let Some(ref tag) = sqllog.tag {
+                        line_buf.extend_from_slice(tag.as_bytes());
                     }
                 }
                 10 => {
                     w_sep!();
                     line_buf.push(b'"');
-                    write_csv_escaped(line_buf, pm.sql.as_bytes());
+                    write_csv_escaped(line_buf, sqllog.sql.as_bytes());
                     line_buf.push(b'"');
                 }
                 11 => {
@@ -165,7 +160,7 @@ pub(super) fn write_record_preparsed(
                     w_sep!();
                     if has_metrics {
                         line_buf.extend_from_slice(
-                            itoa_buf.format(f32_ms_to_i64(pm.exectime)).as_bytes(),
+                            itoa_buf.format(f32_ms_to_i64(sqllog.exectime)).as_bytes(),
                         );
                     }
                 }
@@ -175,8 +170,9 @@ pub(super) fn write_record_preparsed(
                     }
                     w_sep!();
                     if has_metrics {
-                        line_buf
-                            .extend_from_slice(itoa_buf.format(i64::from(pm.rowcount)).as_bytes());
+                        line_buf.extend_from_slice(
+                            itoa_buf.format(i64::from(sqllog.rowcount)).as_bytes(),
+                        );
                     }
                 }
                 13 => {
@@ -185,10 +181,9 @@ pub(super) fn write_record_preparsed(
                     }
                     w_sep!();
                     if has_metrics {
-                        line_buf.extend_from_slice(itoa_buf.format(pm.exec_id).as_bytes());
+                        line_buf.extend_from_slice(itoa_buf.format(sqllog.exec_id).as_bytes());
                     }
                 }
-                // D-03：normalize=false 时跳过 normalized_sql，与 header 逻辑一致
                 14 if normalize => {
                     w_sep!();
                     if let Some(ns) = normalized_sql {
@@ -200,7 +195,6 @@ pub(super) fn write_record_preparsed(
                 _ => {}
             }
         }
-        // 消费 need_sep，避免"最后一次赋值从未被读取"的编译警告
         let _ = need_sep;
     }
 
@@ -214,12 +208,12 @@ pub(super) fn write_record_preparsed(
     })
 }
 
-/// 兼容路径：从 `Sqllog` 内部解析再转调热路径（测试/批量导出使用）。
+/// 兼容路径：从 `Sqllog` 直接写入（v1.1.0 所有字段已物化）。
 #[inline]
 pub(super) fn write_record(
     itoa_buf: &mut itoa::Buffer,
     line_buf: &mut Vec<u8>,
-    sqllog: &Sqllog<'_>,
+    sqllog: &Sqllog,
     writer: &mut BufWriter<File>,
     path: &Path,
     normalize: bool,
@@ -228,23 +222,10 @@ pub(super) fn write_record(
     ordered_indices: &[usize],
     include_performance_metrics: bool,
 ) -> Result<()> {
-    let meta = sqllog.parse_meta();
-    let pm = if include_performance_metrics {
-        sqllog.parse_performance_metrics()
-    } else {
-        PerformanceMetrics {
-            sql: sqllog.body(),
-            exectime: 0.0,
-            rowcount: 0,
-            exec_id: 0,
-        }
-    };
     write_record_preparsed(
         itoa_buf,
         line_buf,
         sqllog,
-        &meta,
-        &pm,
         writer,
         path,
         normalize,

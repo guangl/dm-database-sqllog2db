@@ -337,8 +337,7 @@ fn apply_params(sql: &str, params: &[ParamValue], colon_style: bool) -> String {
 /// valid GB18030 (extremely rare). For GB18030 files, the result is automatically
 /// transcoded to UTF-8.
 pub fn compute_normalized<'a>(
-    record: &dm_database_parser_sqllog::Sqllog<'_>,
-    meta: &dm_database_parser_sqllog::MetaParts<'_>,
+    record: &dm_database_parser_sqllog::Sqllog,
     pm_sql: &str,
     buffer: &mut ParamBuffer,
     placeholder_override: Option<bool>,
@@ -346,18 +345,9 @@ pub fn compute_normalized<'a>(
 ) -> Option<&'a str> {
     if record.tag.is_none() {
         // 无 tag → 可能是 PARAMS 记录。
-        // pm_sql 对于 PARAMS 记录等价于 body()（无性能指标时两者相同），
-        // 直接复用，节省一次 find_indicators_split() 后向扫描。
         if pm_sql.starts_with("PARAMS(") {
             if let Some(params) = parse_params(pm_sql) {
-                // 存储 PARAMS 值，key 使用标准 String
-                buffer.insert(
-                    (
-                        String::from(meta.sess_id.as_ref()),
-                        String::from(meta.statement.as_ref()),
-                    ),
-                    params,
-                );
+                buffer.insert((record.sess_id.clone(), record.statement.clone()), params);
             }
         }
         return None;
@@ -369,20 +359,13 @@ pub fn compute_normalized<'a>(
         return None;
     }
 
-    // 先扫描 SQL 是否含占位符，大多数 SQL 没有占位符，可以提前返回，
-    // 避免两次 CompactString 分配（trxid + statement key）。
     let (placeholder_count, detected_colon) = count_placeholders(pm_sql);
     if placeholder_count == 0 {
         return None;
     }
 
-    let key = (
-        String::from(meta.sess_id.as_ref()),
-        String::from(meta.statement.as_ref()),
-    );
+    let key = (record.sess_id.clone(), record.statement.clone());
 
-    // buffer 条目保留不删除：DM 有时对同一次执行记录两条 SEL 日志（相同 EXEC_ID，
-    // 不同 ROWCOUNT），它们共享同一个 PARAMS。下一次绑定时新的 buffer.insert 会覆盖旧值。
     let params = buffer.get(&key)?.clone();
 
     let colon_style = placeholder_override.unwrap_or(detected_colon);
@@ -402,10 +385,6 @@ pub fn compute_normalized<'a>(
 
     apply_params_into(pm_sql, &params, colon_style, scratch);
 
-    // 常规路径：UTF-8 文件，直接返回。
-    // GB18030 fallback：上游 parser 将 GB18030 文件按 UTF-8 解析时，param 替换后
-    // 的字节序列可能含 GB18030 双字节序列（如汉字），导致 UTF-8 校验失败。
-    // GB18030 是 ASCII 的超集，可安全处理纯 ASCII 与混合内容。
     if std::str::from_utf8(scratch).is_err() {
         let (decoded, _, had_errors) = encoding_rs::GB18030.decode(scratch);
         if had_errors {
@@ -414,7 +393,6 @@ pub fn compute_normalized<'a>(
                 &pm_sql[..pm_sql.len().min(60)]
             );
         }
-        // into_owned() 释放对 scratch 的借用，之后才能 clear + 写回
         let decoded_string = decoded.into_owned();
         scratch.clear();
         scratch.extend_from_slice(decoded_string.as_bytes());

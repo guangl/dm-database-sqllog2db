@@ -2,7 +2,7 @@ use super::ensure_parent_dir;
 use super::{ExportStats, Exporter};
 use crate::config;
 use crate::error::{Error, ExportError, Result};
-use dm_database_parser_sqllog::{MetaParts, PerformanceMetrics, Sqllog};
+use dm_database_parser_sqllog::Sqllog;
 use std::fs::{File, OpenOptions};
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
@@ -11,12 +11,9 @@ pub(crate) mod writer;
 
 use self::writer::{write_record, write_record_preparsed};
 
-/// 文件打开模式
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum WriteMode {
-    /// 新建或截断文件（默认）
     Truncate,
-    /// 追加到已有文件末尾
     Append,
 }
 
@@ -30,8 +27,6 @@ pub struct CsvExporter {
     pub(crate) normalize: bool,
     pub(crate) field_mask: crate::pipeline::FieldMask,
     pub(crate) ordered_indices: Vec<usize>,
-    /// 是否在输出中包含性能指标列（`exec_time_ms`/`row_count`/`exec_id`）。
-    /// 关闭时 header 和数据行都跳过这三列；调用方（`cli/run.rs`）也应跳过 `parse_performance_metrics()`。
     pub(crate) include_performance_metrics: bool,
 }
 
@@ -53,8 +48,6 @@ impl CsvExporter {
             writer: None,
             stats: ExportStats::new(),
             itoa_buf: itoa::Buffer::new(),
-            // 预分配 2 KiB：覆盖典型日志行（元数据 ~120 B + SQL ~500 B + normalized ~500 B）
-            // 避免前几条记录触发 Vec 扩容。clear() 保留容量，运行期自动适配长 SQL。
             line_buf: Vec::with_capacity(2048),
             normalize: true,
             field_mask: crate::pipeline::FieldMask::ALL,
@@ -75,17 +68,14 @@ impl CsvExporter {
         e
     }
 
-    /// 根据 `ordered_indices` 和 `normalize` 标志生成 CSV 头行
     fn build_header(&self) -> Vec<u8> {
         use crate::pipeline::FIELD_NAMES;
         let mut header = Vec::with_capacity(128);
         let mut first = true;
         for &idx in &self.ordered_indices {
-            // idx 14 (normalized_sql) 在 normalize=false 时跳过（与全量路径行为一致）
             if idx == 14 && !self.normalize {
                 continue;
             }
-            // idx 11/12/13 (exectime/rowcount/exec_id) 在 include_performance_metrics=false 时跳过
             if matches!(idx, 11..=13) && !self.include_performance_metrics {
                 continue;
             }
@@ -147,13 +137,8 @@ impl Exporter for CsvExporter {
         Ok(())
     }
 
-    fn export(&mut self, sqllog: &Sqllog<'_>) -> Result<()> {
-        let writer = self.writer.as_mut().ok_or_else(|| {
-            Error::Export(ExportError::WriteFailed {
-                path: self.path.clone(),
-                reason: "not initialized".to_string(),
-            })
-        })?;
+    fn export(&mut self, sqllog: &Sqllog) -> Result<()> {
+        let writer = writer_ref(&mut self.writer, &self.path)?;
         write_record(
             &mut self.itoa_buf,
             &mut self.line_buf,
@@ -170,17 +155,8 @@ impl Exporter for CsvExporter {
         Ok(())
     }
 
-    fn export_one_normalized(
-        &mut self,
-        sqllog: &Sqllog<'_>,
-        normalized: Option<&str>,
-    ) -> Result<()> {
-        let writer = self.writer.as_mut().ok_or_else(|| {
-            Error::Export(ExportError::WriteFailed {
-                path: self.path.clone(),
-                reason: "not initialized".to_string(),
-            })
-        })?;
+    fn export_one_normalized(&mut self, sqllog: &Sqllog, normalized: Option<&str>) -> Result<()> {
+        let writer = writer_ref(&mut self.writer, &self.path)?;
         write_record(
             &mut self.itoa_buf,
             &mut self.line_buf,
@@ -199,30 +175,22 @@ impl Exporter for CsvExporter {
 
     fn export_one_preparsed(
         &mut self,
-        sqllog: &Sqllog<'_>,
-        meta: &MetaParts<'_>,
-        pm: &PerformanceMetrics<'_>,
+        sqllog: &Sqllog,
+        include_pm: bool,
         normalized: Option<&str>,
     ) -> Result<()> {
-        let writer = self.writer.as_mut().ok_or_else(|| {
-            Error::Export(ExportError::WriteFailed {
-                path: self.path.clone(),
-                reason: "not initialized".to_string(),
-            })
-        })?;
+        let writer = writer_ref(&mut self.writer, &self.path)?;
         write_record_preparsed(
             &mut self.itoa_buf,
             &mut self.line_buf,
             sqllog,
-            meta,
-            pm,
             writer,
             &self.path,
             self.normalize,
             normalized,
             self.field_mask,
             &self.ordered_indices,
-            self.include_performance_metrics,
+            include_pm,
         )?;
         self.stats.record_success();
         Ok(())
@@ -243,6 +211,18 @@ impl Exporter for CsvExporter {
     fn stats_snapshot(&self) -> Option<ExportStats> {
         Some(self.stats)
     }
+}
+
+fn writer_ref<'a>(
+    w: &'a mut Option<BufWriter<File>>,
+    path: &Path,
+) -> Result<&'a mut BufWriter<File>> {
+    w.as_mut().ok_or_else(|| {
+        Error::Export(ExportError::WriteFailed {
+            path: path.to_path_buf(),
+            reason: "not initialized".to_string(),
+        })
+    })
 }
 
 impl Drop for CsvExporter {

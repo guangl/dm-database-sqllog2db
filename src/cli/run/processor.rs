@@ -2,7 +2,7 @@ use crate::error::Result;
 use crate::exporter::ExporterManager;
 use crate::pipeline::normalizer::ParamBuffer;
 use crate::pipeline::{CompiledSqlFilters, Pipeline};
-use dm_database_parser_sqllog::LogParser;
+use dm_database_parser_sqllog::LogParserBuilder;
 use log::info;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -31,7 +31,7 @@ pub(super) fn process_log_file(
     // 清除上一个文件留下的残余参数，同时复用已分配的 HashMap 容量。
     params_buffer.clear();
 
-    // 从导出器读取性能指标标志：CSV 关闭时跳过 parse_performance_metrics()（D-05/D-06）
+    // 从导出器读取性能指标标志：CSV 关闭时跳过性能指标输出（D-05/D-06）
     let include_pm = exporter_manager.csv_include_performance_metrics();
 
     let file_start = Instant::now();
@@ -45,7 +45,7 @@ pub(super) fn process_log_file(
         eprintln!("[{file_index}/{total_files}] {file_name}");
     }
 
-    let parser = LogParser::from_path(file_path).map_err(|e| {
+    let parser = LogParserBuilder::new(file_path).build().map_err(|e| {
         crate::error::Error::Parser(crate::error::ParserError::InvalidPath {
             path: file_path.into(),
             reason: format!("{e}"),
@@ -58,43 +58,21 @@ pub(super) fn process_log_file(
     'outer: for result in parser.iter() {
         match result {
             Ok(record) => {
-                // 管线为空：零开销快速路径，所有记录都通过，不提前解析 meta。
-                // 管线非空：提前解析 meta，与管线过滤器共享，消除 FilterProcessor
-                //           内部的重复 parse_meta() 调用（对 pipeline_passthrough
-                //           场景可减少约 50% 的 parse_meta 调用次数）。
-                let (passes, cached_meta) = if pipeline.is_empty() {
-                    (true, None)
+                // 管线：使用 record 直接字段（v1.1.0 所有字段已物化）。
+                let passes = if pipeline.is_empty() {
+                    true
                 } else {
-                    let meta = record.parse_meta();
-                    let ok = pipeline.run_with_meta(&record, &meta);
-                    (ok, Some(meta))
+                    pipeline.run_with_meta(&record)
                 };
 
                 // PARAMS 记录（无 tag）在 do_normalize 时无论是否通过过滤都必须
                 // 更新 params_buffer，以便后续匹配 DML 记录能正确替换参数。
-                let needs_pm = passes || (do_normalize && record.tag.is_none());
-                if needs_pm {
-                    // 无管线时首次解析 meta；有管线时复用已解析结果，零额外开销。
-                    let meta = cached_meta.unwrap_or_else(|| record.parse_meta());
-
+                let needs_processing = passes || (do_normalize && record.tag.is_none());
+                if needs_processing {
                     if passes {
-                        // DML 或通过过滤的 PARAMS：CSV 关闭性能指标时合成空 pm，
-                        // 跳过 find_indicators_split（D-05/D-06）；SQL 字段来自 record.body()。
-                        let pm = if include_pm {
-                            record.parse_performance_metrics()
-                        } else {
-                            dm_database_parser_sqllog::PerformanceMetrics {
-                                sql: record.body(),
-                                exectime: 0.0,
-                                rowcount: 0,
-                                exec_id: 0,
-                            }
-                        };
-
                         // SQL 记录级过滤：只对 DML 记录（有 tag）生效，PARAMS 记录始终通过。
-                        // 被过滤掉的 DML 直接丢弃，不影响 params_buffer。
                         let sql_filter_pass = sql_record_filter
-                            .is_none_or(|f| record.tag.is_none() || f.matches(pm.sql.as_ref()));
+                            .is_none_or(|f| record.tag.is_none() || f.matches(&record.sql));
                         if sql_filter_pass {
                             // 快速路径：params_buffer 为空且当前是 DML 记录（有 tag），
                             // 则不可能存在待替换参数，完全跳过 compute_normalized。
@@ -103,8 +81,7 @@ pub(super) fn process_log_file(
                             {
                                 crate::pipeline::compute_normalized(
                                     &record,
-                                    &meta,
-                                    pm.sql.as_ref(),
+                                    &record.sql,
                                     params_buffer,
                                     placeholder_override,
                                     ns_scratch,
@@ -120,7 +97,7 @@ pub(super) fn process_log_file(
                                 }
                             }
 
-                            exporter_manager.export_one_preparsed(&record, &meta, &pm, ns)?;
+                            exporter_manager.export_one_preparsed(&record, include_pm, ns)?;
                             records_in_file += 1;
 
                             // 每 1024 条检查一次中断信号
@@ -131,13 +108,11 @@ pub(super) fn process_log_file(
                             }
                         }
                     } else {
-                        // 被过滤掉的 PARAMS 记录（needs_pm 成立说明 do_normalize &&
-                        // record.tag.is_none() 为真）：对 PARAMS 记录而言
-                        // pm.sql ≡ record.body()，直接复用，省去 parse_performance_metrics()。
+                        // 被过滤掉的 PARAMS 记录（do_normalize && record.tag.is_none()）：
+                        // 仍需更新 params_buffer。
                         crate::pipeline::compute_normalized(
                             &record,
-                            &meta,
-                            record.body().as_ref(),
+                            &record.sql,
                             params_buffer,
                             placeholder_override,
                             ns_scratch,
