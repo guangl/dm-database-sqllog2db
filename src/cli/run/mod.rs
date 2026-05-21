@@ -14,7 +14,8 @@ mod parallel;
 mod prescan;
 mod processor;
 
-use filter_processor::{build_pipeline, make_progress_bar};
+use filter_processor::build_pipeline;
+use indicatif::{ProgressBar, ProgressStyle};
 use parallel::process_csv_parallel;
 use prescan::{recompile_meta_if_needed, scan_for_trxids_by_transaction_filters};
 use processor::process_log_file;
@@ -106,7 +107,19 @@ pub fn handle_run(
             .is_some_and(|f| f.enable && f.record_sql.has_filters())
     });
     let sql_record_filter = compiled_record_sql.as_ref();
-    let show_progress = make_progress_bar(quiet, 80);
+    let show_progress = !quiet;
+    let pb = if show_progress {
+        let bar = ProgressBar::new_spinner();
+        bar.set_style(
+            ProgressStyle::with_template("{msg}")
+                .unwrap_or_else(|_| ProgressStyle::default_spinner())
+                .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏ "),
+        );
+        bar.enable_steady_tick(std::time::Duration::from_millis(80));
+        Some(bar)
+    } else {
+        None
+    };
     let mut total_records = 0usize;
     let mut skipped_files = 0usize;
     let use_parallel = jobs > 1 && log_files.len() > 1 && final_cfg.exporter.csv.is_some();
@@ -153,6 +166,7 @@ pub fn handle_run(
                 &mut ns_scratch,
                 true,
                 sql_record_filter,
+                pb.as_ref(),
             )?;
             total_records += processed;
             run_stats.merge(&file_stats);
@@ -179,6 +193,15 @@ pub fn handle_run(
         eprintln!(
             "\n✓ SQL Log Export Task Completed{mode_label} in {elapsed:.2}s — {total_records} records total{skip_label}",
         );
+        if run_stats.has_errors() {
+            eprintln!(
+                "  Errors: {} total ({} parse, {} export)",
+                run_stats.total_errors, run_stats.parse_errors, run_stats.export_errors
+            );
+        }
+    }
+    if let Some(pb) = &pb {
+        pb.finish_and_clear();
     }
     if interrupted.load(Ordering::Relaxed) {
         return Err(Error::Interrupted);

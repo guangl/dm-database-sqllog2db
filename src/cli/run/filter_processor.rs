@@ -86,8 +86,3 @@ impl LogProcessor for FilterProcessor {
         })
     }
 }
-
-/// 进度条控制：quiet 时返回 false（不输出进度）。
-pub(super) fn make_progress_bar(quiet: bool, _interval_ms: u64) -> bool {
-    !quiet
-}

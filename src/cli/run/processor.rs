@@ -3,6 +3,7 @@ use crate::exporter::ExporterManager;
 use crate::pipeline::normalizer::ParamBuffer;
 use crate::pipeline::{CompiledSqlFilters, Pipeline};
 use dm_database_parser_sqllog::LogParserBuilder;
+use indicatif::ProgressBar;
 use log::info;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -27,6 +28,7 @@ pub(super) fn process_log_file(
     ns_scratch: &mut Vec<u8>,
     reset_pb: bool,
     sql_record_filter: Option<&CompiledSqlFilters>,
+    pb: Option<&ProgressBar>,
 ) -> Result<(usize, ErrorStats)> {
     // 清除上一个文件留下的残余参数，同时复用已分配的 HashMap 容量。
     params_buffer.clear();
@@ -42,7 +44,10 @@ pub(super) fn process_log_file(
     );
 
     if reset_pb && show_progress {
-        eprintln!("[{file_index}/{total_files}] {file_name}");
+        if let Some(pb) = pb {
+            pb.set_message(format!("[{file_index}/{total_files}] {file_name}"));
+            pb.set_position(0);
+        }
     }
 
     let parser = LogParserBuilder::new(file_path).build().map_err(|e| {
@@ -115,11 +120,14 @@ pub(super) fn process_log_file(
                                 );
                             records_in_file += 1;
 
-                            // 每 1024 条检查一次中断信号
-                            if records_in_file.trailing_zeros() >= 10
-                                && interrupted.load(Ordering::Relaxed)
-                            {
-                                break 'outer;
+                            // 每 1024 条更新进度并检查中断信号
+                            if records_in_file.trailing_zeros() >= 10 {
+                                if let Some(pb) = pb {
+                                    pb.inc(1024);
+                                }
+                                if interrupted.load(Ordering::Relaxed) {
+                                    break 'outer;
+                                }
                             }
                         }
                     } else {
@@ -153,14 +161,16 @@ pub(super) fn process_log_file(
     );
 
     if show_progress {
-        let errors_label = if errors_in_file > 0 {
-            format!(", {errors_in_file} errors")
-        } else {
-            String::new()
-        };
-        eprintln!(
-            "✓ [{file_index}/{total_files}] {file_path} — {records_in_file}{errors_label}, {elapsed:.2}s",
-        );
+        if let Some(pb) = pb {
+            let errors_label = if errors_in_file > 0 {
+                format!(", {errors_in_file} errors")
+            } else {
+                String::new()
+            };
+            pb.set_message(format!(
+                "✓ [{file_index}/{total_files}] {file_path} — {records_in_file}{errors_label}, {elapsed:.2}s",
+            ));
+        }
     }
 
     Ok((records_in_file, file_stats))

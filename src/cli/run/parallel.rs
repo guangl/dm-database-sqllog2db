@@ -158,6 +158,7 @@ pub(super) fn process_csv_parallel(
                     &mut ns_scratch,
                     false, // 并行模式：不重置进度条，避免多线程互相重置计数
                     sql_record_filter,
+                    None, // no progress bar in parallel mode
                 )?;
 
                 em.finalize()?;
