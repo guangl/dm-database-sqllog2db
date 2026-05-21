@@ -1,4 +1,4 @@
-use crate::error::Result;
+use crate::error::{ErrorStats, Result};
 use crate::exporter::ExporterManager;
 use crate::pipeline::normalizer::ParamBuffer;
 use crate::pipeline::{CompiledSqlFilters, Pipeline};
@@ -27,7 +27,7 @@ pub(super) fn process_log_file(
     ns_scratch: &mut Vec<u8>,
     reset_pb: bool,
     sql_record_filter: Option<&CompiledSqlFilters>,
-) -> Result<usize> {
+) -> Result<(usize, ErrorStats)> {
     // 清除上一个文件留下的残余参数，同时复用已分配的 HashMap 容量。
     params_buffer.clear();
 
@@ -49,11 +49,13 @@ pub(super) fn process_log_file(
         crate::error::Error::Parser(crate::error::ParserError::InvalidPath {
             path: file_path.into(),
             reason: format!("{e}"),
+            line_number: None,
         })
     })?;
 
     let mut records_in_file = 0usize;
     let mut errors_in_file = 0usize;
+    let mut file_stats = ErrorStats::default();
 
     'outer: for result in parser.iter() {
         match result {
@@ -97,7 +99,20 @@ pub(super) fn process_log_file(
                                 }
                             }
 
-                            exporter_manager.export_one_preparsed(&record, include_pm, ns)?;
+                            exporter_manager
+                                .export_one_preparsed(&record, include_pm, ns)
+                                .map_or_else(
+                                    |e| {
+                                        if e.is_fatal() {
+                                            file_stats.set_fatal(e.to_string());
+                                        } else {
+                                            file_stats.add_export_error();
+                                        }
+                                        eprintln!("[{}] {file_path}: {e}", e.severity());
+                                        log::warn!("{file_path} | export error: {e:?}");
+                                    },
+                                    |()| {},
+                                );
                             records_in_file += 1;
 
                             // 每 1024 条检查一次中断信号
@@ -122,6 +137,7 @@ pub(super) fn process_log_file(
             }
             Err(e) => {
                 errors_in_file += 1;
+                file_stats.add_parse_error();
                 log::warn!("{file_path} | {e:?}");
             }
         }
@@ -147,5 +163,5 @@ pub(super) fn process_log_file(
         );
     }
 
-    Ok(records_in_file)
+    Ok((records_in_file, file_stats))
 }

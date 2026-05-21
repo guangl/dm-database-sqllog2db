@@ -143,7 +143,7 @@ pub(super) fn process_csv_parallel(
                 let mut params_buf = ParamBuffer::default();
                 let mut ns_scratch = Vec::with_capacity(4096);
 
-                let count = process_log_file(
+                let (count, _stats) = process_log_file(
                     &file.to_string_lossy(),
                     idx + 1,
                     total_files,

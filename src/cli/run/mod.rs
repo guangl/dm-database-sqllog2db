@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::error::{Error, Result};
+use crate::error::{Error, ErrorStats, Result};
 use crate::exporter::ExporterManager;
 use crate::parser::SqllogParser;
 use crate::pipeline::{CompiledMetaFilters, CompiledSqlFilters};
@@ -26,16 +26,17 @@ pub fn handle_run(
     quiet: bool,
     interrupted: &Arc<AtomicBool>,
     compiled_filters: Option<(CompiledMetaFilters, CompiledSqlFilters)>,
-) -> Result<()> {
+) -> Result<ErrorStats> {
     let (compiled_meta, compiled_sql) = match compiled_filters {
         Some((m, s)) => (Some(m), Some(s)),
         None => (None, None),
     };
     let total_start = Instant::now();
     let log_files = SqllogParser::new(&cfg.sqllog.path).log_files()?;
+    let mut run_stats = ErrorStats::default();
     if log_files.is_empty() {
         warn!("No log files found");
-        return Ok(());
+        return Ok(ErrorStats::default());
     }
     let jobs = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
 
@@ -114,7 +115,7 @@ pub fn handle_run(
             if interrupted.load(Ordering::Relaxed) {
                 break;
             }
-            let processed = process_log_file(
+            let (processed, file_stats) = process_log_file(
                 &log_file.to_string_lossy(),
                 idx + 1,
                 log_files.len(),
@@ -131,6 +132,13 @@ pub fn handle_run(
                 sql_record_filter,
             )?;
             total_records += processed;
+            run_stats.merge(&file_stats);
+            if file_stats.has_fatal() {
+                return Err(Error::Export(crate::error::ExportError::WriteFailed {
+                    path: log_file.into(),
+                    reason: file_stats.fatal_error.unwrap_or_default(),
+                }));
+            }
         }
         exporter_manager.finalize()?;
         if !quiet {
@@ -152,7 +160,7 @@ pub fn handle_run(
     if interrupted.load(Ordering::Relaxed) {
         return Err(Error::Interrupted);
     }
-    Ok(())
+    Ok(run_stats)
 }
 
 #[cfg(test)]

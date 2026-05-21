@@ -83,6 +83,7 @@ impl SqllogParser {
             return Err(Error::Parser(ParserError::InvalidPath {
                 path: path.clone(),
                 reason: "既不是文件也不是目录".to_string(),
+                line_number: None,
             }));
         }
 
@@ -104,6 +105,7 @@ impl SqllogParser {
                 Error::Parser(ParserError::InvalidPath {
                     path: self.path.clone(),
                     reason: format!("invalid glob pattern: {e}"),
+                    line_number: None,
                 })
             })?
             .filter_map(std::result::Result::ok)
