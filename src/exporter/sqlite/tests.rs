@@ -1,5 +1,5 @@
 use super::*;
-use dm_database_parser_sqllog::LogParser;
+use dm_database_parser_sqllog::LogParserBuilder;
 
 fn write_test_log(path: &std::path::Path, count: usize) {
     use std::fmt::Write as _;
@@ -22,7 +22,9 @@ fn test_sqlite_basic_export() {
     let dbfile = dir.path().join("out.db");
     write_test_log(&logfile, 5);
 
-    let parser = LogParser::from_path(logfile.to_str().unwrap()).unwrap();
+    let parser = LogParserBuilder::new(logfile.to_str().unwrap())
+        .build()
+        .unwrap();
     let records: Vec<_> = parser.iter().filter_map(std::result::Result::ok).collect();
 
     {
@@ -54,7 +56,9 @@ fn test_sqlite_overwrite_drops_existing_table() {
     let dbfile = dir.path().join("out.db");
     write_test_log(&logfile, 3);
 
-    let parser = LogParser::from_path(logfile.to_str().unwrap()).unwrap();
+    let parser = LogParserBuilder::new(logfile.to_str().unwrap())
+        .build()
+        .unwrap();
     let records: Vec<_> = parser.iter().filter_map(std::result::Result::ok).collect();
 
     // First run: insert 3 rows
@@ -92,7 +96,9 @@ fn test_sqlite_with_normalized() {
     let dbfile = dir.path().join("out.db");
     write_test_log(&logfile, 2);
 
-    let parser = LogParser::from_path(logfile.to_str().unwrap()).unwrap();
+    let parser = LogParserBuilder::new(logfile.to_str().unwrap())
+        .build()
+        .unwrap();
     let records: Vec<_> = parser.iter().filter_map(std::result::Result::ok).collect();
     let normalized: Vec<Option<String>> = records
         .iter()
@@ -141,7 +147,9 @@ fn test_sqlite_export_method() {
     let dbfile = dir.path().join("export.db");
     write_test_log(&logfile, 3);
 
-    let parser = LogParser::from_path(logfile.to_str().unwrap()).unwrap();
+    let parser = LogParserBuilder::new(logfile.to_str().unwrap())
+        .build()
+        .unwrap();
     let records: Vec<_> = parser.iter().filter_map(std::result::Result::ok).collect();
 
     {
@@ -169,7 +177,9 @@ fn test_sqlite_export_one_preparsed() {
     let dbfile = dir.path().join("preparsed.db");
     write_test_log(&logfile, 2);
 
-    let parser = LogParser::from_path(logfile.to_str().unwrap()).unwrap();
+    let parser = LogParserBuilder::new(logfile.to_str().unwrap())
+        .build()
+        .unwrap();
     let records: Vec<_> = parser.iter().filter_map(std::result::Result::ok).collect();
 
     {
@@ -177,9 +187,7 @@ fn test_sqlite_export_one_preparsed() {
             SqliteExporter::new(dbfile.to_string_lossy().into(), "tbl".into(), true, false);
         exporter.initialize().unwrap();
         for r in &records {
-            let meta = r.parse_meta();
-            let pm = r.parse_performance_metrics();
-            exporter.export_one_preparsed(r, &meta, &pm, None).unwrap();
+            exporter.export_one_preparsed(r, true, None).unwrap();
         }
         exporter.finalize().unwrap();
     }
@@ -198,7 +206,9 @@ fn test_sqlite_stats_snapshot() {
     let dbfile = dir.path().join("stats.db");
     write_test_log(&logfile, 4);
 
-    let parser = LogParser::from_path(logfile.to_str().unwrap()).unwrap();
+    let parser = LogParserBuilder::new(logfile.to_str().unwrap())
+        .build()
+        .unwrap();
     let records: Vec<_> = parser.iter().filter_map(std::result::Result::ok).collect();
 
     let mut exporter =
@@ -245,7 +255,9 @@ fn test_sqlite_field_order() {
         exporter.ordered_indices = vec![10, 4]; // sql=10, username=4
         exporter.initialize().unwrap();
 
-        let parser = LogParser::from_path(log.to_str().unwrap()).unwrap();
+        let parser = LogParserBuilder::new(log.to_str().unwrap())
+            .build()
+            .unwrap();
         for record in parser.iter().flatten() {
             exporter.export(&record).unwrap();
         }
@@ -270,7 +282,9 @@ fn test_sqlite_append_mode() {
     let dbfile = dir.path().join("append.db");
     write_test_log(&logfile, 3);
 
-    let parser = LogParser::from_path(logfile.to_str().unwrap()).unwrap();
+    let parser = LogParserBuilder::new(logfile.to_str().unwrap())
+        .build()
+        .unwrap();
     let records: Vec<_> = parser.iter().filter_map(std::result::Result::ok).collect();
 
     // First run: create table with 3 rows
@@ -369,7 +383,9 @@ fn test_sqlite_initialize_clears_existing_table_via_delete() {
     let dbfile = dir.path().join("clear.db");
     write_test_log(&logfile, 4);
 
-    let parser = LogParser::from_path(logfile.to_str().unwrap()).unwrap();
+    let parser = LogParserBuilder::new(logfile.to_str().unwrap())
+        .build()
+        .unwrap();
     let records: Vec<_> = parser.iter().filter_map(std::result::Result::ok).collect();
 
     // 第一次 run：写入 4 条
@@ -420,7 +436,9 @@ fn test_sqlite_batch_commit() {
     let dbfile = dir.path().join("batch.db");
     write_test_log(&logfile, 5);
 
-    let parser = LogParser::from_path(logfile.to_str().unwrap()).unwrap();
+    let parser = LogParserBuilder::new(logfile.to_str().unwrap())
+        .build()
+        .unwrap();
     let records: Vec<_> = parser.iter().filter_map(std::result::Result::ok).collect();
 
     {

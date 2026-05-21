@@ -1,5 +1,5 @@
 use crate::error::{Error, ExportError, Result};
-use dm_database_parser_sqllog::{MetaParts, PerformanceMetrics, Sqllog};
+use dm_database_parser_sqllog::Sqllog;
 use log::info;
 use rusqlite::Connection;
 use std::path::Path;
@@ -96,14 +96,12 @@ impl SqliteExporter {
         })
     }
 
-    /// 获取数据库连接引用，未初始化时返回错误而非 panic
     fn conn_ref(&self) -> Result<&Connection> {
         self.conn
             .as_ref()
             .ok_or_else(|| Self::db_err("not initialized"))
     }
 
-    /// 每 `batch_size` 行执行中间 COMMIT，将大事务拆分为小事务
     fn batch_commit_if_needed(&mut self) -> Result<()> {
         self.row_count += 1;
         if self.row_count % self.batch_size == 0 {
@@ -114,7 +112,6 @@ impl SqliteExporter {
         Ok(())
     }
 
-    /// 处理 DELETE FROM 的执行结果（"no such table" 静默忽略）
     fn handle_delete_clear_result(result: rusqlite::Result<usize>, table_name: &str) {
         if let Err(rusqlite::Error::SqliteFailure(_, Some(ref msg))) = result {
             if msg.contains("no such table") {
@@ -126,7 +123,6 @@ impl SqliteExporter {
         }
     }
 
-    /// 根据 overwrite/append 模式准备目标表
     fn prepare_target_table(&self) -> Result<()> {
         if self.overwrite {
             let conn = self.conn_ref()?;
@@ -178,25 +174,18 @@ impl Exporter for SqliteExporter {
         Ok(())
     }
 
-    fn export(&mut self, sqllog: &Sqllog<'_>) -> Result<()> {
+    fn export(&mut self, sqllog: &Sqllog) -> Result<()> {
         self.export_one_normalized(sqllog, None)
     }
 
-    fn export_one_normalized(
-        &mut self,
-        sqllog: &Sqllog<'_>,
-        normalized: Option<&str>,
-    ) -> Result<()> {
-        let meta = sqllog.parse_meta();
-        let pm = sqllog.parse_performance_metrics();
-        self.export_one_preparsed(sqllog, &meta, &pm, normalized)
+    fn export_one_normalized(&mut self, sqllog: &Sqllog, normalized: Option<&str>) -> Result<()> {
+        self.export_one_preparsed(sqllog, true, normalized)
     }
 
     fn export_one_preparsed(
         &mut self,
-        sqllog: &Sqllog<'_>,
-        meta: &MetaParts<'_>,
-        pm: &PerformanceMetrics<'_>,
+        sqllog: &Sqllog,
+        _include_pm: bool,
         normalized: Option<&str>,
     ) -> Result<()> {
         {
@@ -211,8 +200,6 @@ impl Exporter for SqliteExporter {
             do_insert_preparsed(
                 &mut stmt,
                 sqllog,
-                meta,
-                pm,
                 ns_ref,
                 self.field_mask,
                 &self.ordered_indices,

@@ -1,7 +1,7 @@
 use crate::config::Config;
 use crate::error::{Error, Result};
 use crate::pipeline::CompiledMetaFilters;
-use dm_database_parser_sqllog::LogParser;
+use dm_database_parser_sqllog::LogParserBuilder;
 
 /// 扫描单个日志文件，返回满足事务级过滤条件的去重 `trxid` 列表。
 ///
@@ -13,7 +13,7 @@ use dm_database_parser_sqllog::LogParser;
 pub(super) fn scan_log_file_for_matches(file_path: &str, cfg: &Config) -> Vec<String> {
     use rayon::prelude::*;
 
-    let Ok(parser) = LogParser::from_path(file_path) else {
+    let Ok(parser) = LogParserBuilder::new(file_path).build() else {
         return Vec::new();
     };
     let filters = match &cfg.filter {
@@ -21,27 +21,25 @@ pub(super) fn scan_log_file_for_matches(file_path: &str, cfg: &Config) -> Vec<St
         _ => return Vec::new(),
     };
 
-    // 收集到 HashSet 实现文件内去重，rayon 支持并行 collect 到 std::HashSet。
-    let trxids: std::collections::HashSet<String> = parser
+    // 收集到 Vec 再并行处理（v1.1.0 的 LogParser 不再实现 rayon 的 IntoParallelRefIterator）
+    let records: Vec<_> = parser.iter().filter_map(std::result::Result::ok).collect();
+    let trxids: std::collections::HashSet<String> = records
         .par_iter()
-        .filter_map(std::result::Result::ok)
         .filter_map(|result| {
             let mut matched = false;
 
-            if let Some(ind) = result.parse_indicators() {
-                if filters
-                    .indicators
-                    .matches(ind.exec_id, ind.exectime, i64::from(ind.rowcount))
-                {
-                    matched = true;
-                }
+            if filters.indicators.matches(
+                result.exec_id,
+                result.exectime,
+                i64::from(result.rowcount),
+            ) {
+                matched = true;
             }
             if !matched && filters.sql.has_filters() {
-                matched = filters.sql.matches(result.body().as_ref());
+                matched = filters.sql.matches(&result.sql);
             }
             if matched {
-                let meta = result.parse_meta();
-                Some(String::from(meta.trxid.as_ref()))
+                Some(result.trxid.clone())
             } else {
                 None
             }

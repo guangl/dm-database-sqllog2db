@@ -117,7 +117,7 @@ fn bench_csv_real_file(c: &mut Criterion) {
 ///
 /// 注意：本 group 无 v1.0 baseline。**不要**用 `--baseline v1.0` 对比此 group。
 fn bench_csv_format_only(c: &mut Criterion) {
-    use dm_database_parser_sqllog::LogParser;
+    use dm_database_parser_sqllog::LogParserBuilder;
     use dm_database_sqllog2db::exporter::Exporter;
     use dm_database_sqllog2db::exporter::csv::CsvExporter;
 
@@ -132,7 +132,9 @@ fn bench_csv_format_only(c: &mut Criterion) {
     fs::write(&log_path, &content).unwrap();
 
     // 一次性解析全部 N 条记录到 Vec，benchmark 内只跑格式化
-    let parser = LogParser::from_path(log_path.to_str().unwrap()).unwrap();
+    let parser = LogParserBuilder::new(log_path.to_str().unwrap())
+        .build()
+        .unwrap();
     let records: Vec<_> = parser.iter().filter_map(std::result::Result::ok).collect();
     assert_eq!(
         records.len(),
@@ -141,11 +143,8 @@ fn bench_csv_format_only(c: &mut Criterion) {
         records.len()
     );
 
-    // 预解析 meta + pm（这部分开销不计入 benchmark 测量窗口）
-    let parsed: Vec<_> = records
-        .iter()
-        .map(|r| (r, r.parse_meta(), r.parse_performance_metrics()))
-        .collect();
+    // v1.1.0: 所有字段已在 Sqllog 上物化，无需预解析 meta/pm
+    let parsed: Vec<_> = records.iter().collect();
 
     let out_path = bench_dir.join("out.csv");
 
@@ -155,10 +154,8 @@ fn bench_csv_format_only(c: &mut Criterion) {
         b.iter(|| {
             let mut exporter = CsvExporter::new(&out_path);
             exporter.initialize().unwrap();
-            for (sqllog, meta, pm) in &parsed {
-                exporter
-                    .export_one_preparsed(sqllog, meta, pm, None)
-                    .unwrap();
+            for sqllog in &parsed {
+                exporter.export_one_preparsed(sqllog, true, None).unwrap();
             }
             exporter.finalize().unwrap();
         });

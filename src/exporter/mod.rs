@@ -1,6 +1,6 @@
 use crate::config::Config;
 use crate::error::{ConfigError, Error, Result};
-use dm_database_parser_sqllog::{MetaParts, PerformanceMetrics, Sqllog};
+use dm_database_parser_sqllog::Sqllog;
 use log::info;
 
 pub mod csv;
@@ -12,30 +12,25 @@ pub(crate) use sqlite::SqliteExporter;
 /// 所有导出器必须实现的接口
 pub trait Exporter {
     fn initialize(&mut self) -> Result<()>;
-    fn export(&mut self, sqllog: &Sqllog<'_>) -> Result<()>;
+    fn export(&mut self, sqllog: &Sqllog) -> Result<()>;
 
     /// 流式导出单条记录，同时附带 `normalized_sql`（流式路径，无需 batch）。
     /// 默认实现忽略 normalized，调用 `export`。
-    fn export_one_normalized(
-        &mut self,
-        sqllog: &Sqllog<'_>,
-        normalized: Option<&str>,
-    ) -> Result<()> {
+    fn export_one_normalized(&mut self, sqllog: &Sqllog, normalized: Option<&str>) -> Result<()> {
         let _ = normalized;
         self.export(sqllog)
     }
 
-    /// 热路径：接收调用方已预解析的 `MetaParts` 和 `PerformanceMetrics`，
-    /// 避免在导出器内部重复调用 `parse_meta()` / `parse_performance_metrics()`。
-    /// 默认实现退化为 `export_one_normalized`（不使用预解析数据）。
+    /// 热路径：使用已解析的 `Sqllog` 直接导出。
+    /// `include_pm` 控制是否写入性能指标列（仅 CSV 路径有意义）。
+    /// v1.1.0 后所有字段已物化在 `Sqllog` 上，`meta`/`pm` 参数取消。
     fn export_one_preparsed(
         &mut self,
-        sqllog: &Sqllog<'_>,
-        meta: &MetaParts<'_>,
-        pm: &PerformanceMetrics<'_>,
+        sqllog: &Sqllog,
+        include_pm: bool,
         normalized: Option<&str>,
     ) -> Result<()> {
-        let _ = (meta, pm);
+        let _ = include_pm;
         self.export_one_normalized(sqllog, normalized)
     }
 
@@ -47,7 +42,7 @@ pub trait Exporter {
 }
 
 /// 具体导出器的枚举包装，消除 `Box<dyn Exporter>` 的虚表分发开销，
-/// 使编译器能够内联热路径（`export_one_preparsed` → `write_record_preparsed`）。
+/// 使编译器能够内联热路径。
 #[derive(Debug)]
 pub(crate) enum ExporterKind {
     Csv(CsvExporter),
@@ -63,11 +58,9 @@ impl ExporterKind {
     }
 
     /// 当前 active exporter 是否应包含性能指标列（仅 CSV 路径有意义）。
-    /// 用于 `cli/run.rs` 热循环判断是否需要调用 `record.parse_performance_metrics()`。
     pub fn csv_include_performance_metrics(&self) -> bool {
         match self {
             Self::Csv(exporter) => exporter.include_performance_metrics,
-            // SQLite 永远需要完整 pm（schema 固定）
             Self::Sqlite(_) => true,
         }
     }
@@ -82,14 +75,13 @@ impl ExporterKind {
     #[inline]
     fn export_one_preparsed(
         &mut self,
-        sqllog: &Sqllog<'_>,
-        meta: &MetaParts<'_>,
-        pm: &PerformanceMetrics<'_>,
+        sqllog: &Sqllog,
+        include_pm: bool,
         normalized: Option<&str>,
     ) -> Result<()> {
         match self {
-            Self::Csv(e) => e.export_one_preparsed(sqllog, meta, pm, normalized),
-            Self::Sqlite(e) => e.export_one_preparsed(sqllog, meta, pm, normalized),
+            Self::Csv(e) => e.export_one_preparsed(sqllog, include_pm, normalized),
+            Self::Sqlite(e) => e.export_one_preparsed(sqllog, include_pm, normalized),
         }
     }
 
@@ -196,7 +188,6 @@ impl ExporterManager {
     }
 
     /// 返回当前 active exporter 是否应包含性能指标列。
-    /// CSV 路径根据配置返回；其他路径固定返回 true。
     pub(crate) fn csv_include_performance_metrics(&self) -> bool {
         self.exporter.csv_include_performance_metrics()
     }
@@ -208,17 +199,16 @@ impl ExporterManager {
         Ok(())
     }
 
-    /// 热路径：使用预解析的 meta/pm，避免导出器内部重复解析。
+    /// 热路径：使用已解析的 `Sqllog` 直接导出。
     #[inline]
     pub(crate) fn export_one_preparsed(
         &mut self,
-        sqllog: &Sqllog<'_>,
-        meta: &MetaParts<'_>,
-        pm: &PerformanceMetrics<'_>,
+        sqllog: &Sqllog,
+        include_pm: bool,
         normalized: Option<&str>,
     ) -> Result<()> {
         self.exporter
-            .export_one_preparsed(sqllog, meta, pm, normalized)
+            .export_one_preparsed(sqllog, include_pm, normalized)
     }
 
     pub(crate) fn finalize(&mut self) -> Result<()> {

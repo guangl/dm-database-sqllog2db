@@ -1,7 +1,6 @@
 use crate::config::Config;
 use crate::pipeline::filters::RecordMeta;
 use crate::pipeline::{CompiledMetaFilters, LogProcessor, Pipeline};
-use dm_database_parser_sqllog::MetaParts;
 
 /// 构建处理器管线。
 ///
@@ -48,29 +47,24 @@ impl FilterProcessor {
 
 impl LogProcessor for FilterProcessor {
     fn process(&self, record: &dm_database_parser_sqllog::Sqllog) -> bool {
-        let meta = record.parse_meta();
-        self.process_with_meta(record, &meta)
+        self.process_with_meta(record)
     }
 
-    /// 热路径重载：复用调用方已解析的 `MetaParts`，消除 `parse_meta()` 重复调用。
+    /// 热路径：使用 `Sqllog` 的直接字段（v1.1.0 已物化所有元数据）。
     ///
     /// 时间过滤在前（无需构造 `RecordMeta`），之后用预计算的 `has_meta_filters`
     /// 快速判断是否需要进入元数据过滤 —— 过滤器只含时间范围时直接返回 true。
-    fn process_with_meta(
-        &self,
-        record: &dm_database_parser_sqllog::Sqllog,
-        meta: &MetaParts<'_>,
-    ) -> bool {
-        let ts = record.ts.as_ref();
+    fn process_with_meta(&self, record: &dm_database_parser_sqllog::Sqllog) -> bool {
+        let ts = &record.ts;
 
         // 时间过滤：无需构造 RecordMeta
         if let Some(start) = &self.start_ts {
-            if ts < start.as_str() {
+            if ts.as_str() < start.as_str() {
                 return false;
             }
         }
         if let Some(end) = &self.end_ts {
-            if ts > end.as_str() {
+            if ts.as_str() > end.as_str() {
                 return false;
             }
         }
@@ -81,13 +75,13 @@ impl LogProcessor for FilterProcessor {
         }
 
         self.compiled_meta.should_keep(&RecordMeta {
-            trxid: meta.trxid.as_ref(),
-            ip: meta.client_ip.as_ref(),
-            sess: meta.sess_id.as_ref(),
-            thrd: meta.thrd_id.as_ref(),
-            user: meta.username.as_ref(),
-            stmt: meta.statement.as_ref(),
-            app: meta.appname.as_ref(),
+            trxid: &record.trxid,
+            ip: &record.client_ip,
+            sess: &record.sess_id,
+            thrd: &record.thrd_id,
+            user: &record.username,
+            stmt: &record.statement,
+            app: &record.appname,
             tag: record.tag.as_deref(),
         })
     }

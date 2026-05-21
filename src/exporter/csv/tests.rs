@@ -1,7 +1,7 @@
 use super::super::Exporter;
 use super::CsvExporter;
 use super::writer::write_csv_escaped;
-use dm_database_parser_sqllog::LogParser;
+use dm_database_parser_sqllog::LogParserBuilder;
 
 fn write_test_log(path: &std::path::Path, count: usize) {
     use std::fmt::Write as _;
@@ -24,7 +24,9 @@ fn test_csv_basic_export() {
     let outfile = dir.path().join("out.csv");
     write_test_log(&logfile, 5);
 
-    let parser = LogParser::from_path(logfile.to_str().unwrap()).unwrap();
+    let parser = LogParserBuilder::new(logfile.to_str().unwrap())
+        .build()
+        .unwrap();
     let records: Vec<_> = parser.iter().filter_map(std::result::Result::ok).collect();
     assert!(!records.is_empty());
 
@@ -49,7 +51,9 @@ fn test_csv_no_normalize() {
     let outfile = dir.path().join("out.csv");
     write_test_log(&logfile, 2);
 
-    let parser = LogParser::from_path(logfile.to_str().unwrap()).unwrap();
+    let parser = LogParserBuilder::new(logfile.to_str().unwrap())
+        .build()
+        .unwrap();
     let records: Vec<_> = parser.iter().filter_map(std::result::Result::ok).collect();
 
     let mut exporter = CsvExporter::new(&outfile);
@@ -71,7 +75,9 @@ fn test_csv_export_with_normalized() {
     let outfile = dir.path().join("out.csv");
     write_test_log(&logfile, 3);
 
-    let parser = LogParser::from_path(logfile.to_str().unwrap()).unwrap();
+    let parser = LogParserBuilder::new(logfile.to_str().unwrap())
+        .build()
+        .unwrap();
     let records: Vec<_> = parser.iter().filter_map(std::result::Result::ok).collect();
 
     let mut exporter = CsvExporter::new(&outfile);
@@ -94,7 +100,9 @@ fn test_csv_append_mode() {
     let outfile = dir.path().join("out.csv");
     write_test_log(&logfile, 2);
 
-    let parser = LogParser::from_path(logfile.to_str().unwrap()).unwrap();
+    let parser = LogParserBuilder::new(logfile.to_str().unwrap())
+        .build()
+        .unwrap();
     let records: Vec<_> = parser.iter().filter_map(std::result::Result::ok).collect();
 
     // First write
@@ -158,7 +166,9 @@ fn test_csv_export_method() {
     let outfile = dir.path().join("out.csv");
     write_test_log(&logfile, 3);
 
-    let parser = LogParser::from_path(logfile.to_str().unwrap()).unwrap();
+    let parser = LogParserBuilder::new(logfile.to_str().unwrap())
+        .build()
+        .unwrap();
     let records: Vec<_> = parser.iter().filter_map(std::result::Result::ok).collect();
 
     let mut exporter = CsvExporter::new(&outfile);
@@ -180,7 +190,9 @@ fn test_csv_stats_snapshot() {
     let outfile = dir.path().join("out.csv");
     write_test_log(&logfile, 5);
 
-    let parser = LogParser::from_path(logfile.to_str().unwrap()).unwrap();
+    let parser = LogParserBuilder::new(logfile.to_str().unwrap())
+        .build()
+        .unwrap();
     let records: Vec<_> = parser.iter().filter_map(std::result::Result::ok).collect();
 
     let mut exporter = CsvExporter::new(&outfile);
@@ -290,7 +302,9 @@ fn test_csv_field_order() {
     exporter.ordered_indices = vec![10, 4]; // sql=10, username=4
     exporter.initialize().unwrap();
 
-    let parser = LogParser::from_path(log.to_str().unwrap()).unwrap();
+    let parser = LogParserBuilder::new(log.to_str().unwrap())
+        .build()
+        .unwrap();
     for record in parser.iter().flatten() {
         exporter.export(&record).unwrap();
     }
@@ -326,7 +340,9 @@ fn test_csv_field_order_normalized_sql_skipped_when_normalize_false() {
     exporter.field_mask = FieldMask::from_names(&["sql".to_string()]).unwrap();
     exporter.initialize().unwrap();
 
-    let parser = LogParser::from_path(log.to_str().unwrap()).unwrap();
+    let parser = LogParserBuilder::new(log.to_str().unwrap())
+        .build()
+        .unwrap();
     for record in parser.iter().flatten() {
         exporter.export(&record).unwrap();
     }
@@ -352,7 +368,9 @@ fn test_csv_reserve_boundary_short_sql() {
     let mut exporter = CsvExporter::new(&out);
     exporter.initialize().unwrap();
 
-    let parser = LogParser::from_path(log.to_str().unwrap()).unwrap();
+    let parser = LogParserBuilder::new(log.to_str().unwrap())
+        .build()
+        .unwrap();
     for record in parser.iter().flatten() {
         exporter.export(&record).unwrap();
     }
@@ -380,7 +398,9 @@ fn test_csv_reserve_boundary_long_sql() {
     let mut exporter = CsvExporter::new(&out);
     exporter.initialize().unwrap();
 
-    let parser = LogParser::from_path(log.to_str().unwrap()).unwrap();
+    let parser = LogParserBuilder::new(log.to_str().unwrap())
+        .build()
+        .unwrap();
     for record in parser.iter().flatten() {
         exporter.export(&record).unwrap();
     }
@@ -415,7 +435,9 @@ fn test_csv_data_row_skips_pm_when_disabled() {
     let outfile = dir.path().join("out.csv");
     write_test_log(&logfile, 3);
 
-    let parser = LogParser::from_path(logfile.to_str().unwrap()).unwrap();
+    let parser = LogParserBuilder::new(logfile.to_str().unwrap())
+        .build()
+        .unwrap();
     let records: Vec<_> = parser.iter().filter_map(std::result::Result::ok).collect();
 
     let mut exporter = CsvExporter::new(&outfile);
@@ -447,7 +469,9 @@ fn test_csv_default_include_pm_true_keeps_existing_behavior() {
     let outfile = dir.path().join("out.csv");
     write_test_log(&logfile, 2);
 
-    let parser = LogParser::from_path(logfile.to_str().unwrap()).unwrap();
+    let parser = LogParserBuilder::new(logfile.to_str().unwrap())
+        .build()
+        .unwrap();
     let records: Vec<_> = parser.iter().filter_map(std::result::Result::ok).collect();
 
     let mut exporter = CsvExporter::new(&outfile);
