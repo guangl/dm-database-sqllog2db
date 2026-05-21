@@ -47,26 +47,26 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| VER-01 | — | Pending |
-| VER-02 | — | Pending |
-| VER-03 | — | Pending |
-| VER-04 | — | Pending |
-| VER-05 | — | Pending |
-| VER-06 | — | Pending |
-| ERR-01 | — | Pending |
-| ERR-02 | — | Pending |
-| ERR-03 | — | Pending |
-| PIPE-01 | — | Pending |
-| PIPE-02 | — | Pending |
-| UX-01 | — | Pending |
-| UX-02 | — | Pending |
-| UX-03 | — | Pending |
-| UX-04 | — | Pending |
+| VER-01 | 39 | Pending |
+| VER-02 | 40 | Pending |
+| VER-03 | 39 | Pending |
+| VER-04 | 39 | Pending |
+| VER-05 | 40 | Pending |
+| VER-06 | 40 | Pending |
+| ERR-01 | 36 | Pending |
+| ERR-02 | 36 | Pending |
+| ERR-03 | 36 | Pending |
+| PIPE-01 | 37 | Pending |
+| PIPE-02 | 37 | Pending |
+| UX-01 | 38 | Pending |
+| UX-02 | 38 | Pending |
+| UX-03 | 35 | Pending |
+| UX-04 | 37 | Pending |
 
 **Coverage:**
 - v1.10 requirements: 15 total
-- Mapped to phases: 0
-- Unmapped: 15 ⚠️
+- Mapped to phases: 15
+- Unmapped: 0 ✅
 
 ---
 *Requirements defined: 2026-05-21*
