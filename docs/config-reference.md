@@ -108,7 +108,7 @@ overwrite = true
 | `delimiter` | char | `,` | 列分隔符 |
 | `ordered_indices` | [usize] | `[]`（所有字段） | 字段投影——从零开始的列索引 |
 
-**说明：** CSV 使用 16 MB `BufWriter` + `itoa` 零分配整数格式化，实现约 520 万条记录/秒的吞吐量。`ordered_indices` 用于选择精确的列顺序和子集。为空表示所有字段按默认顺序输出。
+**说明：** CSV 使用 2 MB `BufWriter` + `itoa` 零分配整数格式化，实现约 520 万条记录/秒的吞吐量。`ordered_indices` 用于选择精确的列顺序和子集。为空表示所有字段按默认顺序输出。
 
 ---
 

@@ -1,7 +1,6 @@
 use crate::config::Config;
 use crate::error::{Error, Result};
 use crate::pipeline::CompiledMetaFilters;
-use compact_str::CompactString;
 use dm_database_parser_sqllog::LogParser;
 
 /// 扫描单个日志文件，返回满足事务级过滤条件的去重 `trxid` 列表。
@@ -11,7 +10,7 @@ use dm_database_parser_sqllog::LogParser;
 ///
 /// 结果在文件内去重：同一事务 ID 可能出现在数百条记录中，
 /// 提前去重可显著减少跨文件合并时的中间数据量。
-pub(super) fn scan_log_file_for_matches(file_path: &str, cfg: &Config) -> Vec<CompactString> {
+pub(super) fn scan_log_file_for_matches(file_path: &str, cfg: &Config) -> Vec<String> {
     use rayon::prelude::*;
 
     let Ok(parser) = LogParser::from_path(file_path) else {
@@ -22,9 +21,8 @@ pub(super) fn scan_log_file_for_matches(file_path: &str, cfg: &Config) -> Vec<Co
         _ => return Vec::new(),
     };
 
-    // trxid 用 CompactString：数字字符串 ≤23 字节，内联存储，无堆分配。
     // 收集到 HashSet 实现文件内去重，rayon 支持并行 collect 到 std::HashSet。
-    let trxids: std::collections::HashSet<CompactString> = parser
+    let trxids: std::collections::HashSet<String> = parser
         .par_iter()
         .filter_map(std::result::Result::ok)
         .filter_map(|result| {
@@ -43,7 +41,7 @@ pub(super) fn scan_log_file_for_matches(file_path: &str, cfg: &Config) -> Vec<Co
             }
             if matched {
                 let meta = result.parse_meta();
-                Some(CompactString::from(meta.trxid.as_ref()))
+                Some(String::from(meta.trxid.as_ref()))
             } else {
                 None
             }
@@ -56,7 +54,7 @@ pub(super) fn scan_for_trxids_by_transaction_filters(
     log_files: &[std::path::PathBuf],
     cfg: &Config,
     jobs: usize,
-) -> Result<Vec<CompactString>> {
+) -> Result<Vec<String>> {
     use rayon::prelude::*;
 
     eprintln!(
@@ -71,7 +69,7 @@ pub(super) fn scan_for_trxids_by_transaction_filters(
         .build()
         .map_err(|e| Error::Io(std::io::Error::other(e)))?;
 
-    let matched: Vec<CompactString> = pool.install(|| {
+    let matched: Vec<String> = pool.install(|| {
         log_files
             .par_iter()
             .flat_map(|file| scan_log_file_for_matches(&file.to_string_lossy(), cfg))

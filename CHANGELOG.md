@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9] - 2026-05-20
+
+### Removed
+
+- **6 non-essential dependencies**: removed `mimalloc` (custom allocator), `ahash` (custom hasher), `compact_str` (compact string), `smallvec` (small vector), `indicatif` (progress bar), and `chrono` (time formatting). These were unnecessary for the core streaming parse-export pipeline and their removal reduces binary size and compile time.
+- **`S: BuildHasher` generic parameter**: removed from `compute_normalized()` to simplify the API surface.
+
+### Changed
+
+- **rusqlite feature trim**: reduced rusqlite features to `bundled` only, removing unnecessary optional features.
+- **BufWriter capacity**: reduced from 16MB to 2MB for lower memory footprint without throughput regression.
+- **Time handling**: replaced `chrono::Local` with `std::time::SystemTime` UTC computation, eliminating the chrono dependency.
+- **Progress reporting**: replaced indicatif spinner with `eprintln!` output for simpler, dependency-free progress reporting.
+
+---
+
 ## [1.7] - 2026-05-19
 
 ### Removed
@@ -154,6 +170,7 @@ The 0.x series (0.1.0 through 0.10.7) covered the initial development of sqllog2
 
 See git history for full details.
 
+[1.9]: https://github.com/guangl/sqllog2db/releases/tag/v1.9
 [1.7]: https://github.com/guangl/sqllog2db/releases/tag/v1.7
 [1.6]: https://github.com/guangl/sqllog2db/releases/tag/v1.6
 [1.5]: https://github.com/guangl/sqllog2db/releases/tag/v1.5

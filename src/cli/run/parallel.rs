@@ -2,7 +2,6 @@ use crate::error::{Error, Result};
 use crate::exporter::{CsvExporter, ExporterManager};
 use crate::pipeline::normalizer::ParamBuffer;
 use crate::pipeline::{CompiledSqlFilters, FieldMask, Pipeline};
-use indicatif::ProgressBar;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -38,7 +37,7 @@ pub(super) fn concat_csv_parts(
             .truncate(overwrite)
             .open(output_path)?
     };
-    let mut writer = std::io::BufWriter::with_capacity(16 * 1024 * 1024, file);
+    let mut writer = std::io::BufWriter::with_capacity(2 * 1024 * 1024, file);
 
     for (idx, (part_path, _)) in parts.iter().enumerate() {
         let part_file = std::fs::File::open(part_path)?;
@@ -72,7 +71,7 @@ pub(super) fn process_csv_parallel(
     cfg: &crate::config::Config,
     pipeline: &Pipeline,
     jobs: usize,
-    pb: &ProgressBar,
+    show_progress: bool,
     interrupted: &Arc<AtomicBool>,
     do_normalize: bool,
     placeholder_override: Option<bool>,
@@ -150,7 +149,7 @@ pub(super) fn process_csv_parallel(
                     total_files,
                     &mut em,
                     pipeline,
-                    pb,
+                    show_progress,
                     None,
                     interrupted,
                     do_normalize,

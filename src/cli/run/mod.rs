@@ -3,7 +3,6 @@ use crate::error::{Error, Result};
 use crate::exporter::ExporterManager;
 use crate::parser::SqllogParser;
 use crate::pipeline::{CompiledMetaFilters, CompiledSqlFilters};
-use indicatif::HumanCount;
 use log::{info, warn};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -83,7 +82,7 @@ pub fn handle_run(
             .is_some_and(|f| f.enable && f.record_sql.has_filters())
     });
     let sql_record_filter = compiled_record_sql.as_ref();
-    let pb = make_progress_bar(quiet, 80);
+    let show_progress = make_progress_bar(quiet, 80);
     let mut total_records = 0usize;
     let mut skipped_files = 0usize;
     let use_parallel = jobs > 1 && log_files.len() > 1 && final_cfg.exporter.csv.is_some();
@@ -95,7 +94,7 @@ pub fn handle_run(
             final_cfg,
             &pipeline,
             jobs,
-            &pb,
+            show_progress,
             interrupted,
             do_normalize,
             placeholder_override,
@@ -121,7 +120,7 @@ pub fn handle_run(
                 log_files.len(),
                 &mut exporter_manager,
                 &pipeline,
-                &pb,
+                show_progress,
                 None,
                 interrupted,
                 do_normalize,
@@ -138,18 +137,16 @@ pub fn handle_run(
             exporter_manager.log_stats();
         }
     }
-    pb.finish_and_clear();
     if !quiet {
         let elapsed = total_start.elapsed().as_secs_f64();
         let mode_label = if use_parallel { " [parallel]" } else { "" };
         let skip_label = if skipped_files > 0 {
-            format!(", {} skipped", HumanCount(skipped_files as u64))
+            format!(", {skipped_files} skipped")
         } else {
             String::new()
         };
         eprintln!(
-            "\n✓ SQL Log Export Task Completed{mode_label} in {elapsed:.2}s — {} records total{skip_label}",
-            HumanCount(total_records as u64),
+            "\n✓ SQL Log Export Task Completed{mode_label} in {elapsed:.2}s — {total_records} records total{skip_label}",
         );
     }
     if interrupted.load(Ordering::Relaxed) {

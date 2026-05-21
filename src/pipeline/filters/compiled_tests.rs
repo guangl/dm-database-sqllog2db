@@ -84,9 +84,8 @@ fn test_compiled_meta_tags_none_rejected() {
 
 #[test]
 fn test_compiled_meta_trxids_and() {
-    use compact_str::CompactString;
     let mut trxid_set = TrxidSet::default();
-    trxid_set.insert(CompactString::from("TX123"));
+    trxid_set.insert(String::from("TX123"));
     let include = IncludeFilters {
         users: Some(vec!["^admin".to_string()]),
         trxids: Some(trxid_set),

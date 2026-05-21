@@ -239,12 +239,7 @@ fn test_handle_validate_with_filters_all_fields() {
                 end_ts: Some("2025-12-31".to_string()),
                 users: Some(vec!["admin".to_string()]),
                 ips: Some(vec!["10.0.0.1".to_string()]),
-                trxids: Some(
-                    ["tx1"]
-                        .iter()
-                        .map(|s| compact_str::CompactString::new(s))
-                        .collect(),
-                ),
+                trxids: Some(["tx1"].iter().map(|s| String::from(*s)).collect()),
                 ..Default::default()
             },
             exclude: ExcludeFilters::default(),

@@ -3,7 +3,6 @@ use crate::exporter::ExporterManager;
 use crate::pipeline::normalizer::ParamBuffer;
 use crate::pipeline::{CompiledSqlFilters, Pipeline};
 use dm_database_parser_sqllog::LogParser;
-use indicatif::{HumanCount, ProgressBar};
 use log::info;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -19,7 +18,7 @@ pub(super) fn process_log_file(
     total_files: usize,
     exporter_manager: &mut ExporterManager,
     pipeline: &Pipeline,
-    pb: &ProgressBar,
+    show_progress: bool,
     remaining: Option<usize>,
     interrupted: &Arc<AtomicBool>,
     do_normalize: bool,
@@ -42,10 +41,8 @@ pub(super) fn process_log_file(
         |n| n.to_string_lossy().into_owned(),
     );
 
-    if reset_pb {
-        pb.set_prefix(format!("{file_index}/{total_files}"));
-        pb.set_message(file_name.clone());
-        pb.reset();
+    if reset_pb && show_progress {
+        eprintln!("[{file_index}/{total_files}] {file_name}");
     }
 
     let parser = LogParser::from_path(file_path).map_err(|e| {
@@ -57,8 +54,6 @@ pub(super) fn process_log_file(
 
     let mut records_in_file = 0usize;
     let mut errors_in_file = 0usize;
-    // 用于攒批更新进度条，避免每条记录都触发原子操作
-    let mut pb_pending: u64 = 0;
 
     'outer: for result in parser.iter() {
         match result {
@@ -127,13 +122,6 @@ pub(super) fn process_log_file(
 
                             exporter_manager.export_one_preparsed(&record, &meta, &pm, ns)?;
                             records_in_file += 1;
-                            pb_pending += 1;
-
-                            // 每 4096 条更新一次进度条（减少原子操作频率）
-                            if pb_pending >= 4096 {
-                                pb.inc(pb_pending);
-                                pb_pending = 0;
-                            }
 
                             // 每 1024 条检查一次中断信号
                             if records_in_file.trailing_zeros() >= 10
@@ -164,9 +152,8 @@ pub(super) fn process_log_file(
         }
     }
 
-    // 将剩余未上报的进度刷新到进度条
-    if pb_pending > 0 {
-        pb.inc(pb_pending);
+    if errors_in_file > 0 {
+        log::warn!("{file_path}: {errors_in_file} parse errors");
     }
 
     let elapsed = file_start.elapsed().as_secs_f64();
@@ -174,15 +161,16 @@ pub(super) fn process_log_file(
         "File {file_path}: {records_in_file} records, {errors_in_file} errors, total {elapsed:.2}s",
     );
 
-    let errors_label = if errors_in_file > 0 {
-        format!(", {errors_in_file} errors")
-    } else {
-        String::new()
-    };
-    pb.println(format!(
-        "✓ [{file_index}/{total_files}] {file_path} — {}{errors_label}, {elapsed:.2}s",
-        HumanCount(records_in_file as u64),
-    ));
+    if show_progress {
+        let errors_label = if errors_in_file > 0 {
+            format!(", {errors_in_file} errors")
+        } else {
+            String::new()
+        };
+        eprintln!(
+            "✓ [{file_index}/{total_files}] {file_path} — {records_in_file}{errors_label}, {elapsed:.2}s",
+        );
+    }
 
     Ok(records_in_file)
 }
