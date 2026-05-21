@@ -4,6 +4,7 @@ use crate::exporter::ExporterManager;
 use crate::parser::SqllogParser;
 use crate::pipeline::{CompiledMetaFilters, CompiledSqlFilters};
 use log::{info, warn};
+use std::io::IsTerminal;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
@@ -32,12 +33,21 @@ pub fn handle_run(
         None => (None, None),
     };
     let total_start = Instant::now();
+
     let log_files = SqllogParser::new(&cfg.sqllog.path).log_files()?;
     let mut run_stats = ErrorStats::default();
-    if log_files.is_empty() {
+
+    // Stdin pipe mode: fall back when no log files found AND stdin is not a terminal.
+    let is_stdin_pipe = log_files.is_empty() && !std::io::stdin().is_terminal();
+    let log_files = if is_stdin_pipe {
+        info!("No log files found, reading from stdin (pipe mode)");
+        vec![std::path::PathBuf::from("/dev/stdin")]
+    } else if log_files.is_empty() {
         warn!("No log files found");
         return Ok(ErrorStats::default());
-    }
+    } else {
+        log_files
+    };
     let jobs = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
 
     // 仅当有事务级过滤器时才克隆配置（避免常规路径的额外分配）
@@ -47,13 +57,26 @@ pub fn handle_run(
         .as_ref()
         .is_some_and(crate::pipeline::FiltersFeature::has_transaction_filters)
     {
-        let extra_trxids = scan_for_trxids_by_transaction_filters(&log_files, cfg, jobs)?;
-        let mut tmp = cfg.clone();
-        if let Some(f) = &mut tmp.filter {
-            f.merge_found_trxids(extra_trxids);
+        if is_stdin_pipe {
+            warn!(
+                "Transaction-level filters are configured but stdin pipe mode \
+                 cannot pre-scan for transaction IDs. Degrading to per-record matching \
+                 (transaction integrity not guaranteed)."
+            );
+            eprintln!(
+                "[WARN] Transaction-level filters with stdin: pre-scan disabled, \
+                 degrading to per-record matching."
+            );
+            cfg
+        } else {
+            let extra_trxids = scan_for_trxids_by_transaction_filters(&log_files, cfg, jobs)?;
+            let mut tmp = cfg.clone();
+            if let Some(f) = &mut tmp.filter {
+                f.merge_found_trxids(extra_trxids);
+            }
+            owned_cfg = tmp;
+            &owned_cfg
         }
-        owned_cfg = tmp;
-        &owned_cfg
     } else {
         cfg
     };
