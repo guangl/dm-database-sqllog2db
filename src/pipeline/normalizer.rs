@@ -1,5 +1,3 @@
-use compact_str::CompactString;
-use smallvec::SmallVec;
 use std::collections::HashMap;
 
 /// 参数替换缓冲区类型：keyed by (`sess_id`, `stmt`)，value 为解析好的参数列表。
@@ -7,21 +5,15 @@ use std::collections::HashMap;
 /// Key 使用 `sess_id` 而非 `trxid`：DM 日志中 PARAMS 记录携带绑定时的 `trxid`，
 /// 但对应的 DML 执行记录在自动提交场景下 `trxid` 为 0，导致 key 不匹配。
 /// `sess_id` 在 PARAMS 和执行记录之间始终一致，是更稳定的关联键。
-///
-/// - Key 使用 `CompactString`：`sess_id`（指针地址）和 `stmt` 通常 ≤23 字节，内联存储，无堆分配。
-/// - Value 使用 `SmallVec<[ParamValue; 6]>`：≤6 个参数时不分配堆内存。
-pub type ParamBuffer = ahash::HashMap<(CompactString, CompactString), SmallVec<[ParamValue; 6]>>;
+pub type ParamBuffer = HashMap<(String, String), Vec<ParamValue>>;
 
 /// A single parameter value parsed from a `PARAMS(...)` log record.
-///
-/// `CompactString` stores strings ≤ 24 bytes inline (no heap allocation),
-/// which covers virtually all numeric literals and short string params.
 #[derive(Debug, Clone)]
 pub enum ParamValue {
     /// Single-quoted string already including the surrounding quotes, e.g. `'3USJ29'`.
-    Quoted(CompactString),
+    Quoted(String),
     /// Bare numeric literal, e.g. `2370075`.
-    Bare(CompactString),
+    Bare(String),
     /// NULL, BLOB, or any empty-value entry.
     Null,
 }
@@ -38,15 +30,13 @@ impl ParamValue {
 /// Parse a `PARAMS(SEQNO, TYPE, DATA)={...}` record body into an ordered list of values.
 ///
 /// Returns `None` if the body does not match the expected format.
-///
-/// Uses `SmallVec<[ParamValue; 6]>` to avoid heap allocation for typical param lists (≤6 values).
 #[must_use]
-pub fn parse_params(body: &str) -> Option<SmallVec<[ParamValue; 6]>> {
+pub fn parse_params(body: &str) -> Option<Vec<ParamValue>> {
     // memmem 使用 Two-Way + SIMD 算法，比 str::find 快
     let brace = memchr::memmem::find(body.as_bytes(), b"={")?;
     let inner = body[brace + 2..].strip_suffix('}')?;
 
-    let mut params = SmallVec::new();
+    let mut params = Vec::new();
     // trim_start：只需去除前导空格，尾部空格在下一次迭代自然消耗
     let mut rest = inner.trim_start();
 
@@ -94,7 +84,7 @@ fn parse_one_entry(s: &str) -> Option<(ParamValue, &str)> {
         // s[..i] is the quoted string including both surrounding quotes
         let quoted = &s[..i];
         let tail = s[i..].trim_start().strip_prefix(')')?;
-        Some((ParamValue::Quoted(CompactString::new(quoted)), tail))
+        Some((ParamValue::Quoted(String::from(quoted)), tail))
     } else {
         // Bare number or empty — memchr for closing ')'
         let end = memchr::memchr(b')', s.as_bytes())?;
@@ -103,7 +93,7 @@ fn parse_one_entry(s: &str) -> Option<(ParamValue, &str)> {
         let value = if raw.is_empty() {
             ParamValue::Null
         } else {
-            ParamValue::Bare(CompactString::new(raw))
+            ParamValue::Bare(String::from(raw))
         };
         Some((value, tail))
     }
@@ -346,11 +336,11 @@ fn apply_params(sql: &str, params: &[ParamValue], colon_style: bool) -> String {
 /// Returns `None` only if the result contains bytes that are neither valid UTF-8 nor
 /// valid GB18030 (extremely rare). For GB18030 files, the result is automatically
 /// transcoded to UTF-8.
-pub fn compute_normalized<'a, S: std::hash::BuildHasher>(
+pub fn compute_normalized<'a>(
     record: &dm_database_parser_sqllog::Sqllog<'_>,
     meta: &dm_database_parser_sqllog::MetaParts<'_>,
     pm_sql: &str,
-    buffer: &mut HashMap<(CompactString, CompactString), SmallVec<[ParamValue; 6]>, S>,
+    buffer: &mut ParamBuffer,
     placeholder_override: Option<bool>,
     scratch: &'a mut Vec<u8>,
 ) -> Option<&'a str> {
@@ -360,12 +350,11 @@ pub fn compute_normalized<'a, S: std::hash::BuildHasher>(
         // 直接复用，节省一次 find_indicators_split() 后向扫描。
         if pm_sql.starts_with("PARAMS(") {
             if let Some(params) = parse_params(pm_sql) {
-                // CompactString 对短字符串（≤23 字节）内联存储，消除堆分配。
-                // sess_id（指针如 "0xfffb81a474a0"）和 statement（如 "0x1"）通常都满足此条件。
+                // 存储 PARAMS 值，key 使用标准 String
                 buffer.insert(
                     (
-                        CompactString::from(meta.sess_id.as_ref()),
-                        CompactString::from(meta.statement.as_ref()),
+                        String::from(meta.sess_id.as_ref()),
+                        String::from(meta.statement.as_ref()),
                     ),
                     params,
                 );
@@ -388,8 +377,8 @@ pub fn compute_normalized<'a, S: std::hash::BuildHasher>(
     }
 
     let key = (
-        CompactString::from(meta.sess_id.as_ref()),
-        CompactString::from(meta.statement.as_ref()),
+        String::from(meta.sess_id.as_ref()),
+        String::from(meta.statement.as_ref()),
     );
 
     // buffer 条目保留不删除：DM 有时对同一次执行记录两条 SEL 日志（相同 EXEC_ID，
@@ -439,10 +428,10 @@ mod tests {
     use super::*;
 
     fn bare(s: &str) -> ParamValue {
-        ParamValue::Bare(CompactString::new(s))
+        ParamValue::Bare(String::from(s))
     }
     fn quoted(s: &str) -> ParamValue {
-        ParamValue::Quoted(CompactString::new(s))
+        ParamValue::Quoted(String::from(s))
     }
 
     // ── parse_params ──────────────────────────────────────────────────────────

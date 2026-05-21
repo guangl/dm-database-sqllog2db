@@ -2,7 +2,6 @@ mod compiled;
 mod serde_helpers;
 pub mod types;
 
-use compact_str::CompactString;
 use serde_helpers::TrxidSet;
 
 // 仅在 crate 内部使用（validate_and_compile 返回类型），integration tests 不直接引用。
@@ -43,7 +42,7 @@ impl FiltersFeature {
     }
 
     /// 合并预扫描发现的事务 ID 到 `IncludeFilters` 中，以便在正式扫描时直接通过 trxid 匹配保留整笔事务
-    pub(crate) fn merge_found_trxids(&mut self, trxids: Vec<CompactString>) {
+    pub(crate) fn merge_found_trxids(&mut self, trxids: Vec<String>) {
         if !self.enable || trxids.is_empty() {
             return;
         }
@@ -217,7 +216,7 @@ mod tests {
     fn test_merge_found_trxids_adds_to_set() {
         let mut f = make_feature(true);
         f.include.users = Some(vec!["USER".into()]);
-        f.merge_found_trxids(vec!["TX1".into(), "TX2".into()]);
+        f.merge_found_trxids(vec!["TX1".to_string(), "TX2".to_string()]);
         let trxids = f.include.trxids.unwrap();
         assert!(trxids.contains("TX1"));
         assert!(trxids.contains("TX2"));

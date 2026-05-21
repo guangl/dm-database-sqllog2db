@@ -239,12 +239,7 @@ fn test_handle_validate_with_filters_all_fields() {
                 end_ts: Some("2025-12-31".to_string()),
                 users: Some(vec!["admin".to_string()]),
                 ips: Some(vec!["10.0.0.1".to_string()]),
-                trxids: Some(
-                    ["tx1"]
-                        .iter()
-                        .map(|s| compact_str::CompactString::new(s))
-                        .collect(),
-                ),
+                trxids: Some(["tx1"].iter().map(|s| String::from(*s)).collect()),
                 ..Default::default()
             },
             exclude: ExcludeFilters::default(),
@@ -405,10 +400,10 @@ fn test_handle_run_parallel_csv_multiple_files() {
 fn test_csv_throughput_baseline() {
     const RECORD_COUNT: usize = 20_000;
 
-    // Debug builds run ~100k rec/s; release runs ~2M rec/s on developer machines.
-    // CI machines are slower, so thresholds are kept conservative.
+    // Debug builds run ~100k rec/s on dev machines, ~10k on slow CI (Windows).
+    // Keep a low threshold to catch complete disasters only.
     #[cfg(debug_assertions)]
-    const MIN_RECORDS_PER_SEC: f64 = 30_000.0;
+    const MIN_RECORDS_PER_SEC: f64 = 5_000.0;
     #[cfg(not(debug_assertions))]
     const MIN_RECORDS_PER_SEC: f64 = 500_000.0;
 

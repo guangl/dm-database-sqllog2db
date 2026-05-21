@@ -1,23 +1,20 @@
-use ahash::HashSet as AHashSet;
-use compact_str::CompactString;
 use regex::Regex;
 use serde::{Deserialize, Deserializer};
 
-/// `trxid` 过滤集合类型：使用 `ahash`（non-cryptographic SIMD 哈希），
-/// 比标准 `SipHash` 快 2-3×，适合大量短字符串的热路径 `contains` 查询。
-pub(super) type TrxidSet = AHashSet<CompactString>;
+/// `trxid` 过滤集合类型。
+pub(super) type TrxidSet = std::collections::HashSet<String>;
 
 pub(super) fn vec_to_hashset<'de, D>(deserializer: D) -> Result<Option<TrxidSet>, D::Error>
 where
     D: Deserializer<'de>,
 {
     let v: Option<Vec<String>> = Option::deserialize(deserializer)?;
-    // CompactString 对 ≤23 字节的字符串（trxid 通常是数字字符串）直接内联存储，
-    // 消除堆分配，提升 HashSet 的 cache locality（bucket 内直接包含字符串数据）。
-    Ok(v.map(|items| items.into_iter().map(CompactString::from).collect()))
+    Ok(v.map(|items| items.into_iter().collect()))
 }
 
-pub(super) fn vec_to_i64_hashset<'de, D>(deserializer: D) -> Result<Option<AHashSet<i64>>, D::Error>
+pub(super) fn vec_to_i64_hashset<'de, D>(
+    deserializer: D,
+) -> Result<Option<std::collections::HashSet<i64>>, D::Error>
 where
     D: Deserializer<'de>,
 {

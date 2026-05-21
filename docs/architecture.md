@@ -72,7 +72,7 @@ CSV 输出（src/exporter/csv/mod.rs）或 SQLite 输出（src/exporter/sqlite/m
 - `ExporterKind` 枚举：静态分派（`match`）而非动态派发（`Box<dyn Trait>`），利于热路径内联
 
 **实现：**
-- `CsvExporter`：16 MB `BufWriter` + `itoa` 零分配整数格式化，~520 万条/秒
+- `CsvExporter`：2 MB `BufWriter` + `itoa` 零分配整数格式化，~520 万条/秒
 - `SqliteExporter`：批量 INSERT + PRAGMA 优化（synchronous=OFF、mmap_size、cache_size），~110 万条/秒
 
 **优先级：** CSV > SQLite。同时配置时仅 CSV 生效。
@@ -113,7 +113,7 @@ CSV 输出（src/exporter/csv/mod.rs）或 SQLite 输出（src/exporter/sqlite/m
 
 ### CSV 导出优化
 
-- 16 MB `BufWriter`：大幅减少系统调用次数
+- 2 MB `BufWriter`：大幅减少系统调用次数
 - `itoa` 零分配整数格式化：整数直接写入缓冲区，无需分配中间字符串
 - `memchr` SIMD 加速：字节搜索处理 CSV 转义，比逐字节扫描快数倍
 

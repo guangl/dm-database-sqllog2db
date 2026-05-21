@@ -131,7 +131,7 @@ impl Exporter for CsvExporter {
             })
         })?;
 
-        let mut writer = BufWriter::with_capacity(16 * 1024 * 1024, file);
+        let mut writer = BufWriter::with_capacity(2 * 1024 * 1024, file);
 
         if !append_mode || !file_exists {
             let header = self.build_header();

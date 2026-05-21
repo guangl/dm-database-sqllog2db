@@ -1,6 +1,6 @@
 [package]
 name = "dm-database-sqllog2db"
-version = "1.4.0"
+version = "1.9.0"
 edition = "2024"
 rust-version = "1.85"
 authors = ["guangl <guangl@example.com>"]
@@ -40,23 +40,15 @@ itoa = "1.0"
 clap = { version = "4.6.1", features = ["derive", "env"] }
 serde = { version = "1.0.228", features = ["derive"] }
 toml = { version = "1.1.2", features = ["serde"] }
-chrono = { version = "0.4.44", features = ["clock"] }
-indicatif = "0.18"
 ctrlc = "3"
 glob = "0.3"
 
 rayon = "1.12"
 regex = "1"
-ahash = "0.8"
 memchr = "2"
 encoding_rs = "0.8"
-compact_str = "0.9"
-smallvec = { version = "1", features = ["union"] }
-mimalloc = { version = "0.1", default-features = false }
 rusqlite = { version = "0.39.0", features = [
   "bundled",
-  "vtab",
-  "csvtab",
 ] }
 
 

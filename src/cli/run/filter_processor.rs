@@ -2,8 +2,6 @@ use crate::config::Config;
 use crate::pipeline::filters::RecordMeta;
 use crate::pipeline::{CompiledMetaFilters, LogProcessor, Pipeline};
 use dm_database_parser_sqllog::MetaParts;
-use indicatif::{ProgressBar, ProgressStyle};
-use std::time::Duration;
 
 /// 构建处理器管线。
 ///
@@ -95,19 +93,7 @@ impl LogProcessor for FilterProcessor {
     }
 }
 
-/// 创建带 spinner 的进度条，`quiet` 时返回隐藏进度条。
-pub(super) fn make_progress_bar(quiet: bool, interval_ms: u64) -> ProgressBar {
-    if quiet {
-        return ProgressBar::hidden();
-    }
-    let pb = ProgressBar::new_spinner();
-    pb.set_style(
-        ProgressStyle::with_template(
-            "{spinner:.cyan} [{prefix}] {msg} | {human_pos} records @ {per_sec} [{elapsed_precise}]",
-        )
-        .expect("valid template")
-        .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏ "),
-    );
-    pb.enable_steady_tick(Duration::from_millis(interval_ms));
-    pb
+/// 进度条控制：quiet 时返回 false（不输出进度）。
+pub(super) fn make_progress_bar(quiet: bool, _interval_ms: u64) -> bool {
+    !quiet
 }

@@ -46,6 +46,7 @@ jobs:
             --exclude 'https://crates.io/crates/.*'
             --exclude 'https://guangl\.github\.io/.*'
             --exclude 'https://github\.com/guangl/sqllog2db/blob/main/docs/.*'
+            --exclude 'https://github\.com/guangl/sqllog2db/releases/tag/.*'
             README.md
             CHANGELOG.md
             './docs/**/*.md'

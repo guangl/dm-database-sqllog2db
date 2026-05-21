@@ -1,4 +1,3 @@
-use ahash::HashSet as AHashSet;
 use serde::{Deserialize, Deserializer};
 
 use super::serde_helpers::{TrxidSet, vec_to_hashset, vec_to_i64_hashset};
@@ -242,10 +241,10 @@ impl From<RawFiltersFeature> for FiltersFeature {
 /// 指标过滤器 (Transaction-level)
 #[derive(Debug, Deserialize, Clone, Default)]
 pub struct IndicatorFilters {
-    /// 使用 `AHashSet<i64>` 代替 `Vec<i64>`，将 `matches()` 热路径中的
+    /// 使用 `HashSet<i64>` 代替 `Vec<i64>`，将 `matches()` 热路径中的
     /// `.contains()` 从 O(n) 降为 O(1)。
     #[serde(default, deserialize_with = "vec_to_i64_hashset")]
-    pub exec_ids: Option<AHashSet<i64>>,
+    pub exec_ids: Option<std::collections::HashSet<i64>>,
     pub min_runtime_ms: Option<u32>,
     pub min_row_count: Option<u32>,
 }
