@@ -130,7 +130,7 @@ Full details: `.planning/milestones/v1.7-ROADMAP.md`
 - [ ] **Phase 41: 依赖升级与 Parser 库适配** - 升级全部依赖到最新兼容版本，parser 库编译成功无 deprecated 警告
 - [ ] **Phase 42: Criterion 基准测试基础设施** - 建立覆盖四大场景的可独立运行 benchmark 套件
 - [x] **Phase 43: Parser 新 API 适配与 Filter 重构** - 利用新 API 删除冗余映射代码，重构 filter 模块边界 (completed 2026-05-24)
-- [ ] **Phase 44: 热路径与内存优化** - 单线程吞吐量超越 1.55M records/sec，大文件峰值堆分配明显减少
+- [x] **Phase 44: 热路径与内存优化** - 单线程吞吐量超越 1.55M records/sec，大文件峰值堆分配明显减少 (completed 2026-05-24)
 - [ ] **Phase 45: 并行扩展与 CI 基准集成** - 扩展并行处理范围，GitHub Actions 自动导出基准报告
 
 ## Phase Details
@@ -259,7 +259,9 @@ Full details: `.planning/milestones/v1.7-ROADMAP.md`
   2. GitHub Actions workflow 文件存在，PR 触发时自动运行 `cargo bench`，并将结果以 HTML 或 JSON 格式作为 artifact 上传
   3. CI benchmark artifact 包含足够信息（时间戳、commit SHA、各 benchmark 组的 mean/stddev）供历史趋势对比
   4. 全链路质量门禁通过：`cargo build --release` + `cargo test` + `cargo clippy --all-targets -- -D warnings` + `cargo fmt --check` 全部绿灯
-**Plans**: TBD
+**Plans**: 2 plans
+- [ ] 45-01-PLAN.md — 新建 src/cli/run/sqlite_parallel.rs + SqliteExporter::set_wal_mode + mod.rs 路由扩展 + test_sqlite_parallel_matches_sequential
+- [ ] 45-02-PLAN.md — 新建 .github/workflows/bench.yml + scripts/collect_bench_results.sh（PR + push to main 触发，artifact retention 60 天）
 
 ## Coverage Validation
 
@@ -305,9 +307,9 @@ Full details: `.planning/milestones/v1.7-ROADMAP.md`
 | 41. 依赖升级与 Parser 库适配 | v1.11 | Not started | - |
 | 42. Criterion 基准测试基础设施 | v1.11 | Not started | - |
 | 43. Parser 新 API 适配与 Filter 重构 | 2/2 | Complete   | 2026-05-24 |
-| 44. 热路径与内存优化 | v1.11 | Not started | - |
+| 44. 热路径与内存优化 | 3/3 | Complete   | 2026-05-24 |
 | 45. 并行扩展与 CI 基准集成 | v1.11 | Not started | - |
 
 ---
 *Created: 2026-05-21 for milestone v1.10*
-*Updated: 2026-05-24 — v1.11 phases 41–45 added, Phase 42 plan defined; Phase 43 plans (43-01, 43-02) defined*
+*Updated: 2026-05-24 — v1.11 phases 41–45 added, Phase 42 plan defined; Phase 43 plans (43-01, 43-02) defined; Phase 45 plans (45-01, 45-02) defined*
