@@ -10,7 +10,7 @@
 - ✅ **v1.5 文档完善 & 项目展示** — Phases 21–23 (shipped 2026-05-19)
 - ✅ **v1.6 文档中文化 & 延后需求补全** — Phases 24–27 (shipped 2026-05-19)
 - ✅ **v1.7 项目精简** — Phases 28–34 (shipped 2026-05-20)
-- 🚧 **v1.10 质量加固与体验优化** — Phases 35–40 (planning)
+- ✅ **v1.10 质量加固与体验优化** — Phases 35–40 (shipped 2026-05-21)
 
 ## Phases
 
@@ -112,15 +112,15 @@ Full details: `.planning/milestones/v1.7-ROADMAP.md`
 
 </details>
 
-<details open>
-<summary>🚧 v1.10 质量加固与体验优化 (Phases 35–40) — PLANNING</summary>
+<details>
+<summary>✅ v1.10 质量加固与体验优化 (Phases 35–40) — SHIPPED 2026-05-21</summary>
 
-- [ ] **Phase 35: CLI --help 增强** — zero-risk standalone change for DaMeng usage examples
-- [ ] **Phase 36: 错误处理体系重构** — error type hierarchy, non-fatal continuation, context-rich messages
-- [ ] **Phase 37: stdin 管道输入与错误实时输出** — /dev/stdin mapping, pre-scan skip, stderr output
-- [ ] **Phase 38: 进度显示与统计摘要** — per-1024 progress spinners, completion summary
-- [ ] **Phase 39: CSV/管道/参数核心验证** — end-to-end verification of CSV export, pipeline filters, normalization
-- [ ] **Phase 40: SQLite/并行/最终质量门禁** — SQLite export, parallel CSV, full build/test/lint gate
+- [x] **Phase 35: CLI --help 增强** — completed 2026-05-21
+- [x] **Phase 36: 错误处理体系重构** — completed 2026-05-21
+- [x] **Phase 37: stdin 管道输入与错误实时输出** — completed 2026-05-21
+- [x] **Phase 38: 进度显示与统计摘要** — completed 2026-05-21
+- [x] **Phase 39: CSV/管道/参数核心验证** — completed 2026-05-21
+- [x] **Phase 40: SQLite/并行/最终质量门禁** — completed 2026-05-21
 
 </details>
 
@@ -219,12 +219,12 @@ Full details: `.planning/milestones/v1.7-ROADMAP.md`
 
 | Phase | Milestone | Status | Completed |
 |-------|-----------|--------|-----------|
-| 35. CLI --help 增强 | v1.10 | Not started | — |
-| 36. 错误处理体系重构 | v1.10 | Not started | — |
-| 37. stdin 管道输入与错误实时输出 | v1.10 | Not started | — |
-| 38. 进度显示与统计摘要 | v1.10 | Not started | — |
-| 39. CSV/管道/参数核心验证 | v1.10 | Not started | — |
-| 40. SQLite/并行/最终质量门禁 | v1.10 | Not started | — |
+| 35. CLI --help 增强 | v1.10 | Complete | 2026-05-21 |
+| 36. 错误处理体系重构 | v1.10 | Complete | 2026-05-21 |
+| 37. stdin 管道输入与错误实时输出 | v1.10 | Complete | 2026-05-21 |
+| 38. 进度显示与统计摘要 | v1.10 | Complete | 2026-05-21 |
+| 39. CSV/管道/参数核心验证 | v1.10 | Complete | 2026-05-21 |
+| 40. SQLite/并行/最终质量门禁 | v1.10 | Complete | 2026-05-21 |
 
 ---
 *Created: 2026-05-21 for milestone v1.10*
