@@ -1,11 +1,15 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 /// 参数替换缓冲区类型：keyed by (`sess_id`, `stmt`)，value 为解析好的参数列表。
 ///
 /// Key 使用 `sess_id` 而非 `trxid`：DM 日志中 PARAMS 记录携带绑定时的 `trxid`，
 /// 但对应的 DML 执行记录在自动提交场景下 `trxid` 为 0，导致 key 不匹配。
 /// `sess_id` 在 PARAMS 和执行记录之间始终一致，是更稳定的关联键。
-pub type ParamBuffer = HashMap<(String, String), Vec<ParamValue>>;
+///
+/// Value 使用 `Arc<Vec<ParamValue>>`：热路径 `buffer.get(&key)?.clone()` 仅复制
+/// 引用计数（O(1) 原子操作），而非深拷贝整个 Vec（H-3 优化）。
+pub type ParamBuffer = HashMap<(String, String), Arc<Vec<ParamValue>>>;
 
 /// A single parameter value parsed from a `PARAMS(...)` log record.
 #[derive(Debug, Clone)]
@@ -347,7 +351,10 @@ pub fn compute_normalized<'a>(
         // 无 tag → 可能是 PARAMS 记录。
         if pm_sql.starts_with("PARAMS(") {
             if let Some(params) = parse_params(pm_sql) {
-                buffer.insert((record.sess_id.clone(), record.statement.clone()), params);
+                buffer.insert(
+                    (record.sess_id.clone(), record.statement.clone()),
+                    Arc::new(params),
+                );
             }
         }
         return None;
