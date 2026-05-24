@@ -3,6 +3,8 @@ use crate::error::{Error, Result};
 use crate::pipeline::CompiledMetaFilters;
 use dm_database_parser_sqllog::LogParserBuilder;
 
+// ===== Pre-scan: 单文件扫描（rayon 并行 + 文件内去重）=====
+
 /// 扫描单个日志文件，返回满足事务级过滤条件的去重 `trxid` 列表。
 ///
 /// 文件内部使用 `par_iter()` 并行处理各行，无共享可变状态，
@@ -47,6 +49,8 @@ pub(super) fn scan_log_file_for_matches(file_path: &str, cfg: &Config) -> Vec<St
     trxids.into_iter().collect()
 }
 
+// ===== Pre-scan: 跨文件编排（两级 rayon 嵌套并行）=====
+
 pub(super) fn scan_for_trxids_by_transaction_filters(
     log_files: &[std::path::PathBuf],
     cfg: &Config,
@@ -75,6 +79,8 @@ pub(super) fn scan_for_trxids_by_transaction_filters(
 
     Ok(matched)
 }
+
+// ===== Pre-scan -> Main-pass 衔接: 合并 trxids 后重新编译 CompiledMetaFilters =====
 
 /// pre-scan 完成后重新编译 `CompiledMetaFilters`。
 ///
