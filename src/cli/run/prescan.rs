@@ -21,7 +21,7 @@ pub(super) fn scan_log_file_for_matches(file_path: &str, cfg: &Config) -> Vec<St
         _ => return Vec::new(),
     };
 
-    // 收集到 Vec 再并行处理（v1.1.0 的 LogParser 不再实现 rayon 的 IntoParallelRefIterator）
+    // 收集到 Vec 再并行处理（LogParser 未实现 rayon 的 IntoParallelRefIterator，需先 collect 到 Vec 再并行）
     let records: Vec<_> = parser.iter().filter_map(std::result::Result::ok).collect();
     let trxids: std::collections::HashSet<String> = records
         .par_iter()
