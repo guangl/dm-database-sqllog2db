@@ -211,7 +211,8 @@ Full details: `.planning/milestones/v1.7-ROADMAP.md`
   2. `cargo build --release` 输出无 `deprecated` 警告，无任何 `warning:` 行
   3. `cargo clippy --all-targets -- -D warnings` 通过，clippy 不报告任何新问题
   4. `Cargo.lock` 中 `dm-database-parser-sqllog` 版本号高于 v1.10 基线版本
-**Plans**: TBD
+**Plans**: 1 plan
+- [ ] 41-01-PLAN.md — 升级 dm-database-parser-sqllog 到 2.0.0 + cargo update + 三道质量门禁验证 + 清理过时 v1.1.0 注释
 
 ### Phase 42: Criterion 基准测试基础设施
 **Goal**: 建立覆盖 CSV 导出、SQLite 导出、filter 路径（启用/禁用）、parser 原始解析速度四大场景的 criterion benchmark 套件，`cargo bench` 可独立运行
@@ -222,7 +223,8 @@ Full details: `.planning/milestones/v1.7-ROADMAP.md`
   2. benchmark 覆盖四大场景：CSV 导出吞吐量、SQLite 导出吞吐量、filter 启用时吞吐量、filter 禁用时吞吐量、parser 原始解析速度
   3. 每个 benchmark group 包含 baseline 标注，输出包含 throughput（records/sec 或 MB/s）指标
   4. benchmark 代码通过 `cargo clippy --all-targets -- -D warnings` 检查，无警告
-**Plans**: TBD
+**Plans**: 1 plan
+- [ ] 42-01-PLAN.md — 新增 benches/bench_parser.rs（parser_throughput group，1K/10K/50K 三规模）+ Cargo.toml 注册 [[bench]] 条目 + BENCHMARKS.md 追加 Phase 42 baseline 段落
 
 ### Phase 43: Parser 新 API 适配与 Filter 重构
 **Goal**: 利用新版 `dm-database-parser-sqllog` 的新 API 删除冗余的手动映射代码；重构 filter 模块，使 pre-scan 与 main-pass 逻辑边界清晰，代码复杂度降低
@@ -233,7 +235,9 @@ Full details: `.planning/milestones/v1.7-ROADMAP.md`
   2. filter 模块中 pre-scan 逻辑与 main-pass 逻辑处于独立函数或子模块中，职责不交叉
   3. 重构后单元测试覆盖的场景数量不低于重构前（`cargo test` 过滤 filter 模块全部通过）
   4. `cargo clippy --all-targets -- -D warnings` + `cargo fmt --check` 通过，无新增警告
-**Plans**: TBD
+**Plans**: 2 plans
+- [ ] 43-01-PLAN.md — IndicatorFilters::matches 签名改为 u32 + 消除 prescan.rs 中 i64::from(rowcount) + 修订过时的 v1.1.0 注释
+- [ ] 43-02-PLAN.md — compiled.rs 与 prescan.rs 添加 Pre-scan/Main-pass section 注释 + 全套质量门禁
 
 ### Phase 44: 热路径与内存优化
 **Goal**: 通过 profiling 定位热路径瓶颈后实施优化，使单线程吞吐量超越 v1.10 基线（1.55M records/sec），同时减少处理 1GB+ 文件时的峰值堆分配
@@ -306,4 +310,4 @@ Full details: `.planning/milestones/v1.7-ROADMAP.md`
 
 ---
 *Created: 2026-05-21 for milestone v1.10*
-*Updated: 2026-05-24 — v1.11 phases 41–45 added*
+*Updated: 2026-05-24 — v1.11 phases 41–45 added, Phase 42 plan defined; Phase 43 plans (43-01, 43-02) defined*
