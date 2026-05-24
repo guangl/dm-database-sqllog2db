@@ -27,6 +27,8 @@ pub struct CompiledMetaFilters {
 }
 
 impl CompiledMetaFilters {
+    // ===== 构造（启动期，非热路径）=====
+
     /// 从 `IncludeFilters` 和 `ExcludeFilters` 编译所有正则，
     /// 遇到非法 pattern 返回 `ConfigError::InvalidValue`。
     pub(crate) fn try_from_include_exclude(
@@ -64,6 +66,8 @@ impl CompiledMetaFilters {
         })
     }
 
+    // ===== Pre-scan 辅助（在事务级预扫描时查询是否需要做某类过滤）=====
+
     /// 是否有任何已编译的过滤条件（用于快路径跳过）。
     /// 只检查 include 字段，不含 exclude 字段。
     #[must_use]
@@ -77,6 +81,10 @@ impl CompiledMetaFilters {
             || self.tags.is_some()
             || self.trxids.as_ref().is_some_and(|v| !v.is_empty())
     }
+
+    // ===== Main-pass（热路径：每条记录调用一次，AND + OR-veto）=====
+
+    // has_any_filters 由 FilterProcessor::new 预计算，归入 Main-pass 准备阶段
 
     /// 是否有任何过滤条件（include 或 exclude 任一非空）。
     /// 供 `FilterProcessor::new()` 预计算 `has_meta_filters`，
@@ -197,6 +205,8 @@ pub struct CompiledSqlFilters {
 }
 
 impl CompiledSqlFilters {
+    // ===== 构造（启动期）=====
+
     /// 从 `SqlFilters` 编译正则，遇到非法 pattern 返回 `ConfigError::InvalidValue`。
     pub(crate) fn try_from_sql_filters(sf: &SqlFilters) -> crate::error::Result<Self> {
         Ok(Self {
@@ -210,6 +220,8 @@ impl CompiledSqlFilters {
             )?,
         })
     }
+
+    // ===== Main-pass（热路径：SQL 记录级过滤）=====
 
     /// 判断 SQL 是否通过过滤：
     /// - include：必须命中其中之一（未配置 = 通过）
