@@ -152,7 +152,7 @@ impl OutputConfig {
 pub trait LogProcessor: Send + Sync + std::fmt::Debug {
     fn process(&self, record: &Sqllog) -> bool;
 
-    /// 使用已解析的 `Sqllog` 字段运行过滤逻辑（v1.1.0 后所有字段均为栈上数据）。
+    /// 使用已解析的 `Sqllog` 字段运行过滤逻辑（parser 库提供物化后的字段（栈上数据））。
     /// 默认实现退化为 `process()`。
     fn process_with_meta(&self, record: &Sqllog) -> bool {
         self.process(record)

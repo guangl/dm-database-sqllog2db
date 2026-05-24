@@ -2,7 +2,7 @@ use super::super::{f32_ms_to_i64, strip_ip_prefix};
 use crate::pipeline::FieldMask;
 use dm_database_parser_sqllog::Sqllog;
 
-/// 热路径：使用 `Sqllog` 直接字段插入（v1.1.0 所有字段已物化）。
+/// 热路径：使用 `Sqllog` 直接字段插入（parser 库已物化所有字段）。
 pub(super) fn do_insert_preparsed(
     stmt: &mut rusqlite::CachedStatement<'_>,
     sqllog: &Sqllog,
