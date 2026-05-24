@@ -8,7 +8,19 @@
 
 用户能够精确指定"导出哪些记录的哪些字段"——过滤逻辑清晰可配置，输出结果完全可控。
 
-## Current State: v1.10 已交付
+## Current Milestone: v1.11 性能深化与依赖适配
+
+**Goal:** 适配上游 parser 新 API、优化内存与并行性能、完善基准测试体系，全面提升吞吐量与可维护性。
+
+**Target features:**
+- 适配 dm-database-parser-sqllog 新功能（from_reader API 或新字段，替换现有写法）
+- 解析速度提升（热路径优化，目标超越 1.55M records/sec）
+- 内存占用优化（大文件场景减少堆分配）
+- 并行处理扩展（SQLite 导出或多文件并行）
+- filter 代码重构（降低复杂度，减少模块耦合）
+- 基准测试完善 + CI 性能回归防护
+
+## Previous: v1.10 已交付
 
 **Shipped:** 2026-05-21  
 **Version:** v1.10 质量加固与体验优化（Phases 35–40）
@@ -41,7 +53,7 @@
 
 ### Active
 
-（无——等待 v1.11 milestone 定义）
+（v1.11 requirements — 待 REQUIREMENTS.md 定义后填入）
 
 ### Out of Scope
 
@@ -95,4 +107,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-21 after v1.10 milestone shipped*
+*Last updated: 2026-05-24 — Milestone v1.11 started*
