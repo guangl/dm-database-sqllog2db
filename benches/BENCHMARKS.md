@@ -502,3 +502,54 @@ PERF-10 验收通过：bench scenarios 已补全（D-B1），samply 已采集（
 - [x] 无热点：已记录"已达当前瓶颈"结论
 - [x] cargo test 全量通过，clippy/fmt 净化
 - [x] PERF-10 验收通过：§当前瓶颈分析 逐项对照 D-G1/D-G2 完整签署
+
+---
+
+## Phase 42 — Parser baseline（v1.11）
+
+**Date:** 2026-05-24
+**Goal:** 量化 dm-database-parser-sqllog 原始解析速度（mmap + 解析，无导出层），建立 Phase 44 热路径优化的可量化对比基线（BENCH-01 第四场景）
+**Test environment:** Apple Silicon (Darwin 25.5.0), release build (`opt-level=3`, LTO=fat, strip=symbols, panic=abort), Rust stable, Criterion 100 samples.
+
+Synthetic log lines ≈ 170 bytes/record（与 bench_csv / bench_sqlite 格式完全一致）。
+每次 iter 重建 `LogParserBuilder`，测全链路（mmap 文件读取 + 解析迭代），排除任何 CSV/SQLite 导出层开销。
+Baseline JSON 存档于 `benches/baselines/parser_throughput/v1.0/`。
+
+### parser_throughput（合成日志，三规模）
+
+| Records | Median time | Throughput |
+|--------:|------------:|-----------:|
+|   1 000 |   508.62 µs |  1.97 M/s  |
+|  10 000 |   5.0294 ms |  1.99 M/s  |
+|  50 000 |   25.667 ms |  1.95 M/s  |
+
+> 注：parser 原始解析（~2.0 M records/s）慢于 CSV 全链路导出（~4.7 M records/s），原因是每次 iter 重建 LogParserBuilder（含 mmap 初始化开销），属于设计规格（测全链路包含冷启动）。Phase 44 若优化 parser 调用模式（如复用 parser 实例），应以此 baseline 作为对比基准。
+
+### Criterion 输出原文
+
+<details>
+<summary>cargo bench --bench bench_parser --save-baseline v1.0（parser_throughput，Phase 42）</summary>
+
+```
+parser_throughput/1000  time:   [507.63 µs 508.62 µs 509.66 µs]
+                        thrpt:  [1.9621 Melem/s 1.9661 Melem/s 1.9699 Melem/s]
+
+parser_throughput/10000 time:   [5.0192 ms 5.0294 ms 5.0400 ms]
+                        thrpt:  [1.9841 Melem/s 1.9883 Melem/s 1.9923 Melem/s]
+Found 2 outliers among 100 measurements (2.00%)
+  2 (2.00%) high mild
+
+parser_throughput/50000 time:   [25.630 ms 25.667 ms 25.704 ms]
+                        thrpt:  [1.9452 Melem/s 1.9481 Melem/s 1.9508 Melem/s]
+```
+
+</details>
+
+### 结论
+
+- [x] BENCH-01 四大场景齐全：CSV + SQLite + filter + parser 原始解析（本 Phase 新增）
+- [x] parser_throughput group 包含 Throughput::Elements，输出 records/sec 指标
+- [x] baseline JSON 已存档至 benches/baselines/parser_throughput/v1.0/
+- [x] cargo test 全量通过，clippy/fmt 净化
+
+本 baseline 用于 Phase 44 热路径优化对比基线。
