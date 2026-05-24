@@ -58,7 +58,7 @@ pub(super) fn process_log_file(
     'outer: for result in parser.iter() {
         match result {
             Ok(record) => {
-                // 管线：使用 record 直接字段（v1.1.0 所有字段已物化）。
+                // 管线：使用 record 直接字段（parser 库已物化所有字段）。
                 let passes = if pipeline.is_empty() {
                     true
                 } else {

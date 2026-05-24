@@ -208,7 +208,7 @@ pub(super) fn write_record_preparsed(
     })
 }
 
-/// 兼容路径：从 `Sqllog` 直接写入（v1.1.0 所有字段已物化）。
+/// 兼容路径：从 `Sqllog` 直接写入（parser 库已物化所有字段）。
 #[inline]
 pub(super) fn write_record(
     itoa_buf: &mut itoa::Buffer,
