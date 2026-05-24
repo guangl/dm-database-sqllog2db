@@ -11,6 +11,7 @@
 - ✅ **v1.6 文档中文化 & 延后需求补全** — Phases 24–27 (shipped 2026-05-19)
 - ✅ **v1.7 项目精简** — Phases 28–34 (shipped 2026-05-20)
 - ✅ **v1.10 质量加固与体验优化** — Phases 35–40 (shipped 2026-05-21)
+- 🔄 **v1.11 性能深化与依赖适配** — Phases 41–45 (in progress)
 
 ## Phases
 
@@ -124,6 +125,14 @@ Full details: `.planning/milestones/v1.7-ROADMAP.md`
 
 </details>
 
+### v1.11 性能深化与依赖适配 (Phases 41–45)
+
+- [ ] **Phase 41: 依赖升级与 Parser 库适配** - 升级全部依赖到最新兼容版本，parser 库编译成功无 deprecated 警告
+- [ ] **Phase 42: Criterion 基准测试基础设施** - 建立覆盖四大场景的可独立运行 benchmark 套件
+- [ ] **Phase 43: Parser 新 API 适配与 Filter 重构** - 利用新 API 删除冗余映射代码，重构 filter 模块边界
+- [ ] **Phase 44: 热路径与内存优化** - 单线程吞吐量超越 1.55M records/sec，大文件峰值堆分配明显减少
+- [ ] **Phase 45: 并行扩展与 CI 基准集成** - 扩展并行处理范围，GitHub Actions 自动导出基准报告
+
 ## Phase Details
 
 ### Phase 35: CLI --help 增强
@@ -193,6 +202,61 @@ Full details: `.planning/milestones/v1.7-ROADMAP.md`
   4. `cargo bench` 相比 v1.9 基线性能退化 < 5%
 **Plans**: TBD
 
+### Phase 41: 依赖升级与 Parser 库适配
+**Goal**: 将所有 Cargo 依赖升级到最新兼容版本，`dm-database-parser-sqllog` 升级到最新版本，编译通过且无 deprecated 警告
+**Depends on**: Phase 40
+**Requirements**: REFACTOR-02, PARSER-01
+**Success Criteria** (what must be TRUE):
+  1. `cargo update` 后 `cargo test` 全部通过，无任何测试回归
+  2. `cargo build --release` 输出无 `deprecated` 警告，无任何 `warning:` 行
+  3. `cargo clippy --all-targets -- -D warnings` 通过，clippy 不报告任何新问题
+  4. `Cargo.lock` 中 `dm-database-parser-sqllog` 版本号高于 v1.10 基线版本
+**Plans**: TBD
+
+### Phase 42: Criterion 基准测试基础设施
+**Goal**: 建立覆盖 CSV 导出、SQLite 导出、filter 路径（启用/禁用）、parser 原始解析速度四大场景的 criterion benchmark 套件，`cargo bench` 可独立运行
+**Depends on**: Phase 41
+**Requirements**: BENCH-01
+**Success Criteria** (what must be TRUE):
+  1. `cargo bench` 独立运行成功，不依赖外部数据文件或环境变量
+  2. benchmark 覆盖四大场景：CSV 导出吞吐量、SQLite 导出吞吐量、filter 启用时吞吐量、filter 禁用时吞吐量、parser 原始解析速度
+  3. 每个 benchmark group 包含 baseline 标注，输出包含 throughput（records/sec 或 MB/s）指标
+  4. benchmark 代码通过 `cargo clippy --all-targets -- -D warnings` 检查，无警告
+**Plans**: TBD
+
+### Phase 43: Parser 新 API 适配与 Filter 重构
+**Goal**: 利用新版 `dm-database-parser-sqllog` 的新 API 删除冗余的手动映射代码；重构 filter 模块，使 pre-scan 与 main-pass 逻辑边界清晰，代码复杂度降低
+**Depends on**: Phase 42
+**Requirements**: PARSER-02, REFACTOR-01
+**Success Criteria** (what must be TRUE):
+  1. 利用新 API（如 `from_reader` 或新字段）替换的代码行数可通过 `git diff` 验证减少，无冗余手动映射逻辑残留
+  2. filter 模块中 pre-scan 逻辑与 main-pass 逻辑处于独立函数或子模块中，职责不交叉
+  3. 重构后单元测试覆盖的场景数量不低于重构前（`cargo test` 过滤 filter 模块全部通过）
+  4. `cargo clippy --all-targets -- -D warnings` + `cargo fmt --check` 通过，无新增警告
+**Plans**: TBD
+
+### Phase 44: 热路径与内存优化
+**Goal**: 通过 profiling 定位热路径瓶颈后实施优化，使单线程吞吐量超越 v1.10 基线（1.55M records/sec），同时减少处理 1GB+ 文件时的峰值堆分配
+**Depends on**: Phase 43 (需要稳定的 API 和 benchmark 基础设施)
+**Requirements**: PERF-01, PERF-02
+**Success Criteria** (what must be TRUE):
+  1. `cargo bench` 显示单线程 CSV 导出吞吐量高于 1.55M records/sec（相比 v1.10 基线有可量化提升）
+  2. Heaptrack 或 jemalloc 统计显示处理 1GB+ 文件时峰值堆分配低于 v1.10 基线（减少量可 diff 对比）
+  3. 所有现有测试（`cargo test`）仍全部通过，无功能回归
+  4. 优化变更不引入新的 `unsafe` 代码，或新增 `unsafe` 有文档注释说明安全性
+**Plans**: TBD
+
+### Phase 45: 并行扩展与 CI 基准集成
+**Goal**: 扩展并行处理范围（SQLite 导出批量并行写入或多文件跨文件并行解析），并在 GitHub Actions CI 中集成 benchmark，每次 PR 自动导出基准报告供历史对比
+**Depends on**: Phase 44
+**Requirements**: PERF-03, BENCH-02
+**Success Criteria** (what must be TRUE):
+  1. SQLite 导出或多文件解析中至少一项支持并行处理，`cargo test` 包含并行路径的正确性验证（输出与顺序模式一致）
+  2. GitHub Actions workflow 文件存在，PR 触发时自动运行 `cargo bench`，并将结果以 HTML 或 JSON 格式作为 artifact 上传
+  3. CI benchmark artifact 包含足够信息（时间戳、commit SHA、各 benchmark 组的 mean/stddev）供历史趋势对比
+  4. 全链路质量门禁通过：`cargo build --release` + `cargo test` + `cargo clippy --all-targets -- -D warnings` + `cargo fmt --check` 全部绿灯
+**Plans**: TBD
+
 ## Coverage Validation
 
 | Requirement | Phase | 
@@ -212,8 +276,17 @@ Full details: `.planning/milestones/v1.7-ROADMAP.md`
 | VER-02      | 40    |
 | VER-05      | 40    |
 | VER-06      | 40    |
+| REFACTOR-02 | 41    |
+| PARSER-01   | 41    |
+| BENCH-01    | 42    |
+| PARSER-02   | 43    |
+| REFACTOR-01 | 43    |
+| PERF-01     | 44    |
+| PERF-02     | 44    |
+| PERF-03     | 45    |
+| BENCH-02    | 45    |
 
-**15/15 requirements mapped — coverage: 100%**
+**24/24 requirements mapped — coverage: 100%**
 
 ## Progress
 
@@ -225,6 +298,12 @@ Full details: `.planning/milestones/v1.7-ROADMAP.md`
 | 38. 进度显示与统计摘要 | v1.10 | Complete | 2026-05-21 |
 | 39. CSV/管道/参数核心验证 | v1.10 | Complete | 2026-05-21 |
 | 40. SQLite/并行/最终质量门禁 | v1.10 | Complete | 2026-05-21 |
+| 41. 依赖升级与 Parser 库适配 | v1.11 | Not started | - |
+| 42. Criterion 基准测试基础设施 | v1.11 | Not started | - |
+| 43. Parser 新 API 适配与 Filter 重构 | v1.11 | Not started | - |
+| 44. 热路径与内存优化 | v1.11 | Not started | - |
+| 45. 并行扩展与 CI 基准集成 | v1.11 | Not started | - |
 
 ---
 *Created: 2026-05-21 for milestone v1.10*
+*Updated: 2026-05-24 — v1.11 phases 41–45 added*

@@ -41,21 +41,21 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PARSER-01 | TBD | Pending |
-| PARSER-02 | TBD | Pending |
-| PERF-01 | TBD | Pending |
-| PERF-02 | TBD | Pending |
-| PERF-03 | TBD | Pending |
-| REFACTOR-01 | TBD | Pending |
-| REFACTOR-02 | TBD | Pending |
-| BENCH-01 | TBD | Pending |
-| BENCH-02 | TBD | Pending |
+| PARSER-01 | Phase 41 | Pending |
+| PARSER-02 | Phase 43 | Pending |
+| PERF-01 | Phase 44 | Pending |
+| PERF-02 | Phase 44 | Pending |
+| PERF-03 | Phase 45 | Pending |
+| REFACTOR-01 | Phase 43 | Pending |
+| REFACTOR-02 | Phase 41 | Pending |
+| BENCH-01 | Phase 42 | Pending |
+| BENCH-02 | Phase 45 | Pending |
 
 **Coverage:**
 - v1.11 requirements: 9 total
-- Mapped to phases: TBD (roadmapper will fill)
-- Unmapped: 9 (pending roadmap)
+- Mapped to phases: 9 (100%)
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-05-24*
-*Last updated: 2026-05-24 — v1.11 milestone definition*
+*Last updated: 2026-05-24 — v1.11 roadmap created, traceability filled*
