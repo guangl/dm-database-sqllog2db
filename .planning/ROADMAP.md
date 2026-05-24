@@ -129,7 +129,7 @@ Full details: `.planning/milestones/v1.7-ROADMAP.md`
 
 - [ ] **Phase 41: 依赖升级与 Parser 库适配** - 升级全部依赖到最新兼容版本，parser 库编译成功无 deprecated 警告
 - [ ] **Phase 42: Criterion 基准测试基础设施** - 建立覆盖四大场景的可独立运行 benchmark 套件
-- [ ] **Phase 43: Parser 新 API 适配与 Filter 重构** - 利用新 API 删除冗余映射代码，重构 filter 模块边界
+- [x] **Phase 43: Parser 新 API 适配与 Filter 重构** - 利用新 API 删除冗余映射代码，重构 filter 模块边界 (completed 2026-05-24)
 - [ ] **Phase 44: 热路径与内存优化** - 单线程吞吐量超越 1.55M records/sec，大文件峰值堆分配明显减少
 - [ ] **Phase 45: 并行扩展与 CI 基准集成** - 扩展并行处理范围，GitHub Actions 自动导出基准报告
 
@@ -236,8 +236,8 @@ Full details: `.planning/milestones/v1.7-ROADMAP.md`
   3. 重构后单元测试覆盖的场景数量不低于重构前（`cargo test` 过滤 filter 模块全部通过）
   4. `cargo clippy --all-targets -- -D warnings` + `cargo fmt --check` 通过，无新增警告
 **Plans**: 2 plans
-- [ ] 43-01-PLAN.md — IndicatorFilters::matches 签名改为 u32 + 消除 prescan.rs 中 i64::from(rowcount) + 修订过时的 v1.1.0 注释
-- [ ] 43-02-PLAN.md — compiled.rs 与 prescan.rs 添加 Pre-scan/Main-pass section 注释 + 全套质量门禁
+- [x] 43-01-PLAN.md — IndicatorFilters::matches 签名改为 u32 + 消除 prescan.rs 中 i64::from(rowcount) + 修订过时的 v1.1.0 注释
+- [x] 43-02-PLAN.md — compiled.rs 与 prescan.rs 添加 Pre-scan/Main-pass section 注释 + 全套质量门禁
 
 ### Phase 44: 热路径与内存优化
 **Goal**: 通过 profiling 定位热路径瓶颈后实施优化，使单线程吞吐量超越 v1.10 基线（1.55M records/sec），同时减少处理 1GB+ 文件时的峰值堆分配
@@ -304,7 +304,7 @@ Full details: `.planning/milestones/v1.7-ROADMAP.md`
 | 40. SQLite/并行/最终质量门禁 | v1.10 | Complete | 2026-05-21 |
 | 41. 依赖升级与 Parser 库适配 | v1.11 | Not started | - |
 | 42. Criterion 基准测试基础设施 | v1.11 | Not started | - |
-| 43. Parser 新 API 适配与 Filter 重构 | v1.11 | Not started | - |
+| 43. Parser 新 API 适配与 Filter 重构 | 2/2 | Complete   | 2026-05-24 |
 | 44. 热路径与内存优化 | v1.11 | Not started | - |
 | 45. 并行扩展与 CI 基准集成 | v1.11 | Not started | - |
 
