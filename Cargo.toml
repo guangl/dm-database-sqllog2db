@@ -97,3 +97,7 @@ harness = false
 [[bench]]
 name = "bench_filters"
 harness = false
+
+[[bench]]
+name = "bench_parser"
+harness = false
