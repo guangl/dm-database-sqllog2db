@@ -85,8 +85,8 @@ strip = "none"
 [dev-dependencies]
 tempfile = "3.27.0"
 criterion = { version = "0.7", features = ["html_reports"] }
-tikv-jemallocator = "0.6.1"
-tikv-jemalloc-ctl = "0.6.1"
+tikv-jemallocator = { version = "0.6.1", features = ["stats"] }
+tikv-jemalloc-ctl = { version = "0.6.1", features = ["stats"] }
 
 [[bench]]
 name = "bench_csv"
