@@ -62,7 +62,7 @@ pub(super) fn scan_for_trxids_by_transaction_filters(
 ) -> Result<Vec<String>> {
     use rayon::prelude::*;
 
-    eprintln!(
+    log::info!(
         "Pre-scanning {} files for transaction-level filters...",
         log_files.len()
     );
