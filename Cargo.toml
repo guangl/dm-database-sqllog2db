@@ -84,6 +84,8 @@ strip = "none"
 [dev-dependencies]
 tempfile = "3.27.0"
 criterion = { version = "0.7", features = ["html_reports"] }
+
+[target.'cfg(not(target_os = "windows"))'.dev-dependencies]
 tikv-jemallocator = { version = "0.6.1", features = ["stats"] }
 tikv-jemalloc-ctl = { version = "0.6.1", features = ["stats"] }
 

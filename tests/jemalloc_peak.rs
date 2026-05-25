@@ -1,3 +1,4 @@
+#![cfg(not(target_os = "windows"))]
 //! jemalloc 峰值堆分配基线测试
 //!
 //! 目的：在 Wave 0 采集 v1.10（优化前）的堆分配基线数值，供 Wave 1 优化后对比（PERF-02）。

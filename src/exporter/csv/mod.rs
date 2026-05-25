@@ -125,7 +125,7 @@ impl Exporter for CsvExporter {
         // the TOCTOU window where a concurrent writer could create the file between
         // exists() and open(), causing a duplicate header row to be appended.
         // If metadata() fails (e.g. /dev/null), write the header to be safe.
-        let file_is_empty = file.metadata().map(|meta| meta.len() == 0).unwrap_or(true);
+        let file_is_empty = file.metadata().map_or(true, |meta| meta.len() == 0);
 
         let mut writer = BufWriter::with_capacity(16 * 1024 * 1024, file);
 
