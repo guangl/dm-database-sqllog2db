@@ -193,24 +193,25 @@ fn merge_and_write(
 ///
 /// 返回：`(total_records, skipped_files)`。
 /// 适用条件：SQLite 导出 + 多文件 + jobs > 1 + 非 stdin 管道。
+///
+/// `_show_progress`, `_field_mask`, `_ordered_indices` 保留参数签名以与
+/// `process_csv_parallel` 的调用方对称，方便日后扩展。
+/// - `_show_progress`：进度显示尚未在 `SQLite` 并行路径中实现。
+/// - `_field_mask` / `_ordered_indices`：已通过 `cfg` 传入 `ExporterManager`，无需重复传递。
 #[allow(clippy::too_many_arguments)]
 pub(super) fn process_sqlite_parallel(
     log_files: &[PathBuf],
     cfg: &crate::config::Config,
     pipeline: &Pipeline,
     jobs: usize,
-    show_progress: bool,
+    _show_progress: bool,
     interrupted: &Arc<AtomicBool>,
     do_normalize: bool,
     placeholder_override: Option<bool>,
-    field_mask: FieldMask,
-    ordered_indices: &[usize],
+    _field_mask: FieldMask,
+    _ordered_indices: &[usize],
     sql_record_filter: Option<&CompiledSqlFilters>,
 ) -> Result<(usize, usize)> {
-    // show_progress, field_mask, ordered_indices 当前未在 SQLite 路径直接使用；
-    // 保留参数以维持与 process_csv_parallel 调用方对称，方便日后扩展。
-    let _ = (show_progress, field_mask, ordered_indices);
-
     let (collected, skipped, total_parse_errors) = parallel_collect(
         log_files,
         pipeline,
