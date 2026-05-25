@@ -68,7 +68,7 @@ pub(super) fn scan_for_trxids_by_transaction_filters(
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(jobs)
         .build()
-        .map_err(|e| Error::Io(std::io::Error::other(e)))?;
+        .map_err(|e| Error::Io(std::io::Error::other(format!("rayon thread pool: {e}"))))?;
 
     let matched: Vec<String> = pool.install(|| {
         log_files
