@@ -46,7 +46,7 @@ batch_size = {batch_size}
 }
 
 fn bench_sqlite_export(c: &mut Criterion) {
-    let bench_dir = PathBuf::from("target/bench_sqlite");
+    let bench_dir = bench_common::bench_target_dir("bench_sqlite");
     let sqllog_dir = bench_dir.join("sqllogs");
     fs::create_dir_all(&sqllog_dir).unwrap();
 
@@ -83,7 +83,7 @@ fn bench_sqlite_real_file(c: &mut Criterion) {
     }
 
     // 独立 bench_dir，避免与 synthetic bench_sqlite 的 bench.db 冲突
-    let bench_dir = PathBuf::from("target/bench_sqlite_real");
+    let bench_dir = bench_common::bench_target_dir("bench_sqlite_real");
     fs::create_dir_all(&bench_dir).unwrap();
     let cfg = make_config(&real_dir, &bench_dir, 10_000);
 
@@ -107,7 +107,7 @@ fn bench_sqlite_real_file(c: &mut Criterion) {
 }
 
 fn bench_sqlite_single_row(c: &mut Criterion) {
-    let bench_dir = PathBuf::from("target/bench_sqlite_single_row");
+    let bench_dir = bench_common::bench_target_dir("bench_sqlite_single_row");
     let sqllog_dir = bench_dir.join("sqllogs");
     fs::create_dir_all(&sqllog_dir).unwrap();
 

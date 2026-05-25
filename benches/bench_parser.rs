@@ -11,10 +11,9 @@ use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_m
 use dm_database_parser_sqllog::LogParserBuilder;
 use std::fs;
 use std::hint::black_box;
-use std::path::PathBuf;
 
 fn bench_parser_throughput(c: &mut Criterion) {
-    let bench_dir = PathBuf::from("target/bench_parser");
+    let bench_dir = bench_common::bench_target_dir("bench_parser");
     let sqllog_dir = bench_dir.join("sqllogs");
     fs::create_dir_all(&sqllog_dir).unwrap();
 

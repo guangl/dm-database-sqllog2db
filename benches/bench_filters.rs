@@ -21,7 +21,6 @@ use dm_database_sqllog2db::cli::run::handle_run;
 use dm_database_sqllog2db::config::Config;
 use std::fs;
 use std::path::Path;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
@@ -153,7 +152,7 @@ users = [\"BENCH\"]
 }
 
 fn bench_filters(c: &mut Criterion) {
-    let bench_dir = PathBuf::from("target/bench_filters");
+    let bench_dir = bench_common::bench_target_dir("bench_filters");
     let sqllog_dir = bench_dir.join("sqllogs");
     fs::create_dir_all(&sqllog_dir).unwrap();
     fs::write(

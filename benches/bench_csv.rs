@@ -38,7 +38,7 @@ append = false
 }
 
 fn bench_csv_export(c: &mut Criterion) {
-    let bench_dir = PathBuf::from("target/bench_csv");
+    let bench_dir = bench_common::bench_target_dir("bench_csv");
     let sqllog_dir = bench_dir.join("sqllogs");
     fs::create_dir_all(&sqllog_dir).unwrap();
 
@@ -72,7 +72,7 @@ fn bench_csv_real_file(c: &mut Criterion) {
         return;
     }
 
-    let bench_dir = PathBuf::from("target/bench_csv_real");
+    let bench_dir = bench_common::bench_target_dir("bench_csv_real");
     fs::create_dir_all(&bench_dir).unwrap();
     let cfg = make_config(&real_dir, &bench_dir);
 
@@ -111,7 +111,7 @@ fn bench_csv_format_only(c: &mut Criterion) {
     const LOG_LINE: &str = "2024-01-01 00:00:00.000 (EP[1234] sess:0x0001 user:BENCHUSER trxid:TID001 stmt:0x1 appname:App ip:10.0.0.1) [SEL] SELECT * FROM t WHERE id = 1. EXECTIME: 10(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.\n";
     const N: usize = 10_000;
 
-    let bench_dir = PathBuf::from("target/bench_csv_format_only");
+    let bench_dir = bench_common::bench_target_dir("bench_csv_format_only");
     fs::create_dir_all(&bench_dir).unwrap();
     let log_path = bench_dir.join("fmt.log");
     let content: String = LOG_LINE.repeat(N);
