@@ -4,6 +4,9 @@
 /// (`JOURNAL_MODE=OFF`, `SYNCHRONOUS=OFF`, `EXCLUSIVE` locking, mmap).
 ///
 /// Run with: `cargo bench --bench bench_sqlite --features sqlite`
+#[path = "bench_common.rs"]
+mod bench_common;
+
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use dm_database_sqllog2db::cli::run::handle_run;
 use dm_database_sqllog2db::config::Config;
@@ -13,22 +16,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
-
-fn synthetic_log(record_count: usize) -> String {
-    use std::fmt::Write as _;
-    let mut buf = String::with_capacity(record_count * 170);
-    for i in 0..record_count {
-        writeln!(
-            buf,
-            "2025-01-15 10:30:28.001 (EP[0] sess:0x{i:04x} user:BENCH trxid:{i} stmt:0x1 appname:BenchApp ip:10.0.0.{ip}) [SEL] SELECT col1, col2 FROM bench_table WHERE id={i} AND status='active'. EXECTIME: {exec}(ms) ROWCOUNT: {rows}(rows) EXEC_ID: {i}.",
-            ip   = i % 256,
-            exec = (i * 13) % 5000,
-            rows = i % 1000,
-        )
-        .unwrap();
-    }
-    buf
-}
 
 fn make_config(sqllog_dir: &Path, bench_dir: &Path, batch_size: usize) -> Config {
     // Write to a real file — SQLite needs actual block device storage.
@@ -68,7 +55,7 @@ fn bench_sqlite_export(c: &mut Criterion) {
     group.sample_size(20);
 
     for &n in &[1_000usize, 10_000, 50_000] {
-        fs::write(sqllog_dir.join("bench.log"), synthetic_log(n)).unwrap();
+        fs::write(sqllog_dir.join("bench.log"), bench_common::synthetic_log(n)).unwrap();
         let cfg = make_config(&sqllog_dir, &bench_dir, 10_000);
 
         group.throughput(Throughput::Elements(n as u64));
@@ -129,7 +116,7 @@ fn bench_sqlite_single_row(c: &mut Criterion) {
     group.sample_size(10);
 
     for &n in &[1_000usize, 10_000] {
-        fs::write(sqllog_dir.join("bench.log"), synthetic_log(n)).unwrap();
+        fs::write(sqllog_dir.join("bench.log"), bench_common::synthetic_log(n)).unwrap();
         // batch_size=1 触发每条 INSERT 独立 BEGIN/COMMIT（单行提交对照组）
         let cfg = make_config(&sqllog_dir, &bench_dir, 1);
 

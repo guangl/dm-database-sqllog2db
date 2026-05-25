@@ -13,6 +13,9 @@
 /// | `exclude_active`        | all records excluded by OR-veto (100% hit rate)          |
 ///
 /// Run with: `cargo bench --bench bench_filters`
+#[path = "bench_common.rs"]
+mod bench_common;
+
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use dm_database_sqllog2db::cli::run::handle_run;
 use dm_database_sqllog2db::config::Config;
@@ -23,23 +26,6 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 const RECORDS: usize = 10_000;
-
-/// Synthetic log where `trxid` = loop index i, `exec_time` = (i\*13)%5000 ms.
-fn synthetic_log(record_count: usize) -> String {
-    use std::fmt::Write as _;
-    let mut buf = String::with_capacity(record_count * 170);
-    for i in 0..record_count {
-        writeln!(
-            buf,
-            "2025-01-15 10:30:28.001 (EP[0] sess:0x{i:04x} user:BENCH trxid:{i} stmt:0x1 appname:BenchApp ip:10.0.0.{ip}) [SEL] SELECT col1, col2 FROM bench_table WHERE id={i}. EXECTIME: {exec}(ms) ROWCOUNT: {rows}(rows) EXEC_ID: {i}.",
-            ip   = i % 256,
-            exec = (i * 13) % 5000,
-            rows = i % 1000,
-        )
-        .unwrap();
-    }
-    buf
-}
 
 fn base_toml(sqllog_dir: &Path, bench_dir: &Path) -> String {
     format!(
@@ -170,7 +156,11 @@ fn bench_filters(c: &mut Criterion) {
     let bench_dir = PathBuf::from("target/bench_filters");
     let sqllog_dir = bench_dir.join("sqllogs");
     fs::create_dir_all(&sqllog_dir).unwrap();
-    fs::write(sqllog_dir.join("bench.log"), synthetic_log(RECORDS)).unwrap();
+    fs::write(
+        sqllog_dir.join("bench.log"),
+        bench_common::synthetic_log(RECORDS),
+    )
+    .unwrap();
 
     let scenarios: &[(&str, Config)] = &[
         ("no_pipeline", cfg_no_pipeline(&sqllog_dir, &bench_dir)),
