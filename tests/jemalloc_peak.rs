@@ -2,13 +2,13 @@
 //!
 //! 目的：在 Wave 0 采集 v1.10（优化前）的堆分配基线数值，供 Wave 1 优化后对比（PERF-02）。
 //!
-//! `cfg(test)` 隔离原因：
-//! - 本文件为 integration test，仅在 `cargo test` 时编译。
+//! 隔离说明：
+//! - 本文件为 integration test，仅在 `cargo test` 时编译（tests/ 目录下文件始终处于 test 环境）。
 //! - `#[global_allocator]` 放在测试文件中只替换测试进程的 allocator，不影响 release binary（D-03）。
-//! - `tikv-jemallocator` 是 dev-dependency，不会进入 release 编译图（Pitfall 1 防护）。
+//! - `tikv-jemallocator` 是 dev-dependency，这才是真正防止其进入 release 编译图的原因（非 cfg(test)）。
 
-// SAFETY: 仅在测试环境替换全局 allocator，不影响生产 binary（D-03/Pitfall 1 防护）
-#[cfg(test)]
+// SAFETY: 仅在测试环境替换全局 allocator，不影响生产 binary（D-03）。
+// 注意：此处无需 #[cfg(test)]，tests/ 中的文件本身即为 test-only 编译单元。
 #[global_allocator]
 static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
