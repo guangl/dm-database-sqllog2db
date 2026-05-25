@@ -12,6 +12,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 ///
 /// PARAMS 记录（`record.tag.is_none()`）在 `do_normalize` 时无论是否通过过滤都必须
 /// 更新 `params_buf`，以便后续 DML 记录能正确替换参数（mirror processor.rs 第 75-143 行）。
+///
+/// 返回 `(rows, parse_error_count)`，与顺序路径的错误统计对齐。
 fn collect_log_file(
     file: &Path,
     pipeline: &Pipeline,
@@ -19,7 +21,7 @@ fn collect_log_file(
     placeholder_override: Option<bool>,
     sql_record_filter: Option<&CompiledSqlFilters>,
     interrupted: &Arc<AtomicBool>,
-) -> Result<Vec<(Sqllog, Option<String>)>> {
+) -> Result<(Vec<(Sqllog, Option<String>)>, usize)> {
     let file_str = file.to_string_lossy();
     let parser = LogParserBuilder::new(file_str.as_ref())
         .build()
@@ -34,12 +36,20 @@ fn collect_log_file(
     let mut params_buf = ParamBuffer::default();
     let mut ns_scratch = Vec::with_capacity(4096);
     let mut rows: Vec<(Sqllog, Option<String>)> = Vec::new();
+    let mut parse_errors: usize = 0;
 
     for result in parser.iter() {
         if interrupted.load(Ordering::Relaxed) {
             break;
         }
-        let Ok(record) = result else { continue };
+        let record = match result {
+            Ok(r) => r,
+            Err(e) => {
+                parse_errors += 1;
+                log::warn!("{} | parse error: {e:?}", file.display());
+                continue;
+            }
+        };
         process_record(
             record,
             pipeline,
@@ -51,7 +61,7 @@ fn collect_log_file(
             &mut rows,
         );
     }
-    Ok(rows)
+    Ok((rows, parse_errors))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -100,7 +110,9 @@ fn process_record(
     }
 }
 
-/// 在 rayon 线程池中并行解析所有文件，返回每个文件的 Vec<(Sqllog, Option<String>)>。
+/// 在 rayon 线程池中并行解析所有文件，返回每个文件的 `Vec<(Sqllog, Option<String>)>`。
+///
+/// 返回 `(collected, skipped_files, total_parse_errors)`。
 fn parallel_collect(
     log_files: &[PathBuf],
     pipeline: &Pipeline,
@@ -109,20 +121,20 @@ fn parallel_collect(
     placeholder_override: Option<bool>,
     sql_record_filter: Option<&CompiledSqlFilters>,
     interrupted: &Arc<AtomicBool>,
-) -> Result<(Vec<Vec<(Sqllog, Option<String>)>>, usize)> {
+) -> Result<(Vec<Vec<(Sqllog, Option<String>)>>, usize, usize)> {
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(jobs)
         .build()
         .map_err(|e| Error::Io(std::io::Error::other(e)))?;
 
-    let results: Vec<Result<Option<Vec<(Sqllog, Option<String>)>>>> = pool.install(|| {
+    let results: Vec<Result<Option<(Vec<(Sqllog, Option<String>)>, usize)>>> = pool.install(|| {
         log_files
             .par_iter()
             .map(|file| {
                 if interrupted.load(Ordering::Relaxed) {
                     return Ok(None);
                 }
-                let rows = collect_log_file(
+                let (rows, parse_errors) = collect_log_file(
                     file,
                     pipeline,
                     do_normalize,
@@ -130,7 +142,7 @@ fn parallel_collect(
                     sql_record_filter,
                     interrupted,
                 )?;
-                Ok(Some(rows))
+                Ok(Some((rows, parse_errors)))
             })
             .collect()
     });
@@ -138,9 +150,13 @@ fn parallel_collect(
     let mut collected: Vec<Vec<(Sqllog, Option<String>)>> = Vec::with_capacity(log_files.len());
     let mut first_err: Option<Error> = None;
     let mut skipped = 0usize;
+    let mut total_parse_errors = 0usize;
     for result in results {
         match result {
-            Ok(Some(rows)) => collected.push(rows),
+            Ok(Some((rows, parse_errors))) => {
+                total_parse_errors += parse_errors;
+                collected.push(rows);
+            }
             Ok(None) => skipped += 1,
             Err(e) if first_err.is_none() => first_err = Some(e),
             Err(_) => {}
@@ -149,7 +165,7 @@ fn parallel_collect(
     if let Some(e) = first_err {
         return Err(e);
     }
-    Ok((collected, skipped))
+    Ok((collected, skipped, total_parse_errors))
 }
 
 /// 按文件原始顺序将收集到的记录写入 SQLite（WAL 模式），返回总写入记录数。
@@ -195,7 +211,7 @@ pub(super) fn process_sqlite_parallel(
     // 保留参数以维持与 process_csv_parallel 调用方对称，方便日后扩展。
     let _ = (show_progress, field_mask, ordered_indices);
 
-    let (collected, skipped) = parallel_collect(
+    let (collected, skipped, total_parse_errors) = parallel_collect(
         log_files,
         pipeline,
         jobs,
@@ -204,6 +220,10 @@ pub(super) fn process_sqlite_parallel(
         sql_record_filter,
         interrupted,
     )?;
+
+    if total_parse_errors > 0 {
+        log::warn!("SQLite parallel: {total_parse_errors} parse error(s) across all files");
+    }
 
     let total = merge_and_write(collected, cfg)?;
     Ok((total, skipped))
