@@ -15,8 +15,12 @@ use dm_database_parser_sqllog::LogParserBuilder;
 pub(super) fn scan_log_file_for_matches(file_path: &str, cfg: &Config) -> Vec<String> {
     use rayon::prelude::*;
 
-    let Ok(parser) = LogParserBuilder::new(file_path).build() else {
-        return Vec::new();
+    let parser = match LogParserBuilder::new(file_path).build() {
+        Ok(p) => p,
+        Err(e) => {
+            log::warn!("Pre-scan: failed to open '{file_path}': {e}");
+            return Vec::new();
+        }
     };
     let filters = match &cfg.filter {
         Some(f) if f.has_transaction_filters() => f,
