@@ -199,6 +199,15 @@ impl ExporterManager {
         Ok(())
     }
 
+    /// 仅对 `SQLite` exporter 生效，启用 WAL 模式。
+    /// 非 `SQLite` exporter 时静默 no-op（per D-02：并行场景下启用 WAL）。
+    pub(crate) fn set_sqlite_wal_mode(&self) -> Result<()> {
+        match &self.exporter {
+            ExporterKind::Sqlite(e) => e.set_wal_mode(),
+            ExporterKind::Csv(_) => Ok(()),
+        }
+    }
+
     /// 热路径：使用已解析的 `Sqllog` 直接导出。
     #[inline]
     pub(crate) fn export_one_preparsed(

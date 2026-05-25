@@ -13,12 +13,14 @@ mod filter_processor;
 mod parallel;
 mod prescan;
 mod processor;
+mod sqlite_parallel;
 
 use filter_processor::build_pipeline;
 use indicatif::{ProgressBar, ProgressStyle};
 use parallel::process_csv_parallel;
 use prescan::{recompile_meta_if_needed, scan_for_trxids_by_transaction_filters};
 use processor::process_log_file;
+use sqlite_parallel::process_sqlite_parallel;
 
 /// 主编排函数：解析日志文件并导出到配置的导出器。
 /// `compiled_filters` 由调用方预编译（`Config::validate_and_compile`），避免重复编译正则。
@@ -122,9 +124,13 @@ pub fn handle_run(
     };
     let mut total_records = 0usize;
     let mut skipped_files = 0usize;
-    let use_parallel = jobs > 1 && log_files.len() > 1 && final_cfg.exporter.csv.is_some();
+    let use_csv_parallel =
+        jobs > 1 && log_files.len() > 1 && !is_stdin_pipe && final_cfg.exporter.csv.is_some();
+    let use_sqlite_parallel =
+        jobs > 1 && log_files.len() > 1 && !is_stdin_pipe && final_cfg.exporter.sqlite.is_some();
+    let use_parallel = use_csv_parallel || use_sqlite_parallel;
 
-    if use_parallel {
+    if use_csv_parallel {
         info!("Parsing and exporting SQL logs (parallel, {jobs} jobs)...");
         let (processed_files, parallel_skipped) = process_csv_parallel(
             &log_files,
@@ -140,6 +146,23 @@ pub fn handle_run(
             sql_record_filter,
         )?;
         total_records = processed_files.iter().map(|(_, c)| *c).sum();
+        skipped_files = parallel_skipped;
+    } else if use_sqlite_parallel {
+        info!("Parsing and exporting SQL logs (SQLite parallel, {jobs} jobs)...");
+        let (total, parallel_skipped) = process_sqlite_parallel(
+            &log_files,
+            final_cfg,
+            &pipeline,
+            jobs,
+            show_progress,
+            interrupted,
+            do_normalize,
+            placeholder_override,
+            field_mask,
+            &ordered_indices,
+            sql_record_filter,
+        )?;
+        total_records = total;
         skipped_files = parallel_skipped;
     } else {
         let mut exporter_manager = ExporterManager::from_config(final_cfg)?;
