@@ -74,7 +74,9 @@ pub(super) fn scan_for_trxids_by_transaction_filters(
         .build()
         .map_err(|e| Error::Io(std::io::Error::other(format!("rayon thread pool: {e}"))))?;
 
-    let matched: Vec<String> = pool.install(|| {
+    // Collect directly into a HashSet to deduplicate trxids across files in one pass,
+    // avoiding duplicate String allocations when the same trxid spans multiple files.
+    let matched: std::collections::HashSet<String> = pool.install(|| {
         log_files
             .par_iter()
             .flat_map(|file| {
@@ -91,7 +93,7 @@ pub(super) fn scan_for_trxids_by_transaction_filters(
             .collect()
     });
 
-    Ok(matched)
+    Ok(matched.into_iter().collect())
 }
 
 // ===== Pre-scan -> Main-pass 衔接: 合并 trxids 后重新编译 CompiledMetaFilters =====
