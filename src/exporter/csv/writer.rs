@@ -71,7 +71,7 @@ pub(super) fn write_record_preparsed(
         line_buf.push(b'"');
         if include_performance_metrics {
             line_buf.push(b',');
-            if sqllog.exec_id != 0 || sqllog.exectime > 0.0 {
+            if sqllog.exec_id != 0 || sqllog.exectime > 0.0 || sqllog.rowcount != 0 {
                 line_buf
                     .extend_from_slice(itoa_buf.format(f32_ms_to_i64(sqllog.exectime)).as_bytes());
                 line_buf.push(b',');
@@ -102,7 +102,7 @@ pub(super) fn write_record_preparsed(
             };
         }
 
-        let has_metrics = sqllog.exec_id != 0 || sqllog.exectime > 0.0;
+        let has_metrics = sqllog.exec_id != 0 || sqllog.exectime > 0.0 || sqllog.rowcount != 0;
         for &idx in ordered_indices {
             match idx {
                 0 => {
