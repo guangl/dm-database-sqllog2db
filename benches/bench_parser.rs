@@ -7,6 +7,7 @@
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use dm_database_parser_sqllog::LogParserBuilder;
 use std::fs;
+use std::hint::black_box;
 use std::path::PathBuf;
 
 /// Build N synthetic `DaMeng` SQL log lines.
@@ -40,10 +41,10 @@ fn bench_parser_throughput(c: &mut Criterion) {
         group.throughput(Throughput::Elements(n as u64));
         group.bench_with_input(BenchmarkId::from_parameter(n), &log_path, |b, path| {
             b.iter(|| {
-                let parser = LogParserBuilder::new(path.to_str().unwrap())
+                let parser = LogParserBuilder::new(black_box(path.to_str().unwrap()))
                     .build()
                     .unwrap();
-                parser.iter().filter_map(std::result::Result::ok).count()
+                black_box(parser.iter().filter_map(std::result::Result::ok).count())
             });
         });
     }
