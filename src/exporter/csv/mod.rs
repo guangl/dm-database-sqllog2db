@@ -100,7 +100,6 @@ impl Exporter for CsvExporter {
         })?;
 
         let append_mode = self.write_mode == WriteMode::Append;
-        let file_exists = self.path.exists();
 
         let file = if append_mode {
             OpenOptions::new()
@@ -121,9 +120,16 @@ impl Exporter for CsvExporter {
             })
         })?;
 
-        let mut writer = BufWriter::with_capacity(2 * 1024 * 1024, file);
+        // Determine whether to write a header AFTER opening the file, using the
+        // actual file size rather than a pre-open exists() check. This eliminates
+        // the TOCTOU window where a concurrent writer could create the file between
+        // exists() and open(), causing a duplicate header row to be appended.
+        // If metadata() fails (e.g. /dev/null), write the header to be safe.
+        let file_is_empty = file.metadata().map_or(true, |meta| meta.len() == 0);
 
-        if !append_mode || !file_exists {
+        let mut writer = BufWriter::with_capacity(16 * 1024 * 1024, file);
+
+        if !append_mode || file_is_empty {
             let header = self.build_header();
             writer.write_all(&header).map_err(|e| {
                 Error::Export(ExportError::WriteFailed {

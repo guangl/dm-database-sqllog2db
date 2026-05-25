@@ -102,6 +102,23 @@ impl SqliteExporter {
             .ok_or_else(|| Self::db_err("not initialized"))
     }
 
+    /// 启用 WAL 模式（仅供并行路径在 `initialize` 之后调用）。
+    /// 不修改 `initialize_pragmas`，避免影响 benchmark 路径的 OFF+OFF 配置。
+    /// 必须先 COMMIT 关闭 `initialize()` 开启的事务，再切换模式，最后重新 BEGIN。
+    /// `locking_mode` 也须切回 NORMAL，因为 EXCLUSIVE 模式与 WAL 不兼容。
+    pub(crate) fn set_wal_mode(&self) -> Result<()> {
+        let conn = self.conn_ref()?;
+        conn.execute_batch(
+            "COMMIT;
+             PRAGMA locking_mode = NORMAL;
+             PRAGMA journal_mode = WAL;
+             PRAGMA synchronous = NORMAL;
+             BEGIN TRANSACTION;",
+        )
+        .map_err(|e| Self::db_err(format!("set WAL mode failed: {e}")))?;
+        Ok(())
+    }
+
     fn batch_commit_if_needed(&mut self) -> Result<()> {
         self.row_count += 1;
         if self.row_count % self.batch_size == 0 {

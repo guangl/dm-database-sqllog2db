@@ -62,7 +62,7 @@ impl IndicatorFilters {
     }
 
     #[must_use]
-    pub fn matches(&self, exec_id: i64, runtime_ms: f32, row_count: i64) -> bool {
+    pub fn matches(&self, exec_id: i64, runtime_ms: f32, row_count: u32) -> bool {
         if !self.has_filters() {
             return false;
         }
@@ -78,7 +78,7 @@ impl IndicatorFilters {
             }
         }
         if let Some(min_r) = self.min_row_count {
-            if row_count >= i64::from(min_r) {
+            if row_count >= min_r {
                 return true;
             }
         }
@@ -235,8 +235,8 @@ mod tests {
             min_runtime_ms: None,
             min_row_count: None,
         };
-        assert!(f.matches(42, 0.0_f32, 0));
-        assert!(!f.matches(99, 0.0_f32, 0));
+        assert!(f.matches(42, 0.0_f32, 0_u32));
+        assert!(!f.matches(99, 0.0_f32, 0_u32));
     }
 
     #[test]
@@ -246,9 +246,9 @@ mod tests {
             min_runtime_ms: Some(1000),
             min_row_count: None,
         };
-        assert!(f.matches(0, 1000.0_f32, 0));
-        assert!(f.matches(0, 2000.0_f32, 0));
-        assert!(!f.matches(0, 999.0_f32, 0));
+        assert!(f.matches(0, 1000.0_f32, 0_u32));
+        assert!(f.matches(0, 2000.0_f32, 0_u32));
+        assert!(!f.matches(0, 999.0_f32, 0_u32));
     }
 
     #[test]
@@ -258,12 +258,12 @@ mod tests {
             min_runtime_ms: None,
             min_row_count: Some(100),
         };
-        assert!(f.matches(0, 0.0_f32, 100));
-        assert!(!f.matches(0, 0.0_f32, 99));
+        assert!(f.matches(0, 0.0_f32, 100_u32));
+        assert!(!f.matches(0, 0.0_f32, 99_u32));
     }
 
     #[test]
     fn test_indicator_no_filters_always_false() {
-        assert!(!IndicatorFilters::default().matches(1, 9999.0_f32, 9999));
+        assert!(!IndicatorFilters::default().matches(1, 9999.0_f32, 9999_u32));
     }
 }

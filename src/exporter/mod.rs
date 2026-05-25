@@ -23,7 +23,7 @@ pub trait Exporter {
 
     /// 热路径：使用已解析的 `Sqllog` 直接导出。
     /// `include_pm` 控制是否写入性能指标列（仅 CSV 路径有意义）。
-    /// v1.1.0 后所有字段已物化在 `Sqllog` 上，`meta`/`pm` 参数取消。
+    /// parser 库已将所有字段物化到 `Sqllog`，`meta`/`pm` 参数取消。
     fn export_one_preparsed(
         &mut self,
         sqllog: &Sqllog,
@@ -197,6 +197,15 @@ impl ExporterManager {
         self.exporter.initialize()?;
         info!("Exporters initialized");
         Ok(())
+    }
+
+    /// 仅对 `SQLite` exporter 生效，启用 WAL 模式。
+    /// 非 `SQLite` exporter 时静默 no-op（per D-02：并行场景下启用 WAL）。
+    pub(crate) fn set_sqlite_wal_mode(&self) -> Result<()> {
+        match &self.exporter {
+            ExporterKind::Sqlite(e) => e.set_wal_mode(),
+            ExporterKind::Csv(_) => Ok(()),
+        }
     }
 
     /// 热路径：使用已解析的 `Sqllog` 直接导出。

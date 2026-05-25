@@ -1,11 +1,15 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 /// 参数替换缓冲区类型：keyed by (`sess_id`, `stmt`)，value 为解析好的参数列表。
 ///
 /// Key 使用 `sess_id` 而非 `trxid`：DM 日志中 PARAMS 记录携带绑定时的 `trxid`，
 /// 但对应的 DML 执行记录在自动提交场景下 `trxid` 为 0，导致 key 不匹配。
 /// `sess_id` 在 PARAMS 和执行记录之间始终一致，是更稳定的关联键。
-pub type ParamBuffer = HashMap<(String, String), Vec<ParamValue>>;
+///
+/// Value 使用 `Arc<Vec<ParamValue>>`：热路径 `buffer.get(&key)?.clone()` 仅复制
+/// 引用计数（O(1) 原子操作），而非深拷贝整个 Vec（H-3 优化）。
+pub type ParamBuffer = HashMap<(String, String), Arc<Vec<ParamValue>>>;
 
 /// A single parameter value parsed from a `PARAMS(...)` log record.
 #[derive(Debug, Clone)]
@@ -331,11 +335,23 @@ fn apply_params(sql: &str, params: &[ParamValue], colon_style: bool) -> String {
 /// a per-record heap allocation. The caller must not modify `scratch` while the
 /// returned reference is live.
 ///
+/// # Returns
+///
+/// - `Some(&str)` — the SQL with all placeholders replaced by their bound values,
+///   written into `scratch`. The reference borrows `scratch`; the caller must not
+///   modify `scratch` while it is live.
+/// - `None` — if any of the following hold:
+///   - the record has no `tag` (e.g. a `PARAMS` record — its values are stored in `buffer`)
+///   - the tag is not `INS`, `DEL`, `UPD`, or `SEL`
+///   - the SQL contains no recognisable placeholders
+///   - no matching params entry exists in `buffer` for this (`sess_id`, `stmt`) key
+///   - the number of bound params does not equal the number of placeholders in the SQL
+///
 /// # Panics
 ///
-/// Returns `None` only if the result contains bytes that are neither valid UTF-8 nor
-/// valid GB18030 (extremely rare). For GB18030 files, the result is automatically
-/// transcoded to UTF-8.
+/// Will not panic in practice: all bytes written to `scratch` are either taken verbatim
+/// from the UTF-8 input SQL or from UTF-8 `ParamValue` strings. The `expect` below
+/// is an internal consistency assertion that should never fire.
 pub fn compute_normalized<'a>(
     record: &dm_database_parser_sqllog::Sqllog,
     pm_sql: &str,
@@ -347,7 +363,10 @@ pub fn compute_normalized<'a>(
         // 无 tag → 可能是 PARAMS 记录。
         if pm_sql.starts_with("PARAMS(") {
             if let Some(params) = parse_params(pm_sql) {
-                buffer.insert((record.sess_id.clone(), record.statement.clone()), params);
+                buffer.insert(
+                    (record.sess_id.clone(), record.statement.clone()),
+                    Arc::new(params),
+                );
             }
         }
         return None;
@@ -385,20 +404,18 @@ pub fn compute_normalized<'a>(
 
     apply_params_into(pm_sql, &params, colon_style, scratch);
 
-    if std::str::from_utf8(scratch).is_err() {
-        let (decoded, _, had_errors) = encoding_rs::GB18030.decode(scratch);
-        if had_errors {
-            log::warn!(
-                "replace_parameters: GB18030 fallback had unmappable bytes for sql: {}",
-                &pm_sql[..pm_sql.len().min(60)]
-            );
-        }
-        let decoded_string = decoded.into_owned();
-        scratch.clear();
-        scratch.extend_from_slice(decoded_string.as_bytes());
-    }
-
-    Some(std::str::from_utf8(scratch).expect("scratch contains valid UTF-8"))
+    // All bytes in `scratch` come from two UTF-8 sources:
+    //   1. verbatim slices of `pm_sql` (already valid UTF-8)
+    //   2. ParamValue::Quoted/Bare strings (Rust String — always valid UTF-8)
+    // ASCII literals used as delimiters ('?', ':', '\'') are single-byte and
+    // cannot appear in the interior of a multi-byte UTF-8 sequence, so no
+    // sequence is broken. The debug_assert guards this invariant cheaply in
+    // debug builds; the expect is a final consistency guard.
+    debug_assert!(
+        std::str::from_utf8(scratch).is_ok(),
+        "apply_params_into produced invalid UTF-8 — safety invariant violated"
+    );
+    Some(std::str::from_utf8(scratch).expect("apply_params_into produced invalid UTF-8"))
 }
 
 #[cfg(test)]

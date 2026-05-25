@@ -8,32 +8,20 @@ mod pipeline;
 mod preflight;
 
 use config::Config;
-use error::Result;
+use error::{Error, ErrorStats, Result};
 use log::{info, warn};
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 // 退出码约定：
-// 0  = 成功
-// 1  = 未分类错误
-// 2  = 配置错误
-// 3  = 输入/文件/解析错误
-// 4  = 导出错误
+// 0 = 全部成功，零错误
+// 1 = 处理完成但有非致命错误（部分成功）
+// 2 = 致命错误，无法完成处理
 // 130 = 被用户中断（Ctrl+C），遵循 Unix 128+SIGINT(2) 惯例
-const EXIT_CONFIG: i32 = 2;
-const EXIT_IO: i32 = 3;
-const EXIT_EXPORT: i32 = 4;
+const EXIT_PARTIAL: i32 = 1;
+const EXIT_FATAL: i32 = 2;
 const EXIT_INTERRUPTED: i32 = 130;
-
-fn exit_code_for(e: &error::Error) -> i32 {
-    match e {
-        error::Error::Config(_) => EXIT_CONFIG,
-        error::Error::File(_) | error::Error::Parser(_) | error::Error::Io(_) => EXIT_IO,
-        error::Error::Export(_) => EXIT_EXPORT,
-        error::Error::Interrupted => EXIT_INTERRUPTED,
-    }
-}
 
 /// Initialize simple console logging for non-run commands
 fn init_simple_logging(verbose: u8, quiet: bool) {
@@ -70,18 +58,36 @@ fn apply_verbosity_to_config(cfg: &mut Config, verbose: u8, quiet: bool) {
 
 fn main() {
     match run() {
-        Ok(()) => {}
-        Err(e) => {
-            let code = exit_code_for(&e);
-            if code != EXIT_INTERRUPTED {
-                eprintln!("Error: {e}");
+        Ok(Some(stats)) => {
+            if stats.has_fatal() {
+                std::process::exit(EXIT_FATAL);
             }
-            std::process::exit(code);
+            if stats.has_errors() {
+                eprintln!(
+                    "Completed with {} error(s) ({} parse, {} export).",
+                    stats.total_errors, stats.parse_errors, stats.export_errors
+                );
+                std::process::exit(EXIT_PARTIAL);
+            }
+            // EXIT_CLEAN (0) is default
+        }
+        Ok(None) => {} // non-Run commands: normal exit
+        Err(e) => {
+            if matches!(e, Error::Interrupted) {
+                std::process::exit(EXIT_INTERRUPTED);
+            }
+            let sev = e.severity();
+            eprintln!("[{sev}] {e}");
+            let suggestion = e.suggestion();
+            if !suggestion.is_empty() {
+                eprintln!("  Suggestion: {suggestion}");
+            }
+            std::process::exit(EXIT_FATAL);
         }
     }
 }
 
-fn run() -> Result<()> {
+fn run() -> Result<Option<ErrorStats>> {
     use clap::{CommandFactory, FromArgMatches, Parser};
 
     let cmd = cli::opts::Cli::command();
@@ -94,7 +100,10 @@ fn run() -> Result<()> {
     }
 
     match &cli.command {
-        Some(cli::opts::Commands::Init { output, force }) => cli::init::handle_init(output, *force),
+        Some(cli::opts::Commands::Init { output, force }) => {
+            cli::init::handle_init(output, *force)?;
+            Ok(None)
+        }
         Some(cli::opts::Commands::Run { config }) => {
             let mut cfg = load_config(config)?;
             let compiled_filters = cfg.validate_and_compile()?;
@@ -106,7 +115,7 @@ fn run() -> Result<()> {
 
             let pf = preflight::check(&cfg);
             if pf.print_and_check() {
-                std::process::exit(EXIT_CONFIG);
+                std::process::exit(EXIT_FATAL);
             }
 
             let interrupted = Arc::new(AtomicBool::new(false));
@@ -116,7 +125,8 @@ fn run() -> Result<()> {
             })
             .ok();
 
-            cli::run::handle_run(&cfg, cli.quiet, &interrupted, compiled_filters)
+            let stats = cli::run::handle_run(&cfg, cli.quiet, &interrupted, compiled_filters)?;
+            Ok(Some(stats))
         }
         Some(cli::opts::Commands::Validate { config }) => {
             let mut cfg = load_config(config)?;
@@ -128,7 +138,7 @@ fn run() -> Result<()> {
             info!("Configuration validation passed");
 
             cli::validate::handle_validate(&cfg);
-            Ok(())
+            Ok(None)
         }
         None => {
             let _ = cli::opts::Cli::try_parse_from(["sqllog2db", "--help"]);
@@ -145,7 +155,7 @@ fn load_config(config_path: &str) -> Result<Config> {
             Ok(c)
         }
         Err(e) => {
-            if let error::Error::Config(error::ConfigError::NotFound(_)) = &e {
+            if let Error::Config(crate::error::ConfigError::NotFound(_)) = &e {
                 warn!("Configuration file not found: {config_path}, using default configuration");
                 info!("Tip: run 'sqllog2db init' to generate a configuration file");
                 Ok(Config::default())
@@ -159,48 +169,60 @@ fn load_config(config_path: &str) -> Result<Config> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::error::{ConfigError, ExportError, FileError, ParserError};
+    use crate::error::{ConfigError, ExportError, ParserError};
 
     #[test]
-    fn test_exit_code_config_error() {
-        let e = error::Error::Config(ConfigError::NoExporters);
-        assert_eq!(exit_code_for(&e), EXIT_CONFIG);
+    fn test_exit_code_clean() {
+        let stats = ErrorStats::default();
+        assert!(!stats.has_errors());
+        assert!(!stats.has_fatal());
     }
 
     #[test]
-    fn test_exit_code_file_error() {
-        let e = error::Error::File(FileError::CreateDirectoryFailed {
+    fn test_exit_code_partial_errors() {
+        let mut stats = ErrorStats::default();
+        stats.add_parse_error();
+        assert!(stats.has_errors());
+        assert!(!stats.has_fatal());
+    }
+
+    #[test]
+    fn test_exit_code_fatal_error() {
+        let mut stats = ErrorStats::default();
+        stats.set_fatal("test fatal".into());
+        assert!(stats.has_fatal());
+    }
+
+    #[test]
+    fn test_error_is_fatal_for_config() {
+        let e = Error::Config(ConfigError::NoExporters);
+        assert!(e.is_fatal());
+        assert_eq!(e.severity(), crate::error::ErrorSeverity::Critical);
+    }
+
+    #[test]
+    fn test_error_is_fatal_for_parse_error() {
+        let e = Error::Parser(ParserError::PathNotFound {
             path: "/tmp".into(),
-            reason: "test".into(),
         });
-        assert_eq!(exit_code_for(&e), EXIT_IO);
+        assert!(!e.is_fatal());
+        assert_eq!(e.severity(), crate::error::ErrorSeverity::Warning);
     }
 
     #[test]
-    fn test_exit_code_parser_error() {
-        let e = error::Error::Parser(ParserError::PathNotFound {
-            path: "/tmp".into(),
+    fn test_error_suggestion_for_config_not_found() {
+        let e = Error::Config(ConfigError::NotFound("/tmp/config.toml".into()));
+        assert!(e.suggestion().contains("sqllog2db init"));
+    }
+
+    #[test]
+    fn test_error_suggestion_for_export_write_failed() {
+        let e = Error::Export(ExportError::WriteFailed {
+            path: "/tmp/out.csv".into(),
+            reason: "disk full".into(),
         });
-        assert_eq!(exit_code_for(&e), EXIT_IO);
-    }
-
-    #[test]
-    fn test_exit_code_io_error() {
-        let e = error::Error::Io(std::io::Error::other("test io"));
-        assert_eq!(exit_code_for(&e), EXIT_IO);
-    }
-
-    #[test]
-    fn test_exit_code_export_error() {
-        let e = error::Error::Export(ExportError::DatabaseFailed {
-            reason: "test".into(),
-        });
-        assert_eq!(exit_code_for(&e), EXIT_EXPORT);
-    }
-
-    #[test]
-    fn test_exit_code_interrupted() {
-        assert_eq!(exit_code_for(&error::Error::Interrupted), EXIT_INTERRUPTED);
+        assert!(!e.is_fatal());
+        assert!(!e.suggestion().is_empty());
     }
 
     #[test]
@@ -245,25 +267,5 @@ mod tests {
         std::fs::write(&path, "not valid toml ][[[").unwrap();
         let result = load_config(path.to_str().unwrap());
         assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_init_simple_logging_info() {
-        init_simple_logging(0, false);
-    }
-
-    #[test]
-    fn test_init_simple_logging_verbose() {
-        init_simple_logging(1, false);
-    }
-
-    #[test]
-    fn test_init_simple_logging_quiet() {
-        init_simple_logging(0, true);
-    }
-
-    #[test]
-    fn test_init_simple_logging_trace() {
-        init_simple_logging(2, false);
     }
 }

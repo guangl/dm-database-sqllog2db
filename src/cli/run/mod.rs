@@ -1,9 +1,10 @@
 use crate::config::Config;
-use crate::error::{Error, Result};
+use crate::error::{Error, ErrorStats, Result};
 use crate::exporter::ExporterManager;
 use crate::parser::SqllogParser;
 use crate::pipeline::{CompiledMetaFilters, CompiledSqlFilters};
 use log::{info, warn};
+use std::io::IsTerminal;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
@@ -12,11 +13,14 @@ mod filter_processor;
 mod parallel;
 mod prescan;
 mod processor;
+mod sqlite_parallel;
 
-use filter_processor::{build_pipeline, make_progress_bar};
+use filter_processor::build_pipeline;
+use indicatif::{ProgressBar, ProgressStyle};
 use parallel::process_csv_parallel;
 use prescan::{recompile_meta_if_needed, scan_for_trxids_by_transaction_filters};
 use processor::process_log_file;
+use sqlite_parallel::process_sqlite_parallel;
 
 /// 主编排函数：解析日志文件并导出到配置的导出器。
 /// `compiled_filters` 由调用方预编译（`Config::validate_and_compile`），避免重复编译正则。
@@ -26,17 +30,29 @@ pub fn handle_run(
     quiet: bool,
     interrupted: &Arc<AtomicBool>,
     compiled_filters: Option<(CompiledMetaFilters, CompiledSqlFilters)>,
-) -> Result<()> {
+) -> Result<ErrorStats> {
     let (compiled_meta, compiled_sql) = match compiled_filters {
         Some((m, s)) => (Some(m), Some(s)),
         None => (None, None),
     };
     let total_start = Instant::now();
+
     let log_files = SqllogParser::new(&cfg.sqllog.path).log_files()?;
-    if log_files.is_empty() {
+    let mut run_stats = ErrorStats::default();
+
+    // Stdin pipe mode: fall back when no log files found AND stdin is not a terminal.
+    // /dev/stdin is Unix-only; skip pipe mode on Windows.
+    let is_stdin_pipe =
+        log_files.is_empty() && !std::io::stdin().is_terminal() && !cfg!(target_os = "windows");
+    let log_files = if is_stdin_pipe {
+        info!("No log files found, reading from stdin (pipe mode)");
+        vec![std::path::PathBuf::from("/dev/stdin")]
+    } else if log_files.is_empty() {
         warn!("No log files found");
-        return Ok(());
-    }
+        return Ok(ErrorStats::default());
+    } else {
+        log_files
+    };
     let jobs = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
 
     // 仅当有事务级过滤器时才克隆配置（避免常规路径的额外分配）
@@ -46,13 +62,26 @@ pub fn handle_run(
         .as_ref()
         .is_some_and(crate::pipeline::FiltersFeature::has_transaction_filters)
     {
-        let extra_trxids = scan_for_trxids_by_transaction_filters(&log_files, cfg, jobs)?;
-        let mut tmp = cfg.clone();
-        if let Some(f) = &mut tmp.filter {
-            f.merge_found_trxids(extra_trxids);
+        if is_stdin_pipe {
+            warn!(
+                "Transaction-level filters are configured but stdin pipe mode \
+                 cannot pre-scan for transaction IDs. Degrading to per-record matching \
+                 (transaction integrity not guaranteed)."
+            );
+            eprintln!(
+                "[WARN] Transaction-level filters with stdin: pre-scan disabled, \
+                 degrading to per-record matching."
+            );
+            cfg
+        } else {
+            let extra_trxids = scan_for_trxids_by_transaction_filters(&log_files, cfg, jobs)?;
+            let mut tmp = cfg.clone();
+            if let Some(f) = &mut tmp.filter {
+                f.merge_found_trxids(extra_trxids);
+            }
+            owned_cfg = tmp;
+            &owned_cfg
         }
-        owned_cfg = tmp;
-        &owned_cfg
     } else {
         cfg
     };
@@ -82,12 +111,28 @@ pub fn handle_run(
             .is_some_and(|f| f.enable && f.record_sql.has_filters())
     });
     let sql_record_filter = compiled_record_sql.as_ref();
-    let show_progress = make_progress_bar(quiet, 80);
+    let show_progress = !quiet;
+    let pb = if show_progress {
+        let bar = ProgressBar::new_spinner();
+        bar.set_style(
+            ProgressStyle::with_template("{msg}")
+                .unwrap_or_else(|_| ProgressStyle::default_spinner())
+                .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏ "),
+        );
+        bar.enable_steady_tick(std::time::Duration::from_millis(80));
+        Some(bar)
+    } else {
+        None
+    };
     let mut total_records = 0usize;
     let mut skipped_files = 0usize;
-    let use_parallel = jobs > 1 && log_files.len() > 1 && final_cfg.exporter.csv.is_some();
+    let use_csv_parallel =
+        jobs > 1 && log_files.len() > 1 && !is_stdin_pipe && final_cfg.exporter.csv.is_some();
+    let use_sqlite_parallel =
+        jobs > 1 && log_files.len() > 1 && !is_stdin_pipe && final_cfg.exporter.sqlite.is_some();
+    let use_parallel = use_csv_parallel || use_sqlite_parallel;
 
-    if use_parallel {
+    if use_csv_parallel {
         info!("Parsing and exporting SQL logs (parallel, {jobs} jobs)...");
         let (processed_files, parallel_skipped) = process_csv_parallel(
             &log_files,
@@ -104,6 +149,23 @@ pub fn handle_run(
         )?;
         total_records = processed_files.iter().map(|(_, c)| *c).sum();
         skipped_files = parallel_skipped;
+    } else if use_sqlite_parallel {
+        info!("Parsing and exporting SQL logs (SQLite parallel, {jobs} jobs)...");
+        let (total, parallel_skipped) = process_sqlite_parallel(
+            &log_files,
+            final_cfg,
+            &pipeline,
+            jobs,
+            show_progress,
+            interrupted,
+            do_normalize,
+            placeholder_override,
+            field_mask,
+            &ordered_indices,
+            sql_record_filter,
+        )?;
+        total_records = total;
+        skipped_files = parallel_skipped;
     } else {
         let mut exporter_manager = ExporterManager::from_config(final_cfg)?;
         exporter_manager.initialize()?;
@@ -114,7 +176,7 @@ pub fn handle_run(
             if interrupted.load(Ordering::Relaxed) {
                 break;
             }
-            let processed = process_log_file(
+            let (processed, file_stats) = process_log_file(
                 &log_file.to_string_lossy(),
                 idx + 1,
                 log_files.len(),
@@ -129,8 +191,16 @@ pub fn handle_run(
                 &mut ns_scratch,
                 true,
                 sql_record_filter,
+                pb.as_ref(),
             )?;
             total_records += processed;
+            run_stats.merge(&file_stats);
+            if file_stats.has_fatal() {
+                return Err(Error::Export(crate::error::ExportError::WriteFailed {
+                    path: log_file.into(),
+                    reason: file_stats.fatal_error.unwrap_or_default(),
+                }));
+            }
         }
         exporter_manager.finalize()?;
         if !quiet {
@@ -148,11 +218,20 @@ pub fn handle_run(
         eprintln!(
             "\n✓ SQL Log Export Task Completed{mode_label} in {elapsed:.2}s — {total_records} records total{skip_label}",
         );
+        if run_stats.has_errors() {
+            eprintln!(
+                "  Errors: {} total ({} parse, {} export)",
+                run_stats.total_errors, run_stats.parse_errors, run_stats.export_errors
+            );
+        }
+    }
+    if let Some(pb) = &pb {
+        pb.finish_and_clear();
     }
     if interrupted.load(Ordering::Relaxed) {
         return Err(Error::Interrupted);
     }
-    Ok(())
+    Ok(run_stats)
 }
 
 #[cfg(test)]

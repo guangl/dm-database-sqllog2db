@@ -50,7 +50,7 @@ impl LogProcessor for FilterProcessor {
         self.process_with_meta(record)
     }
 
-    /// 热路径：使用 `Sqllog` 的直接字段（v1.1.0 已物化所有元数据）。
+    /// 热路径：使用 `Sqllog` 的直接字段（parser 库已物化所有元数据字段）。
     ///
     /// 时间过滤在前（无需构造 `RecordMeta`），之后用预计算的 `has_meta_filters`
     /// 快速判断是否需要进入元数据过滤 —— 过滤器只含时间范围时直接返回 true。
@@ -85,9 +85,4 @@ impl LogProcessor for FilterProcessor {
             tag: record.tag.as_deref(),
         })
     }
-}
-
-/// 进度条控制：quiet 时返回 false（不输出进度）。
-pub(super) fn make_progress_bar(quiet: bool, _interval_ms: u64) -> bool {
-    !quiet
 }

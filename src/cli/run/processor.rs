@@ -1,8 +1,9 @@
-use crate::error::Result;
+use crate::error::{ErrorStats, Result};
 use crate::exporter::ExporterManager;
 use crate::pipeline::normalizer::ParamBuffer;
 use crate::pipeline::{CompiledSqlFilters, Pipeline};
 use dm_database_parser_sqllog::LogParserBuilder;
+use indicatif::ProgressBar;
 use log::info;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -27,7 +28,8 @@ pub(super) fn process_log_file(
     ns_scratch: &mut Vec<u8>,
     reset_pb: bool,
     sql_record_filter: Option<&CompiledSqlFilters>,
-) -> Result<usize> {
+    pb: Option<&ProgressBar>,
+) -> Result<(usize, ErrorStats)> {
     // 清除上一个文件留下的残余参数，同时复用已分配的 HashMap 容量。
     params_buffer.clear();
 
@@ -42,23 +44,28 @@ pub(super) fn process_log_file(
     );
 
     if reset_pb && show_progress {
-        eprintln!("[{file_index}/{total_files}] {file_name}");
+        if let Some(pb) = pb {
+            pb.set_message(format!("[{file_index}/{total_files}] {file_name}"));
+            pb.set_position(0);
+        }
     }
 
     let parser = LogParserBuilder::new(file_path).build().map_err(|e| {
         crate::error::Error::Parser(crate::error::ParserError::InvalidPath {
             path: file_path.into(),
             reason: format!("{e}"),
+            line_number: None,
         })
     })?;
 
     let mut records_in_file = 0usize;
     let mut errors_in_file = 0usize;
+    let mut file_stats = ErrorStats::default();
 
     'outer: for result in parser.iter() {
         match result {
             Ok(record) => {
-                // 管线：使用 record 直接字段（v1.1.0 所有字段已物化）。
+                // 管线：使用 record 直接字段（parser 库已物化所有字段）。
                 let passes = if pipeline.is_empty() {
                     true
                 } else {
@@ -97,14 +104,35 @@ pub(super) fn process_log_file(
                                 }
                             }
 
-                            exporter_manager.export_one_preparsed(&record, include_pm, ns)?;
-                            records_in_file += 1;
+                            let export_result =
+                                exporter_manager.export_one_preparsed(&record, include_pm, ns);
+                            match export_result {
+                                Ok(()) => {
+                                    records_in_file += 1;
+                                }
+                                Err(ref e) if e.is_fatal() => {
+                                    file_stats.set_fatal(e.to_string());
+                                    eprintln!("[{}] {file_path}: {e}", e.severity());
+                                    log::warn!(
+                                        "{file_path} | fatal export error: {export_result:?}"
+                                    );
+                                    break 'outer;
+                                }
+                                Err(ref e) => {
+                                    file_stats.add_export_error();
+                                    eprintln!("[{}] {file_path}: {e}", e.severity());
+                                    log::warn!("{file_path} | export error: {export_result:?}");
+                                }
+                            }
 
-                            // 每 1024 条检查一次中断信号
-                            if records_in_file.trailing_zeros() >= 10
-                                && interrupted.load(Ordering::Relaxed)
-                            {
-                                break 'outer;
+                            // 每 1024 条更新进度并检查中断信号
+                            if records_in_file.trailing_zeros() >= 10 {
+                                if let Some(pb) = pb {
+                                    pb.inc(1024);
+                                }
+                                if interrupted.load(Ordering::Relaxed) {
+                                    break 'outer;
+                                }
                             }
                         }
                     } else {
@@ -122,6 +150,7 @@ pub(super) fn process_log_file(
             }
             Err(e) => {
                 errors_in_file += 1;
+                file_stats.add_parse_error();
                 log::warn!("{file_path} | {e:?}");
             }
         }
@@ -137,15 +166,17 @@ pub(super) fn process_log_file(
     );
 
     if show_progress {
-        let errors_label = if errors_in_file > 0 {
-            format!(", {errors_in_file} errors")
-        } else {
-            String::new()
-        };
-        eprintln!(
-            "✓ [{file_index}/{total_files}] {file_path} — {records_in_file}{errors_label}, {elapsed:.2}s",
-        );
+        if let Some(pb) = pb {
+            let errors_label = if errors_in_file > 0 {
+                format!(", {errors_in_file} errors")
+            } else {
+                String::new()
+            };
+            pb.set_message(format!(
+                "✓ [{file_index}/{total_files}] {file_path} — {records_in_file}{errors_label}, {elapsed:.2}s",
+            ));
+        }
     }
 
-    Ok(records_in_file)
+    Ok((records_in_file, file_stats))
 }
