@@ -41,7 +41,9 @@ pub fn handle_run(
     let mut run_stats = ErrorStats::default();
 
     // Stdin pipe mode: fall back when no log files found AND stdin is not a terminal.
-    let is_stdin_pipe = log_files.is_empty() && !std::io::stdin().is_terminal();
+    // /dev/stdin is Unix-only; skip pipe mode on Windows.
+    let is_stdin_pipe =
+        log_files.is_empty() && !std::io::stdin().is_terminal() && !cfg!(target_os = "windows");
     let log_files = if is_stdin_pipe {
         info!("No log files found, reading from stdin (pipe mode)");
         vec![std::path::PathBuf::from("/dev/stdin")]
