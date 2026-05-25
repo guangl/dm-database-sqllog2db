@@ -104,21 +104,26 @@ pub(super) fn process_log_file(
                                 }
                             }
 
-                            exporter_manager
-                                .export_one_preparsed(&record, include_pm, ns)
-                                .map_or_else(
-                                    |e| {
-                                        if e.is_fatal() {
-                                            file_stats.set_fatal(e.to_string());
-                                        } else {
-                                            file_stats.add_export_error();
-                                        }
-                                        eprintln!("[{}] {file_path}: {e}", e.severity());
-                                        log::warn!("{file_path} | export error: {e:?}");
-                                    },
-                                    |()| {},
-                                );
-                            records_in_file += 1;
+                            let export_result =
+                                exporter_manager.export_one_preparsed(&record, include_pm, ns);
+                            match export_result {
+                                Ok(()) => {
+                                    records_in_file += 1;
+                                }
+                                Err(ref e) if e.is_fatal() => {
+                                    file_stats.set_fatal(e.to_string());
+                                    eprintln!("[{}] {file_path}: {e}", e.severity());
+                                    log::warn!(
+                                        "{file_path} | fatal export error: {export_result:?}"
+                                    );
+                                    break 'outer;
+                                }
+                                Err(ref e) => {
+                                    file_stats.add_export_error();
+                                    eprintln!("[{}] {file_path}: {e}", e.severity());
+                                    log::warn!("{file_path} | export error: {export_result:?}");
+                                }
+                            }
 
                             // 每 1024 条更新进度并检查中断信号
                             if records_in_file.trailing_zeros() >= 10 {
