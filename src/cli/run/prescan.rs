@@ -77,7 +77,17 @@ pub(super) fn scan_for_trxids_by_transaction_filters(
     let matched: Vec<String> = pool.install(|| {
         log_files
             .par_iter()
-            .flat_map(|file| scan_log_file_for_matches(&file.to_string_lossy(), cfg))
+            .flat_map(|file| {
+                if let Some(path) = file.to_str() {
+                    scan_log_file_for_matches(path, cfg)
+                } else {
+                    log::warn!(
+                        "Pre-scan: skipping file with non-UTF8 path: {}",
+                        file.display()
+                    );
+                    Vec::new()
+                }
+            })
             .collect()
     });
 
