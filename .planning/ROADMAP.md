@@ -11,7 +11,7 @@
 - ✅ **v1.6 文档中文化 & 延后需求补全** — Phases 24–27 (shipped 2026-05-19)
 - ✅ **v1.7 项目精简** — Phases 28–34 (shipped 2026-05-20)
 - ✅ **v1.10 质量加固与体验优化** — Phases 35–40 (shipped 2026-05-21)
-- 🔄 **v1.11 性能深化与依赖适配** — Phases 41–45 (in progress)
+- ✅ **v1.11 性能深化与依赖适配** — Phases 41–45 (shipped 2026-05-25)
 
 ## Phases
 
@@ -125,13 +125,18 @@ Full details: `.planning/milestones/v1.7-ROADMAP.md`
 
 </details>
 
-### v1.11 性能深化与依赖适配 (Phases 41–45)
+<details>
+<summary>✅ v1.11 性能深化与依赖适配 (Phases 41–45) — SHIPPED 2026-05-25</summary>
 
-- [ ] **Phase 41: 依赖升级与 Parser 库适配** - 升级全部依赖到最新兼容版本，parser 库编译成功无 deprecated 警告
-- [ ] **Phase 42: Criterion 基准测试基础设施** - 建立覆盖四大场景的可独立运行 benchmark 套件
-- [x] **Phase 43: Parser 新 API 适配与 Filter 重构** - 利用新 API 删除冗余映射代码，重构 filter 模块边界 (completed 2026-05-24)
-- [x] **Phase 44: 热路径与内存优化** - 单线程吞吐量超越 1.55M records/sec，大文件峰值堆分配明显减少 (completed 2026-05-24)
-- [ ] **Phase 45: 并行扩展与 CI 基准集成** - 扩展并行处理范围，GitHub Actions 自动导出基准报告
+- [x] **Phase 41: 依赖升级与 Parser 库适配** — completed 2026-05-25
+- [x] **Phase 42: Criterion 基准测试基础设施** — completed 2026-05-25
+- [x] **Phase 43: Parser 新 API 适配与 Filter 重构** — completed 2026-05-24
+- [x] **Phase 44: 热路径与内存优化** — completed 2026-05-24
+- [x] **Phase 45: 并行扩展与 CI 基准集成** — completed 2026-05-25
+
+Full details: `.planning/phases/41-parser/`, `.planning/phases/42-criterion/`, `.planning/phases/43-parser-api-filter/`, `.planning/phases/44-hotpath/`, `.planning/phases/45-ci/`
+
+</details>
 
 ## Phase Details
 
@@ -304,12 +309,12 @@ Full details: `.planning/milestones/v1.7-ROADMAP.md`
 | 38. 进度显示与统计摘要 | v1.10 | Complete | 2026-05-21 |
 | 39. CSV/管道/参数核心验证 | v1.10 | Complete | 2026-05-21 |
 | 40. SQLite/并行/最终质量门禁 | v1.10 | Complete | 2026-05-21 |
-| 41. 依赖升级与 Parser 库适配 | v1.11 | Not started | - |
-| 42. Criterion 基准测试基础设施 | v1.11 | Not started | - |
-| 43. Parser 新 API 适配与 Filter 重构 | 2/2 | Complete   | 2026-05-24 |
-| 44. 热路径与内存优化 | 3/3 | Complete   | 2026-05-24 |
-| 45. 并行扩展与 CI 基准集成 | v1.11 | Not started | - |
+| 41. 依赖升级与 Parser 库适配 | v1.11 | Complete | 2026-05-25 |
+| 42. Criterion 基准测试基础设施 | v1.11 | Complete | 2026-05-25 |
+| 43. Parser 新 API 适配与 Filter 重构 | v1.11 | Complete | 2026-05-24 |
+| 44. 热路径与内存优化 | v1.11 | Complete | 2026-05-24 |
+| 45. 并行扩展与 CI 基准集成 | v1.11 | Complete | 2026-05-25 |
 
 ---
 *Created: 2026-05-21 for milestone v1.10*
-*Updated: 2026-05-24 — v1.11 phases 41–45 added, Phase 42 plan defined; Phase 43 plans (43-01, 43-02) defined; Phase 45 plans (45-01, 45-02) defined*
+*Updated: 2026-05-25 — v1.11 (Phases 41–45) shipped; code review + fixes applied across all phases*
