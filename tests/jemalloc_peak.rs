@@ -148,8 +148,11 @@ fn test_jemalloc_peak_baseline() {
         final_resident > 0,
         "jemalloc resident must be positive — allocator may not be active"
     );
-    assert!(
-        heap_pressure > 0,
-        "heap pressure (resident_delta or allocated_delta) must be positive — got allocated={allocated_delta}, resident={resident_delta}"
-    );
+    // Note: heap_pressure (delta-based) is intentionally not asserted here.
+    // On warm runs both allocated_delta and resident_delta can be 0 because:
+    //   - allocated_delta: handle_run frees temporary memory before returning
+    //   - resident_delta: jemalloc reuses already-mapped pages (lazy OS return)
+    // This test is a *measurement* baseline (PERF-02), not a correctness assertion.
+    // The liveness check above (final_resident > 0) is the only reliable guard.
+    let _ = heap_pressure; // consumed by println above; no assertion on delta values
 }
