@@ -100,9 +100,10 @@ pub(super) fn scan_for_trxids_by_transaction_filters(
 
 /// pre-scan 完成后重新编译 `CompiledMetaFilters`。
 ///
-/// 若 `final_cfg` 含有 `filter.enable == true`，则从 `final_cfg` 重新编译以包含
-/// 预扫描发现的 trxids；否则直接回传原始值（`compiled_meta` 来自入参）。
-/// 回传原始值的情形：无 filters 配置、filters 禁用、或调用方传 None 时走 None 路径。
+/// 若 `final_cfg` 含有 `filter.enable == true` 且 `include`/`exclude` 中存在至少一个
+/// 过滤条件，则从 `final_cfg` 重新编译以包含预扫描发现的 trxids；否则直接回传原始值。
+/// 回传原始值的情形：无 filters 配置、filters 禁用、include/exclude 均为空、
+/// 或调用方传 None 时走 None 路径。
 pub(super) fn recompile_meta_if_needed(
     final_cfg: &Config,
     original: Option<CompiledMetaFilters>,
@@ -111,6 +112,12 @@ pub(super) fn recompile_meta_if_needed(
         Some(f) if f.enable => f,
         _ => return Ok(original),
     };
+    // Early-return when no include/exclude patterns exist to avoid creating
+    // a Some(CompiledMetaFilters { all fields: None }) that build_pipeline
+    // would immediately discard via has_filters().
+    if !filters.include.has_filters() && !filters.exclude.has_filters() {
+        return Ok(original);
+    }
     // 重新从 final_cfg 编译，以捕获 merge_found_trxids 写入的 trxids
     let recompiled = crate::pipeline::CompiledMetaFilters::try_from_include_exclude(
         &filters.include,
