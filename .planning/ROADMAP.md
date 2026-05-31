@@ -288,7 +288,8 @@ Full details: `.planning/phases/41-parser/`, `.planning/phases/42-criterion/`, `
   2. 每条错误信息末尾附带 `hint:` 行，提供具体修复建议，例如 `hint: 将 output.path 设置为有效文件路径，如 "output/result.csv"`
   3. 运行时错误（文件不可读、磁盘满等）同样包含 hint，告知用户检查权限或磁盘空间
   4. `cargo clippy --all-targets -- -D warnings` + `cargo test` 全部通过，无性能退化
-**Plans**: TBD
+**Plans**: 1 plan
+- [x] 46-01-PLAN.md — main.rs eprintln 前缀 Suggestion→hint + 抽取 format_error_output 辅助函数 + Error::Io hint 文本校验 + 单元测试 + tests/integration.rs 端到端 stderr 断言
 
 ### Phase 47: 配置文件体验
 **Goal**: `init` 生成带注释的配置模板让用户一看即懂，`validate` 逐项显示每条校验结果让用户精确定位问题
@@ -296,10 +297,12 @@ Full details: `.planning/phases/41-parser/`, `.planning/phases/42-criterion/`, `
 **Requirements**: CONFIG-01, CONFIG-02
 **Success Criteria** (what must be TRUE):
   1. `sqllog2db init -o config.toml` 生成的文件中每个配置字段都有行内注释，说明用途和合法值示例（如 `# 输出路径，支持相对/绝对路径，例如 "output/result.csv"`）
-  2. `sqllog2db validate -c config.toml` 对一个有效配置逐项输出 `[OK] <校验项>` 列表，至少覆盖 input/output/filter 三个区域
-  3. `sqllog2db validate -c config.toml` 对一个包含错误的配置逐项输出 `[FAIL] <校验项>: <原因>`，精确定位失败项而非仅返回总体失败
+  2. `sqllog2db validate -c config.toml` 对一个有效配置输出 `Configuration valid.`（CONTEXT D-03 静默通过，未输出 `[OK]` 列表——以 CONTEXT 决策为准；planning 计划已据此实现）
+  3. `sqllog2db validate -c config.toml` 对一个包含错误的配置输出 `[FAIL] <字段>: <原因>` 与 `  hint: <修复建议>` 行（fail-fast 语义，首个失败即渲染并退出，符合 CONTEXT D-02）
   4. `cargo clippy --all-targets -- -D warnings` + `cargo test` 全部通过
-**Plans**: TBD
+**Plans**: 2 plans
+- [ ] 47-01-PLAN.md — handle_validate 改 println! 静默通过 + main.rs Validate 分支失败渲染为 [FAIL] + tests/integration.rs 端到端 CLI 输出断言（CONFIG-02）
+- [ ] 47-02-PLAN.md — CONFIG_TEMPLATE_EN 补全 csv.{file,overwrite,append} 与 sqlite.{database_url,table_name,overwrite,append} 共 7 段行内注释 + tests/integration.rs 注释存在性断言（CONFIG-01）
 
 ### Phase 48: 日志级别与运行提示
 **Goal**: 用户可通过 `--verbose` 和 `--quiet` 精确控制运行时输出的信息量，满足调试与静默脚本两种场景需求
@@ -311,7 +314,9 @@ Full details: `.planning/phases/41-parser/`, `.planning/phases/42-criterion/`, `
   3. 默认模式（不加标志）的运行结束摘要与加 `--verbose` 后的摘要内容不同，verbose 摘要包含更多字段（如每个文件的处理行数）
   4. `--verbose` 和 `--quiet` 互斥，同时指定时给出明确错误提示
   5. `cargo clippy --all-targets -- -D warnings` + `cargo test` 全部通过
-**Plans**: TBD
+**Plans**: 2 plans
+- [ ] 48-01-PLAN.md — opts.rs `-v` 改 bool + main.rs 移除 debug 映射并扩展 handle_run 调用 + cli/run/mod.rs 增 verbose 参数与 ProgressBar 条件化 + 35+ handle_run 调用点迁移 + 端到端 CLI 测试覆盖 LOG-01/LOG-02
+- [ ] 48-02-PLAN.md — sqlite_parallel 返回值对齐 csv_parallel 形态 + handle_run 顺序路径收集 per_file_counts + verbose 摘要前输出每文件 `Processed:` 明细 + 端到端测试覆盖 LOG-03
 **UI hint**: yes
 
 ### Phase 49: Glob 输入支持
@@ -324,7 +329,6 @@ Full details: `.planning/phases/41-parser/`, `.planning/phases/42-criterion/`, `
   3. 无匹配文件时给出明确错误（`error: glob pattern 'sqllogs/*.log' matched 0 files`），而非静默空输出
   4. glob 与直接路径混合使用时（如 `--input file1.log --input 'dir/*.log'`）均能正确处理
   5. `cargo clippy --all-targets -- -D warnings` + `cargo test` 全部通过，不引入重量级依赖（使用 `glob` 或 `globset` crate）
-**Plans**: TBD
 
 ## Coverage Validation
 
@@ -381,11 +385,11 @@ Full details: `.planning/phases/41-parser/`, `.planning/phases/42-criterion/`, `
 | 43. Parser 新 API 适配与 Filter 重构 | v1.11 | Complete | 2026-05-24 |
 | 44. 热路径与内存优化 | v1.11 | Complete | 2026-05-24 |
 | 45. 并行扩展与 CI 基准集成 | v1.11 | Complete | 2026-05-25 |
-| 46. 错误信息优化 | v1.12 | Not started | - |
-| 47. 配置文件体验 | v1.12 | Not started | - |
-| 48. 日志级别与运行提示 | v1.12 | Not started | - |
+| 46. 错误信息优化 | 1/1 | Complete    | 2026-05-31 |
+| 47. 配置文件体验 | v1.12 | Ready to execute | - |
+| 48. 日志级别与运行提示 | v1.12 | Ready to execute | - |
 | 49. Glob 输入支持 | v1.12 | Not started | - |
 
 ---
 *Created: 2026-05-21 for milestone v1.10*
-*Updated: 2026-05-31 — v1.12 (Phases 46–49) roadmap added*
+*Updated: 2026-05-31 — v1.12 (Phases 46–49) roadmap added; Phase 46 plan registered; Phase 47 plans 01/02 registered (CONTEXT D-03 静默通过决策已反映在 SC2); Phase 48 plans 01/02 registered (verbose/quiet 重塑 + 摘要差异化)*
