@@ -145,7 +145,7 @@ pub fn handle_run(
             );
         }
         info!("Parsing and exporting SQL logs (parallel, {jobs} jobs)...");
-        let (csv_processed_files, parallel_skipped) = process_csv_parallel(
+        let (csv_processed_files, parallel_skipped, csv_parallel_stats) = process_csv_parallel(
             &log_files,
             final_cfg,
             &pipeline,
@@ -158,6 +158,7 @@ pub fn handle_run(
             &ordered_indices,
             sql_record_filter,
         )?;
+        run_stats.merge(&csv_parallel_stats);
         total_records = csv_processed_files.iter().map(|(_, c)| *c).sum();
         skipped_files = parallel_skipped;
         csv_processed_files
@@ -170,19 +171,21 @@ pub fn handle_run(
             );
         }
         info!("Parsing and exporting SQL logs (SQLite parallel, {jobs} jobs)...");
-        let (sqlite_processed_files, parallel_skipped) = process_sqlite_parallel(
-            &log_files,
-            final_cfg,
-            &pipeline,
-            jobs,
-            show_progress,
-            interrupted,
-            do_normalize,
-            placeholder_override,
-            field_mask,
-            &ordered_indices,
-            sql_record_filter,
-        )?;
+        let (sqlite_processed_files, parallel_skipped, sqlite_parallel_stats) =
+            process_sqlite_parallel(
+                &log_files,
+                final_cfg,
+                &pipeline,
+                jobs,
+                show_progress,
+                interrupted,
+                do_normalize,
+                placeholder_override,
+                field_mask,
+                &ordered_indices,
+                sql_record_filter,
+            )?;
+        run_stats.merge(&sqlite_parallel_stats);
         total_records = sqlite_processed_files.iter().map(|(_, c)| *c).sum();
         skipped_files = parallel_skipped;
         sqlite_processed_files

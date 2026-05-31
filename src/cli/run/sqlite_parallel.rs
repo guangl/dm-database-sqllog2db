@@ -1,4 +1,4 @@
-use crate::error::{Error, Result};
+use crate::error::{Error, ErrorStats, Result};
 use crate::exporter::ExporterManager;
 use crate::pipeline::normalizer::ParamBuffer;
 use crate::pipeline::{CompiledSqlFilters, FieldMask, Pipeline};
@@ -160,8 +160,12 @@ fn parallel_collect(
                 collected.push((path, rows));
             }
             Ok(None) => skipped += 1,
-            Err(e) if first_err.is_none() => first_err = Some(e),
-            Err(_) => {}
+            Err(e) => {
+                log::warn!("parallel collect error: {e}");
+                if first_err.is_none() {
+                    first_err = Some(e);
+                }
+            }
         }
     }
     if let Some(e) = first_err {
@@ -172,7 +176,8 @@ fn parallel_collect(
 
 /// `SQLite` 并行处理：每个文件独立在 rayon 线程上解析，主线程按文件原始顺序写入 `SQLite`。
 ///
-/// 返回：`(per_file_counts, skipped_files)`，其中 `per_file_counts` 是每文件 `(path, count)` 列表。
+/// 返回：`(per_file_counts, skipped_files, parse_stats)`，其中 `per_file_counts` 是每文件
+/// `(path, count)` 列表，`parse_stats` 汇总所有文件的解析错误统计。
 /// 适用条件：SQLite 导出 + 多文件 + jobs > 1 + 非 stdin 管道。
 ///
 /// `_show_progress`, `_field_mask`, `_ordered_indices` 保留参数签名以与
@@ -192,7 +197,7 @@ pub(super) fn process_sqlite_parallel(
     _field_mask: FieldMask,
     _ordered_indices: &[usize],
     sql_record_filter: Option<&CompiledSqlFilters>,
-) -> Result<(Vec<(PathBuf, usize)>, usize)> {
+) -> Result<(Vec<(PathBuf, usize)>, usize, ErrorStats)> {
     let (collected, skipped, total_parse_errors) = parallel_collect(
         log_files,
         pipeline,
@@ -205,6 +210,12 @@ pub(super) fn process_sqlite_parallel(
 
     if total_parse_errors > 0 {
         log::warn!("SQLite parallel: {total_parse_errors} parse error(s) across all files");
+    }
+
+    // 将解析错误计数转换为 ErrorStats，供调用方合并到全局统计
+    let mut parallel_stats = ErrorStats::default();
+    for _ in 0..total_parse_errors {
+        parallel_stats.add_parse_error();
     }
 
     // 写入 SQLite 并同时构建每文件 (path, count) 列表
@@ -222,5 +233,5 @@ pub(super) fn process_sqlite_parallel(
     }
 
     exporter_manager.finalize()?;
-    Ok((per_file_counts, skipped))
+    Ok((per_file_counts, skipped, parallel_stats))
 }
