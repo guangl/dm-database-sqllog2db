@@ -38,7 +38,9 @@ pub fn handle_run(
     };
     let total_start = Instant::now();
 
-    let log_files = SqllogParser::new(&cfg.sqllog.path).log_files()?;
+    // TODO(Plan 02): 更新 SqllogParser::new() 接受 Vec<String>；当前临时使用第一个 input
+    let first_input = cfg.sqllog.inputs.first().cloned().unwrap_or_default();
+    let log_files = SqllogParser::new(&first_input).log_files()?;
     let mut run_stats = ErrorStats::default();
 
     // Stdin pipe mode: fall back when no log files found AND stdin is not a terminal.

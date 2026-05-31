@@ -124,7 +124,8 @@ fn test_from_config_sqlite_path() {
             }),
         },
         sqllog: SqllogConfig {
-            path: "sqllogs".to_string(),
+            inputs: vec!["sqllogs".to_string()],
+            path_deprecated: None,
         },
         ..Default::default()
     };
@@ -141,7 +142,8 @@ fn test_from_config_no_exporters_error() {
             sqlite: None,
         },
         sqllog: SqllogConfig {
-            path: "sqllogs".to_string(),
+            inputs: vec!["sqllogs".to_string()],
+            path_deprecated: None,
         },
         ..Default::default()
     };

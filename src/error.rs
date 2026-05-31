@@ -144,6 +144,9 @@ impl Error {
                 }
                 ParserError::InvalidPath { .. } => "Check the path format or try an absolute path.",
                 ParserError::ReadDirFailed { .. } => "Check directory permissions.",
+                ParserError::NoFilesFound { .. } => {
+                    "Verify the glob/path entries exist; ensure patterns match .log files in the current directory."
+                }
             },
             Error::Export(e) => match e {
                 ExportError::WriteFailed { .. } => {
@@ -210,6 +213,11 @@ pub enum ParserError {
         path: PathBuf,
         reason: String,
     },
+    // NOTE: 由 Plan 02 的 parser.rs 构造；Plan 01 仅定义变体
+    #[allow(dead_code)]
+    NoFilesFound {
+        inputs: Vec<String>,
+    },
 }
 
 impl fmt::Display for ParserError {
@@ -232,6 +240,9 @@ impl fmt::Display for ParserError {
             ParserError::ReadDirFailed { path, reason } => {
                 write!(f, "Failed to read directory {}: {}", path.display(), reason)
             }
+            ParserError::NoFilesFound { inputs } => {
+                write!(f, "No log files found matching inputs: {inputs:?}")
+            }
         }
     }
 }
@@ -247,4 +258,54 @@ pub enum ExportError {
     /// `SQLite` 操作失败
     #[error("Database error: {reason}")]
     DatabaseFailed { reason: String },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_no_files_found_display_contains_inputs() {
+        let err = ParserError::NoFilesFound {
+            inputs: vec!["a.log".into(), "b/*.log".into()],
+        };
+        let display = format!("{err}");
+        assert!(
+            display.contains("a.log"),
+            "Display should contain 'a.log', got: {display}"
+        );
+        assert!(
+            display.contains("b/*.log"),
+            "Display should contain 'b/*.log', got: {display}"
+        );
+    }
+
+    #[test]
+    fn test_no_files_found_suggestion_non_empty() {
+        let err = Error::Parser(ParserError::NoFilesFound {
+            inputs: vec!["x".into()],
+        });
+        let suggestion = err.suggestion();
+        assert!(
+            !suggestion.is_empty(),
+            "suggestion() should not be empty for NoFilesFound"
+        );
+        assert!(
+            suggestion.contains("glob"),
+            "suggestion() should contain 'glob', got: {suggestion}"
+        );
+    }
+
+    #[test]
+    fn test_no_files_found_not_fatal() {
+        let err = Error::Parser(ParserError::NoFilesFound {
+            inputs: vec!["x".into()],
+        });
+        assert!(!err.is_fatal(), "NoFilesFound should not be fatal");
+        assert_eq!(
+            err.severity(),
+            ErrorSeverity::Warning,
+            "NoFilesFound should have Warning severity"
+        );
+    }
 }

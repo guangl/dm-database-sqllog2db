@@ -10,7 +10,9 @@ use std::path::Path;
 #[must_use]
 pub(crate) fn check(cfg: &Config) -> PreflightResult {
     let mut result = PreflightResult::default();
-    check_log_path(&cfg.sqllog.path, &mut result);
+    // TODO(Plan 02): 更新 check_log_path 接受 Vec<String>；当前临时使用第一个 input
+    let first_input = cfg.sqllog.inputs.first().cloned().unwrap_or_default();
+    check_log_path(&first_input, &mut result);
     check_output_writable(cfg, &mut result);
     result
 }
@@ -113,7 +115,8 @@ mod tests {
     fn config_with_log_dir(dir: &str) -> Config {
         Config {
             sqllog: SqllogConfig {
-                path: dir.to_string(),
+                inputs: vec![dir.to_string()],
+                path_deprecated: None,
             },
             ..Default::default()
         }

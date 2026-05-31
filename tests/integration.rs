@@ -31,7 +31,8 @@ fn write_test_log(path: &std::path::Path, count: usize) {
 fn make_run_config(log_dir: &std::path::Path, csv_file: &std::path::Path) -> Config {
     Config {
         sqllog: SqllogConfig {
-            path: log_dir.to_str().unwrap().to_string(),
+            inputs: vec![log_dir.to_str().unwrap().to_string()],
+            path_deprecated: None,
         },
         exporter: ExporterConfig {
             csv: Some(CsvExporterConfig {
@@ -914,7 +915,7 @@ fn test_cli_validate_valid_config_outputs_configuration_valid() {
     // Write a minimal valid config: sqllog + csv exporter
     std::fs::write(
         &config_path,
-        "[sqllog]\npath = \"sqllogs\"\n\n[exporter.csv]\nfile = \"out.csv\"\n",
+        "[sqllog]\ninputs = [\"sqllogs\"]\n\n[exporter.csv]\nfile = \"out.csv\"\n",
     )
     .unwrap();
 
@@ -1021,7 +1022,7 @@ fn test_cli_verbose_prints_processing_line_per_file() {
     std::fs::write(
         &config_path,
         format!(
-            "[sqllog]\npath = \"{logdir}\"\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n",
+            "[sqllog]\ninputs = [\"{logdir}\"]\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n",
             logdir = log_dir.to_string_lossy().replace('\\', "/"),
             errlog = error_log.to_string_lossy().replace('\\', "/"),
             applog = app_log.to_string_lossy().replace('\\', "/"),
@@ -1062,7 +1063,7 @@ fn test_cli_quiet_suppresses_summary() {
     std::fs::write(
         &config_path,
         format!(
-            "[sqllog]\npath = \"{logdir}\"\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n",
+            "[sqllog]\ninputs = [\"{logdir}\"]\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n",
             logdir = log_dir.to_string_lossy().replace('\\', "/"),
             errlog = error_log.to_string_lossy().replace('\\', "/"),
             applog = app_log.to_string_lossy().replace('\\', "/"),
@@ -1096,7 +1097,7 @@ fn make_toml_config(
     app_log: &std::path::Path,
 ) -> String {
     format!(
-        "[sqllog]\npath = \"{logdir}\"\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n",
+        "[sqllog]\ninputs = [\"{logdir}\"]\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n",
         logdir = log_dir.to_string_lossy().replace('\\', "/"),
         errlog = error_log.to_string_lossy().replace('\\', "/"),
         applog = app_log.to_string_lossy().replace('\\', "/"),
