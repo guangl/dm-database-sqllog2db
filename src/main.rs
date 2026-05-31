@@ -44,6 +44,16 @@ fn apply_verbosity_to_config(cfg: &mut Config, _verbose: bool, quiet: bool) {
     }
 }
 
+/// Apply CLI --input overrides to configuration.
+/// Per D-05: CLI inputs completely replace config inputs when Some; not merged.
+fn apply_cli_inputs_to_config(cfg: &mut Config, cli_inputs: Option<Vec<String>>) {
+    if let Some(inputs) = cli_inputs {
+        if !inputs.is_empty() {
+            cfg.sqllog.inputs = inputs;
+        }
+    }
+}
+
 /// Format a fatal error into a multi-line string for stderr output.
 /// First line: `[SEVERITY] display_text`
 /// Second line (if hint non-empty): `  hint: suggestion_text`
@@ -102,8 +112,9 @@ fn run() -> Result<Option<(ErrorStats, bool)>> {
             cli::init::handle_init(output, *force)?;
             Ok(None)
         }
-        Some(cli::opts::Commands::Run { config }) => {
+        Some(cli::opts::Commands::Run { config, input }) => {
             let mut cfg = load_config(config)?;
+            apply_cli_inputs_to_config(&mut cfg, input.clone());
             let compiled_filters = cfg.validate_and_compile()?;
 
             apply_verbosity_to_config(&mut cfg, cli.verbose, cli.quiet);
@@ -261,6 +272,43 @@ mod tests {
         std::fs::write(&path, "not valid toml ][[[").unwrap();
         let result = load_config(path.to_str().unwrap());
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_apply_cli_inputs_none_keeps_config() {
+        let mut cfg = Config::default();
+        // Default inputs = ["sqllogs"]
+        assert_eq!(cfg.sqllog.inputs, vec!["sqllogs".to_string()]);
+        apply_cli_inputs_to_config(&mut cfg, None);
+        assert_eq!(
+            cfg.sqllog.inputs,
+            vec!["sqllogs".to_string()],
+            "None should not change config inputs"
+        );
+    }
+
+    #[test]
+    fn test_apply_cli_inputs_some_replaces() {
+        let mut cfg = Config::default();
+        cfg.sqllog.inputs = vec!["a".to_string()];
+        apply_cli_inputs_to_config(&mut cfg, Some(vec!["b".to_string(), "c".to_string()]));
+        assert_eq!(
+            cfg.sqllog.inputs,
+            vec!["b".to_string(), "c".to_string()],
+            "Some(non-empty) should completely replace config inputs"
+        );
+    }
+
+    #[test]
+    fn test_apply_cli_inputs_empty_vec_keeps_config() {
+        let mut cfg = Config::default();
+        cfg.sqllog.inputs = vec!["x".to_string()];
+        apply_cli_inputs_to_config(&mut cfg, Some(vec![]));
+        assert_eq!(
+            cfg.sqllog.inputs,
+            vec!["x".to_string()],
+            "Some(empty vec) should not change config inputs"
+        );
     }
 
     #[test]

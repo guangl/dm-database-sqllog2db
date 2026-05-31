@@ -50,11 +50,13 @@ EXAMPLES:
     Export using a custom configuration path:
         sqllog2db run -c /path/to/config.toml
 
-    // TODO(Phase 37): replace with actual stdin pipe example
-    Pipe log data via stdin (requires --input flag):
-        sqllog2db run -c config.toml --input -
+    Pipe log data via stdin:
+        cat access.log | sqllog2db run -c config.toml
 
-Configuration file sections: [csv] / [sqlite] for output, [pipeline] for filters (include, exclude, indicators, sql)."
+    Override input paths from CLI:
+        sqllog2db run -c config.toml --input 'sqllogs/*.log' --input archive.log
+
+Configuration file sections: [csv] / [sqlite] for output, [filter] for filters (include, exclude, indicators, sql)."
     )]
     Run {
         /// TOML configuration file path
@@ -63,9 +65,17 @@ Configuration file sections: [csv] / [sqlite] for output, [pipeline] for filters
             long = "config",
             default_value = "config.toml",
             env = "SQLLOG2DB_CONFIG",
-            help = "TOML configuration file path. See [csv], [sqlite], [pipeline] sections."
+            help = "TOML configuration file path. See [csv], [sqlite], [filter] sections."
         )]
         config: String,
+        /// Input log paths. Repeat for multiple entries. Overrides config [sqllog].inputs.
+        #[arg(
+            short = 'i',
+            long = "input",
+            action = clap::ArgAction::Append,
+            help = "Input log paths. Repeat for multiple entries. Overrides config [sqllog].inputs."
+        )]
+        input: Option<Vec<String>>,
     },
     /// Generate a default configuration file
     #[command(
