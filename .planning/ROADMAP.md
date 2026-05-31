@@ -392,7 +392,7 @@ Full details: `.planning/phases/41-parser/`, `.planning/phases/42-criterion/`, `
 | 46. 错误信息优化 | 1/1 | Complete    | 2026-05-31 |
 | 47. 配置文件体验 | 2/2 | Complete    | 2026-05-31 |
 | 48. 日志级别与运行提示 | 2/2 | Complete    | 2026-05-31 |
-| 49. Glob 输入支持 | 3/3 | Complete   | 2026-05-31 |
+| 49. Glob 输入支持 | 3/3 | Complete    | 2026-05-31 |
 
 ---
 *Created: 2026-05-21 for milestone v1.10*
