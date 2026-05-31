@@ -120,14 +120,21 @@ enable = false
 
 # Option 1: CSV export (default)
 [exporter.csv]
+# CSV output file path
 file = "outputs/sqllog.csv"
+# Drop and recreate the file before writing (true/false)
 overwrite = true
+# Append to existing CSV file instead of overwriting (true/false)
 append = false
 
 # Option 2: SQLite database export
 # [exporter.sqlite]
+# SQLite database file path
 # database_url = "export/sqllog2db.db"
+# Table name to write records into (ASCII identifiers only: [A-Za-z_][A-Za-z0-9_]*)
 # table_name = "sqllog_records"
+# Drop and recreate the table before writing (true/false)
 # overwrite = true
+# Append rows to existing table instead of overwriting (true/false)
 # append = false
 "#;
