@@ -24,20 +24,10 @@ const EXIT_FATAL: i32 = 2;
 const EXIT_INTERRUPTED: i32 = 130;
 
 /// Initialize simple console logging for non-run commands
-fn init_simple_logging(verbose: u8, quiet: bool) {
-    let level = if verbose >= 2 {
-        "trace"
-    } else if verbose >= 1 {
-        "debug"
-    } else if quiet {
-        "error"
-    } else {
-        "info"
-    };
+fn init_simple_logging(_verbose: bool, quiet: bool) {
+    let level = if quiet { "error" } else { "info" };
 
     let filter = match level {
-        "trace" => log::LevelFilter::Trace,
-        "debug" => log::LevelFilter::Debug,
         "error" => log::LevelFilter::Error,
         _ => log::LevelFilter::Info,
     };
@@ -48,10 +38,8 @@ fn init_simple_logging(verbose: u8, quiet: bool) {
 }
 
 /// Apply CLI verbosity flags to configuration
-fn apply_verbosity_to_config(cfg: &mut Config, verbose: u8, quiet: bool) {
-    if verbose >= 1 {
-        cfg.logging.level = "debug".to_string();
-    } else if quiet {
+fn apply_verbosity_to_config(cfg: &mut Config, _verbose: bool, quiet: bool) {
+    if quiet {
         cfg.logging.level = "error".to_string();
     }
 }
@@ -71,15 +59,17 @@ fn format_error_output(error: &Error) -> String {
 
 fn main() {
     match run() {
-        Ok(Some(stats)) => {
+        Ok(Some((stats, quiet))) => {
             if stats.has_fatal() {
                 std::process::exit(EXIT_FATAL);
             }
             if stats.has_errors() {
-                eprintln!(
-                    "Completed with {} error(s) ({} parse, {} export).",
-                    stats.total_errors, stats.parse_errors, stats.export_errors
-                );
+                if !quiet {
+                    eprintln!(
+                        "Completed with {} error(s) ({} parse, {} export).",
+                        stats.total_errors, stats.parse_errors, stats.export_errors
+                    );
+                }
                 std::process::exit(EXIT_PARTIAL);
             }
             // EXIT_CLEAN (0) is default
@@ -95,7 +85,7 @@ fn main() {
     }
 }
 
-fn run() -> Result<Option<ErrorStats>> {
+fn run() -> Result<Option<(ErrorStats, bool)>> {
     use clap::{CommandFactory, FromArgMatches, Parser};
 
     let cmd = cli::opts::Cli::command();
@@ -133,8 +123,9 @@ fn run() -> Result<Option<ErrorStats>> {
             })
             .ok();
 
-            let stats = cli::run::handle_run(&cfg, cli.quiet, &interrupted, compiled_filters)?;
-            Ok(Some(stats))
+            let stats =
+                cli::run::handle_run(&cfg, cli.quiet, cli.verbose, &interrupted, compiled_filters)?;
+            Ok(Some((stats, cli.quiet)))
         }
         Some(cli::opts::Commands::Validate { config }) => {
             let cfg = load_config(config)?;
@@ -238,14 +229,14 @@ mod tests {
     #[test]
     fn test_apply_verbosity_verbose() {
         let mut cfg = Config::default();
-        apply_verbosity_to_config(&mut cfg, 1, false);
-        assert_eq!(cfg.logging.level, "debug");
+        apply_verbosity_to_config(&mut cfg, true, false);
+        assert_eq!(cfg.logging.level, Config::default().logging.level);
     }
 
     #[test]
     fn test_apply_verbosity_quiet() {
         let mut cfg = Config::default();
-        apply_verbosity_to_config(&mut cfg, 0, true);
+        apply_verbosity_to_config(&mut cfg, false, true);
         assert_eq!(cfg.logging.level, "error");
     }
 
@@ -253,15 +244,8 @@ mod tests {
     fn test_apply_verbosity_neither() {
         let mut cfg = Config::default();
         let original = cfg.logging.level.clone();
-        apply_verbosity_to_config(&mut cfg, 0, false);
+        apply_verbosity_to_config(&mut cfg, false, false);
         assert_eq!(cfg.logging.level, original);
-    }
-
-    #[test]
-    fn test_apply_verbosity_trace() {
-        let mut cfg = Config::default();
-        apply_verbosity_to_config(&mut cfg, 2, false);
-        assert_eq!(cfg.logging.level, "debug");
     }
 
     #[test]

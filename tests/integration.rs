@@ -57,7 +57,7 @@ fn test_handle_run_empty_dir() {
     let csv_file = dir.path().join("out.csv");
     let cfg = make_run_config(&log_dir, &csv_file);
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None).unwrap();
 }
 
 #[test]
@@ -72,7 +72,7 @@ fn test_handle_run_multi_file() {
     let cfg = make_run_config(&log_dir, &csv_file);
 
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None).unwrap();
 }
 
 #[test]
@@ -86,7 +86,7 @@ fn test_handle_run_real_csv_export() {
     let cfg = make_run_config(&log_dir, &csv_file);
 
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None).unwrap();
 
     let content = std::fs::read_to_string(&csv_file).unwrap();
     // header + 10 data rows = 11 lines
@@ -110,7 +110,7 @@ fn test_handle_run_interrupted() {
 
     // Pre-set interrupted flag — run returns Err(Interrupted) when flag is set before processing
     let interrupted = Arc::new(AtomicBool::new(true));
-    let result = handle_run(&cfg, true, &interrupted, None);
+    let result = handle_run(&cfg, true, false, &interrupted, None);
     assert!(
         result.is_err(),
         "handle_run should return Err(Interrupted) when interrupt flag is pre-set: {result:?}"
@@ -333,7 +333,7 @@ fn test_handle_run_non_quiet_prints_summary() {
     let cfg = make_run_config(&log_dir, &csv_file);
     let interrupted = Arc::new(AtomicBool::new(false));
     // quiet=false exercises the summary print path
-    handle_run(&cfg, false, &interrupted, None).unwrap();
+    handle_run(&cfg, false, false, &interrupted, None).unwrap();
 }
 
 #[test]
@@ -357,7 +357,7 @@ fn test_handle_run_with_filters_builds_pipeline() {
     });
     let compiled_filters = cfg.validate_and_compile().unwrap();
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, &interrupted, compiled_filters).unwrap();
+    handle_run(&cfg, true, false, &interrupted, compiled_filters).unwrap();
 }
 
 #[test]
@@ -382,7 +382,7 @@ fn test_handle_run_with_transaction_filters_prescans() {
         ..Default::default()
     });
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None).unwrap();
 }
 
 #[test]
@@ -407,7 +407,7 @@ fn test_handle_run_with_min_runtime_filter() {
         ..Default::default()
     });
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None).unwrap();
 }
 
 // ── parallel CSV tests ──────────────────────────────────────────────────────
@@ -427,7 +427,7 @@ fn test_handle_run_parallel_csv_multiple_files() {
     let interrupted = Arc::new(AtomicBool::new(false));
 
     // jobs=2, multiple files, no limit, CSV exporter → triggers process_csv_parallel
-    handle_run(&cfg, true, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None).unwrap();
 
     let content = std::fs::read_to_string(&csv_file).unwrap();
     let data_lines = content.lines().count().saturating_sub(1);
@@ -463,7 +463,7 @@ fn test_csv_throughput_baseline() {
 
     let interrupted = Arc::new(AtomicBool::new(false));
     let start = std::time::Instant::now();
-    handle_run(&cfg, true, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None).unwrap();
     let elapsed = start.elapsed().as_secs_f64();
 
     let rate = f64::from(u32::try_from(RECORD_COUNT).expect("20_000 fits in u32")) / elapsed;
@@ -633,7 +633,7 @@ fn test_e2e_filter_pipeline() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None).unwrap();
 
     // Assert: header + 10 条数据行 = 11 行
     let content = std::fs::read_to_string(&csv_file).unwrap();
@@ -670,7 +670,7 @@ fn test_e2e_filter_pipeline() {
         exclude: ExcludeFilters::default(),
         ..Default::default()
     });
-    handle_run(&cfg2, true, &Arc::new(AtomicBool::new(false)), None).unwrap();
+    handle_run(&cfg2, true, false, &Arc::new(AtomicBool::new(false)), None).unwrap();
     let content2 = std::fs::read_to_string(&csv_file2).unwrap();
     // OTHER 全被过滤，只有 header
     assert_eq!(
@@ -701,7 +701,7 @@ fn test_e2e_field_projection() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None).unwrap();
 
     // Assert: header 精确为 "ts,username,sql"，数据行 split(',').count() == 3
     let content = std::fs::read_to_string(&csv_file).unwrap();
@@ -744,7 +744,7 @@ fn test_boundary_empty_log_file() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None).unwrap();
 
     // Assert: CSV 文件存在且只有 header（1 行）
     assert!(
@@ -782,7 +782,7 @@ fn test_boundary_all_filtered() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None).unwrap();
 
     // Assert: CSV 只有 header（全部记录被过滤）
     let content = std::fs::read_to_string(&csv_file).unwrap();
@@ -820,7 +820,7 @@ fn test_boundary_malformed_line() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None).unwrap();
 
     // Assert: 无效行被跳过，4 条正常记录导出 → header + 4 data = 5 行
     let csv_content = std::fs::read_to_string(&csv_file).unwrap();
@@ -850,7 +850,7 @@ fn test_boundary_long_sql() {
 
     // Act: 不应 panic，不应 OOM
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None).unwrap();
 
     // Assert: 1 条记录正常导出 → header + 1 data = 2 行
     let csv_content = std::fs::read_to_string(&csv_file).unwrap();
@@ -980,5 +980,109 @@ fn test_cli_validate_invalid_config_outputs_fail_prefix() {
     assert!(
         !stderr_text.contains("[ERROR]"),
         "stderr should not contain '[ERROR]' for validate errors, got: {stderr_text}"
+    );
+}
+
+// ── verbose/quiet CLI behavior tests (LOG-01, LOG-02) ───────────────────────
+
+/// Verify that `-v -q` conflict is detected by clap and exits non-zero with a conflict message.
+#[test]
+fn test_cli_verbose_quiet_mutual_exclusion() {
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_sqllog2db"))
+        .args(["-v", "-q", "run", "-c", "nonexistent.toml"])
+        .output()
+        .expect("failed to spawn sqllog2db binary");
+    assert!(
+        !output.status.success(),
+        "expected non-zero exit for -v -q conflict"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("cannot be used with") || stderr.contains("conflict"),
+        "expected clap conflict message, got: {stderr}"
+    );
+}
+
+/// Verify that `--verbose run` prints `Processing: <path>` to stderr for each processed file.
+/// Uses a single log file to force the sequential path (where per-file output is emitted).
+#[test]
+fn test_cli_verbose_prints_processing_line_per_file() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_dir = dir.path().join("logs");
+    std::fs::create_dir_all(&log_dir).unwrap();
+    // Single file forces sequential path, which emits "Processing: <path>" per file.
+    write_test_log(&log_dir.join("a.log"), 5);
+
+    let csv_path = dir.path().join("out.csv");
+    let error_log = dir.path().join("errors.log");
+    let app_log = dir.path().join("app.log");
+
+    let config_path = dir.path().join("config.toml");
+    std::fs::write(
+        &config_path,
+        format!(
+            "[sqllog]\npath = \"{logdir}\"\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n",
+            logdir = log_dir.to_string_lossy().replace('\\', "/"),
+            errlog = error_log.to_string_lossy().replace('\\', "/"),
+            applog = app_log.to_string_lossy().replace('\\', "/"),
+            csv = csv_path.to_string_lossy().replace('\\', "/"),
+        ),
+    )
+    .unwrap();
+
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_sqllog2db"))
+        .args(["--verbose", "run", "-c", config_path.to_str().unwrap()])
+        .output()
+        .expect("failed to spawn sqllog2db binary");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "verbose run should succeed, stderr: {stderr}"
+    );
+    let processing_count = stderr.matches("Processing: ").count();
+    assert!(
+        processing_count >= 1,
+        "expected >=1 Processing line, got {processing_count}: {stderr}"
+    );
+}
+
+/// Verify that `--quiet run` suppresses the completion summary and `ProgressBar` output.
+#[test]
+fn test_cli_quiet_suppresses_summary() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_dir = dir.path().join("logs");
+    std::fs::create_dir_all(&log_dir).unwrap();
+    write_test_log(&log_dir.join("test.log"), 5);
+
+    let csv_path = dir.path().join("out.csv");
+    let error_log = dir.path().join("errors.log");
+    let app_log = dir.path().join("app.log");
+
+    let config_path = dir.path().join("config.toml");
+    std::fs::write(
+        &config_path,
+        format!(
+            "[sqllog]\npath = \"{logdir}\"\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n",
+            logdir = log_dir.to_string_lossy().replace('\\', "/"),
+            errlog = error_log.to_string_lossy().replace('\\', "/"),
+            applog = app_log.to_string_lossy().replace('\\', "/"),
+            csv = csv_path.to_string_lossy().replace('\\', "/"),
+        ),
+    )
+    .unwrap();
+
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_sqllog2db"))
+        .args(["--quiet", "run", "-c", config_path.to_str().unwrap()])
+        .output()
+        .expect("failed to spawn sqllog2db binary");
+    assert!(output.status.success(), "quiet run should succeed");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !stderr.contains("SQL Log Export Task Completed"),
+        "quiet should suppress completion summary, got: {stderr}"
+    );
+    assert!(
+        !stderr.contains("Completed with"),
+        "quiet should suppress error count line, got: {stderr}"
     );
 }

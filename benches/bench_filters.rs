@@ -194,6 +194,7 @@ fn bench_filters(c: &mut Criterion) {
                     handle_run(
                         cfg,
                         true,
+                        false,
                         &Arc::new(AtomicBool::new(false)),
                         compiled_filters,
                     )

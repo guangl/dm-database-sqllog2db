@@ -28,6 +28,7 @@ use sqlite_parallel::process_sqlite_parallel;
 pub fn handle_run(
     cfg: &Config,
     quiet: bool,
+    verbose: bool,
     interrupted: &Arc<AtomicBool>,
     compiled_filters: Option<(CompiledMetaFilters, CompiledSqlFilters)>,
 ) -> Result<ErrorStats> {
@@ -111,7 +112,7 @@ pub fn handle_run(
             .is_some_and(|f| f.enable && f.record_sql.has_filters())
     });
     let sql_record_filter = compiled_record_sql.as_ref();
-    let show_progress = !quiet;
+    let show_progress = !quiet && !verbose;
     let pb = if show_progress {
         let bar = ProgressBar::new_spinner();
         bar.set_style(
@@ -133,6 +134,13 @@ pub fn handle_run(
     let use_parallel = use_csv_parallel || use_sqlite_parallel;
 
     if use_csv_parallel {
+        if verbose {
+            eprintln!(
+                "Processing {} files in parallel ({} jobs)",
+                log_files.len(),
+                jobs
+            );
+        }
         info!("Parsing and exporting SQL logs (parallel, {jobs} jobs)...");
         let (processed_files, parallel_skipped) = process_csv_parallel(
             &log_files,
@@ -150,6 +158,13 @@ pub fn handle_run(
         total_records = processed_files.iter().map(|(_, c)| *c).sum();
         skipped_files = parallel_skipped;
     } else if use_sqlite_parallel {
+        if verbose {
+            eprintln!(
+                "Processing {} files in parallel ({} jobs)",
+                log_files.len(),
+                jobs
+            );
+        }
         info!("Parsing and exporting SQL logs (SQLite parallel, {jobs} jobs)...");
         let (total, parallel_skipped) = process_sqlite_parallel(
             &log_files,
@@ -175,6 +190,9 @@ pub fn handle_run(
         for (idx, log_file) in log_files.iter().enumerate() {
             if interrupted.load(Ordering::Relaxed) {
                 break;
+            }
+            if verbose {
+                eprintln!("Processing: {}", log_file.display());
             }
             let (processed, file_stats) = process_log_file(
                 &log_file.to_string_lossy(),
