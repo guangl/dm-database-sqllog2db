@@ -41,10 +41,14 @@ fn init_simple_logging(quiet: bool) {
 }
 
 /// Apply CLI verbosity flags to configuration.
-/// verbose flag is intentionally ignored: the Run path passes verbose directly
-/// to `handle_run`; only quiet affects the config's log level here.
-fn apply_verbosity_to_config(cfg: &mut Config, quiet: bool) {
-    if quiet {
+/// Sets the file logging level to match the CLI verbosity:
+/// - verbose=true → "debug" (more detail in log file)
+/// - quiet=true   → "error" (suppress most log output)
+/// - neither      → leave the config value unchanged
+fn apply_verbosity_to_config(cfg: &mut Config, verbose: bool, quiet: bool) {
+    if verbose {
+        cfg.logging.level = "debug".to_string();
+    } else if quiet {
         cfg.logging.level = "error".to_string();
     }
 }
@@ -135,7 +139,7 @@ fn run() -> Result<Option<(ErrorStats, bool)>> {
             apply_cli_inputs_to_config(&mut cfg, input.clone());
             let compiled_filters = cfg.validate_and_compile()?;
 
-            apply_verbosity_to_config(&mut cfg, cli.quiet);
+            apply_verbosity_to_config(&mut cfg, cli.verbose, cli.quiet);
             logging::init_logging(&cfg.logging, false)?;
             info!("Application started");
             info!("Configuration validation passed");
@@ -270,7 +274,7 @@ mod tests {
     #[test]
     fn test_apply_verbosity_quiet() {
         let mut cfg = Config::default();
-        apply_verbosity_to_config(&mut cfg, true);
+        apply_verbosity_to_config(&mut cfg, false, true);
         assert_eq!(cfg.logging.level, "error");
     }
 
@@ -278,8 +282,15 @@ mod tests {
     fn test_apply_verbosity_not_quiet() {
         let mut cfg = Config::default();
         let original = cfg.logging.level.clone();
-        apply_verbosity_to_config(&mut cfg, false);
+        apply_verbosity_to_config(&mut cfg, false, false);
         assert_eq!(cfg.logging.level, original);
+    }
+
+    #[test]
+    fn test_apply_verbosity_verbose_sets_debug() {
+        let mut cfg = Config::default();
+        apply_verbosity_to_config(&mut cfg, true, false);
+        assert_eq!(cfg.logging.level, "debug");
     }
 
     #[test]
