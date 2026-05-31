@@ -171,19 +171,22 @@ fn test_handle_init_en_template() {
     let config_path = dir.path().join("config.toml");
     handle_init(config_path.to_str().unwrap(), false).unwrap();
     let content = std::fs::read_to_string(&config_path).unwrap();
-    assert!(content.contains("[sqllog]"));
-    assert!(content.contains("SQL log path"));
-    assert!(!content.contains("日志路径"));
-}
-
-#[test]
-fn test_handle_init_template_is_english() {
-    let dir = tempfile::TempDir::new().unwrap();
-    let config_path = dir.path().join("config.toml");
-    handle_init(config_path.to_str().unwrap(), false).unwrap();
-    let content = std::fs::read_to_string(&config_path).unwrap();
-    assert!(content.contains("[sqllog]"));
-    assert!(content.contains("log path"));
+    assert!(
+        content.contains("[sqllog]"),
+        "init template should contain [sqllog] section"
+    );
+    assert!(
+        content.contains("SQL log path"),
+        "init template should contain 'SQL log path' comment"
+    );
+    assert!(
+        content.contains("log path"),
+        "init template should contain 'log path' (English only)"
+    );
+    assert!(
+        !content.contains("日志路径"),
+        "init template must not contain Chinese text"
+    );
 }
 
 // ── handle_init template comment tests ───────────────────────────────────────
