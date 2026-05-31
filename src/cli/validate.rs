@@ -2,7 +2,7 @@ use crate::config::Config;
 use log::info;
 
 pub fn handle_validate(cfg: &Config) {
-    info!("SQL log input path: {}", cfg.sqllog.path);
+    info!("SQL log inputs: {:?}", cfg.sqllog.inputs);
     info!("Log level: {}", cfg.logging.level);
     info!("Log file: {}", cfg.logging.file);
     info!("Log retention: {} days", cfg.logging.retention_days);

@@ -31,7 +31,8 @@ fn write_test_log(path: &std::path::Path, count: usize) {
 fn make_run_config(log_dir: &std::path::Path, csv_file: &std::path::Path) -> Config {
     Config {
         sqllog: SqllogConfig {
-            path: log_dir.to_str().unwrap().to_string(),
+            inputs: vec![log_dir.to_str().unwrap().to_string()],
+            path_deprecated: None,
         },
         exporter: ExporterConfig {
             csv: Some(CsvExporterConfig {

@@ -61,8 +61,9 @@ pub fn handle_init(output_path: &str, force: bool) -> Result<()> {
 const CONFIG_TEMPLATE_EN: &str = r#"# sqllog2db default configuration file (edit as needed)
 
 [sqllog]
-# SQL log path: directory, single file, or glob pattern (e.g. "./logs/2025-*.log")
-path = "sqllogs"
+# SQL log path list: directories, single files, or glob patterns (e.g. "./logs/2025-*.log")
+# Multiple entries are supported.
+inputs = ["sqllogs"]
 
 [logging]
 # Application log file path

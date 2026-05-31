@@ -88,14 +88,14 @@ mod tests {
             &path,
             r#"
 [sqllog]
-directory = "sqllogs"
+inputs = ["sqllogs"]
 [exporter.csv]
 file = "out.csv"
 "#,
         )
         .unwrap();
         let cfg = Config::from_file(&path).unwrap();
-        assert_eq!(cfg.sqllog.path, "sqllogs");
+        assert_eq!(cfg.sqllog.inputs, vec!["sqllogs".to_string()]);
         assert_eq!(cfg.exporter.csv.unwrap().file, "out.csv");
     }
 
@@ -135,7 +135,7 @@ file = "out.csv"
     fn test_csv_toml_default_include_performance_metrics() {
         let toml = r#"
 [sqllog]
-directory = "sqllogs"
+inputs = ["sqllogs"]
 [exporter.csv]
 file = "/tmp/x.csv"
 overwrite = true

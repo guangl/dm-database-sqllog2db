@@ -66,7 +66,7 @@ fn make_config(sqllog_dir: &std::path::Path, bench_dir: &std::path::Path) -> Con
     let toml = format!(
         r#"
 [sqllog]
-directory = "{sqllog}"
+inputs = ["{sqllog}"]
 
 [logging]
 file = "{dir}/app.log"

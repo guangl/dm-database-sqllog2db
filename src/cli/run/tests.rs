@@ -15,7 +15,7 @@ fn test_include_performance_metrics_false_csv_excludes_pm_columns() {
     let app_log = dir.path().join("app.log");
 
     let toml = format!(
-        "[sqllog]\npath = \"{logdir}\"\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\ninclude_performance_metrics = false\n",
+        "[sqllog]\ninputs = [\"{logdir}\"]\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\ninclude_performance_metrics = false\n",
         logdir = dir.path().to_string_lossy().replace('\\', "/"),
         errlog = error_log.to_string_lossy().replace('\\', "/"),
         applog = app_log.to_string_lossy().replace('\\', "/"),
@@ -56,7 +56,7 @@ fn test_handle_run_default_config_succeeds() {
     let app_log = dir.path().join("app.log");
 
     let toml = format!(
-        "[sqllog]\npath = \"{logdir}\"\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n",
+        "[sqllog]\ninputs = [\"{logdir}\"]\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n",
         logdir = dir.path().to_string_lossy().replace('\\', "/"),
         errlog = error_log.to_string_lossy().replace('\\', "/"),
         applog = app_log.to_string_lossy().replace('\\', "/"),
@@ -82,7 +82,7 @@ fn test_precompiled_filter_path() {
     let app_log = dir.path().join("app.log");
 
     let toml = format!(
-        "[sqllog]\npath = \"{logdir}\"\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[filter]\nenable = true\nusernames = [\"U\"]\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n",
+        "[sqllog]\ninputs = [\"{logdir}\"]\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[filter]\nenable = true\nusernames = [\"U\"]\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n",
         logdir = dir.path().to_string_lossy().replace('\\', "/"),
         errlog = error_log.to_string_lossy().replace('\\', "/"),
         applog = app_log.to_string_lossy().replace('\\', "/"),
@@ -119,7 +119,7 @@ fn test_parallel_merge_consistent() {
 
     let make_cfg_dir = |logdir: &std::path::Path, csv_file: &str| {
         let toml = format!(
-            "[sqllog]\npath = \"{logdir}\"\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n",
+            "[sqllog]\ninputs = [\"{logdir}\"]\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n",
             logdir = logdir.to_string_lossy().replace('\\', "/"),
             errlog = error_log.to_string_lossy().replace('\\', "/"),
             applog = app_log.to_string_lossy().replace('\\', "/"),
@@ -201,7 +201,7 @@ fn test_sqlite_parallel_matches_sequential() {
 
     let make_cfg = |logdir: &std::path::Path, db_path: &str| {
         let toml = format!(
-            "[sqllog]\npath = \"{logdir}\"\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.sqlite]\ndatabase_url = \"{db}\"\ntable_name = \"sqllog\"\noverwrite = true\nappend = false\nbatch_size = 1000\n",
+            "[sqllog]\ninputs = [\"{logdir}\"]\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.sqlite]\ndatabase_url = \"{db}\"\ntable_name = \"sqllog\"\noverwrite = true\nappend = false\nbatch_size = 1000\n",
             logdir = logdir.to_string_lossy().replace('\\', "/"),
             errlog = error_log.to_string_lossy().replace('\\', "/"),
             applog = app_log.to_string_lossy().replace('\\', "/"),
