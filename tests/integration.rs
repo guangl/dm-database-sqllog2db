@@ -1086,3 +1086,100 @@ fn test_cli_quiet_suppresses_summary() {
         "quiet should suppress error count line, got: {stderr}"
     );
 }
+
+// ── verbose summary differentiation tests (LOG-03) ───────────────────────────
+
+fn make_toml_config(
+    log_dir: &std::path::Path,
+    csv_file: &std::path::Path,
+    error_log: &std::path::Path,
+    app_log: &std::path::Path,
+) -> String {
+    format!(
+        "[sqllog]\npath = \"{logdir}\"\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n",
+        logdir = log_dir.to_string_lossy().replace('\\', "/"),
+        errlog = error_log.to_string_lossy().replace('\\', "/"),
+        applog = app_log.to_string_lossy().replace('\\', "/"),
+        csv = csv_file.to_string_lossy().replace('\\', "/"),
+    )
+}
+
+/// Verify that `--verbose run` stderr includes per-file `Processed: <path> — N records` lines
+/// before the completion summary, covering at least 2 files.
+#[test]
+fn test_cli_verbose_summary_includes_per_file_counts() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_dir = dir.path().join("logs");
+    std::fs::create_dir_all(&log_dir).unwrap();
+    write_test_log(&log_dir.join("a.log"), 5);
+    write_test_log(&log_dir.join("b.log"), 7);
+
+    let csv_file = dir.path().join("out.csv");
+    let error_log = dir.path().join("errors.log");
+    let app_log = dir.path().join("app.log");
+    let toml_path = dir.path().join("config.toml");
+    std::fs::write(
+        &toml_path,
+        make_toml_config(&log_dir, &csv_file, &error_log, &app_log),
+    )
+    .unwrap();
+
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_sqllog2db"))
+        .args(["--verbose", "run", "-c", toml_path.to_str().unwrap()])
+        .output()
+        .expect("failed to spawn");
+    assert!(
+        output.status.success(),
+        "verbose run failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let processed_count = stderr.matches("Processed: ").count();
+    assert!(
+        processed_count >= 2,
+        "expected >=2 'Processed: ' lines (one per file), got {processed_count}: {stderr}"
+    );
+    assert!(
+        stderr.contains("5 records") || stderr.contains("7 records"),
+        "expected per-file record count in stderr: {stderr}"
+    );
+    assert!(
+        stderr.contains("✓ SQL Log Export Task Completed"),
+        "expected completion summary in stderr: {stderr}"
+    );
+}
+
+/// Verify that default mode (no flags) stderr includes the completion summary but NOT
+/// per-file `Processed: ` detail lines.
+#[test]
+fn test_cli_default_summary_omits_per_file_counts() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_dir = dir.path().join("logs");
+    std::fs::create_dir_all(&log_dir).unwrap();
+    write_test_log(&log_dir.join("a.log"), 5);
+
+    let csv_file = dir.path().join("out.csv");
+    let error_log = dir.path().join("errors.log");
+    let app_log = dir.path().join("app.log");
+    let toml_path = dir.path().join("config.toml");
+    std::fs::write(
+        &toml_path,
+        make_toml_config(&log_dir, &csv_file, &error_log, &app_log),
+    )
+    .unwrap();
+
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_sqllog2db"))
+        .args(["run", "-c", toml_path.to_str().unwrap()])
+        .output()
+        .expect("failed to spawn");
+    assert!(output.status.success(), "default run should succeed");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !stderr.contains("Processed: "),
+        "default mode should NOT print per-file lines, got: {stderr}"
+    );
+    assert!(
+        stderr.contains("✓ SQL Log Export Task Completed"),
+        "default mode should print completion summary, got: {stderr}"
+    );
+}
