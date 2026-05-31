@@ -54,12 +54,15 @@ fn apply_verbosity_to_config(cfg: &mut Config, verbose: bool, quiet: bool) {
 }
 
 /// Apply CLI --input overrides to configuration.
-/// Per D-05: CLI inputs completely replace config inputs when Some; not merged.
+/// Per D-05: CLI inputs completely replace config inputs when Some and non-empty.
+/// Some(empty vec) keeps the config value and emits a warning.
 fn apply_cli_inputs_to_config(cfg: &mut Config, cli_inputs: Option<Vec<String>>) {
     if let Some(inputs) = cli_inputs {
-        if !inputs.is_empty() {
-            cfg.sqllog.inputs = inputs;
+        if inputs.is_empty() {
+            log::warn!("--input provided but empty; using config inputs");
+            return;
         }
+        cfg.sqllog.inputs = inputs;
     }
 }
 
