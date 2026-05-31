@@ -390,7 +390,7 @@ Full details: `.planning/phases/41-parser/`, `.planning/phases/42-criterion/`, `
 | 44. 热路径与内存优化 | v1.11 | Complete | 2026-05-24 |
 | 45. 并行扩展与 CI 基准集成 | v1.11 | Complete | 2026-05-25 |
 | 46. 错误信息优化 | 1/1 | Complete    | 2026-05-31 |
-| 47. 配置文件体验 | 2/2 | Complete   | 2026-05-31 |
+| 47. 配置文件体验 | 2/2 | Complete    | 2026-05-31 |
 | 48. 日志级别与运行提示 | v1.12 | Ready to execute | - |
 | 49. Glob 输入支持 | v1.12 | Ready to execute | - |
 
