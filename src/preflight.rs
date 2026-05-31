@@ -25,7 +25,7 @@ fn check_log_path(path_str: &str, result: &mut PreflightResult) {
         let path = Path::new(path_str);
         if !path.exists() {
             result.errors.push(format!(
-                "日志路径不存在: {path_str}  (可用 --set sqllog.path=<path> 覆盖)"
+                "日志路径不存在: {path_str}  (检查 [sqllog].inputs 或 --input 标志)"
             ));
             return;
         }

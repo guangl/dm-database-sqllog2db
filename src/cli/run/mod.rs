@@ -49,8 +49,11 @@ pub fn handle_run(
         info!("No log files found, reading from stdin (pipe mode)");
         vec![std::path::PathBuf::from("/dev/stdin")]
     } else if log_files.is_empty() {
-        warn!("No log files found");
-        return Ok(ErrorStats::default());
+        return Err(crate::error::Error::Parser(
+            crate::error::ParserError::NoFilesFound {
+                inputs: cfg.sqllog.inputs.clone(),
+            },
+        ));
     } else {
         log_files
     };

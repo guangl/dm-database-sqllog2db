@@ -158,7 +158,7 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_empty_sqllog_directory() {
+    fn test_validate_rejects_whitespace_input_entry() {
         let mut cfg = default_config();
         cfg.sqllog.inputs = vec!["  ".to_string()];
         assert!(cfg.validate().is_err());
@@ -445,6 +445,28 @@ file = "out.csv"
         assert!(
             err_msg.contains("[pipeline.fields] → [output.fields]"),
             "actual: {err_msg}"
+        );
+    }
+
+    #[test]
+    fn test_validate_rejects_legacy_sqllog_path_key() {
+        let toml = r#"
+[sqllog]
+path = "sqllogs"
+[exporter.csv]
+file = "out.csv"
+"#;
+        let cfg: Config = toml::from_str(toml).unwrap();
+        let result = cfg.validate();
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("sqllog.path"),
+            "expect sqllog.path field name; got: {err_msg}"
+        );
+        assert!(
+            err_msg.contains("inputs"),
+            "expect migration hint to mention inputs; got: {err_msg}"
         );
     }
 
