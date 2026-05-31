@@ -57,7 +57,7 @@ fn test_handle_run_empty_dir() {
     let csv_file = dir.path().join("out.csv");
     let cfg = make_run_config(&log_dir, &csv_file);
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None).unwrap();
 }
 
 #[test]
@@ -72,7 +72,7 @@ fn test_handle_run_multi_file() {
     let cfg = make_run_config(&log_dir, &csv_file);
 
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None).unwrap();
 }
 
 #[test]
@@ -86,7 +86,7 @@ fn test_handle_run_real_csv_export() {
     let cfg = make_run_config(&log_dir, &csv_file);
 
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None).unwrap();
 
     let content = std::fs::read_to_string(&csv_file).unwrap();
     // header + 10 data rows = 11 lines
@@ -110,7 +110,7 @@ fn test_handle_run_interrupted() {
 
     // Pre-set interrupted flag — run returns Err(Interrupted) when flag is set before processing
     let interrupted = Arc::new(AtomicBool::new(true));
-    let result = handle_run(&cfg, true, &interrupted, None);
+    let result = handle_run(&cfg, true, false, &interrupted, None);
     assert!(
         result.is_err(),
         "handle_run should return Err(Interrupted) when interrupt flag is pre-set: {result:?}"
@@ -333,7 +333,7 @@ fn test_handle_run_non_quiet_prints_summary() {
     let cfg = make_run_config(&log_dir, &csv_file);
     let interrupted = Arc::new(AtomicBool::new(false));
     // quiet=false exercises the summary print path
-    handle_run(&cfg, false, &interrupted, None).unwrap();
+    handle_run(&cfg, false, false, &interrupted, None).unwrap();
 }
 
 #[test]
@@ -357,7 +357,7 @@ fn test_handle_run_with_filters_builds_pipeline() {
     });
     let compiled_filters = cfg.validate_and_compile().unwrap();
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, &interrupted, compiled_filters).unwrap();
+    handle_run(&cfg, true, false, &interrupted, compiled_filters).unwrap();
 }
 
 #[test]
@@ -382,7 +382,7 @@ fn test_handle_run_with_transaction_filters_prescans() {
         ..Default::default()
     });
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None).unwrap();
 }
 
 #[test]
@@ -407,7 +407,7 @@ fn test_handle_run_with_min_runtime_filter() {
         ..Default::default()
     });
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None).unwrap();
 }
 
 // ── parallel CSV tests ──────────────────────────────────────────────────────
@@ -427,7 +427,7 @@ fn test_handle_run_parallel_csv_multiple_files() {
     let interrupted = Arc::new(AtomicBool::new(false));
 
     // jobs=2, multiple files, no limit, CSV exporter → triggers process_csv_parallel
-    handle_run(&cfg, true, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None).unwrap();
 
     let content = std::fs::read_to_string(&csv_file).unwrap();
     let data_lines = content.lines().count().saturating_sub(1);
@@ -463,7 +463,7 @@ fn test_csv_throughput_baseline() {
 
     let interrupted = Arc::new(AtomicBool::new(false));
     let start = std::time::Instant::now();
-    handle_run(&cfg, true, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None).unwrap();
     let elapsed = start.elapsed().as_secs_f64();
 
     let rate = f64::from(u32::try_from(RECORD_COUNT).expect("20_000 fits in u32")) / elapsed;
@@ -633,7 +633,7 @@ fn test_e2e_filter_pipeline() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None).unwrap();
 
     // Assert: header + 10 条数据行 = 11 行
     let content = std::fs::read_to_string(&csv_file).unwrap();
@@ -670,7 +670,7 @@ fn test_e2e_filter_pipeline() {
         exclude: ExcludeFilters::default(),
         ..Default::default()
     });
-    handle_run(&cfg2, true, &Arc::new(AtomicBool::new(false)), None).unwrap();
+    handle_run(&cfg2, true, false, &Arc::new(AtomicBool::new(false)), None).unwrap();
     let content2 = std::fs::read_to_string(&csv_file2).unwrap();
     // OTHER 全被过滤，只有 header
     assert_eq!(
@@ -701,7 +701,7 @@ fn test_e2e_field_projection() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None).unwrap();
 
     // Assert: header 精确为 "ts,username,sql"，数据行 split(',').count() == 3
     let content = std::fs::read_to_string(&csv_file).unwrap();
@@ -744,7 +744,7 @@ fn test_boundary_empty_log_file() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None).unwrap();
 
     // Assert: CSV 文件存在且只有 header（1 行）
     assert!(
@@ -782,7 +782,7 @@ fn test_boundary_all_filtered() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None).unwrap();
 
     // Assert: CSV 只有 header（全部记录被过滤）
     let content = std::fs::read_to_string(&csv_file).unwrap();
@@ -820,7 +820,7 @@ fn test_boundary_malformed_line() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None).unwrap();
 
     // Assert: 无效行被跳过，4 条正常记录导出 → header + 4 data = 5 行
     let csv_content = std::fs::read_to_string(&csv_file).unwrap();
@@ -850,7 +850,7 @@ fn test_boundary_long_sql() {
 
     // Act: 不应 panic，不应 OOM
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None).unwrap();
 
     // Assert: 1 条记录正常导出 → header + 1 data = 2 行
     let csv_content = std::fs::read_to_string(&csv_file).unwrap();

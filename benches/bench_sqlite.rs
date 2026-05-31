@@ -64,6 +64,7 @@ fn bench_sqlite_export(c: &mut Criterion) {
                 handle_run(
                     cfg,
                     true,
+                    false,
                     &Arc::new(AtomicBool::new(false)),
                     None, // compiled_filters
                 )
@@ -97,6 +98,7 @@ fn bench_sqlite_real_file(c: &mut Criterion) {
             handle_run(
                 &cfg,
                 true,
+                false,
                 &Arc::new(AtomicBool::new(false)),
                 None, // compiled_filters
             )
@@ -126,6 +128,7 @@ fn bench_sqlite_single_row(c: &mut Criterion) {
                 handle_run(
                     cfg,
                     true,
+                    false,
                     &Arc::new(AtomicBool::new(false)),
                     None, // compiled_filters
                 )

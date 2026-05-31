@@ -22,14 +22,15 @@ EXAMPLES:
         sqllog2db validate -c config.toml"
 )]
 pub(crate) struct Cli {
-    /// Verbose output (-v for debug, -vv for trace)
+    /// Show per-file processing details
     #[arg(
         short = 'v',
-        action = clap::ArgAction::Count,
+        long = "verbose",
         global = true,
-        help = "-v for debug logging, -vv for trace logging."
+        conflicts_with = "quiet",
+        help = "Show per-file processing details on stderr."
     )]
-    pub(crate) verbose: u8,
+    pub(crate) verbose: bool,
 
     /// Suppress non-error output
     #[arg(short = 'q', global = true, conflicts_with = "verbose")]
