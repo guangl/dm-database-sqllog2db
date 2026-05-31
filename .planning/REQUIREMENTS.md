@@ -42,21 +42,21 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ERROR-01 | TBD | Pending |
-| ERROR-02 | TBD | Pending |
-| CONFIG-01 | TBD | Pending |
-| CONFIG-02 | TBD | Pending |
-| LOG-01 | TBD | Pending |
-| LOG-02 | TBD | Pending |
-| LOG-03 | TBD | Pending |
-| INPUT-01 | TBD | Pending |
-| INPUT-02 | TBD | Pending |
+| ERROR-01 | 46 | Pending |
+| ERROR-02 | 46 | Pending |
+| CONFIG-01 | 47 | Pending |
+| CONFIG-02 | 47 | Pending |
+| LOG-01 | 48 | Pending |
+| LOG-02 | 48 | Pending |
+| LOG-03 | 48 | Pending |
+| INPUT-01 | 49 | Pending |
+| INPUT-02 | 49 | Pending |
 
 **Coverage:**
 - v1.12 requirements: 9 total
-- Mapped to phases: 0 (roadmap pending)
-- Unmapped: 9
+- Mapped to phases: 9
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-05-31*
-*Last updated: 2026-05-31 — v1.12 requirements defined*
+*Last updated: 2026-05-31 — v1.12 roadmap created, all 9 requirements mapped to Phases 46–49*
