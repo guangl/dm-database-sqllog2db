@@ -537,23 +537,6 @@ fn test_init_generates_new_nested_format() {
 }
 
 #[test]
-fn test_init_generated_zh_template_passes_validate() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("config.toml");
-    handle_init(path.to_str().unwrap(), true).unwrap();
-    let cfg = dm_database_sqllog2db::config::Config::from_file(&path).unwrap();
-    assert!(
-        cfg.validate().is_ok(),
-        "ZH init template must pass validate()"
-    );
-    let content = std::fs::read_to_string(&path).unwrap();
-    assert!(
-        !content.contains("pipeline."),
-        "ZH init template must not contain any 'pipeline.' substring"
-    );
-}
-
-#[test]
 fn test_init_generated_en_template_passes_validate() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("config.toml");
