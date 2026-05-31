@@ -815,3 +815,45 @@ fn test_boundary_long_sql() {
         csv_content.lines().count()
     );
 }
+
+// ── CLI stderr error format tests ────────────────────────────────────────────
+
+/// Verify that fatal errors output "  hint: " prefix and not "Suggestion:" in real stderr.
+/// Triggers `Config::ParseFailed` by passing an invalid TOML config file.
+#[test]
+fn test_cli_error_uses_hint_prefix() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let bad_toml = dir.path().join("bad.toml");
+    std::fs::write(&bad_toml, "not valid toml ][[[").unwrap();
+
+    let binary = env!("CARGO_BIN_EXE_sqllog2db");
+    let output = std::process::Command::new(binary)
+        .args(["run", "-c", bad_toml.to_str().unwrap()])
+        .output()
+        .expect("failed to execute sqllog2db binary");
+
+    let stderr_text = String::from_utf8_lossy(&output.stderr);
+
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "expected exit code 2 (EXIT_FATAL), got: {:?}\nstderr: {stderr_text}",
+        output.status.code()
+    );
+    assert!(
+        stderr_text.contains("[CRITICAL]"),
+        "stderr should contain [CRITICAL] prefix, got: {stderr_text}"
+    );
+    assert!(
+        stderr_text.contains("  hint: "),
+        "stderr should contain '  hint: ' prefix, got: {stderr_text}"
+    );
+    assert!(
+        !stderr_text.contains("Suggestion:"),
+        "stderr should not contain old 'Suggestion:' prefix, got: {stderr_text}"
+    );
+    assert!(
+        stderr_text.contains("Configuration error"),
+        "stderr should contain 'Configuration error' text, got: {stderr_text}"
+    );
+}

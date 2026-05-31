@@ -56,6 +56,19 @@ fn apply_verbosity_to_config(cfg: &mut Config, verbose: u8, quiet: bool) {
     }
 }
 
+/// Format a fatal error into a multi-line string for stderr output.
+/// First line: `[SEVERITY] display_text`
+/// Second line (if hint non-empty): `  hint: suggestion_text`
+fn format_error_output(error: &Error) -> String {
+    let severity = error.severity();
+    let hint = error.suggestion();
+    if hint.is_empty() {
+        format!("[{severity}] {error}")
+    } else {
+        format!("[{severity}] {error}\n  hint: {hint}")
+    }
+}
+
 fn main() {
     match run() {
         Ok(Some(stats)) => {
@@ -76,12 +89,7 @@ fn main() {
             if matches!(e, Error::Interrupted) {
                 std::process::exit(EXIT_INTERRUPTED);
             }
-            let sev = e.severity();
-            eprintln!("[{sev}] {e}");
-            let suggestion = e.suggestion();
-            if !suggestion.is_empty() {
-                eprintln!("  Suggestion: {suggestion}");
-            }
+            eprintln!("{}", format_error_output(&e));
             std::process::exit(EXIT_FATAL);
         }
     }
@@ -267,5 +275,37 @@ mod tests {
         std::fs::write(&path, "not valid toml ][[[").unwrap();
         let result = load_config(path.to_str().unwrap());
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_error_io_suggestion_non_empty() {
+        let e = Error::Io(std::io::Error::other("disk full"));
+        let suggestion = e.suggestion();
+        assert!(!suggestion.is_empty(), "Io suggestion should not be empty");
+        assert!(
+            suggestion.contains("filesystem"),
+            "Io suggestion should mention filesystem, got: {suggestion}"
+        );
+    }
+
+    #[test]
+    fn test_error_print_format_uses_hint_prefix() {
+        let e = Error::Export(ExportError::WriteFailed {
+            path: "/tmp/out.csv".into(),
+            reason: "disk full".into(),
+        });
+        let formatted = format_error_output(&e);
+        assert!(
+            formatted.contains("\n  hint: "),
+            "formatted output should contain hint prefix, got: {formatted}"
+        );
+        assert!(
+            !formatted.contains("Suggestion:"),
+            "formatted output should not contain old Suggestion: prefix, got: {formatted}"
+        );
+        assert!(
+            formatted.starts_with("[ERROR]"),
+            "first line should start with [ERROR], got: {formatted}"
+        );
     }
 }
