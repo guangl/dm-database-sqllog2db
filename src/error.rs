@@ -213,8 +213,6 @@ pub enum ParserError {
         path: PathBuf,
         reason: String,
     },
-    // NOTE: 由 Plan 02 的 parser.rs 构造；Plan 01 仅定义变体
-    #[allow(dead_code)]
     NoFilesFound {
         inputs: Vec<String>,
     },

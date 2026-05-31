@@ -38,9 +38,7 @@ pub fn handle_run(
     };
     let total_start = Instant::now();
 
-    // TODO(Plan 02): 更新 SqllogParser::new() 接受 Vec<String>；当前临时使用第一个 input
-    let first_input = cfg.sqllog.inputs.first().cloned().unwrap_or_default();
-    let log_files = SqllogParser::new(&first_input).log_files()?;
+    let log_files = SqllogParser::new(cfg.sqllog.inputs.clone()).log_files()?;
     let mut run_stats = ErrorStats::default();
 
     // Stdin pipe mode: fall back when no log files found AND stdin is not a terminal.
@@ -51,8 +49,11 @@ pub fn handle_run(
         info!("No log files found, reading from stdin (pipe mode)");
         vec![std::path::PathBuf::from("/dev/stdin")]
     } else if log_files.is_empty() {
-        warn!("No log files found");
-        return Ok(ErrorStats::default());
+        return Err(crate::error::Error::Parser(
+            crate::error::ParserError::NoFilesFound {
+                inputs: cfg.sqllog.inputs.clone(),
+            },
+        ));
     } else {
         log_files
     };
