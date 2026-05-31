@@ -172,6 +172,52 @@ fn test_handle_init_template_is_english() {
     assert!(content.contains("log path"));
 }
 
+// ── handle_init template comment tests ───────────────────────────────────────
+
+#[test]
+fn test_init_template_has_csv_append_comment() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let config_path = dir.path().join("config.toml");
+    handle_init(config_path.to_str().unwrap(), false).unwrap();
+    let content = std::fs::read_to_string(&config_path).unwrap();
+    assert!(
+        content.contains("Append to existing CSV file instead of overwriting"),
+        "init template should contain csv append comment"
+    );
+    assert!(
+        content.contains("CSV output file path"),
+        "init template should contain csv file comment"
+    );
+}
+
+#[test]
+fn test_init_template_has_sqlite_field_comments() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let config_path = dir.path().join("config.toml");
+    handle_init(config_path.to_str().unwrap(), false).unwrap();
+    let content = std::fs::read_to_string(&config_path).unwrap();
+    assert!(
+        content.contains("SQLite database file path"),
+        "init template should contain sqlite database_url comment"
+    );
+    assert!(
+        content.contains("Table name to write records into"),
+        "init template should contain sqlite table_name comment"
+    );
+    assert!(
+        content.contains("ASCII identifiers only"),
+        "init template should contain ASCII identifiers note"
+    );
+    assert!(
+        content.contains("Drop and recreate the table"),
+        "init template should contain sqlite overwrite comment"
+    );
+    assert!(
+        content.contains("Append rows to existing table"),
+        "init template should contain sqlite append comment"
+    );
+}
+
 // ── handle_validate tests ────────────────────────────────────────────────────
 
 #[test]
@@ -855,5 +901,84 @@ fn test_cli_error_uses_hint_prefix() {
     assert!(
         stderr_text.contains("Configuration error"),
         "stderr should contain 'Configuration error' text, got: {stderr_text}"
+    );
+}
+
+// ── validate command output tests (CONFIG-02) ────────────────────────────────
+
+/// Verify that `sqllog2db validate` on a valid config outputs exactly "Configuration valid." to stdout.
+#[test]
+fn test_cli_validate_valid_config_outputs_configuration_valid() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let config_path = dir.path().join("config.toml");
+    // Write a minimal valid config: sqllog + csv exporter
+    std::fs::write(
+        &config_path,
+        "[sqllog]\npath = \"sqllogs\"\n\n[exporter.csv]\nfile = \"out.csv\"\n",
+    )
+    .unwrap();
+
+    let binary = env!("CARGO_BIN_EXE_sqllog2db");
+    let output = std::process::Command::new(binary)
+        .args(["validate", "-c", config_path.to_str().unwrap()])
+        .output()
+        .expect("failed to execute sqllog2db binary");
+
+    let stdout_text = String::from_utf8_lossy(&output.stdout);
+    let stderr_text = String::from_utf8_lossy(&output.stderr);
+
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "expected exit code 0 for valid config, got: {:?}\nstderr: {stderr_text}",
+        output.status.code()
+    );
+    assert!(
+        stdout_text.contains("Configuration valid."),
+        "stdout should contain 'Configuration valid.', got: {stdout_text}"
+    );
+}
+
+/// Verify that `sqllog2db validate` on an invalid config outputs "[FAIL]" to stderr and exits with code 2.
+#[test]
+fn test_cli_validate_invalid_config_outputs_fail_prefix() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let config_path = dir.path().join("bad_config.toml");
+    // Invalid: logging.level set to an invalid value
+    std::fs::write(
+        &config_path,
+        "[sqllog]\npath = \"sqllogs\"\n\n[logging]\nlevel = \"verbose\"\n\n[exporter.csv]\nfile = \"out.csv\"\n",
+    )
+    .unwrap();
+
+    let binary = env!("CARGO_BIN_EXE_sqllog2db");
+    let output = std::process::Command::new(binary)
+        .args(["validate", "-c", config_path.to_str().unwrap()])
+        .output()
+        .expect("failed to execute sqllog2db binary");
+
+    let stderr_text = String::from_utf8_lossy(&output.stderr);
+
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "expected exit code 2 (EXIT_FATAL) for invalid config, got: {:?}\nstderr: {stderr_text}",
+        output.status.code()
+    );
+    assert!(
+        stderr_text.contains("[FAIL]"),
+        "stderr should contain '[FAIL]' prefix, got: {stderr_text}"
+    );
+    assert!(
+        stderr_text.contains("  hint: "),
+        "stderr should contain '  hint: ' line, got: {stderr_text}"
+    );
+    assert!(
+        !stderr_text.contains("[CRITICAL]"),
+        "stderr should not contain '[CRITICAL]' for validate errors, got: {stderr_text}"
+    );
+    assert!(
+        !stderr_text.contains("[ERROR]"),
+        "stderr should not contain '[ERROR]' for validate errors, got: {stderr_text}"
     );
 }
