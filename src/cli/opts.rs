@@ -33,7 +33,7 @@ pub(crate) struct Cli {
     pub(crate) verbose: bool,
 
     /// Suppress non-error output
-    #[arg(short = 'q', global = true, conflicts_with = "verbose")]
+    #[arg(short = 'q', long = "quiet", global = true, conflicts_with = "verbose")]
     pub(crate) quiet: bool,
 
     #[command(subcommand)]

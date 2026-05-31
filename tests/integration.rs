@@ -982,3 +982,107 @@ fn test_cli_validate_invalid_config_outputs_fail_prefix() {
         "stderr should not contain '[ERROR]' for validate errors, got: {stderr_text}"
     );
 }
+
+// ── verbose/quiet CLI behavior tests (LOG-01, LOG-02) ───────────────────────
+
+/// Verify that `-v -q` conflict is detected by clap and exits non-zero with a conflict message.
+#[test]
+fn test_cli_verbose_quiet_mutual_exclusion() {
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_sqllog2db"))
+        .args(["-v", "-q", "run", "-c", "nonexistent.toml"])
+        .output()
+        .expect("failed to spawn sqllog2db binary");
+    assert!(
+        !output.status.success(),
+        "expected non-zero exit for -v -q conflict"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("cannot be used with") || stderr.contains("conflict"),
+        "expected clap conflict message, got: {stderr}"
+    );
+}
+
+/// Verify that `--verbose run` prints `Processing: <path>` to stderr for each processed file.
+/// Uses a single log file to force the sequential path (where per-file output is emitted).
+#[test]
+fn test_cli_verbose_prints_processing_line_per_file() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_dir = dir.path().join("logs");
+    std::fs::create_dir_all(&log_dir).unwrap();
+    // Single file forces sequential path, which emits "Processing: <path>" per file.
+    write_test_log(&log_dir.join("a.log"), 5);
+
+    let csv_path = dir.path().join("out.csv");
+    let error_log = dir.path().join("errors.log");
+    let app_log = dir.path().join("app.log");
+
+    let config_path = dir.path().join("config.toml");
+    std::fs::write(
+        &config_path,
+        format!(
+            "[sqllog]\npath = \"{logdir}\"\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n",
+            logdir = log_dir.to_string_lossy().replace('\\', "/"),
+            errlog = error_log.to_string_lossy().replace('\\', "/"),
+            applog = app_log.to_string_lossy().replace('\\', "/"),
+            csv = csv_path.to_string_lossy().replace('\\', "/"),
+        ),
+    )
+    .unwrap();
+
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_sqllog2db"))
+        .args(["--verbose", "run", "-c", config_path.to_str().unwrap()])
+        .output()
+        .expect("failed to spawn sqllog2db binary");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "verbose run should succeed, stderr: {stderr}"
+    );
+    let processing_count = stderr.matches("Processing: ").count();
+    assert!(
+        processing_count >= 1,
+        "expected >=1 Processing line, got {processing_count}: {stderr}"
+    );
+}
+
+/// Verify that `--quiet run` suppresses the completion summary and `ProgressBar` output.
+#[test]
+fn test_cli_quiet_suppresses_summary() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_dir = dir.path().join("logs");
+    std::fs::create_dir_all(&log_dir).unwrap();
+    write_test_log(&log_dir.join("test.log"), 5);
+
+    let csv_path = dir.path().join("out.csv");
+    let error_log = dir.path().join("errors.log");
+    let app_log = dir.path().join("app.log");
+
+    let config_path = dir.path().join("config.toml");
+    std::fs::write(
+        &config_path,
+        format!(
+            "[sqllog]\npath = \"{logdir}\"\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n",
+            logdir = log_dir.to_string_lossy().replace('\\', "/"),
+            errlog = error_log.to_string_lossy().replace('\\', "/"),
+            applog = app_log.to_string_lossy().replace('\\', "/"),
+            csv = csv_path.to_string_lossy().replace('\\', "/"),
+        ),
+    )
+    .unwrap();
+
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_sqllog2db"))
+        .args(["--quiet", "run", "-c", config_path.to_str().unwrap()])
+        .output()
+        .expect("failed to spawn sqllog2db binary");
+    assert!(output.status.success(), "quiet run should succeed");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !stderr.contains("SQL Log Export Task Completed"),
+        "quiet should suppress completion summary, got: {stderr}"
+    );
+    assert!(
+        !stderr.contains("Completed with"),
+        "quiet should suppress error count line, got: {stderr}"
+    );
+}
