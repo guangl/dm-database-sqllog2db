@@ -365,4 +365,48 @@ mod tests {
             "first line should start with [ERROR], got: {formatted}"
         );
     }
+
+    // IN-02: Interrupted is excluded from format_error_output by a matches! guard in main().
+    // This test documents that the guard fires (i.e. the condition is true for Interrupted)
+    // and that if format_error_output were called it would emit a [CRITICAL] hint line —
+    // confirming that the guard is necessary to suppress it.
+    #[test]
+    fn test_interrupted_matches_guard_is_true() {
+        let e = Error::Interrupted;
+        assert!(
+            matches!(e, Error::Interrupted),
+            "Interrupted variant must match the guard used in main()"
+        );
+        // If the guard were bypassed, format_error_output would produce a hint:
+        let formatted = format_error_output(&e);
+        assert!(
+            formatted.starts_with("[CRITICAL]"),
+            "format_error_output for Interrupted would produce [CRITICAL], got: {formatted}"
+        );
+        assert!(
+            formatted.contains("\n  hint: "),
+            "format_error_output for Interrupted would include hint line, got: {formatted}"
+        );
+    }
+
+    #[test]
+    fn test_format_error_output_config_parse_failed_is_critical() {
+        let e = Error::Config(ConfigError::ParseFailed {
+            path: "/tmp/bad.toml".into(),
+            reason: "unexpected EOF".into(),
+        });
+        let formatted = format_error_output(&e);
+        assert!(
+            formatted.starts_with("[CRITICAL]"),
+            "ParseFailed should produce [CRITICAL] prefix, got: {formatted}"
+        );
+        assert!(
+            formatted.contains("\n  hint: "),
+            "ParseFailed should include hint line, got: {formatted}"
+        );
+        assert!(
+            !formatted.contains("Suggestion:"),
+            "should not use old Suggestion: prefix, got: {formatted}"
+        );
+    }
 }
