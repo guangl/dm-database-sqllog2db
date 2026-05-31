@@ -315,8 +315,8 @@ Full details: `.planning/phases/41-parser/`, `.planning/phases/42-criterion/`, `
   4. `--verbose` 和 `--quiet` 互斥，同时指定时给出明确错误提示
   5. `cargo clippy --all-targets -- -D warnings` + `cargo test` 全部通过
 **Plans**: 2 plans
-- [ ] 48-01-PLAN.md — opts.rs `-v` 改 bool + main.rs 移除 debug 映射并扩展 handle_run 调用 + cli/run/mod.rs 增 verbose 参数与 ProgressBar 条件化 + 35+ handle_run 调用点迁移 + 端到端 CLI 测试覆盖 LOG-01/LOG-02
-- [ ] 48-02-PLAN.md — sqlite_parallel 返回值对齐 csv_parallel 形态 + handle_run 顺序路径收集 per_file_counts + verbose 摘要前输出每文件 `Processed:` 明细 + 端到端测试覆盖 LOG-03
+- [x] 48-01-PLAN.md — opts.rs `-v` 改 bool + main.rs 移除 debug 映射并扩展 handle_run 调用 + cli/run/mod.rs 增 verbose 参数与 ProgressBar 条件化 + 35+ handle_run 调用点迁移 + 端到端 CLI 测试覆盖 LOG-01/LOG-02
+- [x] 48-02-PLAN.md — sqlite_parallel 返回值对齐 csv_parallel 形态 + handle_run 顺序路径收集 per_file_counts + verbose 摘要前输出每文件 `Processed:` 明细 + 端到端测试覆盖 LOG-03
 **UI hint**: yes
 
 ### Phase 49: Glob 输入支持
@@ -391,7 +391,7 @@ Full details: `.planning/phases/41-parser/`, `.planning/phases/42-criterion/`, `
 | 45. 并行扩展与 CI 基准集成 | v1.11 | Complete | 2026-05-25 |
 | 46. 错误信息优化 | 1/1 | Complete    | 2026-05-31 |
 | 47. 配置文件体验 | 2/2 | Complete    | 2026-05-31 |
-| 48. 日志级别与运行提示 | v1.12 | Ready to execute | - |
+| 48. 日志级别与运行提示 | 2/2 | Complete   | 2026-05-31 |
 | 49. Glob 输入支持 | v1.12 | Ready to execute | - |
 
 ---
