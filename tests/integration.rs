@@ -172,6 +172,52 @@ fn test_handle_init_template_is_english() {
     assert!(content.contains("log path"));
 }
 
+// ── handle_init template comment tests ───────────────────────────────────────
+
+#[test]
+fn test_init_template_has_csv_append_comment() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let config_path = dir.path().join("config.toml");
+    handle_init(config_path.to_str().unwrap(), false).unwrap();
+    let content = std::fs::read_to_string(&config_path).unwrap();
+    assert!(
+        content.contains("Append to existing CSV file instead of overwriting"),
+        "init template should contain csv append comment"
+    );
+    assert!(
+        content.contains("CSV output file path"),
+        "init template should contain csv file comment"
+    );
+}
+
+#[test]
+fn test_init_template_has_sqlite_field_comments() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let config_path = dir.path().join("config.toml");
+    handle_init(config_path.to_str().unwrap(), false).unwrap();
+    let content = std::fs::read_to_string(&config_path).unwrap();
+    assert!(
+        content.contains("SQLite database file path"),
+        "init template should contain sqlite database_url comment"
+    );
+    assert!(
+        content.contains("Table name to write records into"),
+        "init template should contain sqlite table_name comment"
+    );
+    assert!(
+        content.contains("ASCII identifiers only"),
+        "init template should contain ASCII identifiers note"
+    );
+    assert!(
+        content.contains("Drop and recreate the table"),
+        "init template should contain sqlite overwrite comment"
+    );
+    assert!(
+        content.contains("Append rows to existing table"),
+        "init template should contain sqlite append comment"
+    );
+}
+
 // ── handle_validate tests ────────────────────────────────────────────────────
 
 #[test]
