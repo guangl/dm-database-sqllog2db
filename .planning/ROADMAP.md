@@ -330,9 +330,9 @@ Full details: `.planning/phases/41-parser/`, `.planning/phases/42-criterion/`, `
   4. glob 与直接路径混合使用时（如 `--input file1.log --input 'dir/*.log'`）均能正确处理
   5. `cargo clippy --all-targets -- -D warnings` + `cargo test` 全部通过，不引入重量级依赖（使用 `glob` 或 `globset` crate）
 **Plans**: 3 plans
-- [ ] 49-01-PLAN.md — SqllogConfig 改造 path→inputs: Vec<String> + path_deprecated 旧键检测 + ParserError::NoFilesFound 变体与 Error::suggestion 分支（schema + error 基础设施）
-- [ ] 49-02-PLAN.md — SqllogParser 改为 Vec<String> 多输入接口 + 调用方迁移（cli/run/mod.rs、preflight.rs、cli/validate.rs、config/mod.rs 与 config/validate.rs 内单元测试）+ handle_run 空列表抛 NoFilesFound
-- [ ] 49-03-PLAN.md — cli/opts.rs Run 增 --input/-i (ArgAction::Append) + main.rs apply_cli_inputs_to_config 注入 + CONFIG_TEMPLATE_EN [sqllog] 改为 inputs 数组 + tests/integration.rs 迁移与 4 个端到端 CLI 测试覆盖 INPUT-02
+- [x] 49-01-PLAN.md — SqllogConfig 改造 path→inputs: Vec<String> + path_deprecated 旧键检测 + ParserError::NoFilesFound 变体与 Error::suggestion 分支（schema + error 基础设施）
+- [x] 49-02-PLAN.md — SqllogParser 改为 Vec<String> 多输入接口 + 调用方迁移（cli/run/mod.rs、preflight.rs、cli/validate.rs、config/mod.rs 与 config/validate.rs 内单元测试）+ handle_run 空列表抛 NoFilesFound
+- [x] 49-03-PLAN.md — cli/opts.rs Run 增 --input/-i (ArgAction::Append) + main.rs apply_cli_inputs_to_config 注入 + CONFIG_TEMPLATE_EN [sqllog] 改为 inputs 数组 + tests/integration.rs 迁移与 4 个端到端 CLI 测试覆盖 INPUT-02
 
 ## Coverage Validation
 
@@ -392,7 +392,7 @@ Full details: `.planning/phases/41-parser/`, `.planning/phases/42-criterion/`, `
 | 46. 错误信息优化 | 1/1 | Complete    | 2026-05-31 |
 | 47. 配置文件体验 | 2/2 | Complete    | 2026-05-31 |
 | 48. 日志级别与运行提示 | 2/2 | Complete    | 2026-05-31 |
-| 49. Glob 输入支持 | v1.12 | Ready to execute | - |
+| 49. Glob 输入支持 | 3/3 | Complete   | 2026-05-31 |
 
 ---
 *Created: 2026-05-21 for milestone v1.10*
