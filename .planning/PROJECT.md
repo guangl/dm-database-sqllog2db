@@ -8,31 +8,27 @@
 
 用户能够精确指定"导出哪些记录的哪些字段"——过滤逻辑清晰可配置，输出结果完全可控。
 
-## Current Milestone: v1.11 性能深化与依赖适配
+## Current Milestone: v1.12 CLI 体验全面提升
 
-**Goal:** 适配上游 parser 新 API、优化内存与并行性能、完善基准测试体系，全面提升吞吐量与可维护性。
+**Goal:** 全面改善用户与 sqllog2db 的交互体验，让配置更清晰、错误更可修复、日志更可控、输入更灵活。
 
 **Target features:**
-- 适配 dm-database-parser-sqllog 新功能（from_reader API 或新字段，替换现有写法）
-- 解析速度提升（热路径优化，目标超越 1.55M records/sec）
-- 内存占用优化（大文件场景减少堆分配）
-- 并行处理扩展（SQLite 导出或多文件并行）
-- filter 代码重构（降低复杂度，减少模块耦合）
-- 基准测试完善 + CI 性能回归防护
+- 错误信息优化：显示具体出错字段/原因 + 修复建议 Hint
+- 配置文件体验：init 生成带注释模板，validate 显示详细结果
+- 运行提示/日志级别：--verbose/--quiet 开关，摘要信息可调
+- 多输入文件 glob 支持：config.toml input 字段 + --input 参数均支持 glob
 
-## Previous: v1.10 已交付
+## Previous: v1.11 已交付
 
-**Shipped:** 2026-05-21  
-**Version:** v1.10 质量加固与体验优化（Phases 35–40）
+**Shipped:** 2026-05-25  
+**Version:** v1.11 性能深化与依赖适配（Phases 41–45）
 
 **已交付功能：**
-- CSV + SQLite 双格式导出，全面端到端验证（487 个测试通过）
-- Pipeline 过滤器（include/exclude/indicators/sql）+ 参数归一化
-- 并行 CSV 处理（rayon），~5.2M records/sec 性能基线
-- 错误处理重构：类型细分，非致命继续处理，3 级退出码（0/1/2）
-- stdin 管道输入（`cat log | sqllog2db run`）
-- indicatif 进度条 + 处理摘要
-- 丰富的 --help 示例（达梦场景）
+- 依赖升级与 Parser 库适配（dm-database-parser-sqllog 新 API）
+- Criterion 基准测试基础设施（bench_csv、bench_sqlite）
+- Parser 新 API 适配与 Filter 重构（降低复杂度，减少耦合）
+- 热路径与内存优化（减少堆分配）
+- 并行扩展与 CI 基准集成（rayon 多文件并行，~5.2M records/sec）
 
 ## Requirements
 
@@ -53,7 +49,7 @@
 
 ### Active
 
-（v1.11 requirements — 待 REQUIREMENTS.md 定义后填入）
+（v1.12 requirements — 待 REQUIREMENTS.md 定义后填入）
 
 ### Out of Scope
 
@@ -107,4 +103,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-24 — Milestone v1.11 started*
+*Last updated: 2026-05-31 — Milestone v1.12 started*
