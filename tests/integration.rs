@@ -126,8 +126,11 @@ fn test_handle_run_interrupted() {
     let interrupted = Arc::new(AtomicBool::new(true));
     let result = handle_run(&cfg, true, false, &interrupted, None);
     assert!(
-        result.is_err(),
-        "handle_run should return Err(Interrupted) when interrupt flag is pre-set: {result:?}"
+        matches!(
+            result,
+            Err(dm_database_sqllog2db::error::Error::Interrupted)
+        ),
+        "handle_run should return Err(Interrupted) when interrupt flag is pre-set, got: {result:?}"
     );
 }
 

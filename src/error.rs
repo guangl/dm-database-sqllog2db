@@ -33,10 +33,12 @@ pub struct ErrorStats {
 }
 
 impl ErrorStats {
+    #[must_use]
     pub fn has_errors(&self) -> bool {
         self.total_errors > 0
     }
 
+    #[must_use]
     pub fn has_fatal(&self) -> bool {
         self.fatal_error.is_some()
     }
@@ -87,6 +89,7 @@ pub enum Error {
 }
 
 impl Error {
+    #[must_use]
     pub fn is_fatal(&self) -> bool {
         match self {
             Error::Config(_) | Error::Io(_) | Error::Interrupted => true,
@@ -99,6 +102,7 @@ impl Error {
         }
     }
 
+    #[must_use]
     pub fn severity(&self) -> ErrorSeverity {
         match self {
             Error::Config(_) | Error::Io(_) | Error::Interrupted => ErrorSeverity::Critical,
@@ -116,6 +120,7 @@ impl Error {
         }
     }
 
+    #[must_use]
     pub fn suggestion(&self) -> &str {
         match self {
             Error::Config(e) => match e {
