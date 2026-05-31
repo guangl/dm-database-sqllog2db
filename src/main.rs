@@ -137,14 +137,16 @@ fn run() -> Result<Option<ErrorStats>> {
             Ok(Some(stats))
         }
         Some(cli::opts::Commands::Validate { config }) => {
-            let mut cfg = load_config(config)?;
-            cfg.validate()?;
-
-            apply_verbosity_to_config(&mut cfg, cli.verbose, cli.quiet);
-            logging::init_logging(&cfg.logging, true)?;
-            info!("Application started");
-            info!("Configuration validation passed");
-
+            let cfg = load_config(config)?;
+            if let Err(e) = cfg.validate() {
+                let hint = e.suggestion();
+                if hint.is_empty() {
+                    eprintln!("[FAIL] {e}");
+                } else {
+                    eprintln!("[FAIL] {e}\n  hint: {hint}");
+                }
+                std::process::exit(EXIT_FATAL);
+            }
             cli::validate::handle_validate(&cfg);
             Ok(None)
         }
