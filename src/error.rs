@@ -97,7 +97,7 @@ impl Error {
                 e,
                 FileError::AlreadyExists { .. } | FileError::CreateDirectoryFailed { .. }
             ),
-            Error::Parser(_) => false,
+            Error::Parser(e) => matches!(e, ParserError::ReadDirFailed { .. }),
             Error::Export(e) => matches!(e, ExportError::DatabaseFailed { .. }),
         }
     }
@@ -204,53 +204,24 @@ pub enum FileError {
     CreateDirectoryFailed { path: PathBuf, reason: String },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum ParserError {
-    PathNotFound {
-        path: PathBuf,
-    },
+    #[error("Path not found: {}", path.display())]
+    PathNotFound { path: PathBuf },
+
+    #[error("Invalid path {}: {reason}{}", path.display(), line_number.map_or_else(String::new, |n| format!(" (line {n})")))]
     InvalidPath {
         path: PathBuf,
         reason: String,
         line_number: Option<u64>,
     },
-    ReadDirFailed {
-        path: PathBuf,
-        reason: String,
-    },
-    NoFilesFound {
-        inputs: Vec<String>,
-    },
-}
 
-impl fmt::Display for ParserError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ParserError::PathNotFound { path } => {
-                write!(f, "Path not found: {}", path.display())
-            }
-            ParserError::InvalidPath {
-                path,
-                reason,
-                line_number,
-            } => {
-                write!(f, "Invalid path {}: {}", path.display(), reason)?;
-                if let Some(line) = line_number {
-                    write!(f, " (line {line})")?;
-                }
-                Ok(())
-            }
-            ParserError::ReadDirFailed { path, reason } => {
-                write!(f, "Failed to read directory {}: {}", path.display(), reason)
-            }
-            ParserError::NoFilesFound { inputs } => {
-                write!(f, "No log files found matching inputs: {inputs:?}")
-            }
-        }
-    }
-}
+    #[error("Failed to read directory {}: {reason}", path.display())]
+    ReadDirFailed { path: PathBuf, reason: String },
 
-impl std::error::Error for ParserError {}
+    #[error("No log files found matching inputs: {inputs:?}")]
+    NoFilesFound { inputs: Vec<String> },
+}
 
 #[derive(Debug, Error)]
 pub enum ExportError {
