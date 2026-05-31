@@ -10,6 +10,7 @@ pub use sqllog::SqllogConfig;
 use crate::error::{ConfigError, Error, Result};
 use crate::pipeline::{FiltersFeature, NormalizeConfig, OutputConfig};
 use serde::Deserialize;
+use std::io;
 use std::path::Path;
 
 const PIPELINE_MIGRATION_HINT: &str = "配置格式已升级，请迁移以下字段：\n  [pipeline.normalize] → [replace_parameters]\n  \
@@ -45,8 +46,13 @@ pub struct Config {
 impl Config {
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let path = path.as_ref();
-        let content = std::fs::read_to_string(path)
-            .map_err(|_| Error::Config(ConfigError::NotFound(path.to_path_buf())))?;
+        let content = std::fs::read_to_string(path).map_err(|e| {
+            if e.kind() == io::ErrorKind::NotFound {
+                Error::Config(ConfigError::NotFound(path.to_path_buf()))
+            } else {
+                Error::Io(e)
+            }
+        })?;
         toml::from_str(&content).map_err(|e| {
             Error::Config(ConfigError::ParseFailed {
                 path: path.to_path_buf(),
