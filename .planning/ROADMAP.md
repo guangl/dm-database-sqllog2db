@@ -213,7 +213,7 @@ Full details: `.planning/phases/41-parser/`, `.planning/phases/42-criterion/`, `
 **Requirements**: VER-02, VER-05, VER-06
 **Success Criteria** (what must be TRUE):
   1. SQLite 导出生成有效的 `.db` 文件，schema 正确（字段名、类型、约束），记录数与源文件一致
-  2. 并行 CSV（rayon）输出与顺序模式完全一致，多线程下无数据竞争或乱序
+  2. 并行 CSV（rayon）输出与顺序模式完全一致,多线程下无数据竞争或乱序
   3. `cargo build --release` + `cargo test` + `cargo clippy --all-targets -- -D warnings` + `cargo fmt --check` 全部通过，无任何警告
   4. `cargo bench` 相比 v1.9 基线性能退化 < 5%
 **Plans**: TBD
@@ -301,8 +301,8 @@ Full details: `.planning/phases/41-parser/`, `.planning/phases/42-criterion/`, `
   3. `sqllog2db validate -c config.toml` 对一个包含错误的配置输出 `[FAIL] <字段>: <原因>` 与 `  hint: <修复建议>` 行（fail-fast 语义，首个失败即渲染并退出，符合 CONTEXT D-02）
   4. `cargo clippy --all-targets -- -D warnings` + `cargo test` 全部通过
 **Plans**: 2 plans
-- [ ] 47-01-PLAN.md — handle_validate 改 println! 静默通过 + main.rs Validate 分支失败渲染为 [FAIL] + tests/integration.rs 端到端 CLI 输出断言（CONFIG-02）
-- [ ] 47-02-PLAN.md — CONFIG_TEMPLATE_EN 补全 csv.{file,overwrite,append} 与 sqlite.{database_url,table_name,overwrite,append} 共 7 段行内注释 + tests/integration.rs 注释存在性断言（CONFIG-01）
+- [x] 47-01-PLAN.md — handle_validate 改 println! 静默通过 + main.rs Validate 分支失败渲染为 [FAIL] + tests/integration.rs 端到端 CLI 输出断言（CONFIG-02）
+- [x] 47-02-PLAN.md — CONFIG_TEMPLATE_EN 补全 csv.{file,overwrite,append} 与 sqlite.{database_url,table_name,overwrite,append} 共 7 段行内注释 + tests/integration.rs 注释存在性断言（CONFIG-01）
 
 ### Phase 48: 日志级别与运行提示
 **Goal**: 用户可通过 `--verbose` 和 `--quiet` 精确控制运行时输出的信息量，满足调试与静默脚本两种场景需求
@@ -329,6 +329,10 @@ Full details: `.planning/phases/41-parser/`, `.planning/phases/42-criterion/`, `
   3. 无匹配文件时给出明确错误（`error: glob pattern 'sqllogs/*.log' matched 0 files`），而非静默空输出
   4. glob 与直接路径混合使用时（如 `--input file1.log --input 'dir/*.log'`）均能正确处理
   5. `cargo clippy --all-targets -- -D warnings` + `cargo test` 全部通过，不引入重量级依赖（使用 `glob` 或 `globset` crate）
+**Plans**: 3 plans
+- [ ] 49-01-PLAN.md — SqllogConfig 改造 path→inputs: Vec<String> + path_deprecated 旧键检测 + ParserError::NoFilesFound 变体与 Error::suggestion 分支（schema + error 基础设施）
+- [ ] 49-02-PLAN.md — SqllogParser 改为 Vec<String> 多输入接口 + 调用方迁移（cli/run/mod.rs、preflight.rs、cli/validate.rs、config/mod.rs 与 config/validate.rs 内单元测试）+ handle_run 空列表抛 NoFilesFound
+- [ ] 49-03-PLAN.md — cli/opts.rs Run 增 --input/-i (ArgAction::Append) + main.rs apply_cli_inputs_to_config 注入 + CONFIG_TEMPLATE_EN [sqllog] 改为 inputs 数组 + tests/integration.rs 迁移与 4 个端到端 CLI 测试覆盖 INPUT-02
 
 ## Coverage Validation
 
@@ -386,10 +390,10 @@ Full details: `.planning/phases/41-parser/`, `.planning/phases/42-criterion/`, `
 | 44. 热路径与内存优化 | v1.11 | Complete | 2026-05-24 |
 | 45. 并行扩展与 CI 基准集成 | v1.11 | Complete | 2026-05-25 |
 | 46. 错误信息优化 | 1/1 | Complete    | 2026-05-31 |
-| 47. 配置文件体验 | v1.12 | Ready to execute | - |
+| 47. 配置文件体验 | 2/2 | Complete   | 2026-05-31 |
 | 48. 日志级别与运行提示 | v1.12 | Ready to execute | - |
-| 49. Glob 输入支持 | v1.12 | Not started | - |
+| 49. Glob 输入支持 | v1.12 | Ready to execute | - |
 
 ---
 *Created: 2026-05-21 for milestone v1.10*
-*Updated: 2026-05-31 — v1.12 (Phases 46–49) roadmap added; Phase 46 plan registered; Phase 47 plans 01/02 registered (CONTEXT D-03 静默通过决策已反映在 SC2); Phase 48 plans 01/02 registered (verbose/quiet 重塑 + 摘要差异化)*
+*Updated: 2026-05-31 — v1.12 (Phases 46–49) roadmap added; Phase 46 plan registered; Phase 47 plans 01/02 registered (CONTEXT D-03 静默通过决策已反映在 SC2); Phase 48 plans 01/02 registered (verbose/quiet 重塑 + 摘要差异化); Phase 49 plans 01/02/03 registered (schema 改造 + parser 多输入 + CLI --input 与端到端测试)*

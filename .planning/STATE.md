@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: CLI 体验全面提升
-status: planning
-last_updated: "2026-05-31T13:51:25.675Z"
-last_activity: 2026-05-31 — Milestone v1.12 roadmap created (Phases 46–49)
+status: executing
+last_updated: "2026-05-31T16:28:12.870Z"
+last_activity: 2026-05-31 -- Phase 47 execution started
 progress:
   total_phases: 15
-  completed_phases: 7
-  total_plans: 13
-  completed_plans: 17
-  percent: 47
+  completed_phases: 8
+  total_plans: 21
+  completed_plans: 18
+  percent: 53
 ---
 
 # Project State
@@ -28,10 +28,10 @@ progress:
 
 ## Current Position
 
-Phase: Not started (roadmap defined, ready for Phase 46)
-Plan: —
-Status: Ready to plan
-Last activity: 2026-05-31 — Phases 46–49 context gathered (CONTEXT.md × 4)
+Phase: 47 (config) — EXECUTING
+Plan: 1 of 2
+Status: Executing Phase 47
+Last activity: 2026-05-31 -- Phase 47 execution started
 
 ## Progress Bar
 
