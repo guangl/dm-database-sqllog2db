@@ -9,7 +9,9 @@ pub fn handle_init(output_path: &str, force: bool) -> Result<()> {
 
     info!("Preparing to generate configuration file: {output_path}");
 
-    if path.exists() && !force {
+    let file_existed = path.exists();
+
+    if file_existed && !force {
         error!("Configuration file already exists: {output_path}");
         info!("Tip: use --force to overwrite");
         return Err(Error::File(FileError::AlreadyExists {
@@ -17,7 +19,7 @@ pub fn handle_init(output_path: &str, force: bool) -> Result<()> {
         }));
     }
 
-    if path.exists() && force {
+    if file_existed && force {
         warn!("Will overwrite existing configuration file");
     }
 
@@ -42,7 +44,7 @@ pub fn handle_init(output_path: &str, force: bool) -> Result<()> {
         })
     })?;
 
-    if force {
+    if file_existed {
         info!("Configuration file overwritten: {output_path}");
     } else {
         info!("Configuration file generated: {output_path}");
