@@ -236,6 +236,23 @@ mod tests {
     }
 
     #[test]
+    fn test_error_suggestion_for_config_parse_failed() {
+        let e = Error::Config(ConfigError::ParseFailed {
+            path: "/tmp/bad.toml".into(),
+            reason: "unexpected EOF".into(),
+        });
+        let s = e.suggestion();
+        assert!(
+            !s.is_empty(),
+            "ParseFailed should have a non-empty suggestion, got empty"
+        );
+        assert!(
+            s.contains("TOML") || s.contains("syntax"),
+            "ParseFailed suggestion should mention TOML syntax; got: {s}"
+        );
+    }
+
+    #[test]
     fn test_error_suggestion_for_export_write_failed() {
         let e = Error::Export(ExportError::WriteFailed {
             path: "/tmp/out.csv".into(),
