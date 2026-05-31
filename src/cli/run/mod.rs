@@ -133,7 +133,7 @@ pub fn handle_run(
         jobs > 1 && log_files.len() > 1 && !is_stdin_pipe && final_cfg.exporter.sqlite.is_some();
     let use_parallel = use_csv_parallel || use_sqlite_parallel;
 
-    if use_csv_parallel {
+    let processed_files: Vec<(std::path::PathBuf, usize)> = if use_csv_parallel {
         if verbose {
             eprintln!(
                 "Processing {} files in parallel ({} jobs)",
@@ -142,7 +142,7 @@ pub fn handle_run(
             );
         }
         info!("Parsing and exporting SQL logs (parallel, {jobs} jobs)...");
-        let (processed_files, parallel_skipped) = process_csv_parallel(
+        let (csv_processed_files, parallel_skipped) = process_csv_parallel(
             &log_files,
             final_cfg,
             &pipeline,
@@ -155,8 +155,9 @@ pub fn handle_run(
             &ordered_indices,
             sql_record_filter,
         )?;
-        total_records = processed_files.iter().map(|(_, c)| *c).sum();
+        total_records = csv_processed_files.iter().map(|(_, c)| *c).sum();
         skipped_files = parallel_skipped;
+        csv_processed_files
     } else if use_sqlite_parallel {
         if verbose {
             eprintln!(
@@ -166,7 +167,7 @@ pub fn handle_run(
             );
         }
         info!("Parsing and exporting SQL logs (SQLite parallel, {jobs} jobs)...");
-        let (total, parallel_skipped) = process_sqlite_parallel(
+        let (sqlite_processed_files, parallel_skipped) = process_sqlite_parallel(
             &log_files,
             final_cfg,
             &pipeline,
@@ -179,14 +180,17 @@ pub fn handle_run(
             &ordered_indices,
             sql_record_filter,
         )?;
-        total_records = total;
+        total_records = sqlite_processed_files.iter().map(|(_, c)| *c).sum();
         skipped_files = parallel_skipped;
+        sqlite_processed_files
     } else {
         let mut exporter_manager = ExporterManager::from_config(final_cfg)?;
         exporter_manager.initialize()?;
         info!("Parsing and exporting SQL logs...");
         let mut params_buffer = crate::pipeline::normalizer::ParamBuffer::default();
         let mut ns_scratch: Vec<u8> = Vec::with_capacity(4096);
+        let mut per_file_counts: Vec<(std::path::PathBuf, usize)> =
+            Vec::with_capacity(log_files.len());
         for (idx, log_file) in log_files.iter().enumerate() {
             if interrupted.load(Ordering::Relaxed) {
                 break;
@@ -212,6 +216,7 @@ pub fn handle_run(
                 pb.as_ref(),
             )?;
             total_records += processed;
+            per_file_counts.push((log_file.clone(), processed));
             run_stats.merge(&file_stats);
             if file_stats.has_fatal() {
                 return Err(Error::Export(crate::error::ExportError::WriteFailed {
@@ -224,7 +229,8 @@ pub fn handle_run(
         if !quiet {
             exporter_manager.log_stats();
         }
-    }
+        per_file_counts
+    };
     if !quiet {
         let elapsed = total_start.elapsed().as_secs_f64();
         let mode_label = if use_parallel { " [parallel]" } else { "" };
@@ -233,6 +239,11 @@ pub fn handle_run(
         } else {
             String::new()
         };
+        if verbose && !processed_files.is_empty() {
+            for (path, count) in &processed_files {
+                eprintln!("Processed: {} — {} records", path.display(), count);
+            }
+        }
         eprintln!(
             "\n✓ SQL Log Export Task Completed{mode_label} in {elapsed:.2}s — {total_records} records total{skip_label}",
         );
