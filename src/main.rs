@@ -23,8 +23,11 @@ const EXIT_PARTIAL: i32 = 1;
 const EXIT_FATAL: i32 = 2;
 const EXIT_INTERRUPTED: i32 = 130;
 
-/// Initialize simple console logging for non-run commands
-fn init_simple_logging(_verbose: bool, quiet: bool) {
+/// Initialize simple console logging for non-run commands.
+/// verbose flag is intentionally ignored: non-Run commands (init/validate)
+/// only support quiet suppression; debug verbosity requires the full logging
+/// stack initialized in the Run path.
+fn init_simple_logging(quiet: bool) {
     let level = if quiet { "error" } else { "info" };
 
     let filter = match level {
@@ -37,8 +40,10 @@ fn init_simple_logging(_verbose: bool, quiet: bool) {
         .try_init();
 }
 
-/// Apply CLI verbosity flags to configuration
-fn apply_verbosity_to_config(cfg: &mut Config, _verbose: bool, quiet: bool) {
+/// Apply CLI verbosity flags to configuration.
+/// verbose flag is intentionally ignored: the Run path passes verbose directly
+/// to `handle_run`; only quiet affects the config's log level here.
+fn apply_verbosity_to_config(cfg: &mut Config, quiet: bool) {
     if quiet {
         cfg.logging.level = "error".to_string();
     }
@@ -117,7 +122,7 @@ fn run() -> Result<Option<(ErrorStats, bool)>> {
 
     let needs_simple_logging = !matches!(&cli.command, Some(cli::opts::Commands::Run { .. }));
     if needs_simple_logging {
-        init_simple_logging(cli.verbose, cli.quiet);
+        init_simple_logging(cli.quiet);
     }
 
     match &cli.command {
@@ -130,7 +135,7 @@ fn run() -> Result<Option<(ErrorStats, bool)>> {
             apply_cli_inputs_to_config(&mut cfg, input.clone());
             let compiled_filters = cfg.validate_and_compile()?;
 
-            apply_verbosity_to_config(&mut cfg, cli.verbose, cli.quiet);
+            apply_verbosity_to_config(&mut cfg, cli.quiet);
             logging::init_logging(&cfg.logging, false)?;
             info!("Application started");
             info!("Configuration validation passed");
@@ -263,24 +268,17 @@ mod tests {
     }
 
     #[test]
-    fn test_apply_verbosity_verbose() {
-        let mut cfg = Config::default();
-        apply_verbosity_to_config(&mut cfg, true, false);
-        assert_eq!(cfg.logging.level, Config::default().logging.level);
-    }
-
-    #[test]
     fn test_apply_verbosity_quiet() {
         let mut cfg = Config::default();
-        apply_verbosity_to_config(&mut cfg, false, true);
+        apply_verbosity_to_config(&mut cfg, true);
         assert_eq!(cfg.logging.level, "error");
     }
 
     #[test]
-    fn test_apply_verbosity_neither() {
+    fn test_apply_verbosity_not_quiet() {
         let mut cfg = Config::default();
         let original = cfg.logging.level.clone();
-        apply_verbosity_to_config(&mut cfg, false, false);
+        apply_verbosity_to_config(&mut cfg, false);
         assert_eq!(cfg.logging.level, original);
     }
 
