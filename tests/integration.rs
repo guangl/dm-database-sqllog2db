@@ -237,7 +237,7 @@ fn test_init_template_has_sqlite_field_comments() {
 #[test]
 fn test_handle_validate_default_config() {
     let cfg = Config::default();
-    handle_validate(&cfg); // no panic, hits csv branch and no-filters branch
+    handle_validate(&cfg); // validate called without panic
 }
 
 #[test]
@@ -255,7 +255,7 @@ fn test_handle_validate_with_sqlite_exporter() {
         },
         ..Default::default()
     };
-    handle_validate(&cfg); // hits sqlite branch
+    handle_validate(&cfg); // validate called without panic (sqlite exporter config)
 }
 
 #[test]
@@ -264,7 +264,7 @@ fn test_handle_validate_with_replace_parameters_none() {
         replace_parameters: None,
         ..Default::default()
     };
-    handle_validate(&cfg); // hits replace_parameters None branch
+    handle_validate(&cfg); // validate called without panic (replace_parameters is None)
 }
 
 #[test]
@@ -276,7 +276,7 @@ fn test_handle_validate_with_replace_parameters_some() {
         }),
         ..Default::default()
     };
-    handle_validate(&cfg); // hits replace_parameters Some branch
+    handle_validate(&cfg); // validate called without panic (replace_parameters is Some)
 }
 
 #[test]
@@ -285,7 +285,7 @@ fn test_handle_validate_with_filters_none() {
         filter: None,
         ..Default::default()
     };
-    handle_validate(&cfg); // hits filters None branch
+    handle_validate(&cfg); // validate called without panic (filter is None)
 }
 
 #[test]
@@ -316,7 +316,7 @@ fn test_handle_validate_with_filters_all_fields() {
         }),
         ..Default::default()
     };
-    handle_validate(&cfg); // hits all filter sub-branches
+    handle_validate(&cfg); // validate called without panic (all filter sub-fields populated)
 }
 
 #[test]
@@ -332,7 +332,7 @@ fn test_handle_validate_filters_disabled() {
         }),
         ..Default::default()
     };
-    handle_validate(&cfg); // hits "配置但未明确启用" branch
+    handle_validate(&cfg); // validate called without panic (filter configured but not enabled)
 }
 
 // ── handle_run coverage supplement ──────────────────────────────────────────
