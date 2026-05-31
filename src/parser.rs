@@ -108,7 +108,7 @@ impl SqllogParser {
             .map_err(|e| {
                 Error::Parser(ParserError::InvalidPath {
                     path: PathBuf::from(pattern),
-                    reason: format!("invalid glob pattern: {e}"),
+                    reason: format!("invalid glob pattern: {e}. Check glob syntax (e.g. wildcards must not include unmatched brackets)"),
                     line_number: None,
                 })
             })?
