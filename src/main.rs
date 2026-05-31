@@ -67,6 +67,19 @@ fn format_error_output(error: &Error) -> String {
     }
 }
 
+/// Format a validation error into a multi-line string for stderr output.
+/// Uses `[FAIL]` label (distinct from severity-based labels) to signal
+/// config validation failure rather than a fatal runtime error.
+/// Second line (if hint non-empty): `  hint: suggestion_text`
+fn format_validate_error(error: &Error) -> String {
+    let hint = error.suggestion();
+    if hint.is_empty() {
+        format!("[FAIL] {error}")
+    } else {
+        format!("[FAIL] {error}\n  hint: {hint}")
+    }
+}
+
 fn main() {
     match run() {
         Ok(Some((stats, quiet))) => {
@@ -141,12 +154,7 @@ fn run() -> Result<Option<(ErrorStats, bool)>> {
         Some(cli::opts::Commands::Validate { config }) => {
             let cfg = load_config(config)?;
             if let Err(e) = cfg.validate() {
-                let hint = e.suggestion();
-                if hint.is_empty() {
-                    eprintln!("[FAIL] {e}");
-                } else {
-                    eprintln!("[FAIL] {e}\n  hint: {hint}");
-                }
+                eprintln!("{}", format_validate_error(&e));
                 std::process::exit(EXIT_FATAL);
             }
             cli::validate::handle_validate(&cfg);
