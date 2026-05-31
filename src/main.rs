@@ -118,7 +118,7 @@ fn main() {
 }
 
 fn run() -> Result<Option<(ErrorStats, bool)>> {
-    use clap::{CommandFactory, FromArgMatches, Parser};
+    use clap::{CommandFactory, FromArgMatches};
 
     let cmd = cli::opts::Cli::command();
     let matches = cmd.get_matches();
@@ -170,8 +170,8 @@ fn run() -> Result<Option<(ErrorStats, bool)>> {
             Ok(None)
         }
         None => {
-            let _ = cli::opts::Cli::try_parse_from(["sqllog2db", "--help"]);
-            std::process::exit(1);
+            cli::opts::Cli::command().print_help().ok();
+            std::process::exit(0);
         }
     }
 }
