@@ -43,12 +43,20 @@ pub fn handle_run(
 
     // Stdin pipe mode: fall back when no log files found AND stdin is not a terminal.
     // /dev/stdin is Unix-only; skip pipe mode on Windows.
-    let is_stdin_pipe =
-        log_files.is_empty() && !std::io::stdin().is_terminal() && !cfg!(target_os = "windows");
+    #[cfg(target_os = "windows")]
+    let is_stdin_pipe = false;
+    #[cfg(not(target_os = "windows"))]
+    let is_stdin_pipe = log_files.is_empty() && !std::io::stdin().is_terminal();
     let log_files = if is_stdin_pipe {
         info!("No log files found, reading from stdin (pipe mode)");
         vec![std::path::PathBuf::from("/dev/stdin")]
     } else if log_files.is_empty() {
+        // On Windows, if stdin is piped but no files found, warn the user that stdin
+        // pipe mode is not supported on this platform.
+        #[cfg(target_os = "windows")]
+        if !std::io::stdin().is_terminal() {
+            warn!("Stdin pipe mode is not supported on Windows. No log files found.");
+        }
         return Err(crate::error::Error::Parser(
             crate::error::ParserError::NoFilesFound {
                 inputs: cfg.sqllog.inputs.clone(),
