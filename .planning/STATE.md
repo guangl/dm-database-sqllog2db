@@ -29,11 +29,11 @@ v1.13 SQL 统计分析 — Phases 50–52
 
 | Phase | Name | Requirements | Status |
 |-------|------|--------------|--------|
-| 50 | SQL 标准化引擎 | STATS-06 | Not started |
-| 51 | stats 子命令 CLI 脚手架 | STATS-01, STATS-02 | Not started |
-| 52 | 统计输出与 Exporter 集成 | STATS-03, STATS-04, STATS-05 | Not started |
+| 50 | SQL 标准化引擎 | STATS-06 | ✅ Complete |
+| 51 | stats 子命令 CLI 脚手架 | STATS-01, STATS-02 | ✅ Complete |
+| 52 | 统计输出与 Exporter 集成 | STATS-03, STATS-04, STATS-05 | ✅ Complete |
 
-**Coverage:** 0/6 requirements satisfied — 0%
+**Coverage:** 6/6 requirements satisfied — 100%
 
 ## Accumulated Context
 
@@ -54,6 +54,6 @@ None
 ## Current Position
 
 Phase: 52
-Plan: Not started
+Plan: Complete
 Status: Milestone complete
 Last activity: 2026-06-01

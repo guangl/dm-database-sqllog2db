@@ -2,7 +2,7 @@
 
 ## Milestones
 
-- 🔄 **v1.13 SQL 统计分析** — Phases 50–52 (in progress)
+- ✅ **v1.13 SQL 统计分析** — Phases 50–52 (shipped 2026-06-01)
 - ✅ **v1.12 CLI 体验全面提升** — Phases 46–49 (shipped 2026-06-01)
 - ✅ **v1.0 增强 SQL 内容过滤与字段投影** — Phases 1–2 (shipped 2026-04-18)
 - ✅ **v1.1 性能优化** — Phases 3–6 (shipped 2026-05-10)
