@@ -12,7 +12,7 @@ use std::path::Path;
 /// 将慢 SQL 与高频 SQL 统计结果写入 CSV 文件。
 ///
 /// 输出文件名硬编码为 `slow_sql.csv` 和 `frequent_sql.csv`，放在 `csv_dir` 目录下。
-pub fn write_csv_stats(
+pub(crate) fn write_csv_stats(
     slow: &[SlowSqlRow],
     frequent: &[FrequentSqlRow],
     csv_dir: &Path,
@@ -73,7 +73,7 @@ fn write_frequent_csv(path: &Path, rows: &[FrequentSqlRow]) -> Result<()> {
 }
 
 /// 将慢 SQL 与高频 SQL 统计结果写入 `SQLite` 数据库（DROP + CREATE，不累积历史）。
-pub fn write_sqlite_stats(
+pub(crate) fn write_sqlite_stats(
     slow: &[SlowSqlRow],
     frequent: &[FrequentSqlRow],
     db_url: &str,
