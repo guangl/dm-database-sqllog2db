@@ -19,6 +19,9 @@ cargo install dm-database-sqllog2db
 # 生成配置并运行
 sqllog2db init -o config.toml
 sqllog2db run -c config.toml
+
+# 统计分析慢 SQL 和高频 SQL
+sqllog2db stats -c config.toml
 ```
 
 需要 Rust 1.85+。二进制文件约 5 MB。

@@ -38,7 +38,7 @@
 - **预编译的过滤器处理管道**：`CompiledMetaFilters` 和 `CompiledSqlFilters` 在启动时持有编译好的 `RegexSet` 实例。每个过滤器变体带有类型标签（include、exclude、indicator、SQL include、SQL exclude），无需字符串匹配即可派发。
 - **单线程流式处理**：无论数据量大小，性能可预测。使用标准库全局分配器。Release 配置：`opt-level=3`、LTO fat、codegen-units=1、panic=abort、strip=symbols——生成约 5 MB 的二进制文件。
 - **基准测试结果**：~520 万条记录/秒 CSV（criterion，合成 50k 记录数据集，Apple M 系列芯片），~110 万条记录/秒 SQLite（batch + PRAGMA），~155 万条记录/秒（真实 1.1 GB 文件，约 300 万条记录，NVMe SSD）。
-- **简洁的 CLI**：仅 `init`（生成配置）、`validate`（校验）、`run`（执行导出）三个命令。
+- **简洁的 CLI**：`init`（生成配置）、`validate`（校验）、`run`（执行导出）、`stats`（统计分析）四个命令。
 
 ## 架构
 
@@ -71,6 +71,8 @@ graph LR
 
 - **`cli/run/mod.rs`**：主编排——加载配置、构建管道、预扫描事务过滤器、逐个文件流式处理记录。
 - **`cli/run/sqlite_parallel.rs`**：SQLite 导出的多文件并行解析路径（基于 rayon），解析错误通过 `log::warn!` 上报。
+- **`cli/stats/mod.rs`**：`stats` 子命令入口，委托给 `src/stats/` 完成聚合与写出。
+- **`stats/mod.rs`**：`run_stats` 流式扫描 → `StatsAccumulator` → 写入 `slow_sql.csv` / `frequent_sql.csv`（或 SQLite 表）。
 - **`exporter/mod.rs`**：`Exporter` trait 和 `ExporterManager` 工厂。每次运行只有一个导出器处于活动状态。
 - **`pipeline/mod.rs`**：`LogProcessor` trait 和 `Pipeline`。`pipeline.is_empty()` 启用零开销快速路径。
 - **`pipeline/filters/mod.rs`**：两遍过滤器设计。预扫描使用 `CompiledMetaFilters` 和 `CompiledSqlFilters` 查找匹配的事务 ID。
@@ -110,11 +112,11 @@ sqllog2db validate -c config.toml
 sqllog2db run -c config.toml
 ```
 
-使用 `--limit N` 快速试运行和 `--from`/`--to` 进行时间范围过滤：
+统计分析慢 SQL 和高频 SQL（输出到 `slow_sql.csv` / `frequent_sql.csv`）：
 
 ```bash
-sqllog2db run -c config.toml --limit 1000
-sqllog2db run -c config.toml --from "2025-01-01" --to "2025-12-31"
+sqllog2db stats -c config.toml
+sqllog2db stats -c config.toml --top 10
 ```
 
 详细用法参见[快速入门指南](./docs/quickstart.md)。
@@ -125,7 +127,7 @@ sqllog2db run -c config.toml --from "2025-01-01" --to "2025-12-31"
 
 ```toml
 [sqllog]
-path = "sqllogs"
+inputs = ["sqllogs"]
 
 [filter]
 enable = false

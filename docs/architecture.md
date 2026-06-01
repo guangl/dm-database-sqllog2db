@@ -46,10 +46,11 @@ CSV 输出（src/exporter/csv/mod.rs）或 SQLite 输出（src/exporter/sqlite/m
 
 **结构：**
 - `run/mod.rs` — `handle_run()`：主编排逻辑（加载配置 → 构建管道 → 预扫描 → 流式导出）
+- `stats/mod.rs` — `handle_stats()`：委托给 `src/stats/run_stats()`，流式扫描 → 聚合 → 写出
 - `init.rs` — 生成默认配置
-- `validate.rs` — 验证配置文件
+- `validate.rs` — 验证配置文件（通过时静默，失败时输出 `[FAIL]` 行）
 
-**模式：** CLI handler 函数以 `handle_` 为前缀（`handle_run` 等）。
+**模式：** CLI handler 函数以 `handle_` 为前缀（`handle_run`、`handle_stats` 等）。
 
 ### Pipeline / 特性层 — `src/pipeline/`
 
@@ -83,6 +84,7 @@ CSV 输出（src/exporter/csv/mod.rs）或 SQLite 输出（src/exporter/sqlite/m
 |------|------|------|
 | 错误处理 | `src/error.rs` | 类型化错误枚举 `Error`、`pub type Result<T>` |
 | 解析器 | `src/parser.rs` | 日志文件发现、排序、迭代 |
+| 统计分析 | `src/stats/` | SQL 标准化（`normalize.rs`）、聚合（`aggregate.rs`）、输出（`output.rs`） |
 | 日志 | `src/logging.rs` | 应用日志和错误日志 |
 | 预检 | `src/preflight.rs` | 运行前环境检查 |
 | 工具库 | `src/lib.rs` | 模块注册和公共导出 |
@@ -180,4 +182,4 @@ src/config/ ←─ src/cli/ ←─ src/pipeline/ ←─ src/exporter/
 
 ---
 
-*架构文档在 Phase 28 中更新，反映项目 v1.7 的代码结构。模块级概述，不深入特定 struct 字段或 trait 方法签名。*
+*架构文档最后更新于 v1.13，反映 stats 子命令引入后的模块结构。模块级概述，不深入特定 struct 字段或 trait 方法签名。*

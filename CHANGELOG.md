@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.13] - 2026-06-01
+
+### Added
+
+- **`stats` 子命令**：`sqllog2db stats -c config.toml [--top N]` 流式扫描日志文件，输出慢 SQL 报告和高频 SQL 报告。
+  - CSV 模式：在 `[exporter.csv].file` 的同级目录下生成 `slow_sql.csv`（字段：`sql_text,elapsed_ms,timestamp`）和 `frequent_sql.csv`（字段：`normalized_sql,call_count,avg_elapsed_ms,max_elapsed_ms`）。
+  - SQLite 模式：在配置的数据库中写入 `slow_sql` 和 `frequent_sql` 表。
+  - `--top N`（默认 20，最小 1）：每张表输出 Top N 条记录。
+- **SQL 标准化引擎**（`src/stats/normalize.rs`）：状态机将 SQL 中的字面量（数字、字符串、绑定变量）替换为占位符，用于高频 SQL 聚合去重。
+- **统计聚合器**（`src/stats/aggregate.rs`）：`StatsAccumulator` 持有固定大小的慢 SQL 堆和高频 SQL 频率表，流式扫描全程恒定内存。
+
+---
+
+## [1.12] - 2026-05-28
+
+### Added
+
+- **glob 输入支持**：`[sqllog].inputs` 接受文件路径、目录路径或 glob 模式（如 `./logs/2025-*.log`），支持多条目数组。
+- **`--input` CLI 标志**：`sqllog2db run -c config.toml --input ./logs/*.log` 在命令行覆盖配置文件中的输入列表；`--input -` 映射到 stdin（跳过文件发现和预扫描）。
+- **`-v`/`--verbose` 标志**：在 stderr 输出每文件处理详情；默认只在完成后输出汇总行。
+- **`validate` 结构化输出**：通过校验时静默退出（exit 0），失败时输出 `[FAIL] <字段>: <原因>` 并退出非零码。
+- **配置模板内联注释**：`sqllog2db init` 生成的模板为 `[exporter.csv]` 和 `[exporter.sqlite]` 所有字段添加了说明注释。
+
+### Changed
+
+- **`[sqllog].path` 已弃用**：改为 `inputs = ["sqllogs"]`（数组格式）。旧的 `path` 字段保留兼容性检测，使用时报错提示迁移。
+- **错误信息**：所有错误提示统一加 `hint:` 前缀，可读性更好；`Config::from_file` 区分文件未找到与 IO 错误。
+
+### Fixed
+
+- **None 命令分支**：不带子命令直接运行 `sqllog2db` 现在打印帮助并以 exit 0 退出（之前报错）。
+
+---
+
 ## [1.11] - 2026-05-25
 
 ### Added
