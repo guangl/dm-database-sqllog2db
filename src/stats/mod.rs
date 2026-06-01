@@ -3,9 +3,6 @@
 pub mod aggregate;
 pub mod normalize;
 pub mod output;
-// normalize_sql 是 lib crate 的公开 API；binary 内部通过 aggregate 间接使用
-#[allow(unused_imports)]
-pub use normalize::normalize_sql;
 
 use crate::config::Config;
 use crate::error::{Error, ParserError, Result};
