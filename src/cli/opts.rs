@@ -68,7 +68,7 @@ Configuration file sections: [csv] / [sqlite] for output, [filter] for filters (
             help = "TOML configuration file path. See [csv], [sqlite], [filter] sections."
         )]
         config: String,
-        /// Input log paths. Repeat for multiple entries. Overrides config [sqllog].inputs.
+        /// Input log paths. Repeat for multiple entries. Overrides config \[sqllog\].inputs.
         #[arg(
             short = 'i',
             long = "input",
