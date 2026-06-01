@@ -332,6 +332,13 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM slow_sql", [], |row| row.get(0))
             .unwrap();
         assert_eq!(count, 1, "DROP+CREATE should reset table, not accumulate");
+        let freq_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM frequent_sql", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(
+            freq_count, 0,
+            "frequent_sql should have 0 rows after second write with empty frequent"
+        );
     }
 
     #[test]
