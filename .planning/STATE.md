@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.13
 milestone_name: SQL 统计分析
-status: roadmap_ready
-last_updated: "2026-06-01"
-last_activity: 2026-06-01
+status: Roadmap ready, awaiting plan-phase
+last_updated: "2026-06-01T02:01:24.500Z"
+last_activity: 2026-06-01 — Roadmap created for v1.13
 progress:
-  total_phases: 3
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_phases: 18
+  completed_phases: 7
+  total_plans: 13
+  completed_plans: 17
+  percent: 39
 ---
 
 # Project State
@@ -41,6 +41,7 @@ v1.13 SQL 统计分析 — Phases 50–52
 See `.planning/PROJECT.md` Key Decisions table (updated 2026-06-01)
 
 **v1.13 约束：**
+
 - SQL 标准化先于 stats 命令实现（Phase 50 是 Phase 51/52 的基础构建块）
 - 复用现有 CSV/SQLite exporter，不引入新 exporter 实现
 - stats 作为独立后处理命令，不修改现有 `run` 命令输出
