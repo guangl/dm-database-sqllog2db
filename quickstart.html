@@ -1,0 +1,409 @@
+<!DOCTYPE HTML>
+<html lang="zh" class="ayu sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>快速入门 - sqllog2db</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="达梦数据库 SQL 日志高性能解析工具 — 流式处理，常量内存，支持 CSV/SQLite 导出">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "ayu" : "ayu";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc.js"></script>
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('ayu')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">sqllog2db</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/guangl/sqllog2db" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="快速入门指南"><a class="header" href="#快速入门指南">快速入门指南</a></h1>
+<p>本指南带你了解 sqllog2db 的常见使用场景。每个场景展示从配置生成到输出验证的完整工作流程。如需最简三命令概览，请参见 <a href="../README.html">README</a>。</p>
+<h2 id="环境准备"><a class="header" href="#环境准备">环境准备</a></h2>
+<p>通过 rustup 安装 Rust：</p>
+<pre><code class="language-bash">curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+</code></pre>
+<p>安装 sqllog2db：</p>
+<pre><code class="language-bash">cargo install dm-database-sqllog2db
+</code></pre>
+<p>验证安装：</p>
+<pre><code class="language-bash">sqllog2db --version
+</code></pre>
+<p>备选方案：从源码构建：</p>
+<pre><code class="language-bash">git clone https://github.com/guangl/sqllog2db
+cd sqllog2db
+cargo build --release
+</code></pre>
+<p>二进制文件约 5 MB，静态链接，位于 <code>target/release/sqllog2db</code>。</p>
+<p>从源码克隆时，<code>sqllogs/</code> 目录下包含示例日志文件。生产环境请使用你自己的达梦 SQL 日志。</p>
+<hr />
+<h2 id="场景一导出-sql-日志到-csv"><a class="header" href="#场景一导出-sql-日志到-csv">场景一：导出 SQL 日志到 CSV</a></h2>
+<p>将达梦 SQL 日志导出为 CSV 以供分析或归档。</p>
+<p><strong>步骤 1：生成默认配置</strong></p>
+<pre><code class="language-bash">sqllog2db init -o config.toml --force
+</code></pre>
+<p>预期输出：</p>
+<pre><code>Config written to config.toml
+</code></pre>
+<p><strong>步骤 2：配置 CSV 导出</strong></p>
+<p>编辑 <code>config.toml</code>：</p>
+<pre><code class="language-toml">[sqllog]
+inputs = ["sqllogs"]
+
+[exporter.csv]
+file = "output/sqllog.csv"
+overwrite = true
+</code></pre>
+<p><strong>步骤 3：验证配置</strong></p>
+<pre><code class="language-bash">sqllog2db validate -c config.toml
+</code></pre>
+<p>通过时静默退出（无输出，exit 0）；失败时输出 <code>[FAIL] &lt;字段&gt;: &lt;原因&gt;</code> 并以非零码退出。</p>
+<p><strong>步骤 4：运行导出</strong></p>
+<pre><code class="language-bash">sqllog2db run -c config.toml
+</code></pre>
+<p>预期输出：</p>
+<pre><code>[INFO] Starting export...
+[INFO] Processing: sqllogs/DM_DMSQL_202504_01.log
+[INFO] Processed 100000 records...
+[INFO] Processed 200000 records...
+[INFO] Export complete: 2,372,459 records in 8.87s (267,525 records/sec)
+</code></pre>
+<p><strong>步骤 5：验证输出</strong></p>
+<pre><code class="language-bash">wc -l output/sqllog.csv
+head -5 output/sqllog.csv
+</code></pre>
+<p><strong>故障排查：</strong> 如果看到 "Config validation failed: sqllog.path"，请确保 <code>path</code> 指向存在的目录或文件。自动化脚本中建议使用绝对路径。</p>
+<hr />
+<h2 id="场景二导出到-sqlite-数据库"><a class="header" href="#场景二导出到-sqlite-数据库">场景二：导出到 SQLite 数据库</a></h2>
+<p>导出到 SQLite 以便使用 SQL 进行分析。</p>
+<p><strong>步骤 1：配置 SQLite 导出</strong></p>
+<p>编辑 <code>config.toml</code>：</p>
+<pre><code class="language-toml">[sqllog]
+inputs = ["sqllogs"]
+
+[exporter.sqlite]
+file = "output/sqllog.db"
+table = "sqllog_records"
+overwrite = true
+</code></pre>
+<p><strong>步骤 2：验证并运行</strong></p>
+<pre><code class="language-bash">sqllog2db validate -c config.toml
+sqllog2db run -c config.toml
+</code></pre>
+<p><strong>步骤 3：验证并查询</strong></p>
+<pre><code class="language-bash"># 统计总记录数
+sqlite3 output/sqllog.db "SELECT COUNT(*) FROM sqllog_records;"
+
+# 按查询数量查看 Top 5 用户
+sqlite3 output/sqllog.db "SELECT USERNAME, COUNT(*) AS cnt FROM sqllog_records GROUP BY USERNAME ORDER BY cnt DESC LIMIT 5;"
+
+# 查看 Top 10 最慢查询
+sqlite3 output/sqllog.db "SELECT SQL_TEXT, ELAPSED FROM sqllog_records ORDER BY ELAPSED DESC LIMIT 10;"
+</code></pre>
+<p>预期用户排名输出：</p>
+<pre><code>HIHIS|1748411
+BBP|513287
+HINIS|83921
+BLC|18342
+SYSDBA|5234
+</code></pre>
+<p><strong>故障排查：</strong> 如果找不到 <code>sqlite3</code>，请通过 <code>brew install sqlite</code>（macOS）或系统包管理器安装。</p>
+<hr />
+<h2 id="场景三使用过滤器精确导出"><a class="header" href="#场景三使用过滤器精确导出">场景三：使用过滤器精确导出</a></h2>
+<p>应用记录级和事务级过滤器，仅导出符合条件的 SQL 记录。</p>
+<p><strong>步骤 1：配置过滤器</strong></p>
+<p>编辑 <code>config.toml</code>：</p>
+<pre><code class="language-toml">[sqllog]
+inputs = ["sqllogs"]
+
+[filter]
+enable = true
+
+[filter.include]
+statements = ["INS", "UPD", "DEL"]
+min_runtime_ms = 100
+
+[filter.exclude]
+users = ["SYSDBA", "MONITOR"]
+
+[exporter.csv]
+file = "output/filtered.csv"
+overwrite = true
+</code></pre>
+<p><strong>步骤 2：验证并运行</strong></p>
+<pre><code class="language-bash">sqllog2db validate -c config.toml
+sqllog2db run -c config.toml
+</code></pre>
+<p><strong>步骤 3：使用 SQL 内容过滤器</strong></p>
+<p>事务级 SQL 内容过滤需要两遍预扫描：</p>
+<pre><code class="language-toml">[filter.sql_filter]
+includes = ["FROM ORDERS", "JOIN PAYMENTS"]
+excludes = ["pg_catalog", "information_schema"]
+min_runtime_ms = 500
+</code></pre>
+<p>工具先扫描所有文件收集匹配的事务 ID，再于第二遍中应用全部过滤器。</p>
+<p><strong>通过外部工具分析输出：</strong></p>
+<pre><code class="language-bash"># 使用 sqlite3 查询 Top 5 最慢的写操作
+sqlite3 output/filtered.db "SELECT SQL_TEXT, ELAPSED FROM sqllog_records WHERE STMT_TYPE IN ('INS','UPD','DEL') ORDER BY ELAPSED DESC LIMIT 5;"
+
+# 使用 csvkit 工具
+csvstat output/filtered.csv
+</code></pre>
+<hr />
+<h2 id="场景四sql-统计分析"><a class="header" href="#场景四sql-统计分析">场景四：SQL 统计分析</a></h2>
+<p>使用 <code>stats</code> 子命令对 SQL 日志进行统计分析，生成慢 SQL 报告和高频 SQL 报告。</p>
+<p><strong>步骤 1：配置输入和输出目录</strong></p>
+<p>编辑 <code>config.toml</code>（复用 <code>run</code> 命令的配置格式）：</p>
+<pre><code class="language-toml">[sqllog]
+inputs = ["sqllogs"]
+
+[exporter.csv]
+file = "output/sqllog.csv"
+overwrite = true
+</code></pre>
+<p><strong>步骤 2：运行统计分析</strong></p>
+<pre><code class="language-bash">sqllog2db stats -c config.toml
+</code></pre>
+<p>默认输出 Top 20 条，可用 <code>--top</code> 调整：</p>
+<pre><code class="language-bash">sqllog2db stats -c config.toml --top 10
+</code></pre>
+<p><strong>步骤 3：查看输出</strong></p>
+<p>CSV 模式在 <code>[exporter.csv].file</code> 的同级目录（本例为 <code>output/</code>）生成：</p>
+<pre><code>output/slow_sql.csv       — Top N 最慢 SQL（字段：sql_text, elapsed_ms, timestamp）
+output/frequent_sql.csv   — Top N 高频 SQL（字段：normalized_sql, call_count, avg_elapsed_ms, max_elapsed_ms）
+</code></pre>
+<p>示例查看：</p>
+<pre><code class="language-bash">head -5 output/slow_sql.csv
+head -5 output/frequent_sql.csv
+</code></pre>
+<p><strong>使用 SQLite 输出：</strong></p>
+<pre><code class="language-toml">[sqllog]
+inputs = ["sqllogs"]
+
+[exporter.sqlite]
+database_url = "output/sqllog2db.db"
+table_name = "sqllog_records"
+overwrite = true
+</code></pre>
+<p>SQLite 模式在同一数据库中写入 <code>slow_sql</code> 和 <code>frequent_sql</code> 表，可直接用 SQL 查询：</p>
+<pre><code class="language-bash">sqlite3 output/sqllog2db.db "SELECT * FROM slow_sql LIMIT 5;"
+sqlite3 output/sqllog2db.db "SELECT * FROM frequent_sql ORDER BY call_count DESC LIMIT 5;"
+</code></pre>
+<hr />
+<h2 id="故障排查"><a class="header" href="#故障排查">故障排查</a></h2>
+<h3 id="配置验证失败"><a class="header" href="#配置验证失败">配置验证失败</a></h3>
+<ul>
+<li>运行 <code>sqllog2db validate -c config.toml</code> 查看具体错误</li>
+<li>检查 <code>sqllog.path</code> 是否存在且可读</li>
+<li>确保输出目录存在（sqllog2db 不会自动创建中间目录）</li>
+<li>验证 TOML 语法：节标题使用 <code>[方括号]</code>，值使用 <code>=</code></li>
+</ul>
+<h3 id="未找到-log-文件"><a class="header" href="#未找到-log-文件">"未找到 .log 文件"</a></h3>
+<ul>
+<li>验证 <code>[sqllog].path</code> 中的路径是否正确</li>
+<li>使用绝对路径：<code>/home/user/logs/</code> 而非 <code>../logs/</code></li>
+<li>检查文件是否具有 <code>.log</code> 扩展名</li>
+</ul>
+<h3 id="导出性能较慢"><a class="header" href="#导出性能较慢">导出性能较慢</a></h3>
+<ul>
+<li>确保处理管道为空（无 <code>[filter]</code> 节）以获得最大速度</li>
+<li>CSV 导出比 SQLite 更快（约 520 万条/秒 vs 约 110 万条/秒）</li>
+<li>使用 NVMe SSD 获得最佳吞吐量</li>
+<li>对于大数据集，文件 I/O 是主要瓶颈</li>
+</ul>
+<h3 id="输出中出现解析错误"><a class="header" href="#输出中出现解析错误">输出中出现解析错误</a></h3>
+<ul>
+<li>解析错误是非致命的：工具继续处理后续记录</li>
+<li>错误记录到应用日志中（检查 <code>[logging]</code> 配置）</li>
+<li>GB18030/GBK 编码的文件会自动检测和解码</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="index.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="config-reference.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="index.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="config-reference.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

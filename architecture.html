@@ -1,0 +1,355 @@
+<!DOCTYPE HTML>
+<html lang="zh" class="ayu sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>架构说明 - sqllog2db</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="达梦数据库 SQL 日志高性能解析工具 — 流式处理，常量内存，支持 CSV/SQLite 导出">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "ayu" : "ayu";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc.js"></script>
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('ayu')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">sqllog2db</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/guangl/sqllog2db" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="架构说明"><a class="header" href="#架构说明">架构说明</a></h1>
+<p>sqllog2db 是一个解析达梦数据库 SQL 日志并导出为 CSV 或 SQLite 的命令行工具。本文档描述项目的整体架构、数据流、模块划分和关键抽象。面向希望深入理解内部设计的开发者和贡献者。</p>
+<h2 id="数据流"><a class="header" href="#数据流">数据流</a></h2>
+<p>工具的数据流分为四个阶段：<strong>发现 → 解析 → 管道处理 → 导出</strong>。以下 ASCII art 图展示了完整的数据流路径。</p>
+<pre><code>SQL 日志文件 (.log)
+    ↓ SqllogParser — 文件发现与排序（src/parser.rs）
+    ↓ dm-database-parser-sqllog — 逐行解析（外部 crate）
+    ↓ Sqllog 记录
+    ↓ Pipeline — 可选过滤器/处理器链（src/pipeline/）
+    │ ├─ (空) ───────────────────── 零开销快速路径
+    │ └─ FilterProcessor ────────── 过滤器处理
+    ↓ ExporterManager — 路由到活跃导出器（src/exporter/）
+    ▼
+CSV 输出（src/exporter/csv/mod.rs）或 SQLite 输出（src/exporter/sqlite/mod.rs）
+</code></pre>
+<p><strong>设计要点：</strong></p>
+<ul>
+<li>流式处理：记录逐行读取，内存占用恒定，不受文件大小影响——100 MB 和 100 GB 日志文件消耗相同的峰值内存。</li>
+<li>当管道（Pipeline）为空（无过滤器）时，热循环通过 <code>pipeline.is_empty()</code> 检查跳过所有功能逻辑，实现零开销快速路径。</li>
+</ul>
+<h2 id="模块划分"><a class="header" href="#模块划分">模块划分</a></h2>
+<p>项目按职责分为 4 大核心模块和若干支撑模块。</p>
+<h3 id="配置层--srcconfig"><a class="header" href="#配置层--srcconfig">配置层 — <code>src/config/</code></a></h3>
+<p><strong>职责：</strong> 加载 TOML 配置文件，验证配置完整性。支持嵌套子表格式（v1.4+）。</p>
+<p><strong>关键抽象：</strong></p>
+<ul>
+<li><code>Config</code>：顶层配置结构，包含所有子配置段</li>
+<li><code>validate_and_compile()</code>：验证配置并编译正则表达式</li>
+</ul>
+<p><strong>特性：</strong></p>
+<ul>
+<li>嵌套子表支持（v1.4+）：<code>[filter.include]</code>、<code>[filter.exclude]</code> 为顶级段</li>
+<li>向后兼容：通过 <code>RawFiltersFeature</code> 中间结构支持旧版扁平格式</li>
+</ul>
+<h3 id="cli--编排层--srccli"><a class="header" href="#cli--编排层--srccli">CLI / 编排层 — <code>src/cli/</code></a></h3>
+<p><strong>职责：</strong> 解析命令行参数，分派子命令，编排整体工作流。</p>
+<p><strong>结构：</strong></p>
+<ul>
+<li><code>run/mod.rs</code> — <code>handle_run()</code>：主编排逻辑（加载配置 → 构建管道 → 预扫描 → 流式导出）</li>
+<li><code>stats/mod.rs</code> — <code>handle_stats()</code>：委托给 <code>src/stats/run_stats()</code>，流式扫描 → 聚合 → 写出</li>
+<li><code>init.rs</code> — 生成默认配置</li>
+<li><code>validate.rs</code> — 验证配置文件（通过时静默，失败时输出 <code>[FAIL]</code> 行）</li>
+</ul>
+<p><strong>模式：</strong> CLI handler 函数以 <code>handle_</code> 为前缀（<code>handle_run</code>、<code>handle_stats</code> 等）。</p>
+<h3 id="pipeline--特性层--srcpipeline"><a class="header" href="#pipeline--特性层--srcpipeline">Pipeline / 特性层 — <code>src/pipeline/</code></a></h3>
+<p><strong>职责：</strong> 实现可选的记录处理链——包括过滤器和 SQL 参数归一化。</p>
+<p><strong>关键抽象：</strong></p>
+<ul>
+<li><code>LogProcessor</code> trait：可插拔的记录处理接口，定义 <code>process_with_meta()</code> 方法</li>
+<li><code>Pipeline</code>：记录处理器的有序链，<code>is_empty()</code> 判断是否需要处理</li>
+</ul>
+<p><strong>模式：</strong></p>
+<ul>
+<li>短路语义：任一 processor 返回跳过信号即停止链</li>
+<li>零开销快路径：<code>pipeline.is_empty()</code> 检查避免热循环中不必要的函数调用</li>
+</ul>
+<h3 id="导出层--srcexporter"><a class="header" href="#导出层--srcexporter">导出层 — <code>src/exporter/</code></a></h3>
+<p><strong>职责：</strong> 将已处理的记录写入目标后端（CSV 或 SQLite）。</p>
+<p><strong>关键抽象：</strong></p>
+<ul>
+<li><code>Exporter</code> trait：导出器接口，三阶段生命周期 <code>initialize()</code> → <code>export_one_preparsed()</code> → <code>finalize()</code></li>
+<li><code>ExporterKind</code> 枚举：静态分派（<code>match</code>）而非动态派发（<code>Box&lt;dyn Trait&gt;</code>），利于热路径内联</li>
+</ul>
+<p><strong>实现：</strong></p>
+<ul>
+<li><code>CsvExporter</code>：2 MB <code>BufWriter</code> + <code>itoa</code> 零分配整数格式化，~520 万条/秒</li>
+<li><code>SqliteExporter</code>：批量 INSERT + PRAGMA 优化（synchronous=OFF、mmap_size、cache_size），~110 万条/秒</li>
+</ul>
+<p><strong>优先级：</strong> CSV &gt; SQLite。同时配置时仅 CSV 生效。</p>
+<h3 id="支撑模块"><a class="header" href="#支撑模块">支撑模块</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>模块</th><th>路径</th><th>职责</th></tr></thead><tbody>
+<tr><td>错误处理</td><td><code>src/error.rs</code></td><td>类型化错误枚举 <code>Error</code>、<code>pub type Result&lt;T&gt;</code></td></tr>
+<tr><td>解析器</td><td><code>src/parser.rs</code></td><td>日志文件发现、排序、迭代</td></tr>
+<tr><td>统计分析</td><td><code>src/stats/</code></td><td>SQL 标准化（<code>normalize.rs</code>）、聚合（<code>aggregate.rs</code>）、输出（<code>output.rs</code>）</td></tr>
+<tr><td>日志</td><td><code>src/logging.rs</code></td><td>应用日志和错误日志</td></tr>
+<tr><td>预检</td><td><code>src/preflight.rs</code></td><td>运行前环境检查</td></tr>
+<tr><td>工具库</td><td><code>src/lib.rs</code></td><td>模块注册和公共导出</td></tr>
+</tbody></table>
+</div>
+<h2 id="关键抽象"><a class="header" href="#关键抽象">关键抽象</a></h2>
+<h3 id="exporter-trait--exporterkind-枚举"><a class="header" href="#exporter-trait--exporterkind-枚举">Exporter trait + ExporterKind 枚举</a></h3>
+<p>输出后端接口定义。<code>ExporterKind</code> 使用静态分派（<code>match</code> 语句）替代动态派发（<code>Box&lt;dyn Trait&gt;</code>），编译器可以为热路径中每种变体生成优化的内联代码。三阶段生命周期（初始化 → 逐条写入 → 收尾）提供了清晰的资源管理边界。</p>
+<h3 id="logprocessor-trait--pipeline"><a class="header" href="#logprocessor-trait--pipeline">LogProcessor trait + Pipeline</a></h3>
+<p>可插拔的记录处理链。每个 <code>LogProcessor</code> 实现 <code>process_with_meta()</code> 方法处理单条日志记录。<code>Pipeline</code> 将多个处理器串联为有序链。关键设计：<code>is_empty()</code> 允许在配置无过滤器需求时完全绕过管道，实现零开销。</p>
+<h3 id="fieldmask"><a class="header" href="#fieldmask">FieldMask</a></h3>
+<p><code>u16</code> 位掩码用于字段投影。16 个位对应 15 个输出字段（位 15 保留）。在整个管道中传递，控制每个字段是否被写入。提供 <code>contains(index)</code> 和 <code>set(index)</code> 方法，编译期内联。</p>
+<h2 id="性能设计"><a class="header" href="#性能设计">性能设计</a></h2>
+<h3 id="流式架构"><a class="header" href="#流式架构">流式架构</a></h3>
+<p>单线程流式处理是核心性能策略。每条记录被解析后立即传递给管道和导出器，不存入内存。这意味着文件大小的增长不会影响峰值内存——无论 100 MB 还是 100 GB 的日志文件，内存曲线是平直的水平线。</p>
+<h3 id="零开销快路径"><a class="header" href="#零开销快路径">零开销快路径</a></h3>
+<p>当没有配置任何过滤器时，热循环中的 <code>pipeline.is_empty()</code> 检查确保所有功能逻辑被跳过。此时记录不经处理直接流式写入导出器，性能接近裸文件复制的水平。</p>
+<h3 id="csv-导出优化"><a class="header" href="#csv-导出优化">CSV 导出优化</a></h3>
+<ul>
+<li>2 MB <code>BufWriter</code>：大幅减少系统调用次数</li>
+<li><code>itoa</code> 零分配整数格式化：整数直接写入缓冲区，无需分配中间字符串</li>
+<li><code>memchr</code> SIMD 加速：字节搜索处理 CSV 转义，比逐字节扫描快数倍</li>
+</ul>
+<h3 id="编译优化"><a class="header" href="#编译优化">编译优化</a></h3>
+<p>Release 构建采用激进优化：</p>
+<ul>
+<li><code>opt-level = 3</code>：最高代码优化级别</li>
+<li><code>lto = "fat"</code>：跨 crate 的链接时优化</li>
+<li><code>codegen-units = 1</code>：单一代码生成单元，最大化内联机会</li>
+<li><code>panic = "abort"</code>：移除恐慌展开代码</li>
+<li><code>strip = "symbols"</code>：剥离调试符号</li>
+</ul>
+<p>最终二进制文件约 5 MB，无外部运行时依赖。</p>
+<h3 id="基准性能"><a class="header" href="#基准性能">基准性能</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>场景</th><th>吞吐量</th><th>说明</th></tr></thead><tbody>
+<tr><td>CSV（合成数据）</td><td>~520 万条/秒</td><td>criterion 基准，50k 记录</td></tr>
+<tr><td>SQLite（合成数据）</td><td>~110 万条/秒</td><td>批量 + PRAGMA 优化</td></tr>
+<tr><td>真实文件（1.1 GB）</td><td>~155 万条/秒</td><td>~300 万条记录，NVMe SSD</td></tr>
+</tbody></table>
+</div>
+<h2 id="错误处理策略"><a class="header" href="#错误处理策略">错误处理策略</a></h2>
+<h3 id="分层错误类型"><a class="header" href="#分层错误类型">分层错误类型</a></h3>
+<p>顶层 <code>Error</code> 枚举通过 <code>thiserror</code> 派生宏包含所有子错误变体：</p>
+<ul>
+<li><code>Config(ConfigError)</code> — 配置加载和验证错误</li>
+<li><code>File(FileError)</code> — 文件打开和读写错误</li>
+<li><code>Parser(ParserError)</code> — 日志解析错误</li>
+<li><code>Export(ExportError)</code> — 导出写入错误</li>
+<li><code>Io(io::Error)</code> — 底层 I/O 错误</li>
+<li><code>Interrupted</code> — 用户中断（Ctrl+C）</li>
+</ul>
+<p>每个子错误变体包含上下文字段（<code>path: PathBuf</code>、<code>reason: String</code>），而非裸字符串，便于故障排查。</p>
+<h3 id="非致命解析错误"><a class="header" href="#非致命解析错误">非致命解析错误</a></h3>
+<p>解析失败不会中断整个导出过程。无法解析的行被记录到错误日志文件（配置中的 <code>[error] file</code>），工具继续处理下一行。在运行结束时汇总各文件的解析成功率。</p>
+<h3 id="退出码"><a class="header" href="#退出码">退出码</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>退出码</th><th>含义</th></tr></thead><tbody>
+<tr><td>0</td><td>成功</td></tr>
+<tr><td>2</td><td>配置错误</td></tr>
+<tr><td>3</td><td>文件/解析错误</td></tr>
+<tr><td>4</td><td>导出错误</td></tr>
+<tr><td>130</td><td>用户中断（Ctrl+C）</td></tr>
+</tbody></table>
+</div>
+<hr />
+<h3 id="依赖关系"><a class="header" href="#依赖关系">依赖关系</a></h3>
+<p>模块间的依赖遵循单向分层原则：</p>
+<pre><code>src/error.rs ←──────────────── 所有模块（横切关注点）
+src/config/ ←─ src/cli/ ←─ src/pipeline/ ←─ src/exporter/
+</code></pre>
+<p>配置层（config）被 CLI 层引用，CLI 层协调 Pipeline 和 Exporter 的具体实例。</p>
+<hr />
+<p><em>架构文档最后更新于 v1.13，反映 stats 子命令引入后的模块结构。模块级概述，不深入特定 struct 字段或 trait 方法签名。</em></p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="config-reference.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="contributing.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="config-reference.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="contributing.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>
