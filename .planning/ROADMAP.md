@@ -2,7 +2,7 @@
 
 ## Milestones
 
-- [ ] **v1.12 CLI 体验全面提升** — Phases 46–49 (in progress)
+- ✅ **v1.12 CLI 体验全面提升** — Phases 46–49 (shipped 2026-06-01)
 - ✅ **v1.0 增强 SQL 内容过滤与字段投影** — Phases 1–2 (shipped 2026-04-18)
 - ✅ **v1.1 性能优化** — Phases 3–6 (shipped 2026-05-10)
 - ✅ **v1.2 质量强化 & 性能深化** — Phases 7–11 (shipped 2026-05-15)
@@ -139,13 +139,15 @@ Full details: `.planning/phases/41-parser/`, `.planning/phases/42-criterion/`, `
 
 </details>
 
-<details open>
-<summary>🚧 v1.12 CLI 体验全面提升 (Phases 46–49) — IN PROGRESS</summary>
+<details>
+<summary>✅ v1.12 CLI 体验全面提升 (Phases 46–49) — SHIPPED 2026-06-01</summary>
 
-- [ ] **Phase 46: 错误信息优化**
-- [ ] **Phase 47: 配置文件体验**
-- [ ] **Phase 48: 日志级别与运行提示**
-- [ ] **Phase 49: Glob 输入支持**
+- [x] **Phase 46: 错误信息优化** — completed 2026-05-31
+- [x] **Phase 47: 配置文件体验** — completed 2026-05-31
+- [x] **Phase 48: 日志级别与运行提示** — completed 2026-06-01
+- [x] **Phase 49: Glob 输入支持** — completed 2026-06-01
+
+Full details: `.planning/milestones/v1.12-ROADMAP.md`
 
 </details>
 
@@ -389,10 +391,10 @@ Full details: `.planning/phases/41-parser/`, `.planning/phases/42-criterion/`, `
 | 43. Parser 新 API 适配与 Filter 重构 | v1.11 | Complete | 2026-05-24 |
 | 44. 热路径与内存优化 | v1.11 | Complete | 2026-05-24 |
 | 45. 并行扩展与 CI 基准集成 | v1.11 | Complete | 2026-05-25 |
-| 46. 错误信息优化 | 1/1 | Complete    | 2026-05-31 |
-| 47. 配置文件体验 | 2/2 | Complete    | 2026-05-31 |
-| 48. 日志级别与运行提示 | 2/2 | Complete    | 2026-05-31 |
-| 49. Glob 输入支持 | 3/3 | Complete    | 2026-05-31 |
+| 46. 错误信息优化 | v1.12 | 1/1 | Complete | 2026-05-31 |
+| 47. 配置文件体验 | v1.12 | 2/2 | Complete | 2026-05-31 |
+| 48. 日志级别与运行提示 | v1.12 | 2/2 | Complete | 2026-06-01 |
+| 49. Glob 输入支持 | v1.12 | 3/3 | Complete | 2026-06-01 |
 
 ---
 *Created: 2026-05-21 for milestone v1.10*

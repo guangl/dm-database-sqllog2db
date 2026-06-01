@@ -8,27 +8,18 @@
 
 用户能够精确指定"导出哪些记录的哪些字段"——过滤逻辑清晰可配置，输出结果完全可控。
 
-## Current Milestone: v1.12 CLI 体验全面提升
+## Latest: v1.12 已交付
 
-**Goal:** 全面改善用户与 sqllog2db 的交互体验，让配置更清晰、错误更可修复、日志更可控、输入更灵活。
-
-**Target features:**
-- 错误信息优化：显示具体出错字段/原因 + 修复建议 Hint
-- 配置文件体验：init 生成带注释模板，validate 显示详细结果
-- 运行提示/日志级别：--verbose/--quiet 开关，摘要信息可调
-- 多输入文件 glob 支持：config.toml input 字段 + --input 参数均支持 glob
-
-## Previous: v1.11 已交付
-
-**Shipped:** 2026-05-25  
-**Version:** v1.11 性能深化与依赖适配（Phases 41–45）
+**Shipped:** 2026-06-01  
+**Version:** v1.12 CLI 体验全面提升（Phases 46–49）
 
 **已交付功能：**
-- 依赖升级与 Parser 库适配（dm-database-parser-sqllog 新 API）
-- Criterion 基准测试基础设施（bench_csv、bench_sqlite）
-- Parser 新 API 适配与 Filter 重构（降低复杂度，减少耦合）
-- 热路径与内存优化（减少堆分配）
-- 并行扩展与 CI 基准集成（rayon 多文件并行，~5.2M records/sec）
+- 错误信息优化：`hint:` 前缀统一格式，`format_error_output` 辅助函数
+- 配置文件体验：`validate` 静默通过 / `[FAIL]` 失败输出，`init` 模板全字段注释
+- 运行提示/日志级别：`--verbose` 逐文件输出 + `--quiet` 完全抑制，摘要差异化
+- 多输入 glob 支持：`inputs: Vec<String>` + `--input` CLI flag，glob 展开，旧 `path` 键检测
+
+**Previous: v1.11 已交付（2026-05-25）** — 性能深化与依赖适配（Phases 41–45）
 
 ## Requirements
 
@@ -46,10 +37,14 @@
 - ✓ indicatif 进度显示 + 处理摘要 — v1.10
 - ✓ --help 达梦场景示例 — v1.10
 - ✓ 全链路验证（487 个测试，clippy/fmt 通过） — v1.10
+- ✓ 错误信息结构化 `hint:` 前缀，`format_error_output` 辅助函数 — v1.12
+- ✓ `validate` 静默通过/`[FAIL]` 失败输出，`init` 模板全字段注释 — v1.12
+- ✓ `--verbose` 逐文件输出 + `--quiet` 完全抑制，摘要差异化 — v1.12
+- ✓ `inputs: Vec<String>` 替代 `path: String`，config 和 CLI 均支持 glob 展开 — v1.12
 
 ### Active
 
-（v1.12 requirements — 待 REQUIREMENTS.md 定义后填入）
+（待下一里程碑定义）
 
 ### Out of Scope
 
@@ -66,10 +61,10 @@
 
 - Rust 项目，单线程流式处理，16MB BufWriter 写入
 - 依赖精简（无 reqwest/rustls/self_update 等重依赖，仅新增 indicatif）
-- 当前代码量：~9,289 行 Rust
+- 当前代码量：~8,833 行 Rust（src）+ 1,503 行（tests）
 - 性能基线：~5.2M records/sec（合成 CSV），~1.55M records/sec（1.1GB 真实文件）
-- 测试覆盖：487 个单元测试（CSV 59 + SQLite 61 + Pipeline 109 + 归一化 66 + 并行 3 + 其他）
-- 进度条与非致命错误 stderr 输出在某些终端可能互相干扰（低优先级 debt）
+- 测试覆盖：529 个测试（226 lib + 48+ integration + 1 jemalloc），全部通过
+- assert_cmd / predicates 加入 dev-dependencies，e2e CLI 测试覆盖大幅提升
 
 ## Constraints
 
@@ -91,6 +86,10 @@
 | 3 级退出码（0/1/2/130） | 替代旧的按错误类型映射方案，更简洁 | ✓ Good (v1.10) |
 | stdin 通过 /dev/stdin 路径映射 | 不改变现有 --input 参数结构 | ✓ Good (v1.10) |
 | indicatif 取代 eprintln 进度输出 | 非终端自动退化，体验更好 | ✓ Good (v1.10) |
+| `hint:` 前缀统一格式（两空格缩进） | 可单元测试，用户易识别 | ✓ Good (v1.12) |
+| validate 静默通过策略（D-03） | 仅错误时才输出，减少噪音 | ✓ Good (v1.12) |
+| verbose 语义从日志级别→运行展示 | `-vv` 不再有效，语义更清晰 | ✓ Good (v1.12) |
+| inputs: Vec<String> 替代 path: String | 支持 glob，旧键检测迁移友好 | ✓ Good (v1.12) |
 
 ## Evolution
 
@@ -103,4 +102,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-31 — Milestone v1.12 started*
+*Last updated: 2026-06-01 after v1.12 milestone*
