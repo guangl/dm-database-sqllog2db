@@ -1350,7 +1350,7 @@ fn test_cli_input_flag_with_glob_no_match_behavior() {
 /// Creates `input.log` with one valid DML record so `run_stats` can complete successfully.
 fn make_stats_config_file(dir: &std::path::Path) -> std::path::PathBuf {
     let cfg_path = dir.join("stats_cfg.toml");
-    let log_path = dir.join("test.log");
+    let app_log_path = dir.join("test.log");
     let input_log = dir.join("input.log");
     // Write one valid DML record so stats can scan and produce output
     std::fs::write(
@@ -1363,7 +1363,7 @@ fn make_stats_config_file(dir: &std::path::Path) -> std::path::PathBuf {
          [logging]\nfile = \"{}\"\nlevel = \"info\"\nretention_days = 7\n",
         input_log.to_string_lossy().replace('\\', "/"),
         dir.join("out.csv").to_string_lossy().replace('\\', "/"),
-        log_path.to_string_lossy().replace('\\', "/"),
+        app_log_path.to_string_lossy().replace('\\', "/"),
     );
     std::fs::write(&cfg_path, content).unwrap();
     cfg_path
