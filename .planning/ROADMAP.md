@@ -155,7 +155,7 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
 ### v1.13 SQL 统计分析 (Phases 50–52)
 
 - [x] **Phase 50: SQL 标准化引擎** — 将字面量替换为 `?` 占位符的标准化模块 (completed 2026-06-01)
-- [ ] **Phase 51: stats 子命令 CLI 脚手架** — 新增 `stats` 子命令及 `--top N` 参数
+- [x] **Phase 51: stats 子命令 CLI 脚手架** — 新增 `stats` 子命令及 `--top N` 参数 (completed 2026-06-01)
 - [ ] **Phase 52: 统计输出与 Exporter 集成** — 慢 SQL / 高频 SQL TOP-N 通过现有 exporter 输出
 
 ## Phase Details
@@ -366,7 +366,7 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
   3. `sqllog2db stats -c config.toml --top 5` 将 TOP 数量限制为 5，`--top 0` 或负数给出明确错误提示
   4. `cargo clippy --all-targets -- -D warnings` + `cargo test` 全部通过
 **Plans**: 1 plan
-- [ ] 51-01-PLAN.md — opts.rs 新增 Commands::Stats { config, top } 变体 + cli/mod.rs 注册 stats 模块 + 新建 src/cli/stats/mod.rs handle_stats 桩函数（--top 0 校验 → ConfigError::InvalidValue）+ main.rs 分发分支（Config::from_file 不回落）+ needs_simple_logging 排除 Stats + tests/integration.rs 6 个端到端 CLI 测试覆盖 STATS-01/STATS-02
+- [x] 51-01-PLAN.md — opts.rs 新增 Commands::Stats { config, top } 变体 + cli/mod.rs 注册 stats 模块 + 新建 src/cli/stats/mod.rs handle_stats 桩函数（--top 0 校验 → ConfigError::InvalidValue）+ main.rs 分发分支（Config::from_file 不回落）+ needs_simple_logging 排除 Stats + tests/integration.rs 6 个端到端 CLI 测试覆盖 STATS-01/STATS-02
 
 ### Phase 52: 统计输出与 Exporter 集成
 **Goal**: 用户运行 `stats` 后可在 config.toml 指定的 CSV 或 SQLite 文件中看到两张独立的统计表：慢 SQL TOP-N（按 elapsed 降序）和高频 SQL TOP-N（按调用次数降序）
@@ -448,7 +448,7 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
 | 48. 日志级别与运行提示 | v1.12 | 2/2 | Complete | 2026-06-01 |
 | 49. Glob 输入支持 | v1.12 | 3/3 | Complete | 2026-06-01 |
 | 50. SQL 标准化引擎 | 1/1 | Complete   | 2026-06-01 |
-| 51. stats 子命令 CLI 脚手架 | v1.13 | Not started | - |
+| 51. stats 子命令 CLI 脚手架 | 1/1 | Complete   | 2026-06-01 |
 | 52. 统计输出与 Exporter 集成 | v1.13 | Not started | - |
 
 ---
