@@ -7,7 +7,12 @@ use crate::error::Result;
 /// `value_parser` before reaching this function).
 /// `cfg` must already have verbosity applied before calling this function.
 pub fn handle_stats(cfg: &Config, top: u32) -> Result<()> {
-    log::info!("stats: top={top}");
+    log::info!(
+        "stats: top={top} from={:?} to={:?} config_top={:?}",
+        cfg.stats.from,
+        cfg.stats.to,
+        cfg.stats.top
+    );
     crate::stats::run_stats(cfg, top)
 }
 

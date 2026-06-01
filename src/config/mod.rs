@@ -3,6 +3,7 @@ pub mod logging;
 pub mod sqllog;
 mod validate;
 
+pub use crate::stats::config::StatsConfig;
 pub use exporter::{CsvExporterConfig, ExporterConfig, SqliteExporterConfig};
 pub use logging::{LOG_LEVELS, LoggingConfig};
 pub use sqllog::SqllogConfig;
@@ -27,6 +28,8 @@ pub struct Config {
     pub filter: Option<FiltersFeature>,
     #[serde(default)]
     pub output: Option<OutputConfig>,
+    #[serde(default)]
+    pub stats: StatsConfig,
 }
 
 impl Config {
@@ -150,5 +153,31 @@ append = false
         assert!(cfg.replace_parameters.is_none());
         assert!(cfg.filter.is_none());
         assert!(cfg.output.is_none());
+    }
+
+    #[test]
+    fn test_config_default_stats_all_none() {
+        let cfg = Config::default();
+        assert!(cfg.stats.from.is_none());
+        assert!(cfg.stats.to.is_none());
+        assert!(cfg.stats.top.is_none());
+    }
+
+    #[test]
+    fn test_config_parses_stats_section() {
+        let toml = "[stats]\nfrom = \"2024-01-01\"\nto = \"2024-01-31\"\ntop = 5\n[sqllog]\ninputs = [\"sqllogs\"]\n[exporter.csv]\nfile = \"out.csv\"";
+        let cfg: Config = toml::from_str(toml).unwrap();
+        assert_eq!(cfg.stats.from, Some("2024-01-01".to_string()));
+        assert_eq!(cfg.stats.to, Some("2024-01-31".to_string()));
+        assert_eq!(cfg.stats.top, Some(5));
+    }
+
+    #[test]
+    fn test_config_missing_stats_section_defaults_to_none() {
+        let toml = "[sqllog]\ninputs=[\"sqllogs\"]\n[exporter.csv]\nfile=\"out.csv\"";
+        let cfg: Config = toml::from_str(toml).unwrap();
+        assert!(cfg.stats.from.is_none());
+        assert!(cfg.stats.to.is_none());
+        assert!(cfg.stats.top.is_none());
     }
 }
