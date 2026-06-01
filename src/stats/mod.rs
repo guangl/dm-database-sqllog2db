@@ -2,4 +2,5 @@
 
 pub mod aggregate;
 pub mod normalize;
+pub mod output;
 pub use normalize::normalize_sql;
