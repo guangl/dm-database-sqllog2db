@@ -398,7 +398,13 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
   3. CLI 参数存在时优先于 config 中的值；CLI 与 config 均未配置时，`stats` 命令正常运行且不做时间过滤
   4. `--from "not-a-date"` 或 `from = "20240101"` 等格式不合法的值给出明确错误提示（如 `error: --from 格式不合法，支持 "YYYY-MM-DD" 或 "YYYY-MM-DD HH:MM:SS"`）
   5. `cargo clippy --all-targets -- -D warnings` + `cargo test` 全部通过
-**Plans**: TBD
+**Plans**: 3 plans
+- [ ] 53-01-PLAN.md — 新建 src/stats/config.rs（StatsConfig + validate_time_str）+ stats/mod.rs 注册子模块 + Config 根结构追加 #[serde(default)] pub stats: StatsConfig
+- [ ] 53-02-PLAN.md — opts.rs Stats 变体新增 --from/--to + --top 改 Option<u32> + handle_stats 优先级合并（D-05）+ main.rs 分发分支接入新签名
+- [ ] 53-03-PLAN.md — Config::validate 与 run_stats 接入 validate_time_str + CONFIG_TEMPLATE_EN 追加 [stats] 注释段 + tests/integration.rs 新增 7 个端到端 stats 测试
+- [ ] 53-01-PLAN.md — 新建 src/stats/config.rs（StatsConfig + validate_time_str）+ stats/mod.rs 注册子模块 + Config 根结构追加 #[serde(default)] pub stats: StatsConfig
+- [ ] 53-02-PLAN.md — opts.rs Stats 变体新增 --from/--to + --top 改 Option<u32> + handle_stats 优先级合并（D-05）+ main.rs 分发分支接入新签名
+- [ ] 53-03-PLAN.md — Config::validate 与 run_stats 接入 validate_time_str + CONFIG_TEMPLATE_EN 追加 [stats] 注释段 + tests/integration.rs 新增 7 个端到端 stats 测试
 
 ### Phase 54: StatsAccumulator 时间过滤
 **Goal**: `stats` 命令在聚合统计时自动跳过 `ts` 字段不在指定时间段内的记录，时间段过滤对慢 SQL 和高频 SQL 两张表均生效
