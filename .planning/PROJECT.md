@@ -8,7 +8,17 @@
 
 用户能够精确指定"导出哪些记录的哪些字段"——过滤逻辑清晰可配置，输出结果完全可控。
 
-## Latest: v1.13 已交付
+## Current Milestone: v1.14 stats 时间段过滤
+
+**Goal:** 为 `stats` 子命令加入时间段过滤，用户可通过 CLI 参数或 config.toml 指定起止时间，stats 只统计该时间段内的记录。
+
+**Target features:**
+- `--from`/`--to` CLI 参数（如 `--from "2024-01-01"` `--to "2024-01-31"`）
+- config.toml `[stats]` 节新增 `from`/`to` 字段作为默认值
+- CLI 参数优先于 config 中的值
+- `StatsAccumulator` 在聚合前按时间段跳过不符合的记录
+
+## Previous: v1.13 已交付
 
 **Shipped:** 2026-06-01  
 **Version:** v1.13 SQL 统计分析（Phases 50–52）
@@ -54,13 +64,17 @@
 - ✓ `validate` 静默通过/`[FAIL]` 失败输出，`init` 模板全字段注释 — v1.12
 - ✓ `--verbose` 逐文件输出 + `--quiet` 完全抑制，摘要差异化 — v1.12
 - ✓ `inputs: Vec<String>` 替代 `path: String`，config 和 CLI 均支持 glob 展开 — v1.12
+- ✓ `stats` 子命令（慢 SQL TOP + 高频 SQL TOP）— v1.13
+- ✓ SQL 标准化（参数替换为占位符）— v1.13
+- ✓ `--top N` 参数（默认 20）— v1.13
+- ✓ 输出格式复用 config.toml exporter — v1.13
 
-### Validated
+### Active
 
-- [x] `stats` 子命令（慢 SQL TOP + 高频 SQL TOP）— v1.13 (Validated in Phase 50-52)
-- [x] SQL 标准化（参数替换为占位符）— v1.13 (Validated in Phase 50)
-- [x] `--top N` 参数（默认 20）— v1.13 (Validated in Phase 51)
-- [x] 输出格式复用 config.toml exporter — v1.13 (Validated in Phase 52)
+- [ ] `stats --from`/`--to` CLI 参数（时间段过滤）— v1.14
+- [ ] config.toml `[stats]` 节 `from`/`to` 字段 — v1.14
+- [ ] CLI 参数优先于 config 值 — v1.14
+- [ ] `StatsAccumulator` 按时间段跳过不符合记录 — v1.14
 
 ### Out of Scope
 
@@ -118,4 +132,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-01 — v1.13 milestone Phase 50-52 complete*
+*Last updated: 2026-06-01 — v1.14 milestone started*

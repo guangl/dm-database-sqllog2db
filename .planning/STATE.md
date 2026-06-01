@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.13
-milestone_name: SQL 统计分析
-status: completed
-last_updated: "2026-06-01T09:40:18.000Z"
+milestone: v1.14
+milestone_name: stats 时间段过滤
+status: planning
+last_updated: "2026-06-01T12:04:48.642Z"
 last_activity: 2026-06-01
 progress:
-  total_phases: 18
-  completed_phases: 9
-  total_plans: 17
-  completed_plans: 20
-  percent: 50
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -52,7 +52,7 @@ None
 
 ## Current Position
 
-Phase: 52
-Plan: Complete
-Status: Milestone complete
-Last activity: 2026-06-01
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-06-01 — Milestone v1.14 started
