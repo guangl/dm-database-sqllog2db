@@ -1470,7 +1470,7 @@ fn test_cli_stats_top_zero_errors() {
         .assert()
         .failure()
         .stderr(contains("--top"))
-        .stderr(contains("must be >= 1"));
+        .stderr(contains("is not in 1"));
 }
 
 /// S6: stats with non-existent config exits with non-zero (no fallback to default, D-05).

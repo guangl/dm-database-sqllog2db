@@ -142,6 +142,7 @@ EXAMPLES:
         #[arg(
             long = "top",
             default_value = "20",
+            value_parser = clap::value_parser!(u32).range(1..),
             help = "Number of top records per table. Must be >= 1."
         )]
         top: u32,
