@@ -1,6 +1,5 @@
 use super::Config;
 use crate::error::{ConfigError, Error, Result};
-use crate::stats::validate_time_str;
 
 impl Config {
     pub fn validate(&self) -> Result<()> {
@@ -13,25 +12,7 @@ impl Config {
     }
 
     fn validate_stats_time_fields(&self) -> Result<()> {
-        if let Some(from) = &self.stats.from {
-            validate_time_str(from).map_err(|reason| {
-                Error::Config(ConfigError::InvalidValue {
-                    field: "stats.from".to_string(),
-                    value: from.clone(),
-                    reason,
-                })
-            })?;
-        }
-        if let Some(to) = &self.stats.to {
-            validate_time_str(to).map_err(|reason| {
-                Error::Config(ConfigError::InvalidValue {
-                    field: "stats.to".to_string(),
-                    value: to.clone(),
-                    reason,
-                })
-            })?;
-        }
-        Ok(())
+        crate::stats::config::validate_stats_time_range(&self.stats)
     }
 
     fn validate_output_fields(&self) -> Result<()> {

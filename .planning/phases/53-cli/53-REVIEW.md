@@ -1,20 +1,24 @@
 ---
-phase: 53
-status: findings
+phase: 53-cli
+reviewed: 2026-06-01T00:00:00Z
 depth: standard
-reviewed_files:
-  - src/stats/config.rs
-  - src/stats/mod.rs
-  - src/config/mod.rs
-  - src/config/validate.rs
+files_reviewed: 9
+files_reviewed_list:
+  - src/cli/init.rs
   - src/cli/opts.rs
   - src/cli/stats/mod.rs
+  - src/config/mod.rs
+  - src/config/validate.rs
   - src/main.rs
-  - src/cli/init.rs
+  - src/stats/config.rs
+  - src/stats/mod.rs
   - tests/integration.rs
-critical_count: 1
-warning_count: 3
-info_count: 2
+findings:
+  critical: 0
+  warning: 2
+  info: 3
+  total: 5
+status: issues_found
 ---
 
 # Phase 53: Code Review Report
@@ -26,172 +30,138 @@ info_count: 2
 
 ## Summary
 
-Phase 53 为 `stats` 子命令添加了 `--from`/`--to` CLI 参数与 `[stats]` 配置节，并实现了格式验证与 CLI > config > default 的优先级合并逻辑。
+Phase 53 adds the config/parameter layer for `stats --from`/`--to`/`--top`: a new `StatsConfig` struct, TOML `[stats]` section deserialization, CLI argument wiring, priority merging (CLI > config > default), format validation at both the `validate` subcommand and the `run_stats` entry point, and init template updates. Actual time-range filtering of accumulator records is explicitly deferred to Phase 54 per the `53-CONTEXT.md` decision log.
 
-整体实现结构清晰，优先级合并逻辑正确，防御性二次验证（`validate_cfg_stats_time`）也已到位。发现以下问题：一个 Critical 级逻辑错误（月/日数值范围未检查，合法格式字符串可绕过验证），以及三个 Warning 级问题（重复验证调用、from > to 未检查、CLi 无效格式无法提前拦截）。
+The implementation is structurally sound and the priority-merge logic is correct. Two warnings are raised: the time-string validator accepts semantically impossible dates (e.g. month 99), and the CLI help text describes `--from`/`--to` as "filtering" before the feature is live. Three info items cover missing range checks on private helper indexing, duplicated validation logic, and a test coverage gap that would not catch the absence of actual time-range filtering.
 
----
+No critical issues found.
 
-## Critical Issues
+## Warnings
 
-### CR-01: `validate_time_str` 只校验结构，不校验数值范围，允许无效日期通过
+### WR-01: `validate_time_str` accepts impossible calendar and clock values
 
-**File:** `src/stats/config.rs:23-75`
+**File:** `src/stats/config.rs:51-75`
 
-**Issue:** `check_date_part` 和 `check_time_part` 只验证分隔符位置和字符是否为 ASCII 数字，不验证数值是否合理。以下字符串全部通过验证：
+**Issue:** `check_date_part` and `check_time_part` verify only separator positions and that every expected position holds an ASCII digit. Numeric range constraints are not checked. The following strings all pass validation today:
 
-- `"2024-99-99"` — 月份/日期超出范围
-- `"2024-00-00"` — 零月零日
-- `"2024-01-01 99:99:99"` — 小时/分钟/秒超出范围
-- `"9999-99-99 25:61:61"` — 全部字段溢出
+```
+"2024-99-99"          // month 99, day 99
+"2024-00-00"          // month 0, day 0
+"2024-01-01 25:61:99" // hour 25, minute 61, second 99
+```
 
-这意味着用户传入 `--from "2024-99-99"` 时验证通过，但该值在语义上无效。当此值被用于日志筛选比较时，可能产生意料之外的行为（总是筛掉全部记录或不筛掉任何记录），且无任何错误提示。
+When Phase 54 wires these values into record comparisons, a user who typos a date will receive silently wrong filter results. The problem is present now and will become data-correctness silent-failure in the next phase.
 
-**Fix:** 在 `check_date_part` 和 `check_time_part` 中增加数值范围检查：
+**Fix:** Extend both check functions with per-component range validation:
 
 ```rust
 fn check_date_part(bytes: &[u8]) -> bool {
-    if !(bytes[4] == b'-' && bytes[7] == b'-') {
-        return false;
-    }
-    if !bytes[0..4].iter().all(|b| b.is_ascii_digit()) {
-        return false;
-    }
-    if !bytes[5..7].iter().all(|b| b.is_ascii_digit()) {
-        return false;
-    }
-    if !bytes[8..10].iter().all(|b| b.is_ascii_digit()) {
-        return false;
-    }
+    if !(bytes[4] == b'-' && bytes[7] == b'-') { return false; }
+    if !bytes[..4].iter().all(|b| b.is_ascii_digit()) { return false; }
+    if !bytes[5..7].iter().all(|b| b.is_ascii_digit()) { return false; }
+    if !bytes[8..10].iter().all(|b| b.is_ascii_digit()) { return false; }
     let month = (bytes[5] - b'0') * 10 + (bytes[6] - b'0');
     let day   = (bytes[8] - b'0') * 10 + (bytes[9] - b'0');
     (1..=12).contains(&month) && (1..=31).contains(&day)
 }
 
 fn check_time_part(bytes: &[u8]) -> bool {
-    if !(bytes[10] == b' ' && bytes[13] == b':' && bytes[16] == b':') {
-        return false;
-    }
-    if !bytes[11..13].iter().chain(bytes[14..16].iter()).chain(bytes[17..19].iter())
-        .all(|b| b.is_ascii_digit()) {
-        return false;
-    }
-    let hour   = (bytes[11] - b'0') * 10 + (bytes[12] - b'0');
-    let minute = (bytes[14] - b'0') * 10 + (bytes[15] - b'0');
-    let second = (bytes[17] - b'0') * 10 + (bytes[18] - b'0');
-    hour <= 23 && minute <= 59 && second <= 59
+    if !(bytes[10] == b' ' && bytes[13] == b':' && bytes[16] == b':') { return false; }
+    if !bytes[11..13].iter().chain(bytes[14..16].iter())
+        .chain(bytes[17..19].iter()).all(|b| b.is_ascii_digit()) { return false; }
+    let hour = (bytes[11] - b'0') * 10 + (bytes[12] - b'0');
+    let min  = (bytes[14] - b'0') * 10 + (bytes[15] - b'0');
+    let sec  = (bytes[17] - b'0') * 10 + (bytes[18] - b'0');
+    hour <= 23 && min <= 59 && sec <= 59
 }
 ```
 
 ---
 
-## Warnings
+### WR-02: CLI help text describes `--from`/`--to` as record filtering before the feature is active
 
-### WR-01: `from` 和 `to` 的时序关系未验证（from > to 可通过）
+**File:** `src/cli/opts.rs:131`, `src/cli/opts.rs:151-162`; `src/cli/init.rs:125-128`
 
-**File:** `src/stats/config.rs:23` / `src/config/validate.rs:15`
+**Issue:** The `stats` subcommand's `after_help` example reads `"Filter records by time range:"` and the argument docs say `"Start of time range"` / `"End of time range"`. The config template comment says `"Start of time range"` with no qualifier. At this phase the values are stored and validated but `StatsAccumulator::update` never consults them — every record is always included. A user running `stats --from 2024-01-01 --to 2024-01-31` today receives output spanning all dates with no error or warning.
 
-**Issue:** 当 `from` 和 `to` 都存在时，没有任何地方验证 `from <= to`。用户可以配置 `from = "2024-12-31"` 且 `to = "2024-01-01"`，该配置能通过 `validate` 命令，也能通过 `run_stats` 入口处的 `validate_cfg_stats_time`，最终导致时间范围筛选结果为空集——且无任何警告提示。由于当前版本时间范围仅做记录（`StatsAccumulator::update` 中未实际使用 `from`/`to` 过滤），此问题不会造成数据错误，但在实际过滤逻辑加入后会立刻成为 bug。
-
-**Fix:** 在 `validate_stats_time_fields`（`src/config/validate.rs:15`）中，当两个字段都为 `Some` 且格式均合法时，追加字符串比较（字符串格式保证了字典序等价于时间序）：
+**Fix (until Phase 54 ships):** Emit a `log::warn!` when from/to are set, making the partial state explicit:
 
 ```rust
-if let (Some(from), Some(to)) = (&self.stats.from, &self.stats.to) {
-    if from > to {
-        return Err(Error::Config(ConfigError::InvalidValue {
-            field: "stats.to".to_string(),
-            value: to.clone(),
-            reason: format!("'to' ({to}) must be >= 'from' ({from})"),
-        }));
-    }
+// In src/cli/stats/mod.rs, handle_stats, after merge:
+if merged_cfg.stats.from.is_some() || merged_cfg.stats.to.is_some() {
+    log::warn!(
+        "stats: --from/--to time-range filtering is not yet active; \
+         all records are included regardless of timestamp"
+    );
 }
 ```
 
----
-
-### WR-02: `run_stats` 入口的防御性验证与 `Config::validate` 逻辑重复
-
-**File:** `src/stats/mod.rs:19-42` 与 `src/config/validate.rs:15-35`
-
-**Issue:** `validate_cfg_stats_time`（`mod.rs:22`）与 `Config::validate_stats_time_fields`（`validate.rs:15`）执行完全相同的时间格式检查逻辑（字段、错误类型、消息格式一一对应）。在 `main.rs:185` 中，`Stats` 分支已经调用了 `cfg.validate()?`，之后再调用 `handle_stats` -> `run_stats` -> `validate_cfg_stats_time`，导致同一验证执行了两次。
-
-重复代码意味着：若将来修改验证逻辑（例如加入 CR-01 的数值范围检查），必须同步修改两处，容易产生不一致。
-
-**Fix:** 删除 `src/stats/mod.rs` 中的 `validate_cfg_stats_time` 函数（第 19-42 行）及其在 `run_stats`（第 49 行）中的调用。在 `main.rs` 中 `Stats` 分支已有 `cfg.validate()?`，防御层已存在；`run_stats` 的 `debug_assert!(top_n >= 1)` 模式已作为参考，时间验证不需要重复。
-
-若确实需要防御性检查（例如 `run_stats` 会被库 API 调用），则应将两处实现合并为一个共用私有函数，而不是维护两份副本。
-
----
-
-### WR-03: CLI 传入的 `--from`/`--to` 非法格式只在运行时报错，而非 clap 解析阶段
-
-**File:** `src/cli/opts.rs:152-164`
-
-**Issue:** `from` 和 `to` 被声明为普通 `Option<String>`，没有附加 `value_parser`。这意味着非法格式（如 `--from "not-a-date"`）在 clap 解析阶段不会报错，而是等到 `run_stats` 内部的 `validate_cfg_stats_time` 才报错，错误消息由自定义格式化输出。与之对比，`--top 0` 在 clap 层就会报错（`value_parser = clap::value_parser!(u32).range(1..)`）。
-
-两种参数的用户体验不一致：`--top 0` 立即给出 clap 风格错误，`--from bad-date` 则走到运行时才报错。
-
-**Fix:** 为 `from` 和 `to` 添加 clap value parser，在解析阶段完成验证：
-
-```rust
-// 在 opts.rs 中定义辅助函数
-fn parse_datetime(s: &str) -> Result<String, String> {
-    crate::stats::validate_time_str(s)?;
-    Ok(s.to_string())
-}
-
-// 在 Stats 变体中
-#[arg(long = "from", value_name = "DATETIME", value_parser = parse_datetime)]
-from: Option<String>,
-#[arg(long = "to",   value_name = "DATETIME", value_parser = parse_datetime)]
-to: Option<String>,
-```
-
-这样既能在 clap 层提前拦截，又消除了 WR-02 中运行时重复验证的必要性。
+Alternatively, revise the help text to `"Reserved for time-range filtering (not yet active)"` until Phase 54 is complete.
 
 ---
 
 ## Info
 
-### IN-01: `check_date_part` 调用时假设 `bytes.len() >= 10`，无运行时检查
+### IN-01: Private index helper functions lack `debug_assert` documenting their length precondition
 
-**File:** `src/stats/config.rs:51-62`
+**File:** `src/stats/config.rs:51-75`
 
-**Issue:** `check_date_part` 直接索引 `bytes[0]`..`bytes[9]`，`check_time_part` 索引 `bytes[10]`..`bytes[18]`，均无边界检查。这两个函数是私有的，且调用点在 `match bytes.len()` 分支中（len == 10 或 len == 19），因此当前代码是安全的。但函数签名（`bytes: &[u8]`）不携带任何关于最小长度的保证，若将来被其他地方调用则可能 panic。
+**Issue:** `check_date_part` indexes `bytes[0..9]` directly; `check_time_part` indexes `bytes[10..18]`. Both functions accept a bare `&[u8]` slice with no bounds guarantee in their signature. The callers are in a `match bytes.len()` guard (10 or 19), so no out-of-bounds access is possible today. However, the implicit precondition is not documented in the function contract or enforced by an assertion, making the code fragile to future refactoring.
 
-**Fix:** 在函数文档中明确前置条件，或添加 debug_assert：
+**Fix:** Add `debug_assert` preconditions:
 
 ```rust
 fn check_date_part(bytes: &[u8]) -> bool {
-    debug_assert!(bytes.len() >= 10, "check_date_part requires bytes.len() >= 10");
+    debug_assert!(bytes.len() >= 10, "check_date_part: need at least 10 bytes");
+    // ...
+}
+fn check_time_part(bytes: &[u8]) -> bool {
+    debug_assert!(bytes.len() >= 19, "check_time_part: need at least 19 bytes");
     // ...
 }
 ```
 
 ---
 
-### IN-02: 测试中 `from`/`to` 实际参与过滤的集成用例缺失
+### IN-02: Identical validation logic duplicated across two call sites
 
-**File:** `tests/integration.rs:1663-1873`
+**File:** `src/config/validate.rs:15-34` and `src/stats/mod.rs:19-42`
 
-**Issue:** Phase 53 添加了 `--from`/`--to` 参数，但测试（SC#1–SC#4）只验证：
-1. 参数格式合法/非法的通过/拒绝
-2. CLI 值出现在应用日志中（`log_content.contains("from=Some")`）
-3. CLI 值覆盖 config 值
+**Issue:** `Config::validate_stats_time_fields` and `validate_cfg_stats_time` in `run_stats` are character-for-character identical: both check `cfg.stats.from` and `cfg.stats.to` against `validate_time_str` and produce the same `ConfigError::InvalidValue` variants. The duplication is intentional per D-09 ("defensive check so CLI values are also caught"), but it means that adding range checks from WR-01 must be done in two places. If one site is updated and the other is not, validation becomes inconsistent.
 
-**没有任何测试验证 `from`/`to` 实际上按预期过滤了日志记录**（即 `from` 之前的记录不出现在输出中，`to` 之后的记录也不出现）。当前实现中 `StatsAccumulator::update` 并未使用 `cfg.stats.from`/`cfg.stats.to`（值只被存入 `merged_cfg` 但未传给 accumulator），所以时间范围过滤逻辑实际上**尚未实现**——但测试无法发现这一缺失。
-
-**Fix:** 添加验证过滤语义的集成测试：
+**Fix:** Extract a single shared function in `src/stats/config.rs` and call it from both sites:
 
 ```rust
-#[test]
-fn test_stats_from_to_filters_records() {
-    // 写入时间跨度覆盖多天的记录，设置 from/to 截断，
-    // 验证输出 CSV 只包含范围内的记录行数。
+/// Validates stats.from and stats.to format; used by Config::validate and run_stats.
+pub fn validate_stats_time_range(stats: &StatsConfig) -> crate::error::Result<()> {
+    if let Some(from) = &stats.from {
+        validate_time_str(from).map_err(|reason| /* ConfigError::InvalidValue ... */)?;
+    }
+    if let Some(to) = &stats.to {
+        validate_time_str(to).map_err(|reason| /* ConfigError::InvalidValue ... */)?;
+    }
+    Ok(())
 }
 ```
 
-同时需要在 `StatsAccumulator::update` 或 `scan_files_into_accumulator` 中实现实际的时间过滤逻辑。
+---
+
+### IN-03: Integration tests do not verify that `from`/`to` actually filters records
+
+**File:** `tests/integration.rs:1720-1833`
+
+**Issue:** The Phase 53 integration tests (SC#1–SC#4) verify format acceptance/rejection, that values appear in the application log, and that CLI values override config values. No test asserts that records outside the `[from, to]` range are absent from the stats output. Because the filter is not yet implemented, such a test would currently fail — but its absence means the gap will be invisible when Phase 54 adds filtering, unless a test is written then.
+
+**Fix:** When Phase 54 ships, add a test that writes log lines across multiple dates and checks that the stats output contains only lines within the specified range:
+
+```rust
+#[test]
+fn test_stats_from_to_excludes_out_of_range_records() {
+    // Write records at 2023-01-01 and 2025-01-01
+    // Run stats --from 2025-01-01 --to 2025-12-31
+    // Assert 2023 record is absent from slow_sql.csv / frequent_sql.csv
+}
+```
 
 ---
 

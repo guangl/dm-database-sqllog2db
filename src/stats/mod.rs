@@ -5,48 +5,22 @@ pub mod config;
 pub mod normalize;
 pub mod output;
 
-// Public re-exports for lib API consumers.
-// `validate_time_str` is used by src/config/validate.rs (bin target).
-// `StatsConfig` re-export is for lib API consumers; allow lint for bin target.
+// Public re-exports for lib API consumers; both may be unused in the bin target.
 #[allow(unused_imports)]
 pub use config::StatsConfig;
+#[allow(unused_imports)]
 pub use config::validate_time_str;
 
 use crate::config::Config;
-use crate::error::{ConfigError, Error, ParserError, Result};
+use crate::error::{Error, ParserError, Result};
 use aggregate::StatsAccumulator;
-
-/// 防御性验证 cfg.stats.from / cfg.stats.to 的时间格式（D-09）。
-///
-/// 在 `run_stats` 入口调用，确保 CLI 传入的非法格式也被捕获。
-fn validate_cfg_stats_time(cfg: &Config) -> Result<()> {
-    if let Some(from) = &cfg.stats.from {
-        config::validate_time_str(from).map_err(|reason| {
-            Error::Config(ConfigError::InvalidValue {
-                field: "stats.from".to_string(),
-                value: from.clone(),
-                reason,
-            })
-        })?;
-    }
-    if let Some(to) = &cfg.stats.to {
-        config::validate_time_str(to).map_err(|reason| {
-            Error::Config(ConfigError::InvalidValue {
-                field: "stats.to".to_string(),
-                value: to.clone(),
-                reason,
-            })
-        })?;
-    }
-    Ok(())
-}
 
 /// 执行统计分析：流式扫描日志文件，聚合慢 SQL 与高频 SQL，写入 CSV 或 `SQLite` 输出。
 ///
 /// `top_n` 必须 ≥ 1（由 Phase 51 的 CLI 层保证）。
 pub fn run_stats(cfg: &Config, top_n: u32) -> Result<()> {
     debug_assert!(top_n >= 1, "top_n must be >= 1 (Phase 51 CLI validation)");
-    validate_cfg_stats_time(cfg)?;
+    config::validate_stats_time_range(&cfg.stats)?;
     let log_files = crate::parser::SqllogParser::new(cfg.sqllog.inputs.clone()).log_files()?;
     if log_files.is_empty() {
         return Err(Error::Parser(ParserError::NoFilesFound {
@@ -128,6 +102,7 @@ fn write_stats_output(
 mod tests {
     use super::*;
     use crate::config::{Config, CsvExporterConfig, ExporterConfig, SqllogConfig};
+    use crate::error::ConfigError;
 
     fn make_csv_config(log_path: &str, csv_path: &str) -> Config {
         Config {

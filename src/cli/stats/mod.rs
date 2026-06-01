@@ -31,6 +31,12 @@ pub fn handle_stats(
     merged_cfg.stats.from = effective_from;
     merged_cfg.stats.to = effective_to;
 
+    if merged_cfg.stats.from.is_some() || merged_cfg.stats.to.is_some() {
+        log::warn!(
+            "stats: --from/--to time-range filtering is not yet active; \
+             all records are included regardless of timestamp"
+        );
+    }
     log::info!(
         "stats: top={effective_top} from={:?} to={:?}",
         merged_cfg.stats.from,
