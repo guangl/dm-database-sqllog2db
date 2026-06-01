@@ -154,7 +154,7 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
 
 ### v1.13 SQL 统计分析 (Phases 50–52)
 
-- [ ] **Phase 50: SQL 标准化引擎** — 将字面量替换为 `?` 占位符的标准化模块
+- [x] **Phase 50: SQL 标准化引擎** — 将字面量替换为 `?` 占位符的标准化模块 (completed 2026-06-01)
 - [ ] **Phase 51: stats 子命令 CLI 脚手架** — 新增 `stats` 子命令及 `--top N` 参数
 - [ ] **Phase 52: 统计输出与 Exporter 集成** — 慢 SQL / 高频 SQL TOP-N 通过现有 exporter 输出
 
@@ -353,6 +353,8 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
   3. 不含字面量的 SQL（如 `SELECT 1` 或纯参数绑定查询）经过标准化后与输入相同，无误替换
   4. 标准化函数通过 `cargo test` 中的单元测试覆盖至少 5 种典型 SQL 模式（含边界情况）
   5. `cargo clippy --all-targets -- -D warnings` + `cargo fmt --check` 全部通过
+**Plans**: 1 plan
+- [x] 50-01-PLAN.md — 新建 src/stats/{mod.rs,normalize.rs} + src/lib.rs 注册 pub mod stats + normalize_sql 字符扫描状态机 + 7 个单元测试（含 ROADMAP 5 模式 + 标识符/未闭合边界）
 
 ### Phase 51: stats 子命令 CLI 脚手架
 **Goal**: 用户可运行 `sqllog2db stats -c config.toml [--top N]` 触发统计分析流程，CLI 参数被正确解析并传递到后续处理逻辑
@@ -363,6 +365,8 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
   2. `sqllog2db stats -c config.toml` 在配置有效时不报错退出（即使统计输出暂为空也可），`--top` 缺省时使用默认值 20
   3. `sqllog2db stats -c config.toml --top 5` 将 TOP 数量限制为 5，`--top 0` 或负数给出明确错误提示
   4. `cargo clippy --all-targets -- -D warnings` + `cargo test` 全部通过
+**Plans**: 1 plan
+- [ ] 51-01-PLAN.md — opts.rs 新增 Commands::Stats { config, top } 变体 + cli/mod.rs 注册 stats 模块 + 新建 src/cli/stats/mod.rs handle_stats 桩函数（--top 0 校验 → ConfigError::InvalidValue）+ main.rs 分发分支（Config::from_file 不回落）+ needs_simple_logging 排除 Stats + tests/integration.rs 6 个端到端 CLI 测试覆盖 STATS-01/STATS-02
 
 ### Phase 52: 统计输出与 Exporter 集成
 **Goal**: 用户运行 `stats` 后可在 config.toml 指定的 CSV 或 SQLite 文件中看到两张独立的统计表：慢 SQL TOP-N（按 elapsed 降序）和高频 SQL TOP-N（按调用次数降序）
@@ -374,6 +378,9 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
   3. 当 config.toml 配置 CSV exporter 时，输出为两个独立 CSV 文件（如 `slow_sql.csv` 和 `frequent_sql.csv`）；配置 SQLite 时，输出为同一 `.db` 文件中的两张独立表
   4. 对同一份日志文件，`--top 5` 输出的行数严格不超过 5 行（记录不足时按实际数量输出）
   5. `cargo clippy --all-targets -- -D warnings` + `cargo test` 全部通过，不引入重量级新依赖
+
+**Plans**: 1 plan
+- [ ] 52-01-PLAN.md — pub(crate) ensure_parent_dir/f32_ms_to_i64 + 新建 src/stats/{aggregate.rs,output.rs} StatsAccumulator (BinaryHeap<Reverse<SlowSqlEntry>> + HashMap<String,AggState>) + write_csv_stats/write_sqlite_stats 独立输出（DROP+CREATE）+ src/stats/mod.rs run_stats 编排（CSV 优先）+ src/cli/stats/mod.rs 接入 + 23 项单元/集成测试覆盖 STATS-03/STATS-04/STATS-05
 
 ## Coverage Validation
 
@@ -440,10 +447,10 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
 | 47. 配置文件体验 | v1.12 | 2/2 | Complete | 2026-05-31 |
 | 48. 日志级别与运行提示 | v1.12 | 2/2 | Complete | 2026-06-01 |
 | 49. Glob 输入支持 | v1.12 | 3/3 | Complete | 2026-06-01 |
-| 50. SQL 标准化引擎 | v1.13 | Not started | - |
+| 50. SQL 标准化引擎 | 1/1 | Complete   | 2026-06-01 |
 | 51. stats 子命令 CLI 脚手架 | v1.13 | Not started | - |
 | 52. 统计输出与 Exporter 集成 | v1.13 | Not started | - |
 
 ---
 *Created: 2026-05-21 for milestone v1.10*
-*Updated: 2026-06-01 — v1.13 (Phases 50–52) roadmap added; STATS-01/02/03/04/05/06 全部映射*
+*Updated: 2026-06-01 — v1.13 (Phases 50–52) roadmap added; STATS-01/02/03/04/05/06 全部映射 + Phase 51 plan 1 published*
