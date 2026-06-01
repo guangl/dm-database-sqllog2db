@@ -7,12 +7,12 @@
 
 ### Stats 子命令
 
-- [ ] **STATS-01**: 用户可运行 `sqllog2db stats -c config.toml` 获取 SQL 统计报告
-- [ ] **STATS-02**: 用户可通过 `--top N` 参数控制每张表展示条数（默认 20）
-- [ ] **STATS-03**: 用户可看到慢 SQL TOP-N，按 elapsed 降序排列，包含：SQL 文本、elapsed、时间戳
-- [ ] **STATS-04**: 用户可看到高频 SQL TOP-N，按调用次数降序排列，包含：标准化 SQL、调用次数、avg elapsed、max elapsed
-- [ ] **STATS-05**: 统计结果输出格式遵循 config.toml 中的 exporter 配置（CSV 或 SQLite）
-- [ ] **STATS-06**: SQL 标准化将字面量参数（字符串/数字）替换为占位符 `?`，合并同模板的不同参数调用
+- [x] **STATS-01**: 用户可运行 `sqllog2db stats -c config.toml` 获取 SQL 统计报告
+- [x] **STATS-02**: 用户可通过 `--top N` 参数控制每张表展示条数（默认 20）
+- [x] **STATS-03**: 用户可看到慢 SQL TOP-N，按 elapsed 降序排列，包含：SQL 文本、elapsed、时间戳
+- [x] **STATS-04**: 用户可看到高频 SQL TOP-N，按调用次数降序排列，包含：标准化 SQL、调用次数、avg elapsed、max elapsed
+- [x] **STATS-05**: 统计结果输出格式遵循 config.toml 中的 exporter 配置（CSV 或 SQLite）
+- [x] **STATS-06**: SQL 标准化将字面量参数（字符串/数字）替换为占位符 `?`，合并同模板的不同参数调用
 
 ## Future Requirements
 
@@ -36,12 +36,12 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| STATS-01 | Phase 51 | Pending |
-| STATS-02 | Phase 51 | Pending |
-| STATS-03 | Phase 52 | Pending |
-| STATS-04 | Phase 52 | Pending |
-| STATS-05 | Phase 52 | Pending |
-| STATS-06 | Phase 50 | Pending |
+| STATS-01 | Phase 51 | Complete |
+| STATS-02 | Phase 51 | Complete |
+| STATS-03 | Phase 52 | Complete |
+| STATS-04 | Phase 52 | Complete |
+| STATS-05 | Phase 52 | Complete |
+| STATS-06 | Phase 50 | Complete |
 
 **Coverage:**
 - v1.13 requirements: 6 total

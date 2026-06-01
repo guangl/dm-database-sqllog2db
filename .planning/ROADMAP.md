@@ -447,9 +447,9 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
 | 47. 配置文件体验 | v1.12 | 2/2 | Complete | 2026-05-31 |
 | 48. 日志级别与运行提示 | v1.12 | 2/2 | Complete | 2026-06-01 |
 | 49. Glob 输入支持 | v1.12 | 3/3 | Complete | 2026-06-01 |
-| 50. SQL 标准化引擎 | 1/1 | Complete   | 2026-06-01 |
-| 51. stats 子命令 CLI 脚手架 | 1/1 | Complete   | 2026-06-01 |
-| 52. 统计输出与 Exporter 集成 | 1/1 | Complete   | 2026-06-01 |
+| 50. SQL 标准化引擎 | 1/1 | Complete    | 2026-06-01 |
+| 51. stats 子命令 CLI 脚手架 | 1/1 | Complete    | 2026-06-01 |
+| 52. 统计输出与 Exporter 集成 | 1/1 | Complete    | 2026-06-01 |
 
 ---
 *Created: 2026-05-21 for milestone v1.10*
