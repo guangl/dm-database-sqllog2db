@@ -118,7 +118,7 @@ fn test_jemalloc_peak_baseline() {
     let interrupted = Arc::new(AtomicBool::new(false));
 
     let (allocated_delta, resident_delta) = measure_alloc_delta(|| {
-        handle_run(&cfg, true, false, &interrupted, None).unwrap();
+        handle_run(&cfg, true, false, &interrupted).unwrap();
     });
 
     // Final state for absolute reporting

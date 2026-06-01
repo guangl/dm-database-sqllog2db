@@ -144,7 +144,7 @@ fn run() -> Result<Option<(ErrorStats, bool)>> {
         Some(cli::opts::Commands::Run { config, input }) => {
             let mut cfg = load_config(config)?;
             apply_cli_inputs_to_config(&mut cfg, input.clone());
-            let compiled_filters = cfg.validate_and_compile()?;
+            cfg.validate()?;
 
             apply_verbosity_to_config(&mut cfg, cli.verbose, cli.quiet);
             logging::init_logging(&cfg.logging, false)?;
@@ -163,8 +163,7 @@ fn run() -> Result<Option<(ErrorStats, bool)>> {
             })
             .ok();
 
-            let stats =
-                cli::run::handle_run(&cfg, cli.quiet, cli.verbose, &interrupted, compiled_filters)?;
+            let stats = cli::run::handle_run(&cfg, cli.quiet, cli.verbose, &interrupted)?;
             Ok(Some((stats, cli.quiet)))
         }
         Some(cli::opts::Commands::Validate { config }) => {

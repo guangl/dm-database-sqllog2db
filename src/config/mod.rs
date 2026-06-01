@@ -13,10 +13,6 @@ use serde::Deserialize;
 use std::io;
 use std::path::Path;
 
-const PIPELINE_MIGRATION_HINT: &str = "配置格式已升级，请迁移以下字段：\n  [pipeline.normalize] → [replace_parameters]\n  \
-     [pipeline.filters.*] → [filter.*]\n  [pipeline.fields] → [output.fields]\n\
-     详见 .planning/phases/18-template-chart-nesting/18-CONTEXT.md";
-
 #[derive(Debug, Deserialize, Clone, Default)]
 pub struct Config {
     #[serde(default)]
@@ -31,16 +27,6 @@ pub struct Config {
     pub filter: Option<FiltersFeature>,
     #[serde(default)]
     pub output: Option<OutputConfig>,
-    /// 旧路径检测：捕获 `[pipeline]` 表（若用户仍用旧格式）。
-    /// 非 None 时 validate() 会返回迁移错误，用户不应直接使用此字段。
-    #[doc(hidden)]
-    #[serde(rename = "pipeline", default)]
-    pub pipeline_deprecated: Option<toml::Value>,
-    /// 旧路径检测：捕获 `[template]` 表（若用户仍用旧格式）。
-    /// 非 None 时 validate() 会返回废弃错误，用户不应直接使用此字段。
-    #[doc(hidden)]
-    #[serde(rename = "template", default)]
-    pub template_deprecated: Option<toml::Value>,
 }
 
 impl Config {

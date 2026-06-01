@@ -1,7 +1,7 @@
 use crate::error::{Error, ErrorStats, Result};
 use crate::exporter::{CsvExporter, ExporterManager};
 use crate::pipeline::normalizer::ParamBuffer;
-use crate::pipeline::{CompiledSqlFilters, FieldMask, Pipeline};
+use crate::pipeline::{FieldMask, Pipeline};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -77,7 +77,6 @@ pub(super) fn process_csv_parallel(
     placeholder_override: Option<bool>,
     field_mask: FieldMask,
     ordered_indices: &[usize],
-    sql_record_filter: Option<&CompiledSqlFilters>,
 ) -> Result<(Vec<(PathBuf, usize)>, usize, ErrorStats)> {
     use rayon::prelude::*;
 
@@ -157,8 +156,7 @@ pub(super) fn process_csv_parallel(
                     &mut params_buf,
                     &mut ns_scratch,
                     false, // 并行模式：不重置进度条，避免多线程互相重置计数
-                    sql_record_filter,
-                    None, // no progress bar in parallel mode
+                    None,  // no progress bar in parallel mode
                 )?;
 
                 em.finalize()?;

@@ -59,7 +59,7 @@ fn test_handle_run_empty_dir_returns_no_files_found() {
     let csv_file = dir.path().join("out.csv");
     let cfg = make_run_config(&log_dir, &csv_file);
     let interrupted = Arc::new(AtomicBool::new(false));
-    let result = handle_run(&cfg, true, false, &interrupted, None);
+    let result = handle_run(&cfg, true, false, &interrupted);
     assert!(result.is_err());
     let err = result.unwrap_err().to_string();
     assert!(err.contains("No log files found matching inputs"));
@@ -86,7 +86,7 @@ fn test_handle_run_multi_file() {
     let cfg = make_run_config(&log_dir, &csv_file);
 
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted).unwrap();
 }
 
 #[test]
@@ -100,7 +100,7 @@ fn test_handle_run_real_csv_export() {
     let cfg = make_run_config(&log_dir, &csv_file);
 
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted).unwrap();
 
     let content = std::fs::read_to_string(&csv_file).unwrap();
     // header + 10 data rows = 11 lines
@@ -124,7 +124,7 @@ fn test_handle_run_interrupted() {
 
     // Pre-set interrupted flag — run returns Err(Interrupted) when flag is set before processing
     let interrupted = Arc::new(AtomicBool::new(true));
-    let result = handle_run(&cfg, true, false, &interrupted, None);
+    let result = handle_run(&cfg, true, false, &interrupted);
     assert!(
         matches!(
             result,
@@ -318,7 +318,6 @@ fn test_handle_validate_with_filters_all_fields() {
                 includes: Some(vec!["SELECT".to_string()]),
                 excludes: Some(vec!["DROP".to_string()]),
             },
-            record_sql: SqlFilters::default(),
         }),
         ..Default::default()
     };
@@ -353,7 +352,7 @@ fn test_handle_run_non_quiet_prints_summary() {
     let cfg = make_run_config(&log_dir, &csv_file);
     let interrupted = Arc::new(AtomicBool::new(false));
     // quiet=false exercises the summary print path
-    handle_run(&cfg, false, false, &interrupted, None).unwrap();
+    handle_run(&cfg, false, false, &interrupted).unwrap();
 }
 
 #[test]
@@ -375,9 +374,8 @@ fn test_handle_run_with_filters_builds_pipeline() {
         exclude: ExcludeFilters::default(),
         ..Default::default()
     });
-    let compiled_filters = cfg.validate_and_compile().unwrap();
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, compiled_filters).unwrap();
+    handle_run(&cfg, true, false, &interrupted).unwrap();
 }
 
 #[test]
@@ -402,7 +400,7 @@ fn test_handle_run_with_transaction_filters_prescans() {
         ..Default::default()
     });
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted).unwrap();
 }
 
 #[test]
@@ -427,7 +425,7 @@ fn test_handle_run_with_min_runtime_filter() {
         ..Default::default()
     });
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted).unwrap();
 }
 
 // ── parallel CSV tests ──────────────────────────────────────────────────────
@@ -447,7 +445,7 @@ fn test_handle_run_parallel_csv_multiple_files() {
     let interrupted = Arc::new(AtomicBool::new(false));
 
     // jobs=2, multiple files, no limit, CSV exporter → triggers process_csv_parallel
-    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted).unwrap();
 
     let content = std::fs::read_to_string(&csv_file).unwrap();
     let data_lines = content.lines().count().saturating_sub(1);
@@ -483,7 +481,7 @@ fn test_csv_throughput_baseline() {
 
     let interrupted = Arc::new(AtomicBool::new(false));
     let start = std::time::Instant::now();
-    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted).unwrap();
     let elapsed = start.elapsed().as_secs_f64();
 
     let rate = f64::from(u32::try_from(RECORD_COUNT).expect("20_000 fits in u32")) / elapsed;
@@ -559,58 +557,6 @@ fn test_init_generated_en_template_passes_validate() {
     );
 }
 
-#[test]
-fn test_validate_rejects_legacy_pipeline_template_analysis() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("legacy.toml");
-    std::fs::write(
-        &path,
-        "[sqllog]\ninputs = [\"sqllogs\"]\n\n[pipeline.template_analysis]\nenabled = true\n\n[exporter.csv]\nfile = \"out.csv\"\n",
-    )
-    .unwrap();
-    let cfg = dm_database_sqllog2db::config::Config::from_file(&path).unwrap();
-    let result = cfg.validate();
-    assert!(
-        result.is_err(),
-        "legacy [pipeline.template_analysis] must be rejected by validate()"
-    );
-    let err_msg = result.unwrap_err().to_string();
-    assert!(
-        err_msg.contains("[pipeline.filters.*] → [filter.*]"),
-        "error must contain migration hint for filters; got: {err_msg}"
-    );
-}
-
-#[test]
-fn test_validate_rejects_legacy_pipeline_filters_section() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("legacy_filters.toml");
-    std::fs::write(
-        &path,
-        "[sqllog]\ninputs = [\"sqllogs\"]\n\n[pipeline.filters]\nenable = true\n\n[exporter.csv]\nfile = \"out.csv\"\n",
-    )
-    .unwrap();
-    let cfg = dm_database_sqllog2db::config::Config::from_file(&path).unwrap();
-    let result = cfg.validate();
-    assert!(
-        result.is_err(),
-        "legacy [pipeline.filters] must be rejected by validate()"
-    );
-    let err_msg = result.unwrap_err().to_string();
-    assert!(
-        err_msg.contains("[pipeline.normalize] → [replace_parameters]"),
-        "error must contain migration hint for normalize; got: {err_msg}"
-    );
-    assert!(
-        err_msg.contains("[pipeline.filters.*] → [filter.*]"),
-        "error must contain migration hint for filters; got: {err_msg}"
-    );
-    assert!(
-        err_msg.contains("[pipeline.fields] → [output.fields]"),
-        "error must contain migration hint for fields; got: {err_msg}"
-    );
-}
-
 // ── E2E pipeline tests (TEST-02) ─────────────────────────────────────────────
 
 #[test]
@@ -636,7 +582,7 @@ fn test_e2e_filter_pipeline() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted).unwrap();
 
     // Assert: header + 10 条数据行 = 11 行
     let content = std::fs::read_to_string(&csv_file).unwrap();
@@ -673,7 +619,7 @@ fn test_e2e_filter_pipeline() {
         exclude: ExcludeFilters::default(),
         ..Default::default()
     });
-    handle_run(&cfg2, true, false, &Arc::new(AtomicBool::new(false)), None).unwrap();
+    handle_run(&cfg2, true, false, &Arc::new(AtomicBool::new(false))).unwrap();
     let content2 = std::fs::read_to_string(&csv_file2).unwrap();
     // OTHER 全被过滤，只有 header
     assert_eq!(
@@ -704,7 +650,7 @@ fn test_e2e_field_projection() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted).unwrap();
 
     // Assert: header 精确为 "ts,username,sql"（已验证字段投影正确）
     // 数据行只验证行数（不用 split(',').count()，SQL 含逗号时会误判）
@@ -738,7 +684,7 @@ fn test_boundary_empty_log_file() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted).unwrap();
 
     // Assert: CSV 文件存在且只有 header（1 行）
     assert!(
@@ -776,7 +722,7 @@ fn test_boundary_all_filtered() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted).unwrap();
 
     // Assert: CSV 只有 header（全部记录被过滤）
     let content = std::fs::read_to_string(&csv_file).unwrap();
@@ -814,7 +760,7 @@ fn test_boundary_malformed_line() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted).unwrap();
 
     // Assert: 无效行被跳过，4 条正常记录导出 → header + 4 data = 5 行
     let csv_content = std::fs::read_to_string(&csv_file).unwrap();
@@ -844,7 +790,7 @@ fn test_boundary_long_sql() {
 
     // Act: 不应 panic，不应 OOM
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted).unwrap();
 
     // Assert: 1 条记录正常导出 → header + 1 data = 2 行
     let csv_content = std::fs::read_to_string(&csv_file).unwrap();

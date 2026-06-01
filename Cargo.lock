@@ -343,9 +343,9 @@ dependencies = [
 
 [[package]]
 name = "dm-database-parser-sqllog"
-version = "2.0.0"
+version = "2.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c4b4d3d6e7725869fe755574f4dbdfa146bae65536266d00ef7e236963da31bd"
+checksum = "f4fdb42038032fc2a1ff6ed4b445d3b5f99a539a8ba8d42bb3cda2c7e6cf8a78"
 dependencies = [
  "atoi",
  "encoding",
@@ -370,7 +370,6 @@ dependencies = [
  "memchr",
  "predicates",
  "rayon",
- "regex",
  "rusqlite",
  "serde",
  "tempfile",

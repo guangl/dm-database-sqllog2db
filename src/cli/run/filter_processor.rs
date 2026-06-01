@@ -1,88 +1,300 @@
 use crate::config::Config;
-use crate::pipeline::filters::RecordMeta;
-use crate::pipeline::{CompiledMetaFilters, LogProcessor, Pipeline};
+use crate::pipeline::{FiltersFeature, LogProcessor, Pipeline};
+use dm_database_parser_sqllog::{Filter, FilterBuilder, Sqllog};
+use std::collections::HashSet;
 
-/// 构建处理器管线。
-///
-/// `compiled_meta` 由 `Config::validate_and_compile` 在主流程入口预编译；
-/// 当输入 `None` 或 `has_filters() == false` 时返回空管线。
-pub(super) fn build_pipeline(cfg: &Config, compiled_meta: Option<CompiledMetaFilters>) -> Pipeline {
+pub(super) fn build_pipeline(cfg: &Config) -> Pipeline {
     let mut pipeline = Pipeline::new();
-
-    if let (Some(f), Some(meta)) = (cfg.filter.as_ref(), compiled_meta) {
-        if f.has_filters() {
-            pipeline.add(Box::new(FilterProcessor::new(meta, f)));
+    if let Some(f) = cfg.filter.as_ref() {
+        if f.enable && (f.include.has_filters() || f.exclude.has_filters()) {
+            pipeline.add(Box::new(FilterProcessor::from_feature(f)));
         }
     }
-
     pipeline
 }
 
-#[derive(Debug)]
 struct FilterProcessor {
-    /// 预编译的元数据过滤器（跨字段 AND 语义，字段内 OR 语义）
-    compiled_meta: CompiledMetaFilters,
-    /// 时间范围过滤（字符串比较，不用正则）
-    start_ts: Option<String>,
-    end_ts: Option<String>,
-    /// 预计算：`compiled_meta.has_any_filters()` 的结果（include 或 exclude 任一），避免热路径重复检查
+    base_filter: Filter,
+    include_groups: Vec<Vec<Filter>>,
+    exclude_groups: Vec<Vec<Filter>>,
+    trxid_set: Option<HashSet<String>>,
     has_meta_filters: bool,
 }
 
+impl std::fmt::Debug for FilterProcessor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FilterProcessor")
+            .field("has_meta_filters", &self.has_meta_filters)
+            .finish_non_exhaustive()
+    }
+}
+
+fn build_or_group(
+    values: Option<&[String]>,
+    make: impl Fn(FilterBuilder, &str) -> FilterBuilder,
+) -> Vec<Filter> {
+    match values {
+        None | Some([]) => Vec::new(),
+        Some(v) => v
+            .iter()
+            .map(|val| make(FilterBuilder::new(), val).build())
+            .collect(),
+    }
+}
+
 impl FilterProcessor {
-    /// 接受预编译的 `CompiledMetaFilters`（来自 `Config::validate_and_compile`），
-    /// 避免在 `run` 路径中第二次调用 `Regex::new()`。
-    ///
-    /// `has_any_filters()` 包含 exclude 字段，确保纯 exclude 配置也激活 meta 检查路径（D-05）
-    fn new(compiled_meta: CompiledMetaFilters, filter: &crate::pipeline::FiltersFeature) -> Self {
-        let has_meta_filters = compiled_meta.has_any_filters();
+    fn from_feature(f: &FiltersFeature) -> Self {
+        let mut ts_builder = FilterBuilder::new();
+        if let Some(start) = &f.include.start_ts {
+            ts_builder = ts_builder.ts_gte(start.clone());
+        }
+        if let Some(end) = &f.include.end_ts {
+            ts_builder = ts_builder.ts_lte(end.clone());
+        }
+        let base_filter = ts_builder.build();
+
+        let include_groups = vec![
+            build_or_group(f.include.users.as_deref(), |fb, v| fb.username_eq(v)),
+            build_or_group(f.include.ips.as_deref(), |fb, v| fb.client_ip_eq(v)),
+            build_or_group(f.include.sessions.as_deref(), |fb, v| fb.sess_id_eq(v)),
+            build_or_group(f.include.threads.as_deref(), |fb, v| fb.thrd_id_eq(v)),
+            build_or_group(f.include.statements.as_deref(), |fb, v| fb.statement_eq(v)),
+            build_or_group(f.include.apps.as_deref(), |fb, v| fb.appname_eq(v)),
+            build_or_group(f.include.tags.as_deref(), |fb, v| fb.tag_eq(v)),
+        ];
+
+        let exclude_groups = vec![
+            build_or_group(f.exclude.users.as_deref(), |fb, v| fb.username_eq(v)),
+            build_or_group(f.exclude.ips.as_deref(), |fb, v| fb.client_ip_eq(v)),
+            build_or_group(f.exclude.sessions.as_deref(), |fb, v| fb.sess_id_eq(v)),
+            build_or_group(f.exclude.threads.as_deref(), |fb, v| fb.thrd_id_eq(v)),
+            build_or_group(f.exclude.statements.as_deref(), |fb, v| fb.statement_eq(v)),
+            build_or_group(f.exclude.apps.as_deref(), |fb, v| fb.appname_eq(v)),
+            build_or_group(f.exclude.tags.as_deref(), |fb, v| fb.tag_eq(v)),
+        ];
+
+        let trxid_set = f.include.trxids.clone();
+
+        let has_meta_filters = include_groups.iter().any(|g| !g.is_empty())
+            || exclude_groups.iter().any(|g| !g.is_empty())
+            || trxid_set.as_ref().is_some_and(|s| !s.is_empty());
+
         Self {
-            compiled_meta,
-            start_ts: filter.include.start_ts.clone(),
-            end_ts: filter.include.end_ts.clone(),
+            base_filter,
+            include_groups,
+            exclude_groups,
+            trxid_set,
             has_meta_filters,
         }
     }
 }
 
 impl LogProcessor for FilterProcessor {
-    fn process(&self, record: &dm_database_parser_sqllog::Sqllog) -> bool {
+    fn process(&self, record: &Sqllog) -> bool {
         self.process_with_meta(record)
     }
 
-    /// 热路径：使用 `Sqllog` 的直接字段（parser 库已物化所有元数据字段）。
-    ///
-    /// 时间过滤在前（无需构造 `RecordMeta`），之后用预计算的 `has_meta_filters`
-    /// 快速判断是否需要进入元数据过滤 —— 过滤器只含时间范围时直接返回 true。
-    fn process_with_meta(&self, record: &dm_database_parser_sqllog::Sqllog) -> bool {
-        let ts = &record.ts;
-
-        // 时间过滤：无需构造 RecordMeta
-        if let Some(start) = &self.start_ts {
-            if ts.as_str() < start.as_str() {
-                return false;
-            }
-        }
-        if let Some(end) = &self.end_ts {
-            if ts.as_str() > end.as_str() {
-                return false;
-            }
+    fn process_with_meta(&self, record: &Sqllog) -> bool {
+        if !self.base_filter.matches(record) {
+            return false;
         }
 
-        // 快速路径：无元数据过滤 → 直接通过，跳过 RecordMeta 构造
         if !self.has_meta_filters {
             return true;
         }
 
-        self.compiled_meta.should_keep(&RecordMeta {
-            trxid: &record.trxid,
-            ip: &record.client_ip,
-            sess: &record.sess_id,
-            thrd: &record.thrd_id,
-            user: &record.username,
-            stmt: &record.statement,
-            app: &record.appname,
-            tag: record.tag.as_deref(),
-        })
+        for group in &self.exclude_groups {
+            if !group.is_empty() && group.iter().any(|f| f.matches(record)) {
+                return false;
+            }
+        }
+
+        for group in &self.include_groups {
+            if !group.is_empty() && !group.iter().any(|f| f.matches(record)) {
+                return false;
+            }
+        }
+
+        if let Some(trxids) = &self.trxid_set {
+            if !trxids.is_empty() && !trxids.contains(record.trxid.as_str()) {
+                return false;
+            }
+        }
+
+        true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::pipeline::filters::types::{ExcludeFilters, FiltersFeature, IncludeFilters};
+
+    fn make_record(username: &str, client_ip: &str, trxid: &str, tag: Option<&str>) -> Sqllog {
+        Sqllog {
+            ts: "2024-01-01 00:00:00.000".to_string(),
+            tag: tag.map(String::from),
+            ep: 2,
+            sess_id: "s".to_string(),
+            thrd_id: "t".to_string(),
+            username: username.to_string(),
+            trxid: trxid.to_string(),
+            statement: "st".to_string(),
+            appname: "app".to_string(),
+            client_ip: client_ip.to_string(),
+            sql: "SELECT 1".to_string(),
+            exectime: 100.0,
+            rowcount: 1,
+            exec_id: 1,
+        }
+    }
+
+    fn make_feature(include: IncludeFilters, exclude: ExcludeFilters) -> FiltersFeature {
+        FiltersFeature {
+            enable: true,
+            include,
+            exclude,
+            ..FiltersFeature::default()
+        }
+    }
+
+    #[test]
+    fn test_no_filters_passes_all() {
+        let proc = FilterProcessor::from_feature(&make_feature(
+            IncludeFilters::default(),
+            ExcludeFilters::default(),
+        ));
+        assert!(proc.process_with_meta(&make_record("any", "1.2.3.4", "tx", None)));
+    }
+
+    #[test]
+    fn test_include_username_passes_matching() {
+        let include = IncludeFilters {
+            users: Some(vec!["admin_dba".into()]),
+            ..Default::default()
+        };
+        let proc = FilterProcessor::from_feature(&make_feature(include, ExcludeFilters::default()));
+        assert!(proc.process_with_meta(&make_record("admin_dba", "1.2.3.4", "tx", None)));
+        assert!(!proc.process_with_meta(&make_record("guest_01", "1.2.3.4", "tx", None)));
+    }
+
+    #[test]
+    fn test_include_username_or_semantics() {
+        let include = IncludeFilters {
+            users: Some(vec!["admin_user".into(), "sys_dba".into()]),
+            ..Default::default()
+        };
+        let proc = FilterProcessor::from_feature(&make_feature(include, ExcludeFilters::default()));
+        assert!(proc.process_with_meta(&make_record("admin_user", "ip", "tx", None)));
+        assert!(proc.process_with_meta(&make_record("sys_dba", "ip", "tx", None)));
+        assert!(!proc.process_with_meta(&make_record("regular_user", "ip", "tx", None)));
+    }
+
+    #[test]
+    fn test_include_and_semantics_between_fields() {
+        let include = IncludeFilters {
+            users: Some(vec!["admin_dba".into()]),
+            ips: Some(vec!["192.168.1.1".into()]),
+            ..Default::default()
+        };
+        let proc = FilterProcessor::from_feature(&make_feature(include, ExcludeFilters::default()));
+        assert!(proc.process_with_meta(&make_record("admin_dba", "192.168.1.1", "tx", None)));
+        assert!(!proc.process_with_meta(&make_record("admin_dba", "10.0.0.1", "tx", None)));
+        assert!(!proc.process_with_meta(&make_record("sys_user", "192.168.1.1", "tx", None)));
+    }
+
+    #[test]
+    fn test_include_tag_none_rejected() {
+        let include = IncludeFilters {
+            tags: Some(vec!["SEL".into()]),
+            ..Default::default()
+        };
+        let proc = FilterProcessor::from_feature(&make_feature(include, ExcludeFilters::default()));
+        assert!(!proc.process_with_meta(&make_record("u", "ip", "tx", None)));
+        assert!(proc.process_with_meta(&make_record("u", "ip", "tx", Some("SEL"))));
+        assert!(!proc.process_with_meta(&make_record("u", "ip", "tx", Some("INS"))));
+    }
+
+    #[test]
+    fn test_include_trxid_and_semantics() {
+        use crate::pipeline::filters::TrxidSet;
+        let trxids: TrxidSet = ["TX123".to_string()].into_iter().collect();
+        let include = IncludeFilters {
+            users: Some(vec!["admin_user".into()]),
+            trxids: Some(trxids),
+            ..Default::default()
+        };
+        let proc = FilterProcessor::from_feature(&make_feature(include, ExcludeFilters::default()));
+        assert!(proc.process_with_meta(&make_record("admin_user", "ip", "TX123", None)));
+        assert!(!proc.process_with_meta(&make_record("admin_user", "ip", "TX999", None)));
+        assert!(!proc.process_with_meta(&make_record("other_user", "ip", "TX123", None)));
+    }
+
+    #[test]
+    fn test_exclude_drops_matching_record() {
+        let exclude = ExcludeFilters {
+            users: Some(vec!["guest_01".into()]),
+            ..Default::default()
+        };
+        let proc = FilterProcessor::from_feature(&make_feature(IncludeFilters::default(), exclude));
+        assert!(!proc.process_with_meta(&make_record("guest_01", "1.2.3.4", "tx", None)));
+        assert!(proc.process_with_meta(&make_record("admin_dba", "1.2.3.4", "tx", None)));
+    }
+
+    #[test]
+    fn test_exclude_or_veto_any_hit_drops() {
+        let exclude = ExcludeFilters {
+            users: Some(vec!["guest".into()]),
+            ips: Some(vec!["10.0.0.1".into()]),
+            ..Default::default()
+        };
+        let proc = FilterProcessor::from_feature(&make_feature(IncludeFilters::default(), exclude));
+        assert!(!proc.process_with_meta(&make_record("admin", "10.0.0.1", "tx", None)));
+        assert!(proc.process_with_meta(&make_record("admin", "192.168.1.1", "tx", None)));
+    }
+
+    #[test]
+    fn test_exclude_tag_none_retained() {
+        let exclude = ExcludeFilters {
+            tags: Some(vec!["SEL".into()]),
+            ..Default::default()
+        };
+        let proc = FilterProcessor::from_feature(&make_feature(IncludeFilters::default(), exclude));
+        assert!(!proc.process_with_meta(&make_record("u", "ip", "tx", Some("SEL"))));
+        assert!(proc.process_with_meta(&make_record("u", "ip", "tx", None)));
+        assert!(proc.process_with_meta(&make_record("u", "ip", "tx", Some("INS"))));
+    }
+
+    #[test]
+    fn test_exclude_veto_wins_over_include() {
+        let include = IncludeFilters {
+            users: Some(vec!["admin".into()]),
+            ..Default::default()
+        };
+        let exclude = ExcludeFilters {
+            ips: Some(vec!["10.0.0.1".into()]),
+            ..Default::default()
+        };
+        let proc = FilterProcessor::from_feature(&make_feature(include, exclude));
+        assert!(!proc.process_with_meta(&make_record("admin", "10.0.0.1", "tx", None)));
+        assert!(proc.process_with_meta(&make_record("admin", "192.168.1.1", "tx", None)));
+        assert!(!proc.process_with_meta(&make_record("sys_user", "192.168.1.1", "tx", None)));
+    }
+
+    #[test]
+    fn test_timestamp_range_filter() {
+        let include = IncludeFilters {
+            start_ts: Some("2024-06-01".into()),
+            end_ts: Some("2024-06-30".into()),
+            ..Default::default()
+        };
+        let proc = FilterProcessor::from_feature(&make_feature(include, ExcludeFilters::default()));
+        let mut record = make_record("u", "ip", "tx", None);
+        record.ts = "2024-06-15 10:00:00.000".to_string();
+        assert!(proc.process_with_meta(&record));
+        record.ts = "2024-05-31 23:59:59.999".to_string();
+        assert!(!proc.process_with_meta(&record));
+        record.ts = "2024-07-01 00:00:00.000".to_string();
+        assert!(!proc.process_with_meta(&record));
     }
 }
