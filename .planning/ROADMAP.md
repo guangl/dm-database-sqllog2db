@@ -156,7 +156,7 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
 
 - [x] **Phase 50: SQL 标准化引擎** — 将字面量替换为 `?` 占位符的标准化模块 (completed 2026-06-01)
 - [x] **Phase 51: stats 子命令 CLI 脚手架** — 新增 `stats` 子命令及 `--top N` 参数 (completed 2026-06-01)
-- [ ] **Phase 52: 统计输出与 Exporter 集成** — 慢 SQL / 高频 SQL TOP-N 通过现有 exporter 输出
+- [x] **Phase 52: 统计输出与 Exporter 集成** — 慢 SQL / 高频 SQL TOP-N 通过现有 exporter 输出 (completed 2026-06-01)
 
 ## Phase Details
 
@@ -380,7 +380,7 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
   5. `cargo clippy --all-targets -- -D warnings` + `cargo test` 全部通过，不引入重量级新依赖
 
 **Plans**: 1 plan
-- [ ] 52-01-PLAN.md — pub(crate) ensure_parent_dir/f32_ms_to_i64 + 新建 src/stats/{aggregate.rs,output.rs} StatsAccumulator (BinaryHeap<Reverse<SlowSqlEntry>> + HashMap<String,AggState>) + write_csv_stats/write_sqlite_stats 独立输出（DROP+CREATE）+ src/stats/mod.rs run_stats 编排（CSV 优先）+ src/cli/stats/mod.rs 接入 + 23 项单元/集成测试覆盖 STATS-03/STATS-04/STATS-05
+- [x] 52-01-PLAN.md — pub(crate) ensure_parent_dir/f32_ms_to_i64 + 新建 src/stats/{aggregate.rs,output.rs} StatsAccumulator (BinaryHeap<Reverse<SlowSqlEntry>> + HashMap<String,AggState>) + write_csv_stats/write_sqlite_stats 独立输出（DROP+CREATE）+ src/stats/mod.rs run_stats 编排（CSV 优先）+ src/cli/stats/mod.rs 接入 + 23 项单元/集成测试覆盖 STATS-03/STATS-04/STATS-05
 
 ## Coverage Validation
 
@@ -449,7 +449,7 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
 | 49. Glob 输入支持 | v1.12 | 3/3 | Complete | 2026-06-01 |
 | 50. SQL 标准化引擎 | 1/1 | Complete   | 2026-06-01 |
 | 51. stats 子命令 CLI 脚手架 | 1/1 | Complete   | 2026-06-01 |
-| 52. 统计输出与 Exporter 集成 | v1.13 | Not started | - |
+| 52. 统计输出与 Exporter 集成 | 1/1 | Complete   | 2026-06-01 |
 
 ---
 *Created: 2026-05-21 for milestone v1.10*
