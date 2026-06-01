@@ -399,7 +399,7 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
   4. `--from "not-a-date"` 或 `from = "20240101"` 等格式不合法的值给出明确错误提示（如 `error: --from 格式不合法，支持 "YYYY-MM-DD" 或 "YYYY-MM-DD HH:MM:SS"`）
   5. `cargo clippy --all-targets -- -D warnings` + `cargo test` 全部通过
 **Plans**: 3 plans
-- [ ] 53-01-PLAN.md — 新建 src/stats/config.rs（StatsConfig + validate_time_str）+ stats/mod.rs 注册子模块 + Config 根结构追加 #[serde(default)] pub stats: StatsConfig
+- [x] 53-01-PLAN.md — 新建 src/stats/config.rs（StatsConfig + validate_time_str）+ stats/mod.rs 注册子模块 + Config 根结构追加 #[serde(default)] pub stats: StatsConfig
 - [ ] 53-02-PLAN.md — opts.rs Stats 变体新增 --from/--to + --top 改 Option<u32> + handle_stats 优先级合并（D-05）+ main.rs 分发分支接入新签名
 - [ ] 53-03-PLAN.md — Config::validate 与 run_stats 接入 validate_time_str + CONFIG_TEMPLATE_EN 追加 [stats] 注释段 + tests/integration.rs 新增 7 个端到端 stats 测试
 - [ ] 53-01-PLAN.md — 新建 src/stats/config.rs（StatsConfig + validate_time_str）+ stats/mod.rs 注册子模块 + Config 根结构追加 #[serde(default)] pub stats: StatsConfig
@@ -490,7 +490,7 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
 | 50. SQL 标准化引擎 | v1.13 | 1/1 | Complete | 2026-06-01 |
 | 51. stats 子命令 CLI 脚手架 | v1.13 | 1/1 | Complete | 2026-06-01 |
 | 52. 统计输出与 Exporter 集成 | v1.13 | 1/1 | Complete | 2026-06-01 |
-| 53. 时间段配置与 CLI 参数 | v1.14 | Not started | - |
+| 53. 时间段配置与 CLI 参数 | 1/3 | In Progress|  |
 | 54. StatsAccumulator 时间过滤 | v1.14 | Not started | - |
 
 ---
