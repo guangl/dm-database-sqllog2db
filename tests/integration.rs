@@ -1209,7 +1209,7 @@ fn make_run_only_config_file(dir: &std::path::Path, csv_relative: &str) -> std::
     let cfg_path = dir.join("cfg.toml");
     let content = format!(
         "[sqllog]\ninputs = [\"__placeholder_unused__\"]\n[exporter.csv]\nfile = \"{}\"\noverwrite = true\n",
-        dir.join(csv_relative).to_string_lossy()
+        dir.join(csv_relative).to_string_lossy().replace('\\', "/")
     );
     std::fs::write(&cfg_path, content).unwrap();
     cfg_path
@@ -1263,7 +1263,7 @@ fn test_cli_input_flag_with_glob() {
 
     let cfg_path = make_run_only_config_file(dir.path(), "out.csv");
     let csv_path = dir.path().join("out.csv");
-    let glob_pattern = format!("{}/*.log", log_dir.to_string_lossy());
+    let glob_pattern = format!("{}/*.log", log_dir.to_string_lossy().replace('\\', "/"));
 
     Command::cargo_bin("sqllog2db")
         .unwrap()
@@ -1295,7 +1295,7 @@ fn test_cli_legacy_path_key_rejected() {
     let csv_path = dir.path().join("out.csv");
     let toml = format!(
         "[sqllog]\npath = \"sqllogs\"\n\n[exporter.csv]\nfile = \"{}\"\noverwrite = true\n",
-        csv_path.to_string_lossy()
+        csv_path.to_string_lossy().replace('\\', "/")
     );
     std::fs::write(&cfg_path, &toml).unwrap();
 
