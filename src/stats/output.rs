@@ -36,7 +36,9 @@ fn write_slow_csv(path: &Path, rows: &[SlowSqlRow]) -> Result<()> {
         line_buf.push(b',');
         line_buf.extend_from_slice(itoa::Buffer::new().format(row.elapsed_ms).as_bytes());
         line_buf.push(b',');
+        line_buf.push(b'"');
         line_buf.extend_from_slice(row.timestamp.as_bytes());
+        line_buf.push(b'"');
         line_buf.push(b'\n');
         writer.write_all(&line_buf)?;
     }
