@@ -30,7 +30,7 @@ fn base_toml(sqllog_dir: &Path, bench_dir: &Path) -> String {
     format!(
         r#"
 [sqllog]
-directory = "{sqllog}"
+inputs = ["{sqllog}"]
 
 [logging]
 file = "{dir}/app.log"

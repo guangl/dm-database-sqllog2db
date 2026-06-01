@@ -19,7 +19,7 @@ fn make_config(sqllog_dir: &Path, bench_dir: &Path) -> Config {
     let toml = format!(
         r#"
 [sqllog]
-directory = "{sqllog}"
+inputs = ["{sqllog}"]
 
 [logging]
 file = "{dir}/app.log"
