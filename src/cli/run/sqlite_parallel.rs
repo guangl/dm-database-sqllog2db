@@ -1,4 +1,4 @@
-use crate::error::{Error, Result};
+use crate::error::{Error, ErrorStats, Result};
 use crate::exporter::ExporterManager;
 use crate::pipeline::normalizer::ParamBuffer;
 use crate::pipeline::{CompiledSqlFilters, FieldMask, Pipeline};
@@ -110,9 +110,9 @@ fn process_record(
     }
 }
 
-/// 在 rayon 线程池中并行解析所有文件，返回每个文件的 `Vec<(Sqllog, Option<String>)>`。
+/// 在 rayon 线程池中并行解析所有文件，返回每个文件的 `(path, Vec<(Sqllog, Option<String>)>)`。
 ///
-/// 返回 `(collected, skipped_files, total_parse_errors)`。
+/// 返回 `(collected, skipped_files, total_parse_errors)`，其中 `collected` 保留 path 与记录的对应关系。
 fn parallel_collect(
     log_files: &[PathBuf],
     pipeline: &Pipeline,
@@ -121,45 +121,51 @@ fn parallel_collect(
     placeholder_override: Option<bool>,
     sql_record_filter: Option<&CompiledSqlFilters>,
     interrupted: &Arc<AtomicBool>,
-) -> Result<(Vec<Vec<(Sqllog, Option<String>)>>, usize, usize)> {
+) -> Result<(Vec<(PathBuf, Vec<(Sqllog, Option<String>)>)>, usize, usize)> {
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(jobs)
         .build()
         .map_err(|e| Error::Io(std::io::Error::other(e)))?;
 
-    let results: Vec<Result<Option<(Vec<(Sqllog, Option<String>)>, usize)>>> = pool.install(|| {
-        log_files
-            .par_iter()
-            .map(|file| {
-                if interrupted.load(Ordering::Relaxed) {
-                    return Ok(None);
-                }
-                let (rows, parse_errors) = collect_log_file(
-                    file,
-                    pipeline,
-                    do_normalize,
-                    placeholder_override,
-                    sql_record_filter,
-                    interrupted,
-                )?;
-                Ok(Some((rows, parse_errors)))
-            })
-            .collect()
-    });
+    let results: Vec<Result<Option<(PathBuf, Vec<(Sqllog, Option<String>)>, usize)>>> = pool
+        .install(|| {
+            log_files
+                .par_iter()
+                .map(|file| {
+                    if interrupted.load(Ordering::Relaxed) {
+                        return Ok(None);
+                    }
+                    let (rows, parse_errors) = collect_log_file(
+                        file,
+                        pipeline,
+                        do_normalize,
+                        placeholder_override,
+                        sql_record_filter,
+                        interrupted,
+                    )?;
+                    Ok(Some((file.clone(), rows, parse_errors)))
+                })
+                .collect()
+        });
 
-    let mut collected: Vec<Vec<(Sqllog, Option<String>)>> = Vec::with_capacity(log_files.len());
+    let mut collected: Vec<(PathBuf, Vec<(Sqllog, Option<String>)>)> =
+        Vec::with_capacity(log_files.len());
     let mut first_err: Option<Error> = None;
     let mut skipped = 0usize;
     let mut total_parse_errors = 0usize;
     for result in results {
         match result {
-            Ok(Some((rows, parse_errors))) => {
+            Ok(Some((path, rows, parse_errors))) => {
                 total_parse_errors += parse_errors;
-                collected.push(rows);
+                collected.push((path, rows));
             }
             Ok(None) => skipped += 1,
-            Err(e) if first_err.is_none() => first_err = Some(e),
-            Err(_) => {}
+            Err(e) => {
+                log::warn!("parallel collect error: {e}");
+                if first_err.is_none() {
+                    first_err = Some(e);
+                }
+            }
         }
     }
     if let Some(e) = first_err {
@@ -168,30 +174,10 @@ fn parallel_collect(
     Ok((collected, skipped, total_parse_errors))
 }
 
-/// 按文件原始顺序将收集到的记录写入 SQLite（WAL 模式），返回总写入记录数。
-fn merge_and_write(
-    collected: Vec<Vec<(Sqllog, Option<String>)>>,
-    cfg: &crate::config::Config,
-) -> Result<usize> {
-    let mut exporter_manager = ExporterManager::from_config(cfg)?;
-    exporter_manager.initialize()?;
-    exporter_manager.set_sqlite_wal_mode()?;
-
-    let mut total_records = 0usize;
-    for file_rows in collected {
-        for (record, normalized) in file_rows {
-            exporter_manager.export_one_preparsed(&record, true, normalized.as_deref())?;
-            total_records += 1;
-        }
-    }
-
-    exporter_manager.finalize()?;
-    Ok(total_records)
-}
-
 /// `SQLite` 并行处理：每个文件独立在 rayon 线程上解析，主线程按文件原始顺序写入 `SQLite`。
 ///
-/// 返回：`(total_records, skipped_files)`。
+/// 返回：`(per_file_counts, skipped_files, parse_stats)`，其中 `per_file_counts` 是每文件
+/// `(path, count)` 列表，`parse_stats` 汇总所有文件的解析错误统计。
 /// 适用条件：SQLite 导出 + 多文件 + jobs > 1 + 非 stdin 管道。
 ///
 /// `_show_progress`, `_field_mask`, `_ordered_indices` 保留参数签名以与
@@ -211,7 +197,7 @@ pub(super) fn process_sqlite_parallel(
     _field_mask: FieldMask,
     _ordered_indices: &[usize],
     sql_record_filter: Option<&CompiledSqlFilters>,
-) -> Result<(usize, usize)> {
+) -> Result<(Vec<(PathBuf, usize)>, usize, ErrorStats)> {
     let (collected, skipped, total_parse_errors) = parallel_collect(
         log_files,
         pipeline,
@@ -226,6 +212,26 @@ pub(super) fn process_sqlite_parallel(
         log::warn!("SQLite parallel: {total_parse_errors} parse error(s) across all files");
     }
 
-    let total = merge_and_write(collected, cfg)?;
-    Ok((total, skipped))
+    // 将解析错误计数转换为 ErrorStats，供调用方合并到全局统计
+    let mut parallel_stats = ErrorStats::default();
+    for _ in 0..total_parse_errors {
+        parallel_stats.add_parse_error();
+    }
+
+    // 写入 SQLite 并同时构建每文件 (path, count) 列表
+    let mut exporter_manager = ExporterManager::from_config(cfg)?;
+    exporter_manager.initialize()?;
+    exporter_manager.set_sqlite_wal_mode()?;
+
+    let mut per_file_counts: Vec<(PathBuf, usize)> = Vec::with_capacity(collected.len());
+    for (file_path, file_rows) in collected {
+        let count = file_rows.len();
+        for (record, normalized) in file_rows {
+            exporter_manager.export_one_preparsed(&record, true, normalized.as_deref())?;
+        }
+        per_file_counts.push((file_path, count));
+    }
+
+    exporter_manager.finalize()?;
+    Ok((per_file_counts, skipped, parallel_stats))
 }

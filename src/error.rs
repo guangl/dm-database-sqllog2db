@@ -33,10 +33,12 @@ pub struct ErrorStats {
 }
 
 impl ErrorStats {
+    #[must_use]
     pub fn has_errors(&self) -> bool {
         self.total_errors > 0
     }
 
+    #[must_use]
     pub fn has_fatal(&self) -> bool {
         self.fatal_error.is_some()
     }
@@ -87,6 +89,7 @@ pub enum Error {
 }
 
 impl Error {
+    #[must_use]
     pub fn is_fatal(&self) -> bool {
         match self {
             Error::Config(_) | Error::Io(_) | Error::Interrupted => true,
@@ -94,11 +97,12 @@ impl Error {
                 e,
                 FileError::AlreadyExists { .. } | FileError::CreateDirectoryFailed { .. }
             ),
-            Error::Parser(_) => false,
+            Error::Parser(e) => matches!(e, ParserError::ReadDirFailed { .. }),
             Error::Export(e) => matches!(e, ExportError::DatabaseFailed { .. }),
         }
     }
 
+    #[must_use]
     pub fn severity(&self) -> ErrorSeverity {
         match self {
             Error::Config(_) | Error::Io(_) | Error::Interrupted => ErrorSeverity::Critical,
@@ -116,6 +120,7 @@ impl Error {
         }
     }
 
+    #[must_use]
     pub fn suggestion(&self) -> &str {
         match self {
             Error::Config(e) => match e {
@@ -144,6 +149,9 @@ impl Error {
                 }
                 ParserError::InvalidPath { .. } => "Check the path format or try an absolute path.",
                 ParserError::ReadDirFailed { .. } => "Check directory permissions.",
+                ParserError::NoFilesFound { .. } => {
+                    "Verify the glob/path entries exist; ensure patterns match .log files in the current directory."
+                }
             },
             Error::Export(e) => match e {
                 ExportError::WriteFailed { .. } => {
@@ -196,47 +204,24 @@ pub enum FileError {
     CreateDirectoryFailed { path: PathBuf, reason: String },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum ParserError {
-    PathNotFound {
-        path: PathBuf,
-    },
+    #[error("Path not found: {}", path.display())]
+    PathNotFound { path: PathBuf },
+
+    #[error("Invalid path {}: {reason}{}", path.display(), line_number.map_or_else(String::new, |n| format!(" (line {n})")))]
     InvalidPath {
         path: PathBuf,
         reason: String,
         line_number: Option<u64>,
     },
-    ReadDirFailed {
-        path: PathBuf,
-        reason: String,
-    },
-}
 
-impl fmt::Display for ParserError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ParserError::PathNotFound { path } => {
-                write!(f, "Path not found: {}", path.display())
-            }
-            ParserError::InvalidPath {
-                path,
-                reason,
-                line_number,
-            } => {
-                write!(f, "Invalid path {}: {}", path.display(), reason)?;
-                if let Some(line) = line_number {
-                    write!(f, " (line {line})")?;
-                }
-                Ok(())
-            }
-            ParserError::ReadDirFailed { path, reason } => {
-                write!(f, "Failed to read directory {}: {}", path.display(), reason)
-            }
-        }
-    }
-}
+    #[error("Failed to read directory {}: {reason}", path.display())]
+    ReadDirFailed { path: PathBuf, reason: String },
 
-impl std::error::Error for ParserError {}
+    #[error("No log files found matching inputs: {inputs:?}")]
+    NoFilesFound { inputs: Vec<String> },
+}
 
 #[derive(Debug, Error)]
 pub enum ExportError {
@@ -247,4 +232,54 @@ pub enum ExportError {
     /// `SQLite` 操作失败
     #[error("Database error: {reason}")]
     DatabaseFailed { reason: String },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_no_files_found_display_contains_inputs() {
+        let err = ParserError::NoFilesFound {
+            inputs: vec!["a.log".into(), "b/*.log".into()],
+        };
+        let display = format!("{err}");
+        assert!(
+            display.contains("a.log"),
+            "Display should contain 'a.log', got: {display}"
+        );
+        assert!(
+            display.contains("b/*.log"),
+            "Display should contain 'b/*.log', got: {display}"
+        );
+    }
+
+    #[test]
+    fn test_no_files_found_suggestion_non_empty() {
+        let err = Error::Parser(ParserError::NoFilesFound {
+            inputs: vec!["x".into()],
+        });
+        let suggestion = err.suggestion();
+        assert!(
+            !suggestion.is_empty(),
+            "suggestion() should not be empty for NoFilesFound"
+        );
+        assert!(
+            suggestion.contains("glob"),
+            "suggestion() should contain 'glob', got: {suggestion}"
+        );
+    }
+
+    #[test]
+    fn test_no_files_found_not_fatal() {
+        let err = Error::Parser(ParserError::NoFilesFound {
+            inputs: vec!["x".into()],
+        });
+        assert!(!err.is_fatal(), "NoFilesFound should not be fatal");
+        assert_eq!(
+            err.severity(),
+            ErrorSeverity::Warning,
+            "NoFilesFound should have Warning severity"
+        );
+    }
 }

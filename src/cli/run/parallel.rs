@@ -1,4 +1,4 @@
-use crate::error::{Error, Result};
+use crate::error::{Error, ErrorStats, Result};
 use crate::exporter::{CsvExporter, ExporterManager};
 use crate::pipeline::normalizer::ParamBuffer;
 use crate::pipeline::{CompiledSqlFilters, FieldMask, Pipeline};
@@ -64,7 +64,7 @@ pub(super) fn concat_csv_parts(
 /// 并行 CSV 处理：每个文件独立跑在 rayon 线程上，各写一个临时 CSV，
 /// 最终按文件原始顺序拼接成一个完整 CSV。
 ///
-/// 返回：`(已处理文件列表, 跳过文件数)`，已处理列表顺序与 `log_files` 一致。
+/// 返回：`(已处理文件列表, 跳过文件数, 解析错误统计)`，已处理列表顺序与 `log_files` 一致。
 /// 适用条件：CSV 导出 + 多文件 + jobs > 1 + 无 limit。
 pub(super) fn process_csv_parallel(
     log_files: &[PathBuf],
@@ -78,7 +78,7 @@ pub(super) fn process_csv_parallel(
     field_mask: FieldMask,
     ordered_indices: &[usize],
     sql_record_filter: Option<&CompiledSqlFilters>,
-) -> Result<(Vec<(PathBuf, usize)>, usize)> {
+) -> Result<(Vec<(PathBuf, usize)>, usize, ErrorStats)> {
     use rayon::prelude::*;
 
     let csv_cfg = cfg
@@ -120,8 +120,8 @@ pub(super) fn process_csv_parallel(
         .build()
         .map_err(|e| Error::Io(std::io::Error::other(e)))?;
 
-    // 每个任务返回 Some((orig_path, temp_path, count, task_agg)) 或 None（跳过/中断）
-    type TaskResult = Option<(PathBuf, PathBuf, usize)>;
+    // 每个任务返回 Some((orig_path, temp_path, count, file_stats)) 或 None（跳过/中断）
+    type TaskResult = Option<(PathBuf, PathBuf, usize, ErrorStats)>;
     let results: Vec<Result<TaskResult>> = pool.install(|| {
         log_files
             .par_iter()
@@ -143,7 +143,7 @@ pub(super) fn process_csv_parallel(
                 let mut params_buf = ParamBuffer::default();
                 let mut ns_scratch = Vec::with_capacity(4096);
 
-                let (count, _stats) = process_log_file(
+                let (count, file_stats) = process_log_file(
                     &file.to_string_lossy(),
                     idx + 1,
                     total_files,
@@ -162,24 +162,30 @@ pub(super) fn process_csv_parallel(
                 )?;
 
                 em.finalize()?;
-                Ok(Some((file.clone(), temp_path, count)))
+                Ok(Some((file.clone(), temp_path, count, file_stats)))
             })
             .collect()
     });
 
     // 收集成功的任务；遇到错误先清理再返回
-    // (orig, temp, count, task_agg) 四元组，保持 rayon 的原始文件顺序
+    // (orig, temp, count) 三元组，保持 rayon 的原始文件顺序
     let mut parts_info: Vec<(PathBuf, PathBuf, usize)> = Vec::with_capacity(log_files.len());
+    let mut parallel_stats = ErrorStats::default();
     let mut first_err: Option<Error> = None;
     let mut skipped = 0usize;
     for result in results {
         match result {
-            Ok(Some((orig, temp, count))) => {
+            Ok(Some((orig, temp, count, file_stats))) => {
+                parallel_stats.merge(&file_stats);
                 parts_info.push((orig, temp, count));
             }
             Ok(None) => skipped += 1,
-            Err(e) if first_err.is_none() => first_err = Some(e),
-            Err(_) => {}
+            Err(e) => {
+                log::warn!("parallel collect error: {e}");
+                if first_err.is_none() {
+                    first_err = Some(e);
+                }
+            }
         }
     }
     if let Some(e) = first_err {
@@ -209,12 +215,13 @@ pub(super) fn process_csv_parallel(
     }
     concat_result?;
 
-    // 返回 (已处理文件列表, 跳过文件数)，供 handle_run 消费
+    // 返回 (已处理文件列表, 跳过文件数, 解析错误统计)，供 handle_run 消费
     Ok((
         parts_info
             .into_iter()
             .map(|(orig, _, count)| (orig, count))
             .collect(),
         skipped,
+        parallel_stats,
     ))
 }

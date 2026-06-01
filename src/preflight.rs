@@ -10,7 +10,9 @@ use std::path::Path;
 #[must_use]
 pub(crate) fn check(cfg: &Config) -> PreflightResult {
     let mut result = PreflightResult::default();
-    check_log_path(&cfg.sqllog.path, &mut result);
+    for input in &cfg.sqllog.inputs {
+        check_log_path(input, &mut result);
+    }
     check_output_writable(cfg, &mut result);
     result
 }
@@ -23,13 +25,13 @@ fn check_log_path(path_str: &str, result: &mut PreflightResult) {
         let path = Path::new(path_str);
         if !path.exists() {
             result.errors.push(format!(
-                "日志路径不存在: {path_str}  (可用 --set sqllog.path=<path> 覆盖)"
+                "日志路径不存在: {path_str}  (检查 [sqllog].inputs 或 --input 标志)"
             ));
             return;
         }
     }
 
-    match SqllogParser::new(path_str).log_files() {
+    match SqllogParser::new(vec![path_str.to_string()]).log_files() {
         Ok(files) if files.is_empty() => {
             result
                 .warnings
@@ -113,7 +115,8 @@ mod tests {
     fn config_with_log_dir(dir: &str) -> Config {
         Config {
             sqllog: SqllogConfig {
-                path: dir.to_string(),
+                inputs: vec![dir.to_string()],
+                path_deprecated: None,
             },
             ..Default::default()
         }

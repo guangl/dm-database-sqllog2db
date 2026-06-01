@@ -30,7 +30,7 @@ fn base_toml(sqllog_dir: &Path, bench_dir: &Path) -> String {
     format!(
         r#"
 [sqllog]
-directory = "{sqllog}"
+inputs = ["{sqllog}"]
 
 [logging]
 file = "{dir}/app.log"
@@ -194,6 +194,7 @@ fn bench_filters(c: &mut Criterion) {
                     handle_run(
                         cfg,
                         true,
+                        false,
                         &Arc::new(AtomicBool::new(false)),
                         compiled_filters,
                     )

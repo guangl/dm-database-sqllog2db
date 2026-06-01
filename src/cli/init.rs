@@ -9,7 +9,9 @@ pub fn handle_init(output_path: &str, force: bool) -> Result<()> {
 
     info!("Preparing to generate configuration file: {output_path}");
 
-    if path.exists() && !force {
+    let file_existed = path.exists();
+
+    if file_existed && !force {
         error!("Configuration file already exists: {output_path}");
         info!("Tip: use --force to overwrite");
         return Err(Error::File(FileError::AlreadyExists {
@@ -17,7 +19,7 @@ pub fn handle_init(output_path: &str, force: bool) -> Result<()> {
         }));
     }
 
-    if path.exists() && force {
+    if file_existed && force {
         warn!("Will overwrite existing configuration file");
     }
 
@@ -42,7 +44,7 @@ pub fn handle_init(output_path: &str, force: bool) -> Result<()> {
         })
     })?;
 
-    if force {
+    if file_existed {
         info!("Configuration file overwritten: {output_path}");
     } else {
         info!("Configuration file generated: {output_path}");
@@ -61,8 +63,9 @@ pub fn handle_init(output_path: &str, force: bool) -> Result<()> {
 const CONFIG_TEMPLATE_EN: &str = r#"# sqllog2db default configuration file (edit as needed)
 
 [sqllog]
-# SQL log path: directory, single file, or glob pattern (e.g. "./logs/2025-*.log")
-path = "sqllogs"
+# SQL log path list: directories, single files, or glob patterns (e.g. "./logs/2025-*.log")
+# Multiple entries are supported.
+inputs = ["sqllogs"]
 
 [logging]
 # Application log file path
@@ -120,14 +123,21 @@ enable = false
 
 # Option 1: CSV export (default)
 [exporter.csv]
+# CSV output file path
 file = "outputs/sqllog.csv"
+# Drop and recreate the file before writing (true/false)
 overwrite = true
+# Append to existing CSV file instead of overwriting (true/false)
 append = false
 
 # Option 2: SQLite database export
 # [exporter.sqlite]
+# SQLite database file path
 # database_url = "export/sqllog2db.db"
+# Table name to write records into (ASCII identifiers only: [A-Za-z_][A-Za-z0-9_]*)
 # table_name = "sqllog_records"
+# Drop and recreate the table before writing (true/false)
 # overwrite = true
+# Append rows to existing table instead of overwriting (true/false)
 # append = false
 "#;

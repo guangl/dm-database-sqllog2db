@@ -19,7 +19,7 @@ fn make_config(sqllog_dir: &Path, bench_dir: &Path) -> Config {
     let toml = format!(
         r#"
 [sqllog]
-directory = "{sqllog}"
+inputs = ["{sqllog}"]
 
 [logging]
 file = "{dir}/app.log"
@@ -54,6 +54,7 @@ fn bench_csv_export(c: &mut Criterion) {
                 handle_run(
                     cfg,
                     true,
+                    false,
                     &Arc::new(AtomicBool::new(false)),
                     None, // compiled_filters
                 )
@@ -86,6 +87,7 @@ fn bench_csv_real_file(c: &mut Criterion) {
             handle_run(
                 &cfg,
                 true,
+                false,
                 &Arc::new(AtomicBool::new(false)),
                 None, // compiled_filters
             )

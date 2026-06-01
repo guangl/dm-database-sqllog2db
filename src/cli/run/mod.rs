@@ -28,6 +28,7 @@ use sqlite_parallel::process_sqlite_parallel;
 pub fn handle_run(
     cfg: &Config,
     quiet: bool,
+    verbose: bool,
     interrupted: &Arc<AtomicBool>,
     compiled_filters: Option<(CompiledMetaFilters, CompiledSqlFilters)>,
 ) -> Result<ErrorStats> {
@@ -37,19 +38,30 @@ pub fn handle_run(
     };
     let total_start = Instant::now();
 
-    let log_files = SqllogParser::new(&cfg.sqllog.path).log_files()?;
+    let log_files = SqllogParser::new(cfg.sqllog.inputs.clone()).log_files()?;
     let mut run_stats = ErrorStats::default();
 
     // Stdin pipe mode: fall back when no log files found AND stdin is not a terminal.
     // /dev/stdin is Unix-only; skip pipe mode on Windows.
-    let is_stdin_pipe =
-        log_files.is_empty() && !std::io::stdin().is_terminal() && !cfg!(target_os = "windows");
+    #[cfg(target_os = "windows")]
+    let is_stdin_pipe = false;
+    #[cfg(not(target_os = "windows"))]
+    let is_stdin_pipe = log_files.is_empty() && !std::io::stdin().is_terminal();
     let log_files = if is_stdin_pipe {
         info!("No log files found, reading from stdin (pipe mode)");
         vec![std::path::PathBuf::from("/dev/stdin")]
     } else if log_files.is_empty() {
-        warn!("No log files found");
-        return Ok(ErrorStats::default());
+        // On Windows, if stdin is piped but no files found, warn the user that stdin
+        // pipe mode is not supported on this platform.
+        #[cfg(target_os = "windows")]
+        if !std::io::stdin().is_terminal() {
+            warn!("Stdin pipe mode is not supported on Windows. No log files found.");
+        }
+        return Err(crate::error::Error::Parser(
+            crate::error::ParserError::NoFilesFound {
+                inputs: cfg.sqllog.inputs.clone(),
+            },
+        ));
     } else {
         log_files
     };
@@ -111,7 +123,7 @@ pub fn handle_run(
             .is_some_and(|f| f.enable && f.record_sql.has_filters())
     });
     let sql_record_filter = compiled_record_sql.as_ref();
-    let show_progress = !quiet;
+    let show_progress = !quiet && !verbose;
     let pb = if show_progress {
         let bar = ProgressBar::new_spinner();
         bar.set_style(
@@ -132,9 +144,16 @@ pub fn handle_run(
         jobs > 1 && log_files.len() > 1 && !is_stdin_pipe && final_cfg.exporter.sqlite.is_some();
     let use_parallel = use_csv_parallel || use_sqlite_parallel;
 
-    if use_csv_parallel {
+    let processed_files: Vec<(std::path::PathBuf, usize)> = if use_csv_parallel {
+        if verbose {
+            eprintln!(
+                "Processing {} files in parallel ({} jobs)",
+                log_files.len(),
+                jobs
+            );
+        }
         info!("Parsing and exporting SQL logs (parallel, {jobs} jobs)...");
-        let (processed_files, parallel_skipped) = process_csv_parallel(
+        let (csv_processed_files, parallel_skipped, csv_parallel_stats) = process_csv_parallel(
             &log_files,
             final_cfg,
             &pipeline,
@@ -147,34 +166,51 @@ pub fn handle_run(
             &ordered_indices,
             sql_record_filter,
         )?;
-        total_records = processed_files.iter().map(|(_, c)| *c).sum();
+        run_stats.merge(&csv_parallel_stats);
+        total_records = csv_processed_files.iter().map(|(_, c)| *c).sum();
         skipped_files = parallel_skipped;
+        csv_processed_files
     } else if use_sqlite_parallel {
+        if verbose {
+            eprintln!(
+                "Processing {} files in parallel ({} jobs)",
+                log_files.len(),
+                jobs
+            );
+        }
         info!("Parsing and exporting SQL logs (SQLite parallel, {jobs} jobs)...");
-        let (total, parallel_skipped) = process_sqlite_parallel(
-            &log_files,
-            final_cfg,
-            &pipeline,
-            jobs,
-            show_progress,
-            interrupted,
-            do_normalize,
-            placeholder_override,
-            field_mask,
-            &ordered_indices,
-            sql_record_filter,
-        )?;
-        total_records = total;
+        let (sqlite_processed_files, parallel_skipped, sqlite_parallel_stats) =
+            process_sqlite_parallel(
+                &log_files,
+                final_cfg,
+                &pipeline,
+                jobs,
+                show_progress,
+                interrupted,
+                do_normalize,
+                placeholder_override,
+                field_mask,
+                &ordered_indices,
+                sql_record_filter,
+            )?;
+        run_stats.merge(&sqlite_parallel_stats);
+        total_records = sqlite_processed_files.iter().map(|(_, c)| *c).sum();
         skipped_files = parallel_skipped;
+        sqlite_processed_files
     } else {
         let mut exporter_manager = ExporterManager::from_config(final_cfg)?;
         exporter_manager.initialize()?;
         info!("Parsing and exporting SQL logs...");
         let mut params_buffer = crate::pipeline::normalizer::ParamBuffer::default();
         let mut ns_scratch: Vec<u8> = Vec::with_capacity(4096);
+        let mut per_file_counts: Vec<(std::path::PathBuf, usize)> =
+            Vec::with_capacity(log_files.len());
         for (idx, log_file) in log_files.iter().enumerate() {
             if interrupted.load(Ordering::Relaxed) {
                 break;
+            }
+            if verbose {
+                eprintln!("Processing: {}", log_file.display());
             }
             let (processed, file_stats) = process_log_file(
                 &log_file.to_string_lossy(),
@@ -194,6 +230,7 @@ pub fn handle_run(
                 pb.as_ref(),
             )?;
             total_records += processed;
+            per_file_counts.push((log_file.clone(), processed));
             run_stats.merge(&file_stats);
             if file_stats.has_fatal() {
                 return Err(Error::Export(crate::error::ExportError::WriteFailed {
@@ -206,7 +243,8 @@ pub fn handle_run(
         if !quiet {
             exporter_manager.log_stats();
         }
-    }
+        per_file_counts
+    };
     if !quiet {
         let elapsed = total_start.elapsed().as_secs_f64();
         let mode_label = if use_parallel { " [parallel]" } else { "" };
@@ -215,6 +253,11 @@ pub fn handle_run(
         } else {
             String::new()
         };
+        if verbose && !processed_files.is_empty() {
+            for (path, count) in &processed_files {
+                eprintln!("Processed: {} — {} records", path.display(), count);
+            }
+        }
         eprintln!(
             "\n✓ SQL Log Export Task Completed{mode_label} in {elapsed:.2}s — {total_records} records total{skip_label}",
         );

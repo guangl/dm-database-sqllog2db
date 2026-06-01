@@ -158,9 +158,9 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_empty_sqllog_directory() {
+    fn test_validate_rejects_whitespace_input_entry() {
         let mut cfg = default_config();
-        cfg.sqllog.path = "  ".into();
+        cfg.sqllog.inputs = vec!["  ".to_string()];
         assert!(cfg.validate().is_err());
     }
 
@@ -176,7 +176,7 @@ mod tests {
     fn test_validate_invalid_regex_in_filters() {
         let toml = r#"
 [sqllog]
-path = "sqllogs"
+inputs = ["sqllogs"]
 [filter]
 enable = true
 usernames = ["[invalid"]
@@ -197,7 +197,7 @@ file = "out.csv"
     fn test_validate_valid_regex_in_filters() {
         let toml = r#"
 [sqllog]
-path = "sqllogs"
+inputs = ["sqllogs"]
 [filter]
 enable = true
 usernames = ["^admin.*"]
@@ -328,7 +328,7 @@ file = "out.csv"
     fn test_validate_and_compile_filters_disabled_returns_none() {
         let toml = r#"
 [sqllog]
-path = "sqllogs"
+inputs = ["sqllogs"]
 [filter]
 enable = false
 usernames = ["^admin.*"]
@@ -344,7 +344,7 @@ file = "out.csv"
     fn test_validate_and_compile_returns_compiled_pair() {
         let toml = r#"
 [sqllog]
-path = "sqllogs"
+inputs = ["sqllogs"]
 [filter]
 enable = true
 usernames = ["^admin.*"]
@@ -361,7 +361,7 @@ file = "out.csv"
     fn test_validate_and_compile_invalid_regex_returns_err() {
         let toml = r#"
 [sqllog]
-path = "sqllogs"
+inputs = ["sqllogs"]
 [filter]
 enable = true
 usernames = ["[invalid"]
@@ -405,7 +405,7 @@ file = "out.csv"
     fn test_validate_new_nested_format_passes() {
         let toml = r#"
 [sqllog]
-path = "sqllogs"
+inputs = ["sqllogs"]
 [filter]
 enable = true
 [filter.include]
@@ -424,7 +424,7 @@ file = "out.csv"
     fn test_validate_legacy_pipeline_path_rejected() {
         let toml = r#"
 [sqllog]
-path = "sqllogs"
+inputs = ["sqllogs"]
 [pipeline.template_analysis]
 enabled = true
 [exporter.csv]
@@ -449,10 +449,32 @@ file = "out.csv"
     }
 
     #[test]
-    fn test_validate_new_top_level_format_passes() {
+    fn test_validate_rejects_legacy_sqllog_path_key() {
         let toml = r#"
 [sqllog]
 path = "sqllogs"
+[exporter.csv]
+file = "out.csv"
+"#;
+        let cfg: Config = toml::from_str(toml).unwrap();
+        let result = cfg.validate();
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("sqllog.path"),
+            "expect sqllog.path field name; got: {err_msg}"
+        );
+        assert!(
+            err_msg.contains("inputs"),
+            "expect migration hint to mention inputs; got: {err_msg}"
+        );
+    }
+
+    #[test]
+    fn test_validate_new_top_level_format_passes() {
+        let toml = r#"
+[sqllog]
+inputs = ["sqllogs"]
 [filter]
 enable = false
 [output]
@@ -468,7 +490,7 @@ file = "out.csv"
     fn test_validate_rejects_template_section() {
         let toml = r#"
 [sqllog]
-path = "sqllogs"
+inputs = ["sqllogs"]
 [template]
 enable = true
 [filter]
@@ -503,7 +525,7 @@ file = "out.csv"
     fn test_validate_and_compile_new_format_filter_enabled() {
         let toml = r#"
 [sqllog]
-path = "sqllogs"
+inputs = ["sqllogs"]
 [filter]
 enable = true
 usernames = ["^admin.*"]
@@ -520,7 +542,7 @@ file = "out.csv"
     fn test_validate_and_compile_new_format_filter_disabled() {
         let toml = r#"
 [sqllog]
-path = "sqllogs"
+inputs = ["sqllogs"]
 [filter]
 enable = false
 [exporter.csv]
@@ -535,7 +557,7 @@ file = "out.csv"
     fn test_validate_legacy_pipeline_rejected_in_validate_and_compile() {
         let toml = r#"
 [sqllog]
-path = "sqllogs"
+inputs = ["sqllogs"]
 [pipeline.filters]
 enable = true
 [exporter.csv]
