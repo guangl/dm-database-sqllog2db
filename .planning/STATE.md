@@ -6,7 +6,7 @@ status: planning
 last_updated: "2026-06-01T12:04:48.642Z"
 last_activity: 2026-06-01
 progress:
-  total_phases: 0
+  total_phases: 2
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,19 +20,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-01)
 
 **Core value:** 用户能够精确指定"导出哪些记录的哪些字段"——过滤逻辑清晰可配置，输出结果完全可控
-**Current focus:** Milestone complete
+**Current focus:** v1.14 stats 时间段过滤 — Phase 53
 
 ## Milestone Overview
 
-v1.13 SQL 统计分析 — Phases 50–52
+v1.14 stats 时间段过滤 — Phases 53–54
 
 | Phase | Name | Requirements | Status |
 |-------|------|--------------|--------|
-| 50 | SQL 标准化引擎 | STATS-06 | ✅ Complete |
-| 51 | stats 子命令 CLI 脚手架 | STATS-01, STATS-02 | ✅ Complete |
-| 52 | 统计输出与 Exporter 集成 | STATS-03, STATS-04, STATS-05 | ✅ Complete |
+| 53 | 时间段配置与 CLI 参数 | STATS-07, STATS-08, STATS-09, STATS-11 | Not started |
+| 54 | StatsAccumulator 时间过滤 | STATS-10 | Not started |
 
-**Coverage:** 6/6 requirements satisfied — 100%
+**Coverage:** 5/5 requirements mapped — 100%
 
 ## Accumulated Context
 
@@ -40,11 +39,13 @@ v1.13 SQL 统计分析 — Phases 50–52
 
 See `.planning/PROJECT.md` Key Decisions table (updated 2026-06-01)
 
-**v1.13 约束：**
+**v1.14 约束：**
 
-- SQL 标准化先于 stats 命令实现（Phase 50 是 Phase 51/52 的基础构建块）
-- 复用现有 CSV/SQLite exporter，不引入新 exporter 实现
-- stats 作为独立后处理命令，不修改现有 `run` 命令输出
+- 时间段配置层（Phase 53）先于过滤应用层（Phase 54）实现，Phase 54 依赖 Phase 53 提供的时间范围值
+- `--from`/`--to` CLI 参数优先于 config.toml 中的同名字段，两者均缺省时行为与 v1.13 完全一致（不过滤）
+- 时间格式支持 `"YYYY-MM-DD"` 和 `"YYYY-MM-DD HH:MM:SS"` 两种，通过字符串前缀比较实现（无需 chrono/time 等重量级依赖）
+- 过滤逻辑与 `run` 命令的 `start_ts`/`end_ts` 设计保持一致（参考 `src/pipeline/filters/types.rs`）
+- 不引入新的重量级依赖
 
 ### Blockers
 
@@ -52,7 +53,7 @@ None
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 53 — 时间段配置与 CLI 参数
 Plan: —
-Status: Defining requirements
-Last activity: 2026-06-01 — Milestone v1.14 started
+Status: Roadmap created, ready for planning
+Last activity: 2026-06-01 — Milestone v1.14 roadmap created (Phases 53–54)
