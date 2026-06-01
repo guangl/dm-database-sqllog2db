@@ -180,7 +180,7 @@ fn run() -> Result<Option<(ErrorStats, bool)>> {
             let mut cfg = Config::from_file(Path::new(config))?;
             apply_verbosity_to_config(&mut cfg, cli.verbose, cli.quiet);
             logging::init_logging(&cfg.logging, false)?;
-            cli::stats::handle_stats(&cfg, *top, cli.quiet)?;
+            cli::stats::handle_stats(&cfg, *top)?;
             Ok(None)
         }
         None => {

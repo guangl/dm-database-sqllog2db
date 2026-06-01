@@ -5,7 +5,7 @@ use crate::error::{ConfigError, Error, Result};
 ///
 /// Validates `top` is non-zero, then delegates to Phase 52 statistics logic.
 /// `cfg` must already have verbosity applied before calling this function.
-pub fn handle_stats(cfg: &Config, top: u32, quiet: bool) -> Result<()> {
+pub fn handle_stats(cfg: &Config, top: u32) -> Result<()> {
     if top == 0 {
         return Err(Error::Config(ConfigError::InvalidValue {
             field: "--top".to_string(),
@@ -14,7 +14,6 @@ pub fn handle_stats(cfg: &Config, top: u32, quiet: bool) -> Result<()> {
         }));
     }
     log::info!("stats: top={top}");
-    let _ = quiet; // quiet 模式在本命令不改变输出行为
     crate::stats::run_stats(cfg, top)
 }
 
@@ -52,21 +51,21 @@ mod tests {
     #[test]
     fn test_handle_stats_top_default_passes() {
         let (cfg, _dir) = make_test_config_with_log();
-        let result = handle_stats(&cfg, 20, false);
+        let result = handle_stats(&cfg, 20);
         assert!(result.is_ok(), "top=20 should succeed, got: {result:?}");
     }
 
     #[test]
     fn test_handle_stats_top_nonzero_passes() {
         let (cfg, _dir) = make_test_config_with_log();
-        let result = handle_stats(&cfg, 5, false);
+        let result = handle_stats(&cfg, 5);
         assert!(result.is_ok(), "top=5 should succeed, got: {result:?}");
     }
 
     #[test]
     fn test_handle_stats_top_zero_returns_invalid_value_error() {
         let cfg = Config::default();
-        let result = handle_stats(&cfg, 0, false);
+        let result = handle_stats(&cfg, 0);
         assert!(result.is_err(), "top=0 should return an error");
         match result.unwrap_err() {
             Error::Config(ConfigError::InvalidValue {
@@ -88,7 +87,7 @@ mod tests {
     #[test]
     fn test_handle_stats_top_zero_quiet_still_errors() {
         let cfg = Config::default();
-        let result = handle_stats(&cfg, 0, true);
+        let result = handle_stats(&cfg, 0);
         assert!(
             result.is_err(),
             "top=0 with quiet=true should still return an error"
