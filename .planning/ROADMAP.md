@@ -404,7 +404,7 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
 - [x] 53-03-PLAN.md — Config::validate 与 run_stats 接入 validate_time_str + CONFIG_TEMPLATE_EN 追加 [stats] 注释段 + tests/integration.rs 新增 7 个端到端 stats 测试
 - [x] 53-01-PLAN.md — 新建 src/stats/config.rs（StatsConfig + validate_time_str）+ stats/mod.rs 注册子模块 + Config 根结构追加 #[serde(default)] pub stats: StatsConfig
 - [x] 53-02-PLAN.md — opts.rs Stats 变体新增 --from/--to + --top 改 Option<u32> + handle_stats 优先级合并（D-05）+ main.rs 分发分支接入新签名
-- [ ] 53-03-PLAN.md — Config::validate 与 run_stats 接入 validate_time_str + CONFIG_TEMPLATE_EN 追加 [stats] 注释段 + tests/integration.rs 新增 7 个端到端 stats 测试
+- [x] 53-03-PLAN.md — Config::validate 与 run_stats 接入 validate_time_str + CONFIG_TEMPLATE_EN 追加 [stats] 注释段 + tests/integration.rs 新增 7 个端到端 stats 测试
 
 ### Phase 54: StatsAccumulator 时间过滤
 **Goal**: `stats` 命令在聚合统计时自动跳过 `ts` 字段不在指定时间段内的记录，时间段过滤对慢 SQL 和高频 SQL 两张表均生效
@@ -490,7 +490,7 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
 | 50. SQL 标准化引擎 | v1.13 | 1/1 | Complete | 2026-06-01 |
 | 51. stats 子命令 CLI 脚手架 | v1.13 | 1/1 | Complete | 2026-06-01 |
 | 52. 统计输出与 Exporter 集成 | v1.13 | 1/1 | Complete | 2026-06-01 |
-| 53. 时间段配置与 CLI 参数 | 3/3 | Complete   | 2026-06-01 |
+| 53. 时间段配置与 CLI 参数 | 3/3 | Complete    | 2026-06-01 |
 | 54. StatsAccumulator 时间过滤 | v1.14 | Not started | - |
 
 ---

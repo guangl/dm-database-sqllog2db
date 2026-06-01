@@ -7,11 +7,11 @@
 
 ### stats 时间段过滤
 
-- [ ] **STATS-07**: 用户可通过 `--from`/`--to` CLI 参数为 `stats` 命令指定时间段（如 `--from "2024-01-01"` `--to "2024-01-31"`）
-- [ ] **STATS-08**: 用户可在 config.toml `[stats]` 节配置 `from`/`to` 字段作为 `stats` 命令的默认时间段
-- [ ] **STATS-09**: CLI 参数 `--from`/`--to` 优先于 config.toml 中的 `from`/`to` 值，两者均缺省时不做时间过滤
+- [x] **STATS-07**: 用户可通过 `--from`/`--to` CLI 参数为 `stats` 命令指定时间段（如 `--from "2024-01-01"` `--to "2024-01-31"`）
+- [x] **STATS-08**: 用户可在 config.toml `[stats]` 节配置 `from`/`to` 字段作为 `stats` 命令的默认时间段
+- [x] **STATS-09**: CLI 参数 `--from`/`--to` 优先于 config.toml 中的 `from`/`to` 值，两者均缺省时不做时间过滤
 - [ ] **STATS-10**: `stats` 聚合时自动跳过 `ts` 字段不在指定时间段内的记录（字符串前缀比较，`ts >= from` 且 `ts <= to`）
-- [ ] **STATS-11**: 支持 `"YYYY-MM-DD"` 和 `"YYYY-MM-DD HH:MM:SS"` 两种时间格式，格式不合法时给出明确错误提示
+- [x] **STATS-11**: 支持 `"YYYY-MM-DD"` 和 `"YYYY-MM-DD HH:MM:SS"` 两种时间格式，格式不合法时给出明确错误提示
 
 ## v1.13 Requirements（已完成）
 
@@ -50,11 +50,11 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| STATS-07 | Phase 53 | Pending |
-| STATS-08 | Phase 53 | Pending |
-| STATS-09 | Phase 53 | Pending |
+| STATS-07 | Phase 53 | Complete |
+| STATS-08 | Phase 53 | Complete |
+| STATS-09 | Phase 53 | Complete |
 | STATS-10 | Phase 54 | Pending |
-| STATS-11 | Phase 53 | Pending |
+| STATS-11 | Phase 53 | Complete |
 
 **v1.14 Coverage:**
 - v1.14 requirements: 5 total
