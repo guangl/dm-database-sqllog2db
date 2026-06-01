@@ -2,6 +2,7 @@
 
 ## Milestones
 
+- 🔄 **v1.13 SQL 统计分析** — Phases 50–52 (in progress)
 - ✅ **v1.12 CLI 体验全面提升** — Phases 46–49 (shipped 2026-06-01)
 - ✅ **v1.0 增强 SQL 内容过滤与字段投影** — Phases 1–2 (shipped 2026-04-18)
 - ✅ **v1.1 性能优化** — Phases 3–6 (shipped 2026-05-10)
@@ -150,6 +151,12 @@ Full details: `.planning/phases/41-parser/`, `.planning/phases/42-criterion/`, `
 Full details: `.planning/milestones/v1.12-ROADMAP.md`
 
 </details>
+
+### v1.13 SQL 统计分析 (Phases 50–52)
+
+- [ ] **Phase 50: SQL 标准化引擎** — 将字面量替换为 `?` 占位符的标准化模块
+- [ ] **Phase 51: stats 子命令 CLI 脚手架** — 新增 `stats` 子命令及 `--top N` 参数
+- [ ] **Phase 52: 统计输出与 Exporter 集成** — 慢 SQL / 高频 SQL TOP-N 通过现有 exporter 输出
 
 ## Phase Details
 
@@ -336,9 +343,41 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
 - [x] 49-02-PLAN.md — SqllogParser 改为 Vec<String> 多输入接口 + 调用方迁移（cli/run/mod.rs、preflight.rs、cli/validate.rs、config/mod.rs 与 config/validate.rs 内单元测试）+ handle_run 空列表抛 NoFilesFound
 - [x] 49-03-PLAN.md — cli/opts.rs Run 增 --input/-i (ArgAction::Append) + main.rs apply_cli_inputs_to_config 注入 + CONFIG_TEMPLATE_EN [sqllog] 改为 inputs 数组 + tests/integration.rs 迁移与 4 个端到端 CLI 测试覆盖 INPUT-02
 
+### Phase 50: SQL 标准化引擎
+**Goal**: 用户可依赖一个内部 SQL 标准化模块，将 SQL 文本中的字符串和数字字面量替换为 `?` 占位符，从而把参数不同但模板相同的 SQL 调用归并为同一组
+**Depends on**: Phase 49
+**Requirements**: STATS-06
+**Success Criteria** (what must be TRUE):
+  1. `normalize_sql("SELECT * FROM t WHERE id = 42 AND name = 'alice'")` 返回 `"SELECT * FROM t WHERE id = ? AND name = ?"`
+  2. 连续多个字面量（数字、带转义引号的字符串）均被替换，单次调用产生的占位符数量与字面量个数一致
+  3. 不含字面量的 SQL（如 `SELECT 1` 或纯参数绑定查询）经过标准化后与输入相同，无误替换
+  4. 标准化函数通过 `cargo test` 中的单元测试覆盖至少 5 种典型 SQL 模式（含边界情况）
+  5. `cargo clippy --all-targets -- -D warnings` + `cargo fmt --check` 全部通过
+
+### Phase 51: stats 子命令 CLI 脚手架
+**Goal**: 用户可运行 `sqllog2db stats -c config.toml [--top N]` 触发统计分析流程，CLI 参数被正确解析并传递到后续处理逻辑
+**Depends on**: Phase 50
+**Requirements**: STATS-01, STATS-02
+**Success Criteria** (what must be TRUE):
+  1. `sqllog2db stats --help` 显示 `stats` 子命令说明及 `-c/--config` 和 `--top` 参数的描述
+  2. `sqllog2db stats -c config.toml` 在配置有效时不报错退出（即使统计输出暂为空也可），`--top` 缺省时使用默认值 20
+  3. `sqllog2db stats -c config.toml --top 5` 将 TOP 数量限制为 5，`--top 0` 或负数给出明确错误提示
+  4. `cargo clippy --all-targets -- -D warnings` + `cargo test` 全部通过
+
+### Phase 52: 统计输出与 Exporter 集成
+**Goal**: 用户运行 `stats` 后可在 config.toml 指定的 CSV 或 SQLite 文件中看到两张独立的统计表：慢 SQL TOP-N（按 elapsed 降序）和高频 SQL TOP-N（按调用次数降序）
+**Depends on**: Phase 51
+**Requirements**: STATS-03, STATS-04, STATS-05
+**Success Criteria** (what must be TRUE):
+  1. 慢 SQL 表包含字段：sql_text、elapsed（毫秒）、timestamp，记录按 elapsed 降序排列，行数不超过 `--top N`
+  2. 高频 SQL 表包含字段：normalized_sql、call_count、avg_elapsed（毫秒）、max_elapsed（毫秒），记录按 call_count 降序排列，行数不超过 `--top N`
+  3. 当 config.toml 配置 CSV exporter 时，输出为两个独立 CSV 文件（如 `slow_sql.csv` 和 `frequent_sql.csv`）；配置 SQLite 时，输出为同一 `.db` 文件中的两张独立表
+  4. 对同一份日志文件，`--top 5` 输出的行数严格不超过 5 行（记录不足时按实际数量输出）
+  5. `cargo clippy --all-targets -- -D warnings` + `cargo test` 全部通过，不引入重量级新依赖
+
 ## Coverage Validation
 
-| Requirement | Phase | 
+| Requirement | Phase |
 |-------------|-------|
 | UX-03       | 35    |
 | ERR-01      | 36    |
@@ -373,8 +412,14 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
 | LOG-03      | 48    |
 | INPUT-01    | 49    |
 | INPUT-02    | 49    |
+| STATS-06    | 50    |
+| STATS-01    | 51    |
+| STATS-02    | 51    |
+| STATS-03    | 52    |
+| STATS-04    | 52    |
+| STATS-05    | 52    |
 
-**33/33 requirements mapped — coverage: 100%**
+**39/39 requirements mapped — coverage: 100%**
 
 ## Progress
 
@@ -395,7 +440,10 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
 | 47. 配置文件体验 | v1.12 | 2/2 | Complete | 2026-05-31 |
 | 48. 日志级别与运行提示 | v1.12 | 2/2 | Complete | 2026-06-01 |
 | 49. Glob 输入支持 | v1.12 | 3/3 | Complete | 2026-06-01 |
+| 50. SQL 标准化引擎 | v1.13 | Not started | - |
+| 51. stats 子命令 CLI 脚手架 | v1.13 | Not started | - |
+| 52. 统计输出与 Exporter 集成 | v1.13 | Not started | - |
 
 ---
 *Created: 2026-05-21 for milestone v1.10*
-*Updated: 2026-05-31 — v1.12 (Phases 46–49) roadmap added; Phase 46 plan registered; Phase 47 plans 01/02 registered (CONTEXT D-03 静默通过决策已反映在 SC2); Phase 48 plans 01/02 registered (verbose/quiet 重塑 + 摘要差异化); Phase 49 plans 01/02/03 registered (schema 改造 + parser 多输入 + CLI --input 与端到端测试)*
+*Updated: 2026-06-01 — v1.13 (Phases 50–52) roadmap added; STATS-01/02/03/04/05/06 全部映射*

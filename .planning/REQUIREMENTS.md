@@ -36,18 +36,18 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| STATS-01 | TBD | Pending |
-| STATS-02 | TBD | Pending |
-| STATS-03 | TBD | Pending |
-| STATS-04 | TBD | Pending |
-| STATS-05 | TBD | Pending |
-| STATS-06 | TBD | Pending |
+| STATS-01 | Phase 51 | Pending |
+| STATS-02 | Phase 51 | Pending |
+| STATS-03 | Phase 52 | Pending |
+| STATS-04 | Phase 52 | Pending |
+| STATS-05 | Phase 52 | Pending |
+| STATS-06 | Phase 50 | Pending |
 
 **Coverage:**
 - v1.13 requirements: 6 total
-- Mapped to phases: 0 (roadmap pending)
-- Unmapped: 6 ⚠️
+- Mapped to phases: 6 (100%)
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-06-01*
-*Last updated: 2026-06-01 after initial definition*
+*Last updated: 2026-06-01 — traceability mapped to Phases 50/51/52*
