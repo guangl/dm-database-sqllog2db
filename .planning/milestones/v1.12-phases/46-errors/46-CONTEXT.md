@@ -26,6 +26,9 @@ Phase 46 完善用户看到的错误信息展示：将所有错误变体的 `Sug
 ### Error::Io hint 补全
 - **D-03:** 为 `Error::Io` 在 `suggestion()` 方法中添加通用 hint：`"Check filesystem permissions and disk space."`。与其他变体 hint 风格保持一致。
 
+### ERROR-01 覆盖范围澄清
+- **D-04:** 现有 `ConfigError::InvalidValue` 的 Display 格式 `"Invalid configuration value {field} = '{value}': {reason}"` 已包含字段名和原因，满足 ERROR-01 要求（"包含具体出错的配置字段名称和原因，不只是错误类型枚举名"）。ROADMAP Phase 46 Success Criteria #1 中提及的 `expected string, got integer` 仅为说明性示例，并非精确格式合同。本 phase 不修改 ConfigError 或任何子错误的 thiserror Display 文本格式；ERROR-01 覆盖由既有 Display 文本承担，本决策明确文档化范围边界，防止被误判为 scope reduction。
+
 </decisions>
 
 <canonical_refs>
