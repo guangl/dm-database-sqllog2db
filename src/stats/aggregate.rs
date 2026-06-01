@@ -66,9 +66,13 @@ pub struct StatsAccumulator {
 
 impl StatsAccumulator {
     /// 创建新的聚合器，`top_n` 为输出行数上限（≥ 1）。
+    ///
+    /// # Panics
+    ///
+    /// 当 `top_n` 为 0 时 panic。
     #[must_use]
     pub fn new(top_n: u32) -> Self {
-        debug_assert!(top_n >= 1, "top_n must be >= 1");
+        assert!(top_n >= 1, "top_n must be >= 1");
         Self {
             slow_heap: BinaryHeap::new(),
             freq_map: HashMap::new(),
