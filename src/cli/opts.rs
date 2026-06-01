@@ -117,4 +117,33 @@ EXAMPLES:
         )]
         config: String,
     },
+    /// Run statistical analysis on SQL log files
+    #[command(
+        long_about = "Analyse DM database SQL log files and report slow SQL and high-frequency SQL patterns.",
+        after_help = "\
+EXAMPLES:
+    Run statistics with default top-20:
+        sqllog2db stats -c config.toml
+
+    Limit output to top 5 per table:
+        sqllog2db stats -c config.toml --top 5"
+    )]
+    Stats {
+        /// TOML configuration file path
+        #[arg(
+            short = 'c',
+            long = "config",
+            default_value = "config.toml",
+            env = "SQLLOG2DB_CONFIG",
+            help = "TOML configuration file path. See [csv], [sqlite], [sqllog] sections."
+        )]
+        config: String,
+        /// Number of top records to display per table (default: 20)
+        #[arg(
+            long = "top",
+            default_value = "20",
+            help = "Number of top records per table. Must be >= 1."
+        )]
+        top: u32,
+    },
 }
