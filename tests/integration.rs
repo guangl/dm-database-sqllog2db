@@ -1342,3 +1342,148 @@ fn test_cli_input_flag_with_glob_no_match_behavior() {
         stderr
     );
 }
+
+// ── stats subcommand tests ────────────────────────────────────────────────────
+
+/// Create a valid stats config file with logging pointing to a temp dir.
+fn make_stats_config_file(dir: &std::path::Path) -> std::path::PathBuf {
+    let cfg_path = dir.join("stats_cfg.toml");
+    let log_path = dir.join("test.log");
+    let content = format!(
+        "[sqllog]\ninputs = [\"__placeholder__\"]\n\
+         [exporter.csv]\nfile = \"{}\"\noverwrite = true\n\
+         [logging]\nfile = \"{}\"\nlevel = \"info\"\nretention_days = 7\n",
+        dir.join("out.csv").to_string_lossy().replace('\\', "/"),
+        log_path.to_string_lossy().replace('\\', "/"),
+    );
+    std::fs::write(&cfg_path, content).unwrap();
+    cfg_path
+}
+
+/// S1: stats --help shows subcommand description and key arguments.
+#[test]
+fn test_cli_stats_help_shows_subcommand() {
+    use assert_cmd::Command;
+    use predicates::str::contains;
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .arg("stats")
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(contains("--config"))
+        .stdout(contains("--top"))
+        .stdout(contains("Number of top records"));
+}
+
+/// S2: stats with valid config exits successfully (exit code 0).
+#[test]
+fn test_cli_stats_with_valid_config_succeeds() {
+    use assert_cmd::Command;
+    let dir = tempfile::tempdir().unwrap();
+    let cfg_path = make_stats_config_file(dir.path());
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .arg("stats")
+        .arg("-c")
+        .arg(&cfg_path)
+        .assert()
+        .success();
+}
+
+/// S3: stats without --top uses default value of 20 (verified via log file).
+#[test]
+fn test_cli_stats_top_default_is_20() {
+    use assert_cmd::Command;
+    let dir = tempfile::tempdir().unwrap();
+    let cfg_path = make_stats_config_file(dir.path());
+    let log_path = dir.path().join("test.log");
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .arg("stats")
+        .arg("-c")
+        .arg(&cfg_path)
+        .assert()
+        .success();
+
+    let log_content = std::fs::read_to_string(&log_path)
+        .unwrap_or_else(|_| panic!("log file not found at {}", log_path.display()));
+    assert!(
+        log_content.contains("top=20"),
+        "log file should contain 'top=20', got:\n{log_content}"
+    );
+}
+
+/// S4: stats with --top 5 passes value 5 to `handle_stats` (verified via log file).
+#[test]
+fn test_cli_stats_top_explicit_value() {
+    use assert_cmd::Command;
+    let dir = tempfile::tempdir().unwrap();
+    let cfg_path = make_stats_config_file(dir.path());
+    let log_path = dir.path().join("test.log");
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .arg("stats")
+        .arg("-c")
+        .arg(&cfg_path)
+        .arg("--top")
+        .arg("5")
+        .assert()
+        .success();
+
+    let log_content = std::fs::read_to_string(&log_path)
+        .unwrap_or_else(|_| panic!("log file not found at {}", log_path.display()));
+    assert!(
+        log_content.contains("top=5"),
+        "log file should contain 'top=5', got:\n{log_content}"
+    );
+}
+
+/// S5: stats with --top 0 exits with non-zero and stderr contains error hint.
+#[test]
+fn test_cli_stats_top_zero_errors() {
+    use assert_cmd::Command;
+    use predicates::str::contains;
+    let dir = tempfile::tempdir().unwrap();
+    let cfg_path = make_stats_config_file(dir.path());
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .arg("stats")
+        .arg("-c")
+        .arg(&cfg_path)
+        .arg("--top")
+        .arg("0")
+        .assert()
+        .failure()
+        .stderr(contains("--top"))
+        .stderr(contains("must be >= 1"));
+}
+
+/// S6: stats with non-existent config exits with non-zero (no fallback to default, D-05).
+#[test]
+fn test_cli_stats_config_not_found_errors() {
+    use assert_cmd::Command;
+
+    let output = Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .arg("stats")
+        .arg("-c")
+        .arg("/nonexistent/does/not/exist.toml")
+        .output()
+        .unwrap();
+
+    assert!(
+        !output.status.success(),
+        "stats with missing config should fail"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("not found") || stderr.contains("Configuration file not found"),
+        "stderr should mention config not found, got: {stderr}"
+    );
+}
