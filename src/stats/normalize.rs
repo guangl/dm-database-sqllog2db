@@ -35,6 +35,16 @@ pub fn normalize_sql(sql: &str) -> String {
                 output.push(b'?');
                 prev_was_ident_char = false;
             }
+            b'-' | b'+'
+                if !prev_was_ident_char
+                    && cursor + 1 < len
+                    && bytes[cursor + 1].is_ascii_digit() =>
+            {
+                // 负号或正号紧跟数字时，整体视为一个带符号的数字字面量，用单个 `?` 替换
+                cursor = skip_number_literal(bytes, cursor + 1, len);
+                output.push(b'?');
+                prev_was_ident_char = false;
+            }
             _ => {
                 output.push(byte);
                 prev_was_ident_char = byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'$';
