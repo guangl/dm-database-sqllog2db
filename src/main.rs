@@ -127,7 +127,10 @@ fn run() -> Result<Option<(ErrorStats, bool)>> {
     let matches = cmd.get_matches();
     let cli = cli::opts::Cli::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
 
-    let needs_simple_logging = !matches!(&cli.command, Some(cli::opts::Commands::Run { .. }));
+    let needs_simple_logging = !matches!(
+        &cli.command,
+        Some(cli::opts::Commands::Run { .. } | cli::opts::Commands::Stats { .. })
+    );
     if needs_simple_logging {
         init_simple_logging(cli.quiet);
     }
@@ -170,6 +173,13 @@ fn run() -> Result<Option<(ErrorStats, bool)>> {
                 std::process::exit(EXIT_FATAL);
             }
             cli::validate::handle_validate(&cfg);
+            Ok(None)
+        }
+        Some(cli::opts::Commands::Stats { config, top }) => {
+            let mut cfg = Config::from_file(Path::new(config))?;
+            apply_verbosity_to_config(&mut cfg, cli.verbose, cli.quiet);
+            logging::init_logging(&cfg.logging, false)?;
+            cli::stats::handle_stats(&cfg, *top, cli.quiet)?;
             Ok(None)
         }
         None => {
