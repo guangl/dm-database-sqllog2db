@@ -1,8 +1,14 @@
 //! SQL 统计分析模块（v1.13）：提供 SQL 标准化与统计聚合。
 
 pub mod aggregate;
+pub mod config;
 pub mod normalize;
 pub mod output;
+
+// Public re-exports for lib API consumers (Plan 03 integration tests will use StatsConfig).
+// `#[allow(unused_imports)]` suppresses dead-code lint in the binary target until Plan 03.
+#[allow(unused_imports)]
+pub use config::{StatsConfig, validate_time_str};
 
 use crate::config::Config;
 use crate::error::{Error, ParserError, Result};
