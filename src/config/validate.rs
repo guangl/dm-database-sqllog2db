@@ -320,4 +320,42 @@ file = "out.csv"
         assert!(msg.contains("output.fields"), "actual: {msg}");
         assert!(msg.contains("unknown_field"), "actual: {msg}");
     }
+
+    // ── stats.from / stats.to 时间格式校验 ───────────────────
+    #[test]
+    fn test_validate_rejects_invalid_stats_from() {
+        let mut cfg = default_config();
+        cfg.stats.from = Some("not-a-date".into());
+        let result = cfg.validate();
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("stats.from"), "actual: {msg}");
+        assert!(msg.contains("YYYY-MM-DD"), "actual: {msg}");
+    }
+
+    #[test]
+    fn test_validate_rejects_invalid_stats_to() {
+        let mut cfg = default_config();
+        cfg.stats.to = Some("20240101".into());
+        let result = cfg.validate();
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("stats.to"), "actual: {msg}");
+        assert!(msg.contains("YYYY-MM-DD"), "actual: {msg}");
+    }
+
+    #[test]
+    fn test_validate_accepts_valid_stats_time_strings() {
+        let mut cfg = default_config();
+        cfg.stats.from = Some("2024-01-01".into());
+        cfg.stats.to = Some("2024-01-31 23:59:59".into());
+        assert!(cfg.validate().is_ok());
+    }
+
+    #[test]
+    fn test_validate_accepts_none_stats_time() {
+        let cfg = default_config();
+        // stats 默认全 None，不应触发验证错误
+        assert!(cfg.validate().is_ok());
+    }
 }

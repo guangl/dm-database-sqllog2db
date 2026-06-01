@@ -120,6 +120,13 @@ enable = false
 # includes = ["FROM USER_TABLES", "DELETE FROM"]
 # excludes = ["SELECT 1", "DUAL"]
 
+# --- Stats subcommand time-range filter (optional) ---
+[stats]
+# from = "2024-01-01"   # Start of time range. Formats: "YYYY-MM-DD" or "YYYY-MM-DD HH:MM:SS"
+# to   = "2024-01-31"   # End of time range. Same formats as from.
+# top  = 20             # Default top-N. CLI --top overrides this value.
+# CLI args --from / --to / --top override the values above. When both CLI and config are absent, stats runs without time filtering (top defaults to 20).
+
 # ===================== Exporter Configuration =====================
 # Only one exporter can be active at a time. Priority: csv > sqlite
 
