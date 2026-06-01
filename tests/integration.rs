@@ -1345,14 +1345,23 @@ fn test_cli_input_flag_with_glob_no_match_behavior() {
 
 // ── stats subcommand tests ────────────────────────────────────────────────────
 
-/// Create a valid stats config file with logging pointing to a temp dir.
+/// Create a valid stats config file with a real input log file and logging output.
+///
+/// Creates `input.log` with one valid DML record so `run_stats` can complete successfully.
 fn make_stats_config_file(dir: &std::path::Path) -> std::path::PathBuf {
     let cfg_path = dir.join("stats_cfg.toml");
     let log_path = dir.join("test.log");
+    let input_log = dir.join("input.log");
+    // Write one valid DML record so stats can scan and produce output
+    std::fs::write(
+        &input_log,
+        "2025-01-15 10:30:28.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT id FROM t WHERE id=1. EXECTIME: 5(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.\n",
+    ).unwrap();
     let content = format!(
-        "[sqllog]\ninputs = [\"__placeholder__\"]\n\
+        "[sqllog]\ninputs = [\"{}\"]\n\
          [exporter.csv]\nfile = \"{}\"\noverwrite = true\n\
          [logging]\nfile = \"{}\"\nlevel = \"info\"\nretention_days = 7\n",
+        input_log.to_string_lossy().replace('\\', "/"),
         dir.join("out.csv").to_string_lossy().replace('\\', "/"),
         log_path.to_string_lossy().replace('\\', "/"),
     );
@@ -1485,5 +1494,222 @@ fn test_cli_stats_config_not_found_errors() {
     assert!(
         stderr.contains("not found") || stderr.contains("Configuration file not found"),
         "stderr should mention config not found, got: {stderr}"
+    );
+}
+
+// ── Phase 52 stats output integration tests ──────────────────────────────────
+
+/// 写入 N 条 DML 记录到测试日志文件的辅助函数（含不同 SQL 模板）。
+fn write_stats_test_log(path: &std::path::Path, count: usize) {
+    use std::fmt::Write as _;
+    let mut buf = String::with_capacity(count * 200);
+    for idx in 0..count {
+        writeln!(
+            buf,
+            "2025-01-15 10:30:{:02}.001 (EP[0] sess:0x{idx:04x} user:U trxid:{idx} stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT * FROM table_{idx} WHERE id={idx}. EXECTIME: {exec}(ms) ROWCOUNT: 1(rows) EXEC_ID: {idx}.",
+            idx % 60,
+            exec = (idx * 11) % 500 + 1,
+        ).unwrap();
+    }
+    std::fs::write(path, buf).unwrap();
+}
+
+/// 创建仅含 CSV exporter 的统计配置文件。
+fn make_stats_csv_config(dir: &std::path::Path, log_path: &std::path::Path) -> std::path::PathBuf {
+    let cfg_path = dir.join("stats_csv.toml");
+    let csv_path = dir.join("out").join("data.csv");
+    let content = format!(
+        "[sqllog]\ninputs = [\"{}\"]\n[exporter.csv]\nfile = \"{}\"\noverwrite = true\n",
+        log_path.to_string_lossy().replace('\\', "/"),
+        csv_path.to_string_lossy().replace('\\', "/"),
+    );
+    std::fs::write(&cfg_path, content).unwrap();
+    cfg_path
+}
+
+/// 创建仅含 `SQLite` exporter 的统计配置文件。
+fn make_stats_sqlite_config(
+    dir: &std::path::Path,
+    log_path: &std::path::Path,
+) -> std::path::PathBuf {
+    let cfg_path = dir.join("stats_sqlite.toml");
+    let db_path = dir.join("out").join("stats.db");
+    let content = format!(
+        "[sqllog]\ninputs = [\"{}\"]\n[exporter.sqlite]\ndatabase_url = \"{}\"\n",
+        log_path.to_string_lossy().replace('\\', "/"),
+        db_path.to_string_lossy().replace('\\', "/"),
+    );
+    std::fs::write(&cfg_path, content).unwrap();
+    cfg_path
+}
+
+/// Phase 52 集成测试 1：stats 命令生成 `slow_sql.csv` 和 `frequent_sql.csv`。
+#[test]
+fn test_stats_csv_outputs_two_files() {
+    use assert_cmd::Command;
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_file = dir.path().join("test.log");
+    write_stats_test_log(&log_file, 3);
+    let cfg_path = make_stats_csv_config(dir.path(), &log_file);
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["stats", "-c"])
+        .arg(&cfg_path)
+        .args(["--top", "10"])
+        .assert()
+        .success();
+
+    let out_dir = dir.path().join("out");
+    assert!(
+        out_dir.join("slow_sql.csv").exists(),
+        "slow_sql.csv must exist"
+    );
+    assert!(
+        out_dir.join("frequent_sql.csv").exists(),
+        "frequent_sql.csv must exist"
+    );
+    // 验证表头
+    let slow = std::fs::read_to_string(out_dir.join("slow_sql.csv")).unwrap();
+    assert_eq!(
+        slow.lines().next().unwrap(),
+        "sql_text,elapsed_ms,timestamp"
+    );
+    let freq = std::fs::read_to_string(out_dir.join("frequent_sql.csv")).unwrap();
+    assert_eq!(
+        freq.lines().next().unwrap(),
+        "normalized_sql,call_count,avg_elapsed_ms,max_elapsed_ms"
+    );
+}
+
+/// Phase 52 集成测试 2：--top 5 严格限制输出行数不超过 5。
+#[test]
+fn test_stats_csv_top_5_limits_rows() {
+    use assert_cmd::Command;
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_file = dir.path().join("test.log");
+    write_stats_test_log(&log_file, 8);
+    let cfg_path = make_stats_csv_config(dir.path(), &log_file);
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["stats", "-c"])
+        .arg(&cfg_path)
+        .args(["--top", "5"])
+        .assert()
+        .success();
+
+    let out_dir = dir.path().join("out");
+    let slow = std::fs::read_to_string(out_dir.join("slow_sql.csv")).unwrap();
+    // 数据行 = total lines - 1 (header)
+    let slow_data = slow.lines().count() - 1;
+    assert!(
+        slow_data <= 5,
+        "slow_sql.csv data rows should be ≤ 5, got {slow_data}"
+    );
+
+    let freq = std::fs::read_to_string(out_dir.join("frequent_sql.csv")).unwrap();
+    let freq_data = freq.lines().count() - 1;
+    assert!(
+        freq_data <= 5,
+        "frequent_sql.csv data rows should be ≤ 5, got {freq_data}"
+    );
+}
+
+/// Phase 52 集成测试 3：`SQLite` 配置时生成 `slow_sql` 和 `frequent_sql` 两张表。
+#[test]
+fn test_stats_sqlite_outputs_two_tables() {
+    use assert_cmd::Command;
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_file = dir.path().join("test.log");
+    write_stats_test_log(&log_file, 3);
+    let cfg_path = make_stats_sqlite_config(dir.path(), &log_file);
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["stats", "-c"])
+        .arg(&cfg_path)
+        .args(["--top", "10"])
+        .assert()
+        .success();
+
+    let db_path = dir.path().join("out").join("stats.db");
+    let conn = rusqlite::Connection::open(&db_path).unwrap();
+    let slow_count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM slow_sql", [], |row| row.get(0))
+        .unwrap();
+    assert!(slow_count > 0, "slow_sql table should have rows");
+    let freq_count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM frequent_sql", [], |row| row.get(0))
+        .unwrap();
+    assert!(freq_count > 0, "frequent_sql table should have rows");
+}
+
+/// Phase 52 集成测试 4：同时配置 CSV 和 `SQLite` 时，只生成 CSV（CSV 优先）。
+#[test]
+fn test_stats_csv_preferred_over_sqlite_when_both_configured() {
+    use assert_cmd::Command;
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_file = dir.path().join("test.log");
+    write_stats_test_log(&log_file, 3);
+
+    let cfg_path = dir.path().join("both.toml");
+    let csv_path = dir.path().join("out").join("data.csv");
+    let db_path = dir.path().join("out").join("stats.db");
+    let content = format!(
+        "[sqllog]\ninputs = [\"{}\"]\n\
+         [exporter.csv]\nfile = \"{}\"\noverwrite = true\n\
+         [exporter.sqlite]\ndatabase_url = \"{}\"\n",
+        log_file.to_string_lossy().replace('\\', "/"),
+        csv_path.to_string_lossy().replace('\\', "/"),
+        db_path.to_string_lossy().replace('\\', "/"),
+    );
+    std::fs::write(&cfg_path, &content).unwrap();
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["stats", "-c"])
+        .arg(&cfg_path)
+        .args(["--top", "10"])
+        .assert()
+        .success();
+
+    let out_dir = dir.path().join("out");
+    assert!(
+        out_dir.join("slow_sql.csv").exists(),
+        "CSV should be generated when both exporters configured"
+    );
+    assert!(
+        !db_path.exists(),
+        "SQLite db should NOT be created when CSV takes priority"
+    );
+}
+
+/// Phase 52 集成测试 5：exectime = 0 的记录纳入 slow_sql.csv（D-12）。
+#[test]
+fn test_stats_zero_elapsed_records_included() {
+    use assert_cmd::Command;
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_file = dir.path().join("test.log");
+    // 写入 exectime = 0 的记录
+    std::fs::write(
+        &log_file,
+        "2025-01-15 10:30:28.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT zero FROM t. EXECTIME: 0(ms) ROWCOUNT: 0(rows) EXEC_ID: 0.\n",
+    ).unwrap();
+
+    let cfg_path = make_stats_csv_config(dir.path(), &log_file);
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["stats", "-c"])
+        .arg(&cfg_path)
+        .args(["--top", "10"])
+        .assert()
+        .success();
+
+    let out_dir = dir.path().join("out");
+    let slow = std::fs::read_to_string(out_dir.join("slow_sql.csv")).unwrap();
+    assert!(
+        slow.contains("SELECT zero FROM t"),
+        "zero-elapsed record should appear in slow_sql.csv, got:\n{slow}"
     );
 }
