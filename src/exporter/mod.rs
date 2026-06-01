@@ -287,10 +287,10 @@ pub(crate) fn f32_ms_to_i64(ms: f32) -> i64 {
     } else if ms_f64 < MIN_I64_F64 {
         i64::MIN
     } else {
-        let clamped = ms_f64.trunc();
+        let clamped = ms_f64.round();
         #[expect(
             clippy::cast_possible_truncation,
-            reason = "value already clamped to i64 range"
+            reason = "value is clamped to i64 range above; saturating cast (Rust 1.45+) handles boundary values correctly"
         )]
         {
             clamped as i64
