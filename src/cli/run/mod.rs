@@ -2,7 +2,6 @@ use crate::config::Config;
 use crate::error::{Error, ErrorStats, Result};
 use crate::exporter::ExporterManager;
 use crate::parser::SqllogParser;
-use crate::pipeline::{CompiledMetaFilters, CompiledSqlFilters};
 use log::{info, warn};
 use std::io::IsTerminal;
 use std::sync::Arc;
@@ -18,24 +17,18 @@ mod sqlite_parallel;
 use filter_processor::build_pipeline;
 use indicatif::{ProgressBar, ProgressStyle};
 use parallel::process_csv_parallel;
-use prescan::{recompile_meta_if_needed, scan_for_trxids_by_transaction_filters};
+use prescan::scan_for_trxids_by_transaction_filters;
 use processor::process_log_file;
 use sqlite_parallel::process_sqlite_parallel;
 
 /// 主编排函数：解析日志文件并导出到配置的导出器。
-/// `compiled_filters` 由调用方预编译（`Config::validate_and_compile`），避免重复编译正则。
 /// 并行路径：CSV + 多文件 + jobs > 1；顺序路径：其他情况。
 pub fn handle_run(
     cfg: &Config,
     quiet: bool,
     verbose: bool,
     interrupted: &Arc<AtomicBool>,
-    compiled_filters: Option<(CompiledMetaFilters, CompiledSqlFilters)>,
 ) -> Result<ErrorStats> {
-    let (compiled_meta, compiled_sql) = match compiled_filters {
-        Some((m, s)) => (Some(m), Some(s)),
-        None => (None, None),
-    };
     let total_start = Instant::now();
 
     let log_files = SqllogParser::new(cfg.sqllog.inputs.clone()).log_files()?;
@@ -97,8 +90,7 @@ pub fn handle_run(
     } else {
         cfg
     };
-    let compiled_meta_for_pipeline = recompile_meta_if_needed(final_cfg, compiled_meta)?;
-    let pipeline = build_pipeline(final_cfg, compiled_meta_for_pipeline);
+    let pipeline = build_pipeline(final_cfg);
     let field_mask = final_cfg.output.as_ref().map_or(
         crate::pipeline::FieldMask::ALL,
         crate::pipeline::OutputConfig::field_mask,
@@ -116,13 +108,6 @@ pub fn handle_run(
         .replace_parameters
         .as_ref()
         .and_then(crate::pipeline::NormalizeConfig::placeholder_override);
-    let compiled_record_sql: Option<CompiledSqlFilters> = compiled_sql.filter(|_| {
-        final_cfg
-            .filter
-            .as_ref()
-            .is_some_and(|f| f.enable && f.record_sql.has_filters())
-    });
-    let sql_record_filter = compiled_record_sql.as_ref();
     let show_progress = !quiet && !verbose;
     let pb = if show_progress {
         let bar = ProgressBar::new_spinner();
@@ -164,7 +149,6 @@ pub fn handle_run(
             placeholder_override,
             field_mask,
             &ordered_indices,
-            sql_record_filter,
         )?;
         run_stats.merge(&csv_parallel_stats);
         total_records = csv_processed_files.iter().map(|(_, c)| *c).sum();
@@ -191,7 +175,6 @@ pub fn handle_run(
                 placeholder_override,
                 field_mask,
                 &ordered_indices,
-                sql_record_filter,
             )?;
         run_stats.merge(&sqlite_parallel_stats);
         total_records = sqlite_processed_files.iter().map(|(_, c)| *c).sum();
@@ -226,7 +209,6 @@ pub fn handle_run(
                 &mut params_buffer,
                 &mut ns_scratch,
                 true,
-                sql_record_filter,
                 pb.as_ref(),
             )?;
             total_records += processed;

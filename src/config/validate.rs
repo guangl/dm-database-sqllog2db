@@ -1,65 +1,13 @@
-use super::{Config, PIPELINE_MIGRATION_HINT};
+use super::Config;
 use crate::error::{ConfigError, Error, Result};
 
 impl Config {
     pub fn validate(&self) -> Result<()> {
-        // validate_and_compile() 执行所有相同的校验（logging、exporter、sqllog、filter、output_fields）
-        // 并返回编译结果。validate 子命令不需要编译结果，直接丢弃。
-        self.validate_and_compile()?;
-        Ok(())
-    }
-
-    /// 等价于 `validate()` 但额外返回已编译的过滤器对，供调用方复用，
-    /// 消除 `run` 子命令路径中 regex 的双重编译。
-    ///
-    /// 返回值语义：
-    /// - `Ok(None)`：无过滤器配置 或 `filter.enable == false`
-    /// - `Ok(Some((meta, sql)))`：过滤器已编译，调用方可直接传递给 `build_pipeline`
-    /// - `Err(_)`：任意子校验失败
-    pub fn validate_and_compile(
-        &self,
-    ) -> Result<
-        Option<(
-            crate::pipeline::CompiledMetaFilters,
-            crate::pipeline::CompiledSqlFilters,
-        )>,
-    > {
-        if self.pipeline_deprecated.is_some() {
-            return Err(Error::Config(ConfigError::InvalidValue {
-                field: "[pipeline]".to_string(),
-                value: String::new(),
-                reason: PIPELINE_MIGRATION_HINT.to_string(),
-            }));
-        }
-        if self.template_deprecated.is_some() {
-            return Err(Error::Config(ConfigError::InvalidValue {
-                field: "[template]".to_string(),
-                value: String::new(),
-                reason: "配置段 [template] 已废弃，请移除此配置段".to_string(),
-            }));
-        }
         self.logging.validate()?;
         self.exporter.validate()?;
         self.sqllog.validate()?;
-
-        let compiled = if let Some(filters) = &self.filter {
-            if filters.enable {
-                let meta = crate::pipeline::CompiledMetaFilters::try_from_include_exclude(
-                    &filters.include,
-                    &filters.exclude,
-                )?;
-                let sql =
-                    crate::pipeline::CompiledSqlFilters::try_from_sql_filters(&filters.record_sql)?;
-                Some((meta, sql))
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
         self.validate_output_fields()?;
-        Ok(compiled)
+        Ok(())
     }
 
     fn validate_output_fields(&self) -> Result<()> {
@@ -85,7 +33,7 @@ impl Config {
 mod tests {
     use super::*;
     use crate::config::{CsvExporterConfig, SqliteExporterConfig};
-    use crate::pipeline::{NormalizeConfig, OutputConfig};
+    use crate::pipeline::OutputConfig;
 
     fn default_config() -> Config {
         Config::default()
@@ -169,43 +117,6 @@ mod tests {
         let mut cfg = default_config();
         cfg.exporter.csv = None;
         assert!(cfg.validate().is_err());
-    }
-
-    // ── regex validation ───────────────────────────────────────
-    #[test]
-    fn test_validate_invalid_regex_in_filters() {
-        let toml = r#"
-[sqllog]
-inputs = ["sqllogs"]
-[filter]
-enable = true
-usernames = ["[invalid"]
-[exporter.csv]
-file = "out.csv"
-"#;
-        let cfg: Config = toml::from_str(toml).unwrap();
-        let result = cfg.validate();
-        assert!(result.is_err());
-        let err_msg = result.unwrap_err().to_string();
-        assert!(
-            err_msg.contains("filter."),
-            "error should mention filter field name, got: {err_msg}"
-        );
-    }
-
-    #[test]
-    fn test_validate_valid_regex_in_filters() {
-        let toml = r#"
-[sqllog]
-inputs = ["sqllogs"]
-[filter]
-enable = true
-usernames = ["^admin.*"]
-[exporter.csv]
-file = "out.csv"
-"#;
-        let cfg: Config = toml::from_str(toml).unwrap();
-        assert!(cfg.validate().is_ok());
     }
 
     // ── table_name ASCII 标识符校验 ────────────────────────────
@@ -316,91 +227,6 @@ file = "out.csv"
         assert!(msg.contains("ASCII identifiers only"), "actual: {msg}");
     }
 
-    // ── validate_and_compile ───────────────────────────────────────
-    #[test]
-    fn test_validate_and_compile_default_returns_none() {
-        let cfg = default_config();
-        let result = cfg.validate_and_compile().expect("default config valid");
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn test_validate_and_compile_filters_disabled_returns_none() {
-        let toml = r#"
-[sqllog]
-inputs = ["sqllogs"]
-[filter]
-enable = false
-usernames = ["^admin.*"]
-[exporter.csv]
-file = "out.csv"
-"#;
-        let cfg: Config = toml::from_str(toml).unwrap();
-        let result = cfg.validate_and_compile().expect("config valid");
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn test_validate_and_compile_returns_compiled_pair() {
-        let toml = r#"
-[sqllog]
-inputs = ["sqllogs"]
-[filter]
-enable = true
-usernames = ["^admin.*"]
-[exporter.csv]
-file = "out.csv"
-"#;
-        let cfg: Config = toml::from_str(toml).unwrap();
-        let result = cfg.validate_and_compile().expect("config valid");
-        let pair = result.expect("filter.enable=true should return Some");
-        assert!(pair.0.has_any_filters());
-    }
-
-    #[test]
-    fn test_validate_and_compile_invalid_regex_returns_err() {
-        let toml = r#"
-[sqllog]
-inputs = ["sqllogs"]
-[filter]
-enable = true
-usernames = ["[invalid"]
-[exporter.csv]
-file = "out.csv"
-"#;
-        let cfg: Config = toml::from_str(toml).unwrap();
-        let result = cfg.validate_and_compile();
-        assert!(result.is_err());
-        let err_msg = result.unwrap_err().to_string();
-        assert!(
-            err_msg.contains("filter."),
-            "error should mention filter field name, got: {err_msg}"
-        );
-    }
-
-    #[test]
-    fn test_validate_and_compile_invalid_log_level_returns_err() {
-        let mut cfg = default_config();
-        cfg.logging.level = "invalid".into();
-        assert!(cfg.validate_and_compile().is_err());
-    }
-
-    #[test]
-    fn test_validate_and_compile_unknown_field_returns_err() {
-        let mut cfg = default_config();
-        cfg.output = Some(OutputConfig {
-            fields: Some(vec!["nonexistent_field".into()]),
-        });
-        assert!(cfg.validate_and_compile().is_err());
-    }
-
-    #[test]
-    fn test_validate_and_compile_matches_validate_on_ok() {
-        let cfg = default_config();
-        assert!(cfg.validate().is_ok());
-        assert!(cfg.validate_and_compile().is_ok());
-    }
-
     #[test]
     fn test_validate_new_nested_format_passes() {
         let toml = r#"
@@ -417,35 +243,6 @@ file = "out.csv"
 "#;
         let cfg: Config = toml::from_str(toml).unwrap();
         assert!(cfg.validate().is_ok());
-    }
-
-    // ── 旧路径检测 ─────────────────────────────────────────────
-    #[test]
-    fn test_validate_legacy_pipeline_path_rejected() {
-        let toml = r#"
-[sqllog]
-inputs = ["sqllogs"]
-[pipeline.template_analysis]
-enabled = true
-[exporter.csv]
-file = "out.csv"
-"#;
-        let cfg: Config = toml::from_str(toml).unwrap();
-        let result = cfg.validate();
-        assert!(result.is_err());
-        let err_msg = result.unwrap_err().to_string();
-        assert!(
-            err_msg.contains("[pipeline.normalize] → [replace_parameters]"),
-            "actual: {err_msg}"
-        );
-        assert!(
-            err_msg.contains("[pipeline.filters.*] → [filter.*]"),
-            "actual: {err_msg}"
-        );
-        assert!(
-            err_msg.contains("[pipeline.fields] → [output.fields]"),
-            "actual: {err_msg}"
-        );
     }
 
     #[test]
@@ -486,26 +283,6 @@ file = "out.csv"
         assert!(cfg.validate().is_ok());
     }
 
-    #[test]
-    fn test_validate_rejects_template_section() {
-        let toml = r#"
-[sqllog]
-inputs = ["sqllogs"]
-[template]
-enable = true
-[filter]
-enable = false
-[exporter.csv]
-file = "out.csv"
-"#;
-        let cfg: Config = toml::from_str(toml).unwrap();
-        let result = cfg.validate();
-        assert!(result.is_err());
-        let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("[template]"), "actual: {err_msg}");
-        assert!(err_msg.contains("已废弃"), "actual: {err_msg}");
-    }
-
     // ── output.fields 校验 ───────────────────────────────────
     #[test]
     fn test_validate_output_fields_unknown_field_rejected() {
@@ -518,67 +295,5 @@ file = "out.csv"
         let msg = result.unwrap_err().to_string();
         assert!(msg.contains("output.fields"), "actual: {msg}");
         assert!(msg.contains("unknown_field"), "actual: {msg}");
-    }
-
-    // ── validate_and_compile 新格式 ──────────────────────────
-    #[test]
-    fn test_validate_and_compile_new_format_filter_enabled() {
-        let toml = r#"
-[sqllog]
-inputs = ["sqllogs"]
-[filter]
-enable = true
-usernames = ["^admin.*"]
-[exporter.csv]
-file = "out.csv"
-"#;
-        let cfg: Config = toml::from_str(toml).unwrap();
-        let result = cfg.validate_and_compile().expect("config valid");
-        let pair = result.expect("filter.enable=true should return Some");
-        assert!(pair.0.has_any_filters());
-    }
-
-    #[test]
-    fn test_validate_and_compile_new_format_filter_disabled() {
-        let toml = r#"
-[sqllog]
-inputs = ["sqllogs"]
-[filter]
-enable = false
-[exporter.csv]
-file = "out.csv"
-"#;
-        let cfg: Config = toml::from_str(toml).unwrap();
-        let result = cfg.validate_and_compile().expect("config valid");
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn test_validate_legacy_pipeline_rejected_in_validate_and_compile() {
-        let toml = r#"
-[sqllog]
-inputs = ["sqllogs"]
-[pipeline.filters]
-enable = true
-[exporter.csv]
-file = "out.csv"
-"#;
-        let cfg: Config = toml::from_str(toml).unwrap();
-        let result = cfg.validate_and_compile();
-        assert!(result.is_err());
-        let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("[pipeline]"), "actual: {err_msg}");
-    }
-
-    #[test]
-    fn test_validate_and_compile_normalize_not_needed_for_compile() {
-        // replace_parameters 不影响 validate_and_compile 的 compiled 结果
-        let mut cfg = default_config();
-        cfg.replace_parameters = Some(NormalizeConfig {
-            enable: true,
-            placeholders: vec![],
-        });
-        let result = cfg.validate_and_compile().expect("config valid");
-        assert!(result.is_none()); // 没有 filter，返回 None
     }
 }

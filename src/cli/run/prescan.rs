@@ -1,7 +1,50 @@
 use crate::config::Config;
 use crate::error::{Error, Result};
-use crate::pipeline::CompiledMetaFilters;
-use dm_database_parser_sqllog::LogParserBuilder;
+use crate::pipeline::filters::types::{IndicatorFilters, SqlFilters};
+use dm_database_parser_sqllog::{Filter, FilterBuilder, LogParserBuilder};
+
+// ===== Pre-scan: 指标/SQL 过滤器构建 =====
+
+fn build_indicator_filters(indicators: &IndicatorFilters) -> Vec<Filter> {
+    let mut filters = Vec::new();
+    if let Some(min_ms) = indicators.min_runtime_ms {
+        #[allow(clippy::cast_precision_loss)]
+        filters.push(FilterBuilder::new().exec_time_gte(min_ms as f32).build());
+    }
+    if let Some(min_r) = indicators.min_row_count {
+        // rowcount >= min_r: for u32, rowcount_gt(min_r - 1) works when min_r > 0
+        let filter = if min_r == 0 {
+            FilterBuilder::new().build()
+        } else {
+            FilterBuilder::new().rowcount_gt(min_r - 1).build()
+        };
+        filters.push(filter);
+    }
+    if let Some(ids) = &indicators.exec_ids {
+        for &id in ids {
+            filters.push(FilterBuilder::new().exec_id_eq(id).build());
+        }
+    }
+    filters
+}
+
+fn build_sql_include_filters(sf: &SqlFilters) -> Vec<Filter> {
+    sf.includes
+        .as_deref()
+        .unwrap_or(&[])
+        .iter()
+        .map(|p| FilterBuilder::new().sql_contains(p.clone()).build())
+        .collect()
+}
+
+fn build_sql_exclude_filters(sf: &SqlFilters) -> Vec<Filter> {
+    sf.excludes
+        .as_deref()
+        .unwrap_or(&[])
+        .iter()
+        .map(|p| FilterBuilder::new().sql_contains(p.clone()).build())
+        .collect()
+}
 
 // ===== Pre-scan: 单文件扫描（rayon 并行 + 文件内去重）=====
 
@@ -9,9 +52,6 @@ use dm_database_parser_sqllog::LogParserBuilder;
 ///
 /// 文件内部使用 `par_iter()` 并行处理各行，无共享可变状态，
 /// 可被上层跨文件的 `par_iter()` 安全调用（两级 rayon 嵌套并行）。
-///
-/// 结果在文件内去重：同一事务 ID 可能出现在数百条记录中，
-/// 提前去重可显著减少跨文件合并时的中间数据量。
 pub(super) fn scan_log_file_for_matches(file_path: &str, cfg: &Config) -> Vec<String> {
     use rayon::prelude::*;
 
@@ -27,24 +67,28 @@ pub(super) fn scan_log_file_for_matches(file_path: &str, cfg: &Config) -> Vec<St
         _ => return Vec::new(),
     };
 
-    // 收集到 Vec 再并行处理（LogIterator 未实现 rayon::IntoParallelIterator trait，需先 collect 到 Vec 才能用 par_iter）
+    let indicator_filters = build_indicator_filters(&filters.indicators);
+    let sql_include_filters = build_sql_include_filters(&filters.sql);
+    let sql_exclude_filters = build_sql_exclude_filters(&filters.sql);
+    let has_sql_filters = filters.sql.has_filters();
+
     let records: Vec<_> = parser.iter().filter_map(std::result::Result::ok).collect();
     let trxids: std::collections::HashSet<String> = records
         .par_iter()
-        .filter_map(|result| {
-            let mut matched = false;
+        .filter_map(|record| {
+            let indicator_match = !indicator_filters.is_empty()
+                && indicator_filters.iter().any(|f| f.matches(record));
 
-            if filters
-                .indicators
-                .matches(result.exec_id, result.exectime, result.rowcount)
-            {
-                matched = true;
-            }
-            if !matched && filters.sql.has_filters() {
-                matched = filters.sql.matches(&result.sql);
-            }
-            if matched {
-                Some(result.trxid.clone())
+            let sql_match = !indicator_match && has_sql_filters && {
+                let include_ok = sql_include_filters.is_empty()
+                    || sql_include_filters.iter().any(|f| f.matches(record));
+                let exclude_ok = sql_exclude_filters.is_empty()
+                    || !sql_exclude_filters.iter().any(|f| f.matches(record));
+                include_ok && exclude_ok
+            };
+
+            if indicator_match || sql_match {
+                Some(record.trxid.clone())
             } else {
                 None
             }
@@ -67,15 +111,11 @@ pub(super) fn scan_for_trxids_by_transaction_filters(
         log_files.len()
     );
 
-    // 使用与主流程相同的线程数（jobs），避免预扫描阶段无限制占用 CPU。
-    // pool.install() 使内层 scan_log_file_for_matches 的 par_iter() 也在同一池内调度。
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(jobs)
         .build()
         .map_err(|e| Error::Io(std::io::Error::other(format!("rayon thread pool: {e}"))))?;
 
-    // Collect directly into a HashSet to deduplicate trxids across files in one pass,
-    // avoiding duplicate String allocations when the same trxid spans multiple files.
     let matched: std::collections::HashSet<String> = pool.install(|| {
         log_files
             .par_iter()
@@ -94,34 +134,4 @@ pub(super) fn scan_for_trxids_by_transaction_filters(
     });
 
     Ok(matched.into_iter().collect())
-}
-
-// ===== Pre-scan -> Main-pass 衔接: 合并 trxids 后重新编译 CompiledMetaFilters =====
-
-/// pre-scan 完成后重新编译 `CompiledMetaFilters`。
-///
-/// 若 `final_cfg` 含有 `filter.enable == true` 且 `include`/`exclude` 中存在至少一个
-/// 过滤条件，则从 `final_cfg` 重新编译以包含预扫描发现的 trxids；否则直接回传原始值。
-/// 回传原始值的情形：无 filters 配置、filters 禁用、include/exclude 均为空、
-/// 或调用方传 None 时走 None 路径。
-pub(super) fn recompile_meta_if_needed(
-    final_cfg: &Config,
-    original: Option<CompiledMetaFilters>,
-) -> Result<Option<CompiledMetaFilters>> {
-    let filters = match &final_cfg.filter {
-        Some(f) if f.enable => f,
-        _ => return Ok(original),
-    };
-    // Early-return when no include/exclude patterns exist to avoid creating
-    // a Some(CompiledMetaFilters { all fields: None }) that build_pipeline
-    // would immediately discard via has_filters().
-    if !filters.include.has_filters() && !filters.exclude.has_filters() {
-        return Ok(original);
-    }
-    // 重新从 final_cfg 编译，以捕获 merge_found_trxids 写入的 trxids
-    let recompiled = crate::pipeline::CompiledMetaFilters::try_from_include_exclude(
-        &filters.include,
-        &filters.exclude,
-    )?;
-    Ok(Some(recompiled))
 }

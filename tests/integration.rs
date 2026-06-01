@@ -59,7 +59,7 @@ fn test_handle_run_empty_dir_returns_no_files_found() {
     let csv_file = dir.path().join("out.csv");
     let cfg = make_run_config(&log_dir, &csv_file);
     let interrupted = Arc::new(AtomicBool::new(false));
-    let result = handle_run(&cfg, true, false, &interrupted, None);
+    let result = handle_run(&cfg, true, false, &interrupted);
     assert!(result.is_err());
     let err = result.unwrap_err().to_string();
     assert!(err.contains("No log files found matching inputs"));
@@ -86,7 +86,7 @@ fn test_handle_run_multi_file() {
     let cfg = make_run_config(&log_dir, &csv_file);
 
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted).unwrap();
 }
 
 #[test]
@@ -100,7 +100,7 @@ fn test_handle_run_real_csv_export() {
     let cfg = make_run_config(&log_dir, &csv_file);
 
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted).unwrap();
 
     let content = std::fs::read_to_string(&csv_file).unwrap();
     // header + 10 data rows = 11 lines
@@ -124,7 +124,7 @@ fn test_handle_run_interrupted() {
 
     // Pre-set interrupted flag — run returns Err(Interrupted) when flag is set before processing
     let interrupted = Arc::new(AtomicBool::new(true));
-    let result = handle_run(&cfg, true, false, &interrupted, None);
+    let result = handle_run(&cfg, true, false, &interrupted);
     assert!(
         matches!(
             result,
@@ -318,7 +318,6 @@ fn test_handle_validate_with_filters_all_fields() {
                 includes: Some(vec!["SELECT".to_string()]),
                 excludes: Some(vec!["DROP".to_string()]),
             },
-            record_sql: SqlFilters::default(),
         }),
         ..Default::default()
     };
@@ -353,7 +352,7 @@ fn test_handle_run_non_quiet_prints_summary() {
     let cfg = make_run_config(&log_dir, &csv_file);
     let interrupted = Arc::new(AtomicBool::new(false));
     // quiet=false exercises the summary print path
-    handle_run(&cfg, false, false, &interrupted, None).unwrap();
+    handle_run(&cfg, false, false, &interrupted).unwrap();
 }
 
 #[test]
@@ -375,9 +374,8 @@ fn test_handle_run_with_filters_builds_pipeline() {
         exclude: ExcludeFilters::default(),
         ..Default::default()
     });
-    let compiled_filters = cfg.validate_and_compile().unwrap();
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, compiled_filters).unwrap();
+    handle_run(&cfg, true, false, &interrupted).unwrap();
 }
 
 #[test]
@@ -402,7 +400,7 @@ fn test_handle_run_with_transaction_filters_prescans() {
         ..Default::default()
     });
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted).unwrap();
 }
 
 #[test]
@@ -427,7 +425,7 @@ fn test_handle_run_with_min_runtime_filter() {
         ..Default::default()
     });
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted).unwrap();
 }
 
 // ── parallel CSV tests ──────────────────────────────────────────────────────
@@ -447,7 +445,7 @@ fn test_handle_run_parallel_csv_multiple_files() {
     let interrupted = Arc::new(AtomicBool::new(false));
 
     // jobs=2, multiple files, no limit, CSV exporter → triggers process_csv_parallel
-    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted).unwrap();
 
     let content = std::fs::read_to_string(&csv_file).unwrap();
     let data_lines = content.lines().count().saturating_sub(1);
@@ -483,7 +481,7 @@ fn test_csv_throughput_baseline() {
 
     let interrupted = Arc::new(AtomicBool::new(false));
     let start = std::time::Instant::now();
-    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted).unwrap();
     let elapsed = start.elapsed().as_secs_f64();
 
     let rate = f64::from(u32::try_from(RECORD_COUNT).expect("20_000 fits in u32")) / elapsed;
@@ -559,58 +557,6 @@ fn test_init_generated_en_template_passes_validate() {
     );
 }
 
-#[test]
-fn test_validate_rejects_legacy_pipeline_template_analysis() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("legacy.toml");
-    std::fs::write(
-        &path,
-        "[sqllog]\ninputs = [\"sqllogs\"]\n\n[pipeline.template_analysis]\nenabled = true\n\n[exporter.csv]\nfile = \"out.csv\"\n",
-    )
-    .unwrap();
-    let cfg = dm_database_sqllog2db::config::Config::from_file(&path).unwrap();
-    let result = cfg.validate();
-    assert!(
-        result.is_err(),
-        "legacy [pipeline.template_analysis] must be rejected by validate()"
-    );
-    let err_msg = result.unwrap_err().to_string();
-    assert!(
-        err_msg.contains("[pipeline.filters.*] → [filter.*]"),
-        "error must contain migration hint for filters; got: {err_msg}"
-    );
-}
-
-#[test]
-fn test_validate_rejects_legacy_pipeline_filters_section() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("legacy_filters.toml");
-    std::fs::write(
-        &path,
-        "[sqllog]\ninputs = [\"sqllogs\"]\n\n[pipeline.filters]\nenable = true\n\n[exporter.csv]\nfile = \"out.csv\"\n",
-    )
-    .unwrap();
-    let cfg = dm_database_sqllog2db::config::Config::from_file(&path).unwrap();
-    let result = cfg.validate();
-    assert!(
-        result.is_err(),
-        "legacy [pipeline.filters] must be rejected by validate()"
-    );
-    let err_msg = result.unwrap_err().to_string();
-    assert!(
-        err_msg.contains("[pipeline.normalize] → [replace_parameters]"),
-        "error must contain migration hint for normalize; got: {err_msg}"
-    );
-    assert!(
-        err_msg.contains("[pipeline.filters.*] → [filter.*]"),
-        "error must contain migration hint for filters; got: {err_msg}"
-    );
-    assert!(
-        err_msg.contains("[pipeline.fields] → [output.fields]"),
-        "error must contain migration hint for fields; got: {err_msg}"
-    );
-}
-
 // ── E2E pipeline tests (TEST-02) ─────────────────────────────────────────────
 
 #[test]
@@ -636,7 +582,7 @@ fn test_e2e_filter_pipeline() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted).unwrap();
 
     // Assert: header + 10 条数据行 = 11 行
     let content = std::fs::read_to_string(&csv_file).unwrap();
@@ -673,7 +619,7 @@ fn test_e2e_filter_pipeline() {
         exclude: ExcludeFilters::default(),
         ..Default::default()
     });
-    handle_run(&cfg2, true, false, &Arc::new(AtomicBool::new(false)), None).unwrap();
+    handle_run(&cfg2, true, false, &Arc::new(AtomicBool::new(false))).unwrap();
     let content2 = std::fs::read_to_string(&csv_file2).unwrap();
     // OTHER 全被过滤，只有 header
     assert_eq!(
@@ -704,7 +650,7 @@ fn test_e2e_field_projection() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted).unwrap();
 
     // Assert: header 精确为 "ts,username,sql"（已验证字段投影正确）
     // 数据行只验证行数（不用 split(',').count()，SQL 含逗号时会误判）
@@ -738,7 +684,7 @@ fn test_boundary_empty_log_file() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted).unwrap();
 
     // Assert: CSV 文件存在且只有 header（1 行）
     assert!(
@@ -776,7 +722,7 @@ fn test_boundary_all_filtered() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted).unwrap();
 
     // Assert: CSV 只有 header（全部记录被过滤）
     let content = std::fs::read_to_string(&csv_file).unwrap();
@@ -814,7 +760,7 @@ fn test_boundary_malformed_line() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted).unwrap();
 
     // Assert: 无效行被跳过，4 条正常记录导出 → header + 4 data = 5 行
     let csv_content = std::fs::read_to_string(&csv_file).unwrap();
@@ -844,7 +790,7 @@ fn test_boundary_long_sql() {
 
     // Act: 不应 panic，不应 OOM
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted).unwrap();
 
     // Assert: 1 条记录正常导出 → header + 1 data = 2 行
     let csv_content = std::fs::read_to_string(&csv_file).unwrap();
@@ -1340,5 +1286,376 @@ fn test_cli_input_flag_with_glob_no_match_behavior() {
         "expected stdin fallback (exit 0) OR NoFilesFound+hint (non-zero); exit_code={:?}, stderr={}",
         output.status.code(),
         stderr
+    );
+}
+
+// ── stats subcommand tests ────────────────────────────────────────────────────
+
+/// Create a valid stats config file with a real input log file and logging output.
+///
+/// Creates `input.log` with one valid DML record so `run_stats` can complete successfully.
+fn make_stats_config_file(dir: &std::path::Path) -> std::path::PathBuf {
+    let cfg_path = dir.join("stats_cfg.toml");
+    let app_log_path = dir.join("test.log");
+    let input_log = dir.join("input.log");
+    // Write one valid DML record so stats can scan and produce output
+    std::fs::write(
+        &input_log,
+        "2025-01-15 10:30:28.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT id FROM t WHERE id=1. EXECTIME: 5(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.\n",
+    ).unwrap();
+    let content = format!(
+        "[sqllog]\ninputs = [\"{}\"]\n\
+         [exporter.csv]\nfile = \"{}\"\noverwrite = true\n\
+         [logging]\nfile = \"{}\"\nlevel = \"info\"\nretention_days = 7\n",
+        input_log.to_string_lossy().replace('\\', "/"),
+        dir.join("out.csv").to_string_lossy().replace('\\', "/"),
+        app_log_path.to_string_lossy().replace('\\', "/"),
+    );
+    std::fs::write(&cfg_path, content).unwrap();
+    cfg_path
+}
+
+/// S1: stats --help shows subcommand description and key arguments.
+#[test]
+fn test_cli_stats_help_shows_subcommand() {
+    use assert_cmd::Command;
+    use predicates::str::contains;
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .arg("stats")
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(contains("--config"))
+        .stdout(contains("--top"))
+        .stdout(contains("Number of top records"));
+}
+
+/// S2: stats with valid config exits successfully (exit code 0).
+#[test]
+fn test_cli_stats_with_valid_config_succeeds() {
+    use assert_cmd::Command;
+    let dir = tempfile::tempdir().unwrap();
+    let cfg_path = make_stats_config_file(dir.path());
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .arg("stats")
+        .arg("-c")
+        .arg(&cfg_path)
+        .assert()
+        .success();
+}
+
+/// S3: stats without --top uses default value of 20 (verified via log file).
+#[test]
+fn test_cli_stats_top_default_is_20() {
+    use assert_cmd::Command;
+    let dir = tempfile::tempdir().unwrap();
+    let cfg_path = make_stats_config_file(dir.path());
+    let log_path = dir.path().join("test.log");
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .arg("stats")
+        .arg("-c")
+        .arg(&cfg_path)
+        .assert()
+        .success();
+
+    let log_content = std::fs::read_to_string(&log_path)
+        .unwrap_or_else(|_| panic!("log file not found at {}", log_path.display()));
+    assert!(
+        log_content.contains("top=20"),
+        "log file should contain 'top=20', got:\n{log_content}"
+    );
+}
+
+/// S4: stats with --top 5 passes value 5 to `handle_stats` (verified via log file).
+#[test]
+fn test_cli_stats_top_explicit_value() {
+    use assert_cmd::Command;
+    let dir = tempfile::tempdir().unwrap();
+    let cfg_path = make_stats_config_file(dir.path());
+    let log_path = dir.path().join("test.log");
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .arg("stats")
+        .arg("-c")
+        .arg(&cfg_path)
+        .arg("--top")
+        .arg("5")
+        .assert()
+        .success();
+
+    let log_content = std::fs::read_to_string(&log_path)
+        .unwrap_or_else(|_| panic!("log file not found at {}", log_path.display()));
+    assert!(
+        log_content.contains("top=5"),
+        "log file should contain 'top=5', got:\n{log_content}"
+    );
+}
+
+/// S5: stats with --top 0 exits with non-zero and stderr contains error hint.
+#[test]
+fn test_cli_stats_top_zero_errors() {
+    use assert_cmd::Command;
+    use predicates::str::contains;
+    let dir = tempfile::tempdir().unwrap();
+    let cfg_path = make_stats_config_file(dir.path());
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .arg("stats")
+        .arg("-c")
+        .arg(&cfg_path)
+        .arg("--top")
+        .arg("0")
+        .assert()
+        .failure()
+        .stderr(contains("--top"))
+        .stderr(contains("is not in 1"));
+}
+
+/// S6: stats with non-existent config exits with non-zero (no fallback to default, D-05).
+#[test]
+fn test_cli_stats_config_not_found_errors() {
+    use assert_cmd::Command;
+
+    let output = Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .arg("stats")
+        .arg("-c")
+        .arg("/nonexistent/does/not/exist.toml")
+        .output()
+        .unwrap();
+
+    assert!(
+        !output.status.success(),
+        "stats with missing config should fail"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("not found") || stderr.contains("Configuration file not found"),
+        "stderr should mention config not found, got: {stderr}"
+    );
+}
+
+// ── Phase 52 stats output integration tests ──────────────────────────────────
+
+/// 写入 N 条 DML 记录到测试日志文件的辅助函数（含不同 SQL 模板）。
+fn write_stats_test_log(path: &std::path::Path, count: usize) {
+    use std::fmt::Write as _;
+    let mut buf = String::with_capacity(count * 200);
+    for idx in 0..count {
+        writeln!(
+            buf,
+            "2025-01-15 10:30:{:02}.001 (EP[0] sess:0x{idx:04x} user:U trxid:{idx} stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT * FROM table_{idx} WHERE id={idx}. EXECTIME: {exec}(ms) ROWCOUNT: 1(rows) EXEC_ID: {idx}.",
+            idx % 60,
+            exec = (idx * 11) % 500 + 1,
+        ).unwrap();
+    }
+    std::fs::write(path, buf).unwrap();
+}
+
+/// 创建仅含 CSV exporter 的统计配置文件。
+fn make_stats_csv_config(dir: &std::path::Path, log_path: &std::path::Path) -> std::path::PathBuf {
+    let cfg_path = dir.join("stats_csv.toml");
+    let csv_path = dir.join("out").join("data.csv");
+    let content = format!(
+        "[sqllog]\ninputs = [\"{}\"]\n[exporter.csv]\nfile = \"{}\"\noverwrite = true\n",
+        log_path.to_string_lossy().replace('\\', "/"),
+        csv_path.to_string_lossy().replace('\\', "/"),
+    );
+    std::fs::write(&cfg_path, content).unwrap();
+    cfg_path
+}
+
+/// 创建仅含 `SQLite` exporter 的统计配置文件。
+fn make_stats_sqlite_config(
+    dir: &std::path::Path,
+    log_path: &std::path::Path,
+) -> std::path::PathBuf {
+    let cfg_path = dir.join("stats_sqlite.toml");
+    let db_path = dir.join("out").join("stats.db");
+    let content = format!(
+        "[sqllog]\ninputs = [\"{}\"]\n[exporter.sqlite]\ndatabase_url = \"{}\"\n",
+        log_path.to_string_lossy().replace('\\', "/"),
+        db_path.to_string_lossy().replace('\\', "/"),
+    );
+    std::fs::write(&cfg_path, content).unwrap();
+    cfg_path
+}
+
+/// Phase 52 集成测试 1：stats 命令生成 `slow_sql.csv` 和 `frequent_sql.csv`。
+#[test]
+fn test_stats_csv_outputs_two_files() {
+    use assert_cmd::Command;
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_file = dir.path().join("test.log");
+    write_stats_test_log(&log_file, 3);
+    let cfg_path = make_stats_csv_config(dir.path(), &log_file);
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["stats", "-c"])
+        .arg(&cfg_path)
+        .args(["--top", "10"])
+        .assert()
+        .success();
+
+    let out_dir = dir.path().join("out");
+    assert!(
+        out_dir.join("slow_sql.csv").exists(),
+        "slow_sql.csv must exist"
+    );
+    assert!(
+        out_dir.join("frequent_sql.csv").exists(),
+        "frequent_sql.csv must exist"
+    );
+    // 验证表头
+    let slow = std::fs::read_to_string(out_dir.join("slow_sql.csv")).unwrap();
+    assert_eq!(
+        slow.lines().next().unwrap(),
+        "sql_text,elapsed_ms,timestamp"
+    );
+    let freq = std::fs::read_to_string(out_dir.join("frequent_sql.csv")).unwrap();
+    assert_eq!(
+        freq.lines().next().unwrap(),
+        "normalized_sql,call_count,avg_elapsed_ms,max_elapsed_ms"
+    );
+}
+
+/// Phase 52 集成测试 2：--top 5 严格限制输出行数不超过 5。
+#[test]
+fn test_stats_csv_top_5_limits_rows() {
+    use assert_cmd::Command;
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_file = dir.path().join("test.log");
+    write_stats_test_log(&log_file, 8);
+    let cfg_path = make_stats_csv_config(dir.path(), &log_file);
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["stats", "-c"])
+        .arg(&cfg_path)
+        .args(["--top", "5"])
+        .assert()
+        .success();
+
+    let out_dir = dir.path().join("out");
+    let slow = std::fs::read_to_string(out_dir.join("slow_sql.csv")).unwrap();
+    // 数据行 = total lines - 1 (header)
+    let slow_data = slow.lines().count() - 1;
+    assert!(
+        slow_data <= 5,
+        "slow_sql.csv data rows should be ≤ 5, got {slow_data}"
+    );
+
+    let freq = std::fs::read_to_string(out_dir.join("frequent_sql.csv")).unwrap();
+    let freq_data = freq.lines().count() - 1;
+    assert!(
+        freq_data <= 5,
+        "frequent_sql.csv data rows should be ≤ 5, got {freq_data}"
+    );
+}
+
+/// Phase 52 集成测试 3：`SQLite` 配置时生成 `slow_sql` 和 `frequent_sql` 两张表。
+#[test]
+fn test_stats_sqlite_outputs_two_tables() {
+    use assert_cmd::Command;
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_file = dir.path().join("test.log");
+    write_stats_test_log(&log_file, 3);
+    let cfg_path = make_stats_sqlite_config(dir.path(), &log_file);
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["stats", "-c"])
+        .arg(&cfg_path)
+        .args(["--top", "10"])
+        .assert()
+        .success();
+
+    let db_path = dir.path().join("out").join("stats.db");
+    let conn = rusqlite::Connection::open(&db_path).unwrap();
+    let slow_count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM slow_sql", [], |row| row.get(0))
+        .unwrap();
+    assert!(slow_count > 0, "slow_sql table should have rows");
+    let freq_count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM frequent_sql", [], |row| row.get(0))
+        .unwrap();
+    assert!(freq_count > 0, "frequent_sql table should have rows");
+}
+
+/// Phase 52 集成测试 4：同时配置 CSV 和 `SQLite` 时，只生成 CSV（CSV 优先）。
+#[test]
+fn test_stats_csv_preferred_over_sqlite_when_both_configured() {
+    use assert_cmd::Command;
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_file = dir.path().join("test.log");
+    write_stats_test_log(&log_file, 3);
+
+    let cfg_path = dir.path().join("both.toml");
+    let csv_path = dir.path().join("out").join("data.csv");
+    let db_path = dir.path().join("out").join("stats.db");
+    let content = format!(
+        "[sqllog]\ninputs = [\"{}\"]\n\
+         [exporter.csv]\nfile = \"{}\"\noverwrite = true\n\
+         [exporter.sqlite]\ndatabase_url = \"{}\"\n",
+        log_file.to_string_lossy().replace('\\', "/"),
+        csv_path.to_string_lossy().replace('\\', "/"),
+        db_path.to_string_lossy().replace('\\', "/"),
+    );
+    std::fs::write(&cfg_path, &content).unwrap();
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["stats", "-c"])
+        .arg(&cfg_path)
+        .args(["--top", "10"])
+        .assert()
+        .success();
+
+    let out_dir = dir.path().join("out");
+    assert!(
+        out_dir.join("slow_sql.csv").exists(),
+        "CSV should be generated when both exporters configured"
+    );
+    assert!(
+        !db_path.exists(),
+        "SQLite db should NOT be created when CSV takes priority"
+    );
+}
+
+/// Phase 52 集成测试 5：exectime = 0 的记录纳入 slow_sql.csv（D-12）。
+#[test]
+fn test_stats_zero_elapsed_records_included() {
+    use assert_cmd::Command;
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_file = dir.path().join("test.log");
+    // 写入 exectime = 0 的记录
+    std::fs::write(
+        &log_file,
+        "2025-01-15 10:30:28.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT zero FROM t. EXECTIME: 0(ms) ROWCOUNT: 0(rows) EXEC_ID: 0.\n",
+    ).unwrap();
+
+    let cfg_path = make_stats_csv_config(dir.path(), &log_file);
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["stats", "-c"])
+        .arg(&cfg_path)
+        .args(["--top", "10"])
+        .assert()
+        .success();
+
+    let out_dir = dir.path().join("out");
+    let slow = std::fs::read_to_string(out_dir.join("slow_sql.csv")).unwrap();
+    assert!(
+        slow.contains("SELECT zero FROM t"),
+        "zero-elapsed record should appear in slow_sql.csv, got:\n{slow}"
     );
 }

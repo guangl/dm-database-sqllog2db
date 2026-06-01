@@ -1,7 +1,7 @@
 use crate::error::{ErrorStats, Result};
 use crate::exporter::ExporterManager;
+use crate::pipeline::Pipeline;
 use crate::pipeline::normalizer::ParamBuffer;
-use crate::pipeline::{CompiledSqlFilters, Pipeline};
 use dm_database_parser_sqllog::LogParserBuilder;
 use indicatif::ProgressBar;
 use log::info;
@@ -27,7 +27,6 @@ pub(super) fn process_log_file(
     params_buffer: &mut ParamBuffer,
     ns_scratch: &mut Vec<u8>,
     reset_pb: bool,
-    sql_record_filter: Option<&CompiledSqlFilters>,
     pb: Option<&ProgressBar>,
 ) -> Result<(usize, ErrorStats)> {
     // 清除上一个文件留下的残余参数，同时复用已分配的 HashMap 容量。
@@ -77,62 +76,55 @@ pub(super) fn process_log_file(
                 let needs_processing = passes || (do_normalize && record.tag.is_none());
                 if needs_processing {
                     if passes {
-                        // SQL 记录级过滤：只对 DML 记录（有 tag）生效，PARAMS 记录始终通过。
-                        let sql_filter_pass = sql_record_filter
-                            .is_none_or(|f| record.tag.is_none() || f.matches(&record.sql));
-                        if sql_filter_pass {
-                            // 快速路径：params_buffer 为空且当前是 DML 记录（有 tag），
-                            // 则不可能存在待替换参数，完全跳过 compute_normalized。
-                            let ns = if do_normalize
-                                && (!params_buffer.is_empty() || record.tag.is_none())
-                            {
-                                crate::pipeline::compute_normalized(
-                                    &record,
-                                    &record.sql,
-                                    params_buffer,
-                                    placeholder_override,
-                                    ns_scratch,
-                                )
-                            } else {
-                                None
-                            };
+                        // 快速路径：params_buffer 为空且当前是 DML 记录（有 tag），
+                        // 则不可能存在待替换参数，完全跳过 compute_normalized。
+                        let ns = if do_normalize
+                            && (!params_buffer.is_empty() || record.tag.is_none())
+                        {
+                            crate::pipeline::compute_normalized(
+                                &record,
+                                &record.sql,
+                                params_buffer,
+                                placeholder_override,
+                                ns_scratch,
+                            )
+                        } else {
+                            None
+                        };
 
-                            // 先检查配额，再聚合（CR-02：避免对未导出记录计入统计）
-                            if let Some(remaining) = remaining {
-                                if records_in_file >= remaining {
-                                    break 'outer;
-                                }
+                        // 先检查配额，再聚合（CR-02：避免对未导出记录计入统计）
+                        if let Some(remaining) = remaining {
+                            if records_in_file >= remaining {
+                                break 'outer;
                             }
+                        }
 
-                            let export_result =
-                                exporter_manager.export_one_preparsed(&record, include_pm, ns);
-                            match export_result {
-                                Ok(()) => {
-                                    records_in_file += 1;
-                                }
-                                Err(ref e) if e.is_fatal() => {
-                                    file_stats.set_fatal(e.to_string());
-                                    eprintln!("[{}] {file_path}: {e}", e.severity());
-                                    log::warn!(
-                                        "{file_path} | fatal export error: {export_result:?}"
-                                    );
-                                    break 'outer;
-                                }
-                                Err(ref e) => {
-                                    file_stats.add_export_error();
-                                    eprintln!("[{}] {file_path}: {e}", e.severity());
-                                    log::warn!("{file_path} | export error: {export_result:?}");
-                                }
+                        let export_result =
+                            exporter_manager.export_one_preparsed(&record, include_pm, ns);
+                        match export_result {
+                            Ok(()) => {
+                                records_in_file += 1;
                             }
+                            Err(ref e) if e.is_fatal() => {
+                                file_stats.set_fatal(e.to_string());
+                                eprintln!("[{}] {file_path}: {e}", e.severity());
+                                log::warn!("{file_path} | fatal export error: {export_result:?}");
+                                break 'outer;
+                            }
+                            Err(ref e) => {
+                                file_stats.add_export_error();
+                                eprintln!("[{}] {file_path}: {e}", e.severity());
+                                log::warn!("{file_path} | export error: {export_result:?}");
+                            }
+                        }
 
-                            // 每 1024 条更新进度并检查中断信号
-                            if records_in_file.trailing_zeros() >= 10 {
-                                if let Some(pb) = pb {
-                                    pb.inc(1024);
-                                }
-                                if interrupted.load(Ordering::Relaxed) {
-                                    break 'outer;
-                                }
+                        // 每 1024 条更新进度并检查中断信号
+                        if records_in_file.trailing_zeros() >= 10 {
+                            if let Some(pb) = pb {
+                                pb.inc(1024);
+                            }
+                            if interrupted.load(Ordering::Relaxed) {
+                                break 'outer;
                             }
                         }
                     } else {

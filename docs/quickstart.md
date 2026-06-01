@@ -58,7 +58,7 @@ Config written to config.toml
 
 ```toml
 [sqllog]
-path = "sqllogs"
+inputs = ["sqllogs"]
 
 [exporter.csv]
 file = "output/sqllog.csv"
@@ -71,11 +71,7 @@ overwrite = true
 sqllog2db validate -c config.toml
 ```
 
-预期输出：
-
-```
-Config validation passed
-```
+通过时静默退出（无输出，exit 0）；失败时输出 `[FAIL] <字段>: <原因>` 并以非零码退出。
 
 **步骤 4：运行导出**
 
@@ -114,7 +110,7 @@ head -5 output/sqllog.csv
 
 ```toml
 [sqllog]
-path = "sqllogs"
+inputs = ["sqllogs"]
 
 [exporter.sqlite]
 file = "output/sqllog.db"
@@ -166,7 +162,7 @@ SYSDBA|5234
 
 ```toml
 [sqllog]
-path = "sqllogs"
+inputs = ["sqllogs"]
 
 [filter]
 enable = true
@@ -215,35 +211,69 @@ csvstat output/filtered.csv
 
 ---
 
-## 场景四：并行处理多文件
+## 场景四：SQL 统计分析
 
-当数据目录包含多个日志文件时，启用并行 CSV 导出以充分利用多核 CPU。
+使用 `stats` 子命令对 SQL 日志进行统计分析，生成慢 SQL 报告和高频 SQL 报告。
 
-**步骤 1：配置并行导出**
+**步骤 1：配置输入和输出目录**
 
-编辑 `config.toml`：
+编辑 `config.toml`（复用 `run` 命令的配置格式）：
 
 ```toml
 [sqllog]
-path = "sqllogs"
+inputs = ["sqllogs"]
 
 [exporter.csv]
 file = "output/sqllog.csv"
 overwrite = true
-
-[parallel]
-jobs = 4
 ```
 
-**步骤 2：运行并行导出**
+**步骤 2：运行统计分析**
 
 ```bash
-sqllog2db run -c config.toml
+sqllog2db stats -c config.toml
 ```
 
-每个文件在独立的 rayon 线程中处理，输出临时 CSV，最后按文件顺序拼接为最终 CSV 文件。
+默认输出 Top 20 条，可用 `--top` 调整：
 
-**注意：** 并行模式仅在 CSV 导出 + 多文件 + `jobs > 1` 且无限流（无 `--limit`）时生效。SQLite 导出使用单线程流式处理。
+```bash
+sqllog2db stats -c config.toml --top 10
+```
+
+**步骤 3：查看输出**
+
+CSV 模式在 `[exporter.csv].file` 的同级目录（本例为 `output/`）生成：
+
+```
+output/slow_sql.csv       — Top N 最慢 SQL（字段：sql_text, elapsed_ms, timestamp）
+output/frequent_sql.csv   — Top N 高频 SQL（字段：normalized_sql, call_count, avg_elapsed_ms, max_elapsed_ms）
+```
+
+示例查看：
+
+```bash
+head -5 output/slow_sql.csv
+head -5 output/frequent_sql.csv
+```
+
+**使用 SQLite 输出：**
+
+```toml
+[sqllog]
+inputs = ["sqllogs"]
+
+[exporter.sqlite]
+database_url = "output/sqllog2db.db"
+table_name = "sqllog_records"
+overwrite = true
+```
+
+SQLite 模式在同一数据库中写入 `slow_sql` 和 `frequent_sql` 表，可直接用 SQL 查询：
+
+```bash
+sqlite3 output/sqllog2db.db "SELECT * FROM slow_sql LIMIT 5;"
+sqlite3 output/sqllog2db.db "SELECT * FROM frequent_sql ORDER BY call_count DESC LIMIT 5;"
+```
 
 ---
 

@@ -10,18 +10,17 @@
 
 ```toml
 [sqllog]
-# 达梦 SQL 日志文件路径。可以是单个文件或目录。
-path = "sqllogs"
-# 可选的文件匹配 glob 模式（如 "*.log"）
-# pattern = "*.log"
+# 输入列表：目录、单文件或 glob 模式均可，支持多条目
+inputs = ["sqllogs"]
+# 多条目示例：
+# inputs = ["sqllogs/2025-01/*.log", "sqllogs/2025-02/*.log"]
 ```
 
 | 字段 | 类型 | 默认值 | 描述 |
 |------|------|--------|------|
-| `path` | String | *（必填）* | 日志文件路径或包含 `.log` 文件的目录 |
-| `pattern` | String | `null` | 当 `path` 为目录时用于筛选文件的 glob 模式 |
+| `inputs` | [String] | *（必填）* | 输入路径数组，支持目录、单文件或 glob 模式（如 `./logs/2025-*.log`） |
 
-**说明：** 自动化脚本中建议使用绝对路径。相对路径从当前工作目录解析。目录扫描是递归的，默认查找所有 `.log` 文件。
+**说明：** 自动化脚本中建议使用绝对路径。相对路径从当前工作目录解析。目录条目递归查找 `.log` 文件，结果按路径排序保证确定性顺序。旧版 `path = "..."` 字段已在 v1.12 移除，请迁移为 `inputs = ["..."]`。
 
 ---
 
@@ -155,13 +154,19 @@ overwrite = true
 
 ### 命令行子命令
 
-sqllog2db 提供三个子命令：
+sqllog2db 提供四个子命令：
 
-**`sqllog2db init`** — 生成默认配置文件。支持 `-o` 指定输出路径、`-f` 强制覆盖。
+**`sqllog2db init`** — 生成默认配置文件。支持 `-o` 指定输出路径、`--force` 强制覆盖。
 
-**`sqllog2db validate`** — 校验配置文件。`-c` 指定配置文件路径，一次性报告所有校验错误。
+**`sqllog2db validate`** — 校验配置文件。`-c` 指定配置文件路径，通过时静默退出（exit 0），失败时输出 `[FAIL] <字段>: <原因>` 并以非零码退出。
 
-**`sqllog2db run`** — 执行日志导出。`-c` 指定配置文件路径，`-q` 静默模式。
+**`sqllog2db run`** — 执行日志导出。`-c` 指定配置文件路径，`-v` 详细模式，`-q` 静默模式。
+
+**`sqllog2db stats`** — 统计分析。流式扫描日志文件，聚合慢 SQL 和高频 SQL。
+- `-c` 指定配置文件路径（复用 `[sqllog]` 输入配置和 `[exporter]` 输出目录）
+- `--top N`（默认 20）：每张表输出 Top N 条记录
+- CSV 模式：在 `[exporter.csv].file` 同级目录输出 `slow_sql.csv` 和 `frequent_sql.csv`
+- SQLite 模式：在配置的数据库中写入 `slow_sql` 和 `frequent_sql` 表
 
 示例见[快速入门指南](quickstart.md)。
 

@@ -85,27 +85,29 @@ enable = true
 enable = false
 
 # --- Include filters (record-level, AND semantics: every configured field must match) ---
+# Metadata fields use exact string matching.
 [filter.include]
 # users = ["SYSDBA"]
-# ips = ["127.0.0.1", "192\\.168"]
+# ips = ["127.0.0.1", "192.168.1.100"]
 # sessions = ["0x7f41435437a8"]
 # threads = ["2188515"]
 # statements = ["INS", "UPD", "DEL"]
 # apps = ["DMSQL"]
-# tags = ["\\[SEL\\]"]
+# tags = ["[SEL]"]
 # start_ts = "2023-01-01 00:00:00"
 # end_ts   = "2023-01-01 23:59:59"
 # trxids = ["257809109", "257809110"]
 
 # --- Exclude filters (record-level, OR-veto: any match drops the record) ---
+# Metadata fields use exact string matching.
 [filter.exclude]
-# users = ["guest", "^anon"]
-# ips = ["^10\\.0", "^172\\.16"]
-# sessions = ["^0x0000"]
-# threads = ["^0$"]
+# users = ["guest", "anon"]
+# ips = ["10.0.0.1", "172.16.0.1"]
+# sessions = ["0x0000000000000000"]
+# threads = ["0"]
 # statements = ["SEL", "SET"]
 # apps = ["monitor", "health"]
-# tags = ["\\[SET\\]", "\\[OTH\\]"]
+# tags = ["[SET]", "[OTH]"]
 
 # --- Indicator filters (transaction-level: match retains the whole transaction; requires pre-scan) ---
 [filter.indicators]

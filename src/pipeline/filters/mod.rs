@@ -1,11 +1,7 @@
-mod compiled;
 mod serde_helpers;
 pub mod types;
 
-use serde_helpers::TrxidSet;
-
-// 仅在 crate 内部使用（validate_and_compile 返回类型），integration tests 不直接引用。
-pub(crate) use compiled::{CompiledMetaFilters, CompiledSqlFilters};
+pub(crate) use serde_helpers::TrxidSet;
 
 #[cfg(test)]
 use types::{ExcludeFilters, IncludeFilters};
@@ -15,10 +11,9 @@ pub use types::{IndicatorFilters, SqlFilters};
 
 // FiltersFeature: pub because integration tests directly construct it and access cfg.filter
 pub use types::FiltersFeature;
-pub(crate) use types::RecordMeta;
 
+#[cfg(test)]
 impl FiltersFeature {
-    /// 检查是否配置了任何过滤器
     #[must_use]
     pub fn has_filters(&self) -> bool {
         if !self.enable {
@@ -28,9 +23,10 @@ impl FiltersFeature {
             || self.exclude.has_filters()
             || self.indicators.has_filters()
             || self.sql.has_filters()
-            || self.record_sql.has_filters()
     }
+}
 
+impl FiltersFeature {
     /// 检查是否提供了需要预扫描的过滤器 (Transaction-level)
     #[must_use]
     pub(crate) fn has_transaction_filters(&self) -> bool {
@@ -55,18 +51,18 @@ impl FiltersFeature {
 
 impl IndicatorFilters {
     #[must_use]
-    pub fn has_filters(&self) -> bool {
+    pub(crate) fn has_filters(&self) -> bool {
         self.exec_ids.as_ref().is_some_and(|v| !v.is_empty())
             || self.min_runtime_ms.is_some()
             || self.min_row_count.is_some()
     }
 
+    #[cfg(test)]
     #[must_use]
     pub fn matches(&self, exec_id: i64, runtime_ms: f32, row_count: u32) -> bool {
         if !self.has_filters() {
             return false;
         }
-
         if let Some(ids) = &self.exec_ids {
             if ids.contains(&exec_id) {
                 return true;
@@ -88,40 +84,9 @@ impl IndicatorFilters {
 
 impl SqlFilters {
     #[must_use]
-    pub fn has_filters(&self) -> bool {
+    pub(crate) fn has_filters(&self) -> bool {
         self.includes.as_ref().is_some_and(|v| !v.is_empty())
             || self.excludes.as_ref().is_some_and(|v| !v.is_empty())
-    }
-
-    #[must_use]
-    pub fn matches(&self, sql: &str) -> bool {
-        if !self.has_filters() {
-            return false;
-        }
-
-        // 如果指定了包含模式，必须命中其中之一
-        let include_match = if let Some(patterns) = &self.includes {
-            if patterns.is_empty() {
-                true
-            } else {
-                patterns.iter().any(|p| sql.contains(p.as_str()))
-            }
-        } else {
-            true
-        };
-
-        if !include_match {
-            return false;
-        }
-
-        // 如果指定了排除模式，不能命中任何一个
-        if let Some(patterns) = &self.excludes {
-            if patterns.iter().any(|p| sql.contains(p.as_str())) {
-                return false;
-            }
-        }
-
-        true
     }
 }
 
@@ -136,7 +101,6 @@ mod tests {
             exclude: ExcludeFilters::default(),
             indicators: IndicatorFilters::default(),
             sql: SqlFilters::default(),
-            record_sql: SqlFilters::default(),
         }
     }
 

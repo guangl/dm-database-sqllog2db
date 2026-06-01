@@ -1,7 +1,7 @@
 use crate::error::{Error, ErrorStats, Result};
 use crate::exporter::ExporterManager;
 use crate::pipeline::normalizer::ParamBuffer;
-use crate::pipeline::{CompiledSqlFilters, FieldMask, Pipeline};
+use crate::pipeline::{FieldMask, Pipeline};
 use dm_database_parser_sqllog::{LogParserBuilder, Sqllog};
 use rayon::prelude::*;
 use std::path::{Path, PathBuf};
@@ -19,7 +19,6 @@ fn collect_log_file(
     pipeline: &Pipeline,
     do_normalize: bool,
     placeholder_override: Option<bool>,
-    sql_record_filter: Option<&CompiledSqlFilters>,
     interrupted: &Arc<AtomicBool>,
 ) -> Result<(Vec<(Sqllog, Option<String>)>, usize)> {
     let file_str = file.to_string_lossy();
@@ -55,7 +54,6 @@ fn collect_log_file(
             pipeline,
             do_normalize,
             placeholder_override,
-            sql_record_filter,
             &mut params_buf,
             &mut ns_scratch,
             &mut rows,
@@ -64,13 +62,11 @@ fn collect_log_file(
     Ok((rows, parse_errors))
 }
 
-#[allow(clippy::too_many_arguments)]
 fn process_record(
     record: Sqllog,
     pipeline: &Pipeline,
     do_normalize: bool,
     placeholder_override: Option<bool>,
-    sql_record_filter: Option<&CompiledSqlFilters>,
     params_buf: &mut ParamBuffer,
     ns_scratch: &mut Vec<u8>,
     rows: &mut Vec<(Sqllog, Option<String>)>,
@@ -81,23 +77,19 @@ fn process_record(
         return;
     }
     if passes {
-        let sql_filter_pass =
-            sql_record_filter.is_none_or(|f| record.tag.is_none() || f.matches(&record.sql));
-        if sql_filter_pass {
-            let normalized = if do_normalize && (!params_buf.is_empty() || record.tag.is_none()) {
-                crate::pipeline::compute_normalized(
-                    &record,
-                    &record.sql,
-                    params_buf,
-                    placeholder_override,
-                    ns_scratch,
-                )
-                .map(str::to_owned)
-            } else {
-                None
-            };
-            rows.push((record, normalized));
-        }
+        let normalized = if do_normalize && (!params_buf.is_empty() || record.tag.is_none()) {
+            crate::pipeline::compute_normalized(
+                &record,
+                &record.sql,
+                params_buf,
+                placeholder_override,
+                ns_scratch,
+            )
+            .map(str::to_owned)
+        } else {
+            None
+        };
+        rows.push((record, normalized));
     } else {
         // 被过滤掉的 PARAMS 记录仍需更新 params_buf（do_normalize && record.tag.is_none()）
         crate::pipeline::compute_normalized(
@@ -119,7 +111,6 @@ fn parallel_collect(
     jobs: usize,
     do_normalize: bool,
     placeholder_override: Option<bool>,
-    sql_record_filter: Option<&CompiledSqlFilters>,
     interrupted: &Arc<AtomicBool>,
 ) -> Result<(Vec<(PathBuf, Vec<(Sqllog, Option<String>)>)>, usize, usize)> {
     let pool = rayon::ThreadPoolBuilder::new()
@@ -140,7 +131,6 @@ fn parallel_collect(
                         pipeline,
                         do_normalize,
                         placeholder_override,
-                        sql_record_filter,
                         interrupted,
                     )?;
                     Ok(Some((file.clone(), rows, parse_errors)))
@@ -196,7 +186,6 @@ pub(super) fn process_sqlite_parallel(
     placeholder_override: Option<bool>,
     _field_mask: FieldMask,
     _ordered_indices: &[usize],
-    sql_record_filter: Option<&CompiledSqlFilters>,
 ) -> Result<(Vec<(PathBuf, usize)>, usize, ErrorStats)> {
     let (collected, skipped, total_parse_errors) = parallel_collect(
         log_files,
@@ -204,7 +193,6 @@ pub(super) fn process_sqlite_parallel(
         jobs,
         do_normalize,
         placeholder_override,
-        sql_record_filter,
         interrupted,
     )?;
 

@@ -188,19 +188,9 @@ fn bench_filters(c: &mut Criterion) {
 
     for (name, cfg) in scenarios {
         group.bench_with_input(BenchmarkId::from_parameter(name), cfg, |b, cfg| {
-            b.iter_with_setup(
-                || cfg.validate_and_compile().unwrap(),
-                |compiled_filters| {
-                    handle_run(
-                        cfg,
-                        true,
-                        false,
-                        &Arc::new(AtomicBool::new(false)),
-                        compiled_filters,
-                    )
-                    .unwrap();
-                },
-            );
+            b.iter(|| {
+                handle_run(cfg, true, false, &Arc::new(AtomicBool::new(false))).unwrap();
+            });
         });
     }
 

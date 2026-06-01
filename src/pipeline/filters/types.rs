@@ -2,19 +2,6 @@ use serde::{Deserialize, Deserializer};
 
 use super::serde_helpers::{TrxidSet, vec_to_hashset, vec_to_i64_hashset};
 
-/// 记录的元数据字段，传递给过滤器评估
-#[derive(Debug)]
-pub(crate) struct RecordMeta<'a> {
-    pub(crate) trxid: &'a str,
-    pub(crate) ip: &'a str,
-    pub(crate) sess: &'a str,
-    pub(crate) thrd: &'a str,
-    pub(crate) user: &'a str,
-    pub(crate) stmt: &'a str,
-    pub(crate) app: &'a str,
-    pub(crate) tag: Option<&'a str>,
-}
-
 /// 包含过滤器 (include 子表字段)
 #[derive(Debug, Deserialize, Clone, Default)]
 pub struct IncludeFilters {
@@ -102,8 +89,6 @@ pub struct FiltersFeature {
     pub indicators: IndicatorFilters,
     /// SQL 内容过滤器 (事务级: 预扫描阶段匹配 SQL，保留整笔事务)
     pub sql: SqlFilters,
-    /// SQL 记录级过滤器 (记录级: 在主扫描阶段对每条 DML 记录的 SQL 独立判断)
-    pub record_sql: SqlFilters,
 }
 
 /// 中间反序列化结构体（私有），同时接受新格式子表和旧格式扁平字段
@@ -120,8 +105,6 @@ struct RawFiltersFeature {
     indicators: IndicatorFilters,
     #[serde(default)]
     sql: SqlFilters,
-    #[serde(default)]
-    record_sql: SqlFilters,
     // 旧格式扁平字段（向后兼容）— include 类
     #[serde(default)]
     usernames: Option<Vec<String>>,
@@ -233,7 +216,6 @@ impl From<RawFiltersFeature> for FiltersFeature {
             exclude,
             indicators: raw.indicators,
             sql: raw.sql,
-            record_sql: raw.record_sql,
         }
     }
 }
@@ -249,22 +231,14 @@ pub struct IndicatorFilters {
     pub min_row_count: Option<u32>,
 }
 
-/// SQL 过滤器（仅用于事务级预扫描阶段的 `sql` 字段）。
+/// SQL 过滤器（事务级预扫描阶段）。
 ///
-/// **注意：这里的 `includes` / `excludes` 使用字面量子串匹配（`str::contains`），
-/// 不支持正则表达式。** 请勿在配置中填写正则语法
-/// （如 `^SELECT`、`\bDROP\b`），否则会被当作字面字符串查找，导致静默的语义错误。
-///
-/// 如需正则匹配，请使用记录级过滤器 `record_sql`，它由 `CompiledSqlFilters` 处理，支持正则。
+/// `includes` / `excludes` 使用字面量子串匹配（`str::contains`），不支持正则表达式。
 #[derive(Debug, Deserialize, Clone, Default)]
 pub struct SqlFilters {
-    /// 字面子串包含列表：SQL 必须包含其中之一才会被选中（未配置 = 全部通过）。
-    /// 仅支持字面字符串，不支持正则表达式。
     /// 旧字段名 `include_patterns` 通过 alias 向后兼容。
     #[serde(default, alias = "include_patterns")]
     pub includes: Option<Vec<String>>,
-    /// 字面子串排除列表：SQL 包含其中任意一个则被过滤掉。
-    /// 仅支持字面字符串，不支持正则表达式。
     /// 旧字段名 `exclude_patterns` 通过 alias 向后兼容。
     #[serde(default, alias = "exclude_patterns")]
     pub excludes: Option<Vec<String>>,

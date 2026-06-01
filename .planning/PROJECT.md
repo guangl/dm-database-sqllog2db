@@ -8,7 +8,20 @@
 
 用户能够精确指定"导出哪些记录的哪些字段"——过滤逻辑清晰可配置，输出结果完全可控。
 
-## Latest: v1.12 已交付
+## Latest: v1.13 已交付
+
+**Shipped:** 2026-06-01  
+**Version:** v1.13 SQL 统计分析（Phases 50–52）
+
+**已交付功能：**
+- SQL 标准化引擎：将字面量替换为 `?` 占位符，参数不同但模板相同的 SQL 归并为同一组
+- `stats` 子命令：`sqllog2db stats -c config.toml [--top N]`
+- 慢 SQL TOP-N：按 elapsed 降序，输出 SQL文本 + elapsed + 时间戳
+- 高频 SQL TOP-N：标准化分组，输出标准化SQL + 调用次数 + avg/max elapsed
+- 复用现有 CSV/SQLite exporter，`--top` 默认 20
+
+## Previous: v1.12 已交付
+
 
 **Shipped:** 2026-06-01  
 **Version:** v1.12 CLI 体验全面提升（Phases 46–49）
@@ -42,9 +55,12 @@
 - ✓ `--verbose` 逐文件输出 + `--quiet` 完全抑制，摘要差异化 — v1.12
 - ✓ `inputs: Vec<String>` 替代 `path: String`，config 和 CLI 均支持 glob 展开 — v1.12
 
-### Active
+### Validated
 
-（待下一里程碑定义）
+- [x] `stats` 子命令（慢 SQL TOP + 高频 SQL TOP）— v1.13 (Validated in Phase 50-52)
+- [x] SQL 标准化（参数替换为占位符）— v1.13 (Validated in Phase 50)
+- [x] `--top N` 参数（默认 20）— v1.13 (Validated in Phase 51)
+- [x] 输出格式复用 config.toml exporter — v1.13 (Validated in Phase 52)
 
 ### Out of Scope
 
@@ -102,4 +118,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-01 after v1.12 milestone*
+*Last updated: 2026-06-01 — v1.13 milestone Phase 50-52 complete*

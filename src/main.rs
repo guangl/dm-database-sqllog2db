@@ -6,6 +6,7 @@ mod logging;
 mod parser;
 mod pipeline;
 mod preflight;
+mod stats;
 
 use config::Config;
 use error::{Error, ErrorStats, Result};
@@ -127,7 +128,10 @@ fn run() -> Result<Option<(ErrorStats, bool)>> {
     let matches = cmd.get_matches();
     let cli = cli::opts::Cli::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
 
-    let needs_simple_logging = !matches!(&cli.command, Some(cli::opts::Commands::Run { .. }));
+    let needs_simple_logging = !matches!(
+        &cli.command,
+        Some(cli::opts::Commands::Run { .. } | cli::opts::Commands::Stats { .. })
+    );
     if needs_simple_logging {
         init_simple_logging(cli.quiet);
     }
@@ -140,7 +144,7 @@ fn run() -> Result<Option<(ErrorStats, bool)>> {
         Some(cli::opts::Commands::Run { config, input }) => {
             let mut cfg = load_config(config)?;
             apply_cli_inputs_to_config(&mut cfg, input.clone());
-            let compiled_filters = cfg.validate_and_compile()?;
+            cfg.validate()?;
 
             apply_verbosity_to_config(&mut cfg, cli.verbose, cli.quiet);
             logging::init_logging(&cfg.logging, false)?;
@@ -159,8 +163,7 @@ fn run() -> Result<Option<(ErrorStats, bool)>> {
             })
             .ok();
 
-            let stats =
-                cli::run::handle_run(&cfg, cli.quiet, cli.verbose, &interrupted, compiled_filters)?;
+            let stats = cli::run::handle_run(&cfg, cli.quiet, cli.verbose, &interrupted)?;
             Ok(Some((stats, cli.quiet)))
         }
         Some(cli::opts::Commands::Validate { config }) => {
@@ -170,6 +173,14 @@ fn run() -> Result<Option<(ErrorStats, bool)>> {
                 std::process::exit(EXIT_FATAL);
             }
             cli::validate::handle_validate(&cfg);
+            Ok(None)
+        }
+        Some(cli::opts::Commands::Stats { config, top }) => {
+            let mut cfg = Config::from_file(Path::new(config))?;
+            cfg.validate()?;
+            apply_verbosity_to_config(&mut cfg, cli.verbose, cli.quiet);
+            logging::init_logging(&cfg.logging, false)?;
+            cli::stats::handle_stats(&cfg, *top)?;
             Ok(None)
         }
         None => {
