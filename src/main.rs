@@ -6,6 +6,7 @@ mod logging;
 mod parser;
 mod pipeline;
 mod preflight;
+mod stats;
 
 use config::Config;
 use error::{Error, ErrorStats, Result};
