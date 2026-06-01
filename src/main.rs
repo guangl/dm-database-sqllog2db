@@ -178,6 +178,7 @@ fn run() -> Result<Option<(ErrorStats, bool)>> {
         }
         Some(cli::opts::Commands::Stats { config, top }) => {
             let mut cfg = Config::from_file(Path::new(config))?;
+            cfg.validate()?;
             apply_verbosity_to_config(&mut cfg, cli.verbose, cli.quiet);
             logging::init_logging(&cfg.logging, false)?;
             cli::stats::handle_stats(&cfg, *top)?;
