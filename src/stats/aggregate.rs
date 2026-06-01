@@ -135,7 +135,7 @@ fn build_slow_rows(heap: BinaryHeap<Reverse<SlowSqlEntry>>) -> Vec<SlowSqlRow> {
             timestamp: entry.timestamp,
         })
         .collect();
-    rows.sort_by(|left, right| right.elapsed_ms.cmp(&left.elapsed_ms));
+    rows.sort_by_key(|row| std::cmp::Reverse(row.elapsed_ms));
     rows
 }
 
@@ -162,7 +162,7 @@ fn build_freq_rows(freq_map: HashMap<String, AggState>, top_n: usize) -> Vec<Fre
             }
         })
         .collect();
-    rows.sort_by(|left, right| right.call_count.cmp(&left.call_count));
+    rows.sort_by_key(|row| std::cmp::Reverse(row.call_count));
     rows.truncate(top_n);
     rows
 }
