@@ -53,12 +53,12 @@
 - ✓ `--verbose` 逐文件输出 + `--quiet` 完全抑制，摘要差异化 — v1.12
 - ✓ `inputs: Vec<String>` 替代 `path: String`，config 和 CLI 均支持 glob 展开 — v1.12
 
-### Active
+### Validated
 
-- [ ] `stats` 子命令（慢 SQL TOP + 高频 SQL TOP）— v1.13
-- [ ] SQL 标准化（参数替换为占位符）— v1.13
-- [ ] `--top N` 参数（默认 20）— v1.13
-- [ ] 输出格式复用 config.toml exporter — v1.13
+- [x] `stats` 子命令（慢 SQL TOP + 高频 SQL TOP）— v1.13 (Validated in Phase 50-52)
+- [x] SQL 标准化（参数替换为占位符）— v1.13 (Validated in Phase 50)
+- [x] `--top N` 参数（默认 20）— v1.13 (Validated in Phase 51)
+- [x] 输出格式复用 config.toml exporter — v1.13 (Validated in Phase 52)
 
 ### Out of Scope
 
@@ -116,4 +116,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-01 after v1.12 milestone*
+*Last updated: 2026-06-01 — v1.13 milestone Phase 50-52 complete*
