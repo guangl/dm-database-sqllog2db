@@ -8,6 +8,17 @@
 
 用户能够精确指定"导出哪些记录的哪些字段"——过滤逻辑清晰可配置，输出结果完全可控。
 
+## Current Milestone: v1.13 SQL 统计分析
+
+**Goal:** 新增 `stats` 子命令，对 SQL 日志进行慢查询和高频调用的 TOP-N 统计分析
+
+**Target features:**
+- `stats` 子命令 — `sqllog2db stats -c config.toml [--top N]`
+- 慢 SQL TOP — 按 elapsed 降序，输出：SQL文本 + elapsed + 时间戳
+- 高频 SQL TOP — SQL 标准化分组，输出：标准化SQL + 调用次数 + avg/max elapsed
+- `--top N` 参数 — 控制两张表各展示多少条（默认 20）
+- 输出格式与 config.toml 一致 — 复用现有 CSV/SQLite exporter
+
 ## Latest: v1.12 已交付
 
 **Shipped:** 2026-06-01  
@@ -44,7 +55,10 @@
 
 ### Active
 
-（待下一里程碑定义）
+- [ ] `stats` 子命令（慢 SQL TOP + 高频 SQL TOP）— v1.13
+- [ ] SQL 标准化（参数替换为占位符）— v1.13
+- [ ] `--top N` 参数（默认 20）— v1.13
+- [ ] 输出格式复用 config.toml exporter — v1.13
 
 ### Out of Scope
 

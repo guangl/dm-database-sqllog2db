@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.12
-milestone_name: CLI 体验全面提升
-status: milestone_archived
-last_updated: 2026-06-01
-last_activity: 2026-06-01 — v1.12 milestone archived
+milestone: v1.13
+milestone_name: SQL 统计分析
+status: planning
+last_updated: "2026-06-01T01:43:58.977Z"
+last_activity: 2026-06-01
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 8
-  completed_plans: 8
-  percent: 100
-stopped_at: Milestone complete and archived
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -45,3 +44,10 @@ See `.planning/PROJECT.md` Key Decisions table (updated 2026-06-01)
 ### Blockers
 
 None
+
+## Current Position
+
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-06-01 — Milestone v1.13 started
