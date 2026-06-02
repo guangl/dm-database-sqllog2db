@@ -34,8 +34,10 @@ pub fn validate_stats_time_range(stats: &StatsConfig) -> crate::error::Result<()
         })?;
     }
     if let (Some(from), Some(to)) = (&stats.from, &stats.to) {
-        // YYYY-MM-DD 字典序 == 日期序，字符串比较合法（D-01）
-        if from.as_str() > to.as_str() {
+        // Compare only the common prefix so "2024-01-15 00:00:00" and "2024-01-15"
+        // are treated as equal at the day boundary (matches aggregate.rs prefix logic).
+        let cmp_len = from.len().min(to.len());
+        if from.as_bytes()[..cmp_len] > to.as_bytes()[..cmp_len] {
             return Err(Error::Config(ConfigError::InvalidValue {
                 field: "stats.from".to_string(),
                 value: from.clone(),
@@ -99,7 +101,15 @@ fn check_date_part(bytes: &[u8]) -> bool {
     }
     let month = (bytes[5] - b'0') * 10 + (bytes[6] - b'0');
     let day = (bytes[8] - b'0') * 10 + (bytes[9] - b'0');
-    (1..=12).contains(&month) && (1..=31).contains(&day)
+    if !(1..=12).contains(&month) {
+        return false;
+    }
+    let max_day: u8 = match month {
+        2 => 29,
+        4 | 6 | 9 | 11 => 30,
+        _ => 31,
+    };
+    (1..=max_day).contains(&day)
 }
 
 /// 检查 bytes[10..19] 是否符合 ` HH:MM:SS` 格式（位置 + 数字 + 时/分/秒范围校验）。
@@ -328,5 +338,33 @@ mod tests {
             validate_stats_time_range(&cfg).is_ok(),
             "from < to should be accepted"
         );
+    }
+
+    #[test]
+    fn test_validate_stats_time_range_accepts_datetime_from_with_date_to() {
+        let cfg = StatsConfig {
+            from: Some("2024-01-15 00:00:00".to_string()),
+            to: Some("2024-01-15".to_string()),
+            top: None,
+        };
+        assert!(
+            validate_stats_time_range(&cfg).is_ok(),
+            "datetime from at start of to-date should be accepted"
+        );
+    }
+
+    #[test]
+    fn test_validate_time_str_rejects_feb_31() {
+        assert!(validate_time_str("2024-02-31").is_err());
+    }
+
+    #[test]
+    fn test_validate_time_str_rejects_apr_31() {
+        assert!(validate_time_str("2024-04-31").is_err());
+    }
+
+    #[test]
+    fn test_validate_time_str_accepts_feb_29() {
+        assert!(validate_time_str("2024-02-29").is_ok());
     }
 }

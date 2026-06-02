@@ -67,12 +67,8 @@ fn test_handle_run_empty_dir_returns_no_files_found() {
 
 #[test]
 #[cfg(not(target_os = "windows"))]
-fn test_handle_run_empty_dir_unix_behavior() {
-    // Unix: empty inputs trigger stdin pipe fallback or NoFilesFound depending on tty;
-    // NoFilesFound exit-code path covered indirectly by C3 end-to-end test
-    // (legacy path key rejection achieves the same SC3 non-zero-exit + hint guarantee
-    // without stdin tty interference, because ConfigError fires before file scanning).
-}
+#[ignore = "stdin tty behavior is non-deterministic in CI; covered indirectly by C3"]
+fn test_handle_run_empty_dir_unix_behavior() {}
 
 #[test]
 fn test_handle_run_multi_file() {
@@ -1129,7 +1125,7 @@ fn test_cli_default_summary_omits_per_file_counts() {
 /// Verify that legacy [sqllog] path = "..." key is rejected via validate subcommand
 /// with stderr containing sqllog.path, inputs, and hint: (SC3 main validation path).
 #[test]
-fn test_validate_rejects_legacy_sqllog_path_key_via_cli() {
+fn test_validate_rejects_legacy_sqllog_path_key_via_rust_api() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("legacy_sqllog.toml");
     std::fs::write(
@@ -1939,7 +1935,7 @@ fn test_stats_no_from_to_filters_nothing() {
     );
 }
 
-/// TEST-03 (Phase 57): stats CLI 在 --from 晚于 --to 时退出非零，stderr 包含字段名与 "must be <=" 文案（D-01/D-02）。
+/// P57-SC5 / STATS-12: stats CLI 在 --from 晚于 --to 时退出非零，stderr 包含字段名与 "must be <=" 文案（D-01/D-02）。
 #[test]
 fn test_cli_stats_rejects_from_after_to() {
     use assert_cmd::Command;
@@ -2016,9 +2012,10 @@ fn test_cli_run_csv_output_header_and_row_count() {
 
     let content = std::fs::read_to_string(&csv_file).unwrap();
     let mut lines = content.lines();
+    let expected_header = dm_database_sqllog2db::pipeline::FIELD_NAMES.join(",");
     assert_eq!(
         lines.next().unwrap(),
-        "ts,ep,sess_id,thrd_id,username,trx_id,statement,appname,client_ip,tag,sql,exec_time_ms,row_count,exec_id,normalized_sql",
+        expected_header,
         "CSV header must match FIELD_NAMES order"
     );
     let data_count = lines.filter(|l| !l.is_empty()).count();
