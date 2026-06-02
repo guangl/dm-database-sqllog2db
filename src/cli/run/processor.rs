@@ -87,6 +87,57 @@ pub(super) fn normalize_and_export(
     }
 }
 
+/// 在文件处理开始时设置进度条消息与位置。
+///
+/// 仅在 `reset_pb && show_progress` 时生效，否则为空操作。
+fn setup_progress_bar(
+    pb: Option<&ProgressBar>,
+    reset_pb: bool,
+    show_progress: bool,
+    file_index: usize,
+    total_files: usize,
+    file_name: &str,
+) {
+    if reset_pb && show_progress {
+        if let Some(pb) = pb {
+            pb.set_message(format!("[{file_index}/{total_files}] {file_name}"));
+            pb.set_position(0);
+        }
+    }
+}
+
+/// 文件处理结束时输出统计日志与进度条完成消息。
+#[allow(clippy::too_many_arguments)]
+fn log_file_result(
+    pb: Option<&ProgressBar>,
+    show_progress: bool,
+    file_path: &str,
+    file_index: usize,
+    total_files: usize,
+    records_in_file: usize,
+    errors_in_file: usize,
+    elapsed: f64,
+) {
+    if errors_in_file > 0 {
+        log::warn!("{file_path}: {errors_in_file} parse errors");
+    }
+    info!(
+        "File {file_path}: {records_in_file} records, {errors_in_file} errors, total {elapsed:.2}s",
+    );
+    if show_progress {
+        if let Some(pb) = pb {
+            let errors_label = if errors_in_file > 0 {
+                format!(", {errors_in_file} errors")
+            } else {
+                String::new()
+            };
+            pb.set_message(format!(
+                "✓ [{file_index}/{total_files}] {file_path} — {records_in_file}{errors_label}, {elapsed:.2}s",
+            ));
+        }
+    }
+}
+
 /// 处理单个日志文件，返回本文件实际导出的记录数。
 ///
 /// `remaining`: 最多再导出多少条记录（跨文件的剩余配额），`None` 表示不限制。
@@ -120,12 +171,14 @@ pub(super) fn process_log_file(
         |n| n.to_string_lossy().into_owned(),
     );
 
-    if reset_pb && show_progress {
-        if let Some(pb) = pb {
-            pb.set_message(format!("[{file_index}/{total_files}] {file_name}"));
-            pb.set_position(0);
-        }
-    }
+    setup_progress_bar(
+        pb,
+        reset_pb,
+        show_progress,
+        file_index,
+        total_files,
+        &file_name,
+    );
 
     let parser = crate::scanner::build_parser(std::path::Path::new(file_path))?;
 
@@ -220,27 +273,17 @@ pub(super) fn process_log_file(
         }
     }
 
-    if errors_in_file > 0 {
-        log::warn!("{file_path}: {errors_in_file} parse errors");
-    }
-
     let elapsed = file_start.elapsed().as_secs_f64();
-    info!(
-        "File {file_path}: {records_in_file} records, {errors_in_file} errors, total {elapsed:.2}s",
+    log_file_result(
+        pb,
+        show_progress,
+        file_path,
+        file_index,
+        total_files,
+        records_in_file,
+        errors_in_file,
+        elapsed,
     );
-
-    if show_progress {
-        if let Some(pb) = pb {
-            let errors_label = if errors_in_file > 0 {
-                format!(", {errors_in_file} errors")
-            } else {
-                String::new()
-            };
-            pb.set_message(format!(
-                "✓ [{file_index}/{total_files}] {file_path} — {records_in_file}{errors_label}, {elapsed:.2}s",
-            ));
-        }
-    }
 
     Ok((records_in_file, file_stats))
 }
