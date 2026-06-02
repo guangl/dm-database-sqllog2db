@@ -1938,3 +1938,24 @@ fn test_stats_no_from_to_filters_nothing() {
         "all records should be included when no time filter"
     );
 }
+
+/// TEST-03 (Phase 57): stats CLI 在 --from 晚于 --to 时退出非零，stderr 包含字段名与 "must be <=" 文案（D-01/D-02）。
+#[test]
+fn test_cli_stats_rejects_from_after_to() {
+    use assert_cmd::Command;
+    use predicates::str::contains;
+
+    let dir = tempfile::tempdir().unwrap();
+    let cfg_path = make_stats_config_file(dir.path());
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["stats", "-c"])
+        .arg(&cfg_path)
+        .args(["--from", "2024-01-31", "--to", "2024-01-01"])
+        .assert()
+        .failure()
+        .stderr(contains("stats.from"))
+        .stderr(contains("must be <="))
+        .stderr(contains("2024-01-31"));
+}
