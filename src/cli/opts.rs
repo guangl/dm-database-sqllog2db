@@ -126,7 +126,10 @@ EXAMPLES:
         sqllog2db stats -c config.toml
 
     Limit output to top 5 per table:
-        sqllog2db stats -c config.toml --top 5"
+        sqllog2db stats -c config.toml --top 5
+
+    Filter records by time range:
+        sqllog2db stats -c config.toml --from \"2024-01-01\" --to \"2024-01-31\""
     )]
     Stats {
         /// TOML configuration file path
@@ -141,10 +144,23 @@ EXAMPLES:
         /// Number of top records to display per table (default: 20)
         #[arg(
             long = "top",
-            default_value = "20",
             value_parser = clap::value_parser!(u32).range(1..),
-            help = "Number of top records per table. Must be >= 1."
+            help = "Number of top records per table. Must be >= 1 (default: 20)."
         )]
-        top: u32,
+        top: Option<u32>,
+        /// Start of time range (overrides config `[stats].from`)
+        #[arg(
+            long = "from",
+            value_name = "DATETIME",
+            help = "Start of time range. Formats: \"YYYY-MM-DD\" or \"YYYY-MM-DD HH:MM:SS\". Overrides config [stats].from."
+        )]
+        from: Option<String>,
+        /// End of time range (overrides config `[stats].to`)
+        #[arg(
+            long = "to",
+            value_name = "DATETIME",
+            help = "End of time range. Formats: \"YYYY-MM-DD\" or \"YYYY-MM-DD HH:MM:SS\". Overrides config [stats].to."
+        )]
+        to: Option<String>,
     },
 }

@@ -1,9 +1,19 @@
-# Requirements: sqllog2db v1.13
+# Requirements: sqllog2db
 
 **Defined:** 2026-06-01
 **Core Value:** 用户能够精确指定"导出哪些记录的哪些字段"——过滤逻辑清晰可配置，输出结果完全可控。
 
-## v1.13 Requirements
+## v1.14 Requirements
+
+### stats 时间段过滤
+
+- [x] **STATS-07**: 用户可通过 `--from`/`--to` CLI 参数为 `stats` 命令指定时间段（如 `--from "2024-01-01"` `--to "2024-01-31"`）
+- [x] **STATS-08**: 用户可在 config.toml `[stats]` 节配置 `from`/`to` 字段作为 `stats` 命令的默认时间段
+- [x] **STATS-09**: CLI 参数 `--from`/`--to` 优先于 config.toml 中的 `from`/`to` 值，两者均缺省时不做时间过滤
+- [ ] **STATS-10**: `stats` 聚合时自动跳过 `ts` 字段不在指定时间段内的记录（字符串前缀比较，`ts >= from` 且 `ts <= to`）
+- [x] **STATS-11**: 支持 `"YYYY-MM-DD"` 和 `"YYYY-MM-DD HH:MM:SS"` 两种时间格式，格式不合法时给出明确错误提示
+
+## v1.13 Requirements（已完成）
 
 ### Stats 子命令
 
@@ -18,21 +28,40 @@
 
 ### 扩展统计维度
 
-- **STATS-07**: 按用户名分组统计各用户 SQL 调用情况
-- **STATS-08**: 按表名分组统计各表访问频率
-- **STATS-09**: 慢 SQL 阈值告警（超过阈值时输出警告）
-- **STATS-10**: 时间窗口过滤（只统计指定时间段内的日志）
+- **STATS-12**: 按用户名分组统计各用户 SQL 调用情况
+- **STATS-13**: 按表名分组统计各表访问频率
+- **STATS-14**: 慢 SQL 阈值告警（超过阈值时输出警告）
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
+| `run` 命令新增 `--from`/`--to` | 已有 `[pipeline.include]` `start_ts`/`end_ts`，路径已覆盖 |
+| 相对时间（如 `--from "1d ago"`） | 增加复杂度，绝对时间格式已满足需求 |
+| 时区处理 | 达梦日志 `ts` 无时区信息，本地时间字符串比较足够 |
 | 修改现有 `run` 命令输出 | 保持现有用户行为不变 |
 | 新增 exporter 实现 | 复用现有 CSV/SQLite exporter，不引入新格式 |
 | 实时统计（边 run 边统计） | 复杂度高，stats 作为独立后处理命令更清晰 |
 | SQL 执行计划分析 | 超出日志解析范围 |
 
 ## Traceability
+
+### v1.14
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| STATS-07 | Phase 53 | Complete |
+| STATS-08 | Phase 53 | Complete |
+| STATS-09 | Phase 53 | Complete |
+| STATS-10 | Phase 54 | Pending |
+| STATS-11 | Phase 53 | Complete |
+
+**v1.14 Coverage:**
+- v1.14 requirements: 5 total
+- Mapped to phases: 5
+- Unmapped: 0 ✓
+
+### v1.13
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
@@ -43,11 +72,8 @@
 | STATS-05 | Phase 52 | Complete |
 | STATS-06 | Phase 50 | Complete |
 
-**Coverage:**
-- v1.13 requirements: 6 total
-- Mapped to phases: 6 (100%)
-- Unmapped: 0
+**v1.13 Coverage:** 6/6 (100%)
 
 ---
 *Requirements defined: 2026-06-01*
-*Last updated: 2026-06-01 — traceability mapped to Phases 50/51/52*
+*Last updated: 2026-06-01 — v1.14 traceability populated (Phase 53: STATS-07/08/09/11, Phase 54: STATS-10)*

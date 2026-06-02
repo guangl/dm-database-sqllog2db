@@ -1,8 +1,15 @@
 //! SQL 统计分析模块（v1.13）：提供 SQL 标准化与统计聚合。
 
 pub mod aggregate;
+pub mod config;
 pub mod normalize;
 pub mod output;
+
+// Public re-exports for lib API consumers; both may be unused in the bin target.
+#[allow(unused_imports)]
+pub use config::StatsConfig;
+#[allow(unused_imports)]
+pub use config::validate_time_str;
 
 use crate::config::Config;
 use crate::error::{Error, ParserError, Result};
@@ -13,13 +20,15 @@ use aggregate::StatsAccumulator;
 /// `top_n` 必须 ≥ 1（由 Phase 51 的 CLI 层保证）。
 pub fn run_stats(cfg: &Config, top_n: u32) -> Result<()> {
     debug_assert!(top_n >= 1, "top_n must be >= 1 (Phase 51 CLI validation)");
+    config::validate_stats_time_range(&cfg.stats)?;
     let log_files = crate::parser::SqllogParser::new(cfg.sqllog.inputs.clone()).log_files()?;
     if log_files.is_empty() {
         return Err(Error::Parser(ParserError::NoFilesFound {
             inputs: cfg.sqllog.inputs.clone(),
         }));
     }
-    let mut accumulator = StatsAccumulator::new(top_n);
+    let mut accumulator =
+        StatsAccumulator::new(top_n, cfg.stats.from.clone(), cfg.stats.to.clone());
     scan_files_into_accumulator(&log_files, &mut accumulator)?;
     let (slow_rows, frequent_rows) = accumulator.into_results();
     write_stats_output(cfg, &slow_rows, &frequent_rows)
@@ -94,6 +103,7 @@ fn write_stats_output(
 mod tests {
     use super::*;
     use crate::config::{Config, CsvExporterConfig, ExporterConfig, SqllogConfig};
+    use crate::error::ConfigError;
 
     fn make_csv_config(log_path: &str, csv_path: &str) -> Config {
         Config {
@@ -167,5 +177,37 @@ mod tests {
             slow_content.lines().count() >= 2,
             "should contain header + at least 1 data row from valid record"
         );
+    }
+
+    #[test]
+    fn test_run_stats_rejects_invalid_from() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let csv_path = dir.path().join("out.csv");
+        let mut cfg = make_csv_config(dir.path().to_str().unwrap(), csv_path.to_str().unwrap());
+        cfg.stats.from = Some("bad".to_string());
+        let result = run_stats(&cfg, 5);
+        assert!(result.is_err(), "invalid from should return Err");
+        match result.unwrap_err() {
+            Error::Config(ConfigError::InvalidValue { field, .. }) => {
+                assert_eq!(field, "stats.from");
+            }
+            other => panic!("expected ConfigError::InvalidValue, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_run_stats_rejects_invalid_to() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let csv_path = dir.path().join("out.csv");
+        let mut cfg = make_csv_config(dir.path().to_str().unwrap(), csv_path.to_str().unwrap());
+        cfg.stats.to = Some("20240101".to_string());
+        let result = run_stats(&cfg, 5);
+        assert!(result.is_err(), "invalid to should return Err");
+        match result.unwrap_err() {
+            Error::Config(ConfigError::InvalidValue { field, .. }) => {
+                assert_eq!(field, "stats.to");
+            }
+            other => panic!("expected ConfigError::InvalidValue, got: {other:?}"),
+        }
     }
 }

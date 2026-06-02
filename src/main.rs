@@ -175,12 +175,17 @@ fn run() -> Result<Option<(ErrorStats, bool)>> {
             cli::validate::handle_validate(&cfg);
             Ok(None)
         }
-        Some(cli::opts::Commands::Stats { config, top }) => {
+        Some(cli::opts::Commands::Stats {
+            config,
+            top,
+            from,
+            to,
+        }) => {
             let mut cfg = Config::from_file(Path::new(config))?;
             cfg.validate()?;
             apply_verbosity_to_config(&mut cfg, cli.verbose, cli.quiet);
             logging::init_logging(&cfg.logging, false)?;
-            cli::stats::handle_stats(&cfg, *top)?;
+            cli::stats::handle_stats(&cfg, *top, from.clone(), to.clone())?;
             Ok(None)
         }
         None => {

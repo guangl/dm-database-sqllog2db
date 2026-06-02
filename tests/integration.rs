@@ -1659,3 +1659,282 @@ fn test_stats_zero_elapsed_records_included() {
         "zero-elapsed record should appear in slow_sql.csv, got:\n{slow}"
     );
 }
+
+// ── Phase 53 end-to-end integration tests ────────────────────────────────────
+
+/// 创建包含 [stats] 节的配置文件，from/to/top 字段可选。
+fn make_stats_config_with_section(
+    dir: &std::path::Path,
+    from: Option<&str>,
+    to: Option<&str>,
+    top: Option<u32>,
+) -> std::path::PathBuf {
+    let cfg_path = dir.join("stats_section_cfg.toml");
+    let app_log_path = dir.join("test.log");
+    let input_log = dir.join("input.log");
+    std::fs::write(
+        &input_log,
+        "2025-01-15 10:30:28.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT id FROM t WHERE id=1. EXECTIME: 5(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.\n",
+    )
+    .unwrap();
+    use std::fmt::Write as _;
+    let mut stats_section = String::from("\n[stats]\n");
+    if let Some(f) = from {
+        let _ = writeln!(stats_section, "from = \"{f}\"");
+    }
+    if let Some(t) = to {
+        let _ = writeln!(stats_section, "to = \"{t}\"");
+    }
+    if let Some(n) = top {
+        let _ = writeln!(stats_section, "top = {n}");
+    }
+    let content = format!(
+        "[sqllog]\ninputs = [\"{}\"]\n\
+         [exporter.csv]\nfile = \"{}\"\noverwrite = true\n\
+         [logging]\nfile = \"{}\"\nlevel = \"info\"\nretention_days = 7\n{}",
+        input_log.to_string_lossy().replace('\\', "/"),
+        dir.join("out.csv").to_string_lossy().replace('\\', "/"),
+        app_log_path.to_string_lossy().replace('\\', "/"),
+        stats_section,
+    );
+    std::fs::write(&cfg_path, content).unwrap();
+    cfg_path
+}
+
+/// Phase 53 SC#1: stats --help 包含 --from / --to / YYYY-MM-DD 三个关键子串。
+#[test]
+fn test_cli_stats_help_shows_from_and_to() {
+    use assert_cmd::Command;
+    use predicates::str::contains;
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["stats", "--help"])
+        .assert()
+        .success()
+        .stdout(contains("--from"))
+        .stdout(contains("--to"))
+        .stdout(contains("YYYY-MM-DD"));
+}
+
+/// Phase 53 SC#1 + STATS-07: stats --from / --to CLI 参数成功传入，应用日志含合并值。
+#[test]
+fn test_cli_stats_with_cli_from_and_to_succeeds() {
+    use assert_cmd::Command;
+
+    let dir = tempfile::tempdir().unwrap();
+    let cfg_path = make_stats_config_file(dir.path());
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["stats", "-c"])
+        .arg(&cfg_path)
+        .args(["--from", "2024-01-01", "--to", "2024-12-31"])
+        .assert()
+        .success();
+
+    let app_log = dir.path().join("test.log");
+    let log_content = std::fs::read_to_string(&app_log).unwrap_or_default();
+    assert!(
+        log_content.contains("from=Some"),
+        "app log should contain from=Some, got:\n{log_content}"
+    );
+    assert!(
+        log_content.contains("to=Some"),
+        "app log should contain to=Some, got:\n{log_content}"
+    );
+}
+
+/// Phase 53 SC#2 + STATS-08: validate 命令通过含 from/to 的 config.toml。
+#[test]
+fn test_cli_stats_validate_accepts_valid_config_stats_section() {
+    use assert_cmd::Command;
+    use predicates::str::contains;
+
+    let dir = tempfile::tempdir().unwrap();
+    let cfg_path = make_stats_config_with_section(
+        dir.path(),
+        Some("2024-01-01"),
+        Some("2024-01-31"),
+        Some(10),
+    );
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["validate", "-c"])
+        .arg(&cfg_path)
+        .assert()
+        .success()
+        .stdout(contains("Configuration valid."));
+}
+
+/// Phase 53 SC#4 + STATS-11: validate 命令拒绝含非法 from 格式的 config.toml。
+#[test]
+fn test_cli_stats_validate_rejects_bad_config_from_format() {
+    use assert_cmd::Command;
+    use predicates::str::contains;
+
+    let dir = tempfile::tempdir().unwrap();
+    let cfg_path = make_stats_config_with_section(dir.path(), Some("20240101"), None, None);
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["validate", "-c"])
+        .arg(&cfg_path)
+        .assert()
+        .failure()
+        .stderr(contains("[FAIL]"))
+        .stderr(contains("stats.from"))
+        .stderr(contains("YYYY-MM-DD"));
+}
+
+/// Phase 53 SC#3 + STATS-09: CLI --from 优先于 config.toml 中的 from 值。
+#[test]
+fn test_cli_stats_cli_overrides_config_from() {
+    use assert_cmd::Command;
+
+    let dir = tempfile::tempdir().unwrap();
+    // config 中设置一个遥远未来的 from，CLI 覆盖为过去的日期
+    let cfg_path = make_stats_config_with_section(dir.path(), Some("2099-12-31"), None, None);
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["stats", "-c"])
+        .arg(&cfg_path)
+        .args(["--from", "2024-01-01"])
+        .assert()
+        .success();
+
+    let app_log = dir.path().join("test.log");
+    let log_content = std::fs::read_to_string(&app_log).unwrap_or_default();
+    assert!(
+        log_content.contains("2024-01-01"),
+        "app log should contain CLI from value 2024-01-01, got:\n{log_content}"
+    );
+}
+
+/// Phase 53 SC#4 + STATS-11 CLI 路径（D-09）: stats --from 传入非法格式时退出非零。
+#[test]
+fn test_cli_stats_runtime_rejects_bad_cli_from_format() {
+    use assert_cmd::Command;
+    use predicates::str::contains;
+
+    let dir = tempfile::tempdir().unwrap();
+    let cfg_path = make_stats_config_file(dir.path());
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["stats", "-c"])
+        .arg(&cfg_path)
+        .args(["--from", "not-a-date"])
+        .assert()
+        .failure()
+        .stderr(contains("stats.from"))
+        .stderr(contains("YYYY-MM-DD"));
+}
+
+/// Phase 53 init 模板：生成文件包含 [stats] 注释段与三字段示例。
+#[test]
+fn test_init_template_contains_stats_section() {
+    use assert_cmd::Command;
+
+    let dir = tempfile::tempdir().unwrap();
+    let out_file = dir.path().join("cfg.toml");
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["init", "-o"])
+        .arg(&out_file)
+        .args(["--force"])
+        .assert()
+        .success();
+
+    let content = std::fs::read_to_string(&out_file).unwrap();
+    assert!(
+        content.contains("[stats]"),
+        "template should contain [stats]"
+    );
+    assert!(
+        content.contains("# from = \"2024"),
+        "template should contain commented from field"
+    );
+    assert!(
+        content.contains("# to"),
+        "template should contain commented to field"
+    );
+    assert!(
+        content.contains("# top"),
+        "template should contain commented top field"
+    );
+    assert!(
+        content.contains("YYYY-MM-DD HH:MM:SS"),
+        "template should contain format hint YYYY-MM-DD HH:MM:SS"
+    );
+}
+
+// ── Phase 54 stats time-range filter integration tests ──
+
+#[test]
+fn test_stats_from_to_filters_to_single_day() {
+    use assert_cmd::Command;
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_file = dir.path().join("input.log");
+    let lines = [
+        "2024-01-14 10:00:00.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT * FROM t WHERE id=1. EXECTIME: 10(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.",
+        "2024-01-15 10:00:00.001 (EP[0] sess:0x0002 user:U trxid:2 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT * FROM t WHERE id=2. EXECTIME: 20(ms) ROWCOUNT: 1(rows) EXEC_ID: 2.",
+        "2024-01-16 10:00:00.001 (EP[0] sess:0x0003 user:U trxid:3 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT * FROM t WHERE id=3. EXECTIME: 30(ms) ROWCOUNT: 1(rows) EXEC_ID: 3.",
+    ];
+    std::fs::write(&log_file, lines.join("\n") + "\n").unwrap();
+    let cfg_path = make_stats_csv_config(dir.path(), &log_file);
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args([
+            "stats",
+            "-c",
+            cfg_path.to_str().unwrap(),
+            "--from",
+            "2024-01-15",
+            "--to",
+            "2024-01-15",
+        ])
+        .assert()
+        .success();
+    let slow_csv = dir.path().join("out").join("slow_sql.csv");
+    let content = std::fs::read_to_string(&slow_csv).unwrap();
+    let data_lines: Vec<&str> = content.lines().skip(1).filter(|l| !l.is_empty()).collect();
+    assert_eq!(
+        data_lines.len(),
+        1,
+        "only 2024-01-15 record should be included"
+    );
+    assert!(
+        data_lines[0].contains("2024-01-15"),
+        "timestamp should be 2024-01-15"
+    );
+}
+
+#[test]
+fn test_stats_no_from_to_filters_nothing() {
+    use assert_cmd::Command;
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_file = dir.path().join("input.log");
+    let lines = [
+        "2024-01-14 10:00:00.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT * FROM t WHERE id=1. EXECTIME: 10(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.",
+        "2024-01-16 10:00:00.001 (EP[0] sess:0x0002 user:U trxid:2 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT * FROM t WHERE id=2. EXECTIME: 20(ms) ROWCOUNT: 1(rows) EXEC_ID: 2.",
+    ];
+    std::fs::write(&log_file, lines.join("\n") + "\n").unwrap();
+    let cfg_path = make_stats_csv_config(dir.path(), &log_file);
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["stats", "-c", cfg_path.to_str().unwrap(), "--top", "10"])
+        .assert()
+        .success();
+    let slow_csv = dir.path().join("out").join("slow_sql.csv");
+    let content = std::fs::read_to_string(&slow_csv).unwrap();
+    let data_lines: Vec<&str> = content.lines().skip(1).filter(|l| !l.is_empty()).collect();
+    assert_eq!(
+        data_lines.len(),
+        2,
+        "all records should be included when no time filter"
+    );
+}

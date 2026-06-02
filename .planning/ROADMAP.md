@@ -2,6 +2,7 @@
 
 ## Milestones
 
+- ⏳ **v1.14 stats 时间段过滤** — Phases 53–54 (in progress)
 - ✅ **v1.13 SQL 统计分析** — Phases 50–52 (shipped 2026-06-01)
 - ✅ **v1.12 CLI 体验全面提升** — Phases 46–49 (shipped 2026-06-01)
 - ✅ **v1.0 增强 SQL 内容过滤与字段投影** — Phases 1–2 (shipped 2026-04-18)
@@ -157,6 +158,11 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
 - [x] **Phase 50: SQL 标准化引擎** — 将字面量替换为 `?` 占位符的标准化模块 (completed 2026-06-01)
 - [x] **Phase 51: stats 子命令 CLI 脚手架** — 新增 `stats` 子命令及 `--top N` 参数 (completed 2026-06-01)
 - [x] **Phase 52: 统计输出与 Exporter 集成** — 慢 SQL / 高频 SQL TOP-N 通过现有 exporter 输出 (completed 2026-06-01)
+
+### v1.14 stats 时间段过滤 (Phases 53–54)
+
+- [x] **Phase 53: 时间段配置与 CLI 参数** — 扩展 StatsConfig、opts.rs 新增 --from/--to、格式验证与优先级合并 (completed 2026-06-01)
+- [ ] **Phase 54: StatsAccumulator 时间过滤** — 在聚合层按 ts 字段跳过时间段外的记录
 
 ## Phase Details
 
@@ -333,7 +339,7 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
 **Depends on**: Phase 48
 **Requirements**: INPUT-01, INPUT-02
 **Success Criteria** (what must be TRUE):
-  1. `input = ["sqllogs/*.log"]` 在 config.toml 中被解析后自动展开为所有匹配的 `.log` 文件，`cargo test` 包含此场景的单元测试
+  1. `input = ["sqllogs/*.log"]` 在 config.toml 中被解析后自动展开为所有匹配的 `.log` 文件,`cargo test` 包含此场景的单元测试
   2. `sqllog2db run -c config.toml --input 'logs/*.log'` 从命令行接收 glob 并展开，输出结果与手动列出所有文件一致
   3. 无匹配文件时给出明确错误（`error: glob pattern 'sqllogs/*.log' matched 0 files`），而非静默空输出
   4. glob 与直接路径混合使用时（如 `--input file1.log --input 'dir/*.log'`）均能正确处理
@@ -382,6 +388,36 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
 **Plans**: 1 plan
 - [x] 52-01-PLAN.md — pub(crate) ensure_parent_dir/f32_ms_to_i64 + 新建 src/stats/{aggregate.rs,output.rs} StatsAccumulator (BinaryHeap<Reverse<SlowSqlEntry>> + HashMap<String,AggState>) + write_csv_stats/write_sqlite_stats 独立输出（DROP+CREATE）+ src/stats/mod.rs run_stats 编排（CSV 优先）+ src/cli/stats/mod.rs 接入 + 23 项单元/集成测试覆盖 STATS-03/STATS-04/STATS-05
 
+### Phase 53: 时间段配置与 CLI 参数
+**Goal**: 用户可通过 CLI 参数或 config.toml 为 `stats` 命令指定时间段过滤，格式被验证，优先级正确合并，为聚合层提供可用的时间范围值
+**Depends on**: Phase 52
+**Requirements**: STATS-07, STATS-08, STATS-09, STATS-11
+**Success Criteria** (what must be TRUE):
+  1. `sqllog2db stats -c config.toml --from "2024-01-01" --to "2024-01-31"` 不报错退出，`stats --help` 中可见 `--from` 和 `--to` 参数说明
+  2. config.toml `[stats]` 节可配置 `from = "2024-01-01"` 和 `to = "2024-01-31"`，`sqllog2db validate -c config.toml` 通过验证
+  3. CLI 参数存在时优先于 config 中的值；CLI 与 config 均未配置时，`stats` 命令正常运行且不做时间过滤
+  4. `--from "not-a-date"` 或 `from = "20240101"` 等格式不合法的值给出明确错误提示（如 `error: --from 格式不合法，支持 "YYYY-MM-DD" 或 "YYYY-MM-DD HH:MM:SS"`）
+  5. `cargo clippy --all-targets -- -D warnings` + `cargo test` 全部通过
+**Plans**: 3 plans
+- [x] 53-01-PLAN.md — 新建 src/stats/config.rs（StatsConfig + validate_time_str）+ stats/mod.rs 注册子模块 + Config 根结构追加 #[serde(default)] pub stats: StatsConfig
+- [x] 53-02-PLAN.md — opts.rs Stats 变体新增 --from/--to + --top 改 Option<u32> + handle_stats 优先级合并（D-05）+ main.rs 分发分支接入新签名
+- [x] 53-03-PLAN.md — Config::validate 与 run_stats 接入 validate_time_str + CONFIG_TEMPLATE_EN 追加 [stats] 注释段 + tests/integration.rs 新增 7 个端到端 stats 测试
+- [x] 53-01-PLAN.md — 新建 src/stats/config.rs（StatsConfig + validate_time_str）+ stats/mod.rs 注册子模块 + Config 根结构追加 #[serde(default)] pub stats: StatsConfig
+- [x] 53-02-PLAN.md — opts.rs Stats 变体新增 --from/--to + --top 改 Option<u32> + handle_stats 优先级合并（D-05）+ main.rs 分发分支接入新签名
+- [x] 53-03-PLAN.md — Config::validate 与 run_stats 接入 validate_time_str + CONFIG_TEMPLATE_EN 追加 [stats] 注释段 + tests/integration.rs 新增 7 个端到端 stats 测试
+
+### Phase 54: StatsAccumulator 时间过滤
+**Goal**: `stats` 命令在聚合统计时自动跳过 `ts` 字段不在指定时间段内的记录，时间段过滤对慢 SQL 和高频 SQL 两张表均生效
+**Depends on**: Phase 53
+**Requirements**: STATS-10
+**Success Criteria** (what must be TRUE):
+  1. 对包含多日记录的日志，`--from "2024-01-15" --to "2024-01-15"` 只统计该日的记录，慢 SQL 表和高频 SQL 表的 timestamp 字段均在范围内
+  2. `--from` 和 `--to` 均未设置时，聚合结果与未加时间过滤的结果完全一致（无行为变化）
+  3. 只设置 `--from`（不设 `--to`）时，只过滤早于 `from` 的记录，晚于 `from` 的记录均被统计；只设置 `--to` 时，只过滤晚于 `to` 的记录
+  4. `cargo clippy --all-targets -- -D warnings` + `cargo test` 全部通过，性能无明显退化（字符串前缀比较不引入额外分配）
+**Plans**: 1 plan
+- [ ] 54-01-PLAN.md — StatsAccumulator 新增 from/to 字段与 in_range 守卫 + update 范围外 return + run_stats 调用点接入 cfg.stats.from/to + 删除 cli/stats/mod.rs "not yet active" warn 占位 + 11 个单元测试（6 迁移 + 5 新过滤）+ 2 个端到端 stats --from/--to CLI 测试
+
 ## Coverage Validation
 
 | Requirement | Phase |
@@ -425,8 +461,13 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
 | STATS-03    | 52    |
 | STATS-04    | 52    |
 | STATS-05    | 52    |
+| STATS-07    | 53    |
+| STATS-08    | 53    |
+| STATS-09    | 53    |
+| STATS-11    | 53    |
+| STATS-10    | 54    |
 
-**39/39 requirements mapped — coverage: 100%**
+**44/44 requirements mapped — coverage: 100%**
 
 ## Progress
 
@@ -447,10 +488,12 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
 | 47. 配置文件体验 | v1.12 | 2/2 | Complete | 2026-05-31 |
 | 48. 日志级别与运行提示 | v1.12 | 2/2 | Complete | 2026-06-01 |
 | 49. Glob 输入支持 | v1.12 | 3/3 | Complete | 2026-06-01 |
-| 50. SQL 标准化引擎 | 1/1 | Complete    | 2026-06-01 |
-| 51. stats 子命令 CLI 脚手架 | 1/1 | Complete    | 2026-06-01 |
-| 52. 统计输出与 Exporter 集成 | 1/1 | Complete    | 2026-06-01 |
+| 50. SQL 标准化引擎 | v1.13 | 1/1 | Complete | 2026-06-01 |
+| 51. stats 子命令 CLI 脚手架 | v1.13 | 1/1 | Complete | 2026-06-01 |
+| 52. 统计输出与 Exporter 集成 | v1.13 | 1/1 | Complete | 2026-06-01 |
+| 53. 时间段配置与 CLI 参数 | 3/3 | Complete    | 2026-06-01 |
+| 54. StatsAccumulator 时间过滤 | v1.14 | Not started | - |
 
 ---
 *Created: 2026-05-21 for milestone v1.10*
-*Updated: 2026-06-01 — v1.13 (Phases 50–52) roadmap added; STATS-01/02/03/04/05/06 全部映射 + Phase 51 plan 1 published*
+*Updated: 2026-06-01 — v1.14 (Phases 53–54) roadmap added; STATS-07/08/09/10/11 全部映射*

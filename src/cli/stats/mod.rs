@@ -1,14 +1,43 @@
 use crate::config::Config;
 use crate::error::Result;
 
+fn merge_stats_options(
+    cfg: &Config,
+    cli_top: Option<u32>,
+    cli_from: Option<String>,
+    cli_to: Option<String>,
+) -> (u32, Option<String>, Option<String>) {
+    let effective_top: u32 = cli_top.or(cfg.stats.top).unwrap_or(20);
+    let effective_from: Option<String> = cli_from.or_else(|| cfg.stats.from.clone());
+    let effective_to: Option<String> = cli_to.or_else(|| cfg.stats.to.clone());
+    (effective_top, effective_from, effective_to)
+}
+
 /// Handle the `stats` subcommand.
 ///
-/// Delegates to Phase 52 statistics logic. `top` must be >= 1 (enforced by clap's
-/// `value_parser` before reaching this function).
+/// Merges CLI args with config values using priority: CLI > config > default.
+/// `top` defaults to 20 when neither CLI nor config provides a value.
 /// `cfg` must already have verbosity applied before calling this function.
-pub fn handle_stats(cfg: &Config, top: u32) -> Result<()> {
-    log::info!("stats: top={top}");
-    crate::stats::run_stats(cfg, top)
+pub fn handle_stats(
+    cfg: &Config,
+    top: Option<u32>,
+    from: Option<String>,
+    to: Option<String>,
+) -> Result<()> {
+    let (effective_top, effective_from, effective_to) = merge_stats_options(cfg, top, from, to);
+
+    let mut merged_cfg = cfg.clone();
+    merged_cfg.stats.top = Some(effective_top);
+    merged_cfg.stats.from = effective_from;
+    merged_cfg.stats.to = effective_to;
+
+    log::info!(
+        "stats: top={effective_top} from={:?} to={:?}",
+        merged_cfg.stats.from,
+        merged_cfg.stats.to
+    );
+
+    crate::stats::run_stats(&merged_cfg, effective_top)
 }
 
 #[cfg(test)]
@@ -44,14 +73,75 @@ mod tests {
     #[test]
     fn test_handle_stats_top_default_passes() {
         let (cfg, _dir) = make_test_config_with_log();
-        let result = handle_stats(&cfg, 20);
+        let result = handle_stats(&cfg, Some(20), None, None);
         assert!(result.is_ok(), "top=20 should succeed, got: {result:?}");
     }
 
     #[test]
     fn test_handle_stats_top_nonzero_passes() {
         let (cfg, _dir) = make_test_config_with_log();
-        let result = handle_stats(&cfg, 5);
+        let result = handle_stats(&cfg, Some(5), None, None);
         assert!(result.is_ok(), "top=5 should succeed, got: {result:?}");
+    }
+
+    #[test]
+    fn test_handle_stats_cli_none_config_none_falls_back_to_20() {
+        let (cfg, _dir) = make_test_config_with_log();
+        let result = handle_stats(&cfg, None, None, None);
+        assert!(
+            result.is_ok(),
+            "default top=20 fallback should succeed, got: {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_handle_stats_cli_top_overrides_config_top() {
+        let (mut cfg, _dir) = make_test_config_with_log();
+        cfg.stats.top = Some(10);
+        let result = handle_stats(&cfg, Some(5), None, None);
+        assert!(
+            result.is_ok(),
+            "CLI top=5 should override config top=10, got: {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_handle_stats_config_top_used_when_cli_none() {
+        let (mut cfg, _dir) = make_test_config_with_log();
+        cfg.stats.top = Some(7);
+        let result = handle_stats(&cfg, None, None, None);
+        assert!(
+            result.is_ok(),
+            "config top=7 should be used when CLI=None, got: {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_merge_stats_options_cli_top_priority() {
+        let cfg = Config::default();
+        let (top, from, to) = merge_stats_options(&cfg, Some(5), None, None);
+        assert_eq!(top, 5);
+        assert_eq!(from, None);
+        assert_eq!(to, None);
+    }
+
+    #[test]
+    fn test_merge_stats_options_config_top_fallback() {
+        let mut cfg = Config::default();
+        cfg.stats.top = Some(10);
+        cfg.stats.from = Some("2024-01-01".to_string());
+        let (top, from, to) = merge_stats_options(&cfg, None, None, None);
+        assert_eq!(top, 10);
+        assert_eq!(from, Some("2024-01-01".to_string()));
+        assert_eq!(to, None);
+    }
+
+    #[test]
+    fn test_merge_stats_options_default_fallback() {
+        let cfg = Config::default();
+        let (top, from, to) = merge_stats_options(&cfg, None, None, None);
+        assert_eq!(top, 20);
+        assert_eq!(from, None);
+        assert_eq!(to, None);
     }
 }
