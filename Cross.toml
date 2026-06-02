@@ -1,0 +1,5 @@
+# cross-rs 跨编译配置
+# 官方镜像：https://github.com/cross-rs/cross/pkgs/container/aarch64-unknown-linux-gnu
+# edge = main 分支最新构建（latest = 0.2.5，3 年前，过旧）
+[target.aarch64-unknown-linux-gnu]
+image = "ghcr.io/cross-rs/aarch64-unknown-linux-gnu:edge"
