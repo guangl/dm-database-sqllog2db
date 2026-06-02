@@ -33,6 +33,16 @@ pub fn validate_stats_time_range(stats: &StatsConfig) -> crate::error::Result<()
             })
         })?;
     }
+    if let (Some(from), Some(to)) = (&stats.from, &stats.to) {
+        // YYYY-MM-DD 字典序 == 日期序，字符串比较合法（D-01）
+        if from.as_str() > to.as_str() {
+            return Err(Error::Config(ConfigError::InvalidValue {
+                field: "stats.from".to_string(),
+                value: from.clone(),
+                reason: format!("stats.from ({from}) must be <= stats.to ({to})"),
+            }));
+        }
+    }
     Ok(())
 }
 
@@ -236,5 +246,87 @@ mod tests {
         assert_eq!(w.stats.from, Some("2024-01-01".to_string()));
         assert!(w.stats.to.is_none());
         assert_eq!(w.stats.top, Some(10));
+    }
+
+    #[test]
+    fn test_validate_stats_time_range_rejects_from_after_to() {
+        let cfg = StatsConfig {
+            from: Some("2024-01-31".to_string()),
+            to: Some("2024-01-01".to_string()),
+            top: None,
+        };
+        let result = validate_stats_time_range(&cfg);
+        assert!(result.is_err(), "from > to should return Err");
+        match result.unwrap_err() {
+            crate::error::Error::Config(crate::error::ConfigError::InvalidValue {
+                field,
+                value,
+                reason,
+            }) => {
+                assert_eq!(field, "stats.from");
+                assert_eq!(value, "2024-01-31");
+                assert!(
+                    reason.contains("must be <="),
+                    "reason should contain 'must be <=': {reason}"
+                );
+                assert!(
+                    reason.contains("2024-01-31"),
+                    "reason should contain from value: {reason}"
+                );
+                assert!(
+                    reason.contains("2024-01-01"),
+                    "reason should contain to value: {reason}"
+                );
+            }
+            err => panic!("expected ConfigError::InvalidValue, got: {err:?}"),
+        }
+    }
+
+    #[test]
+    fn test_validate_stats_time_range_accepts_equal_from_to() {
+        let cfg = StatsConfig {
+            from: Some("2024-01-15".to_string()),
+            to: Some("2024-01-15".to_string()),
+            top: None,
+        };
+        assert!(
+            validate_stats_time_range(&cfg).is_ok(),
+            "from == to should be accepted"
+        );
+    }
+
+    #[test]
+    fn test_validate_stats_time_range_accepts_from_only() {
+        let cfg_from_only = StatsConfig {
+            from: Some("2024-01-15".to_string()),
+            to: None,
+            top: None,
+        };
+        assert!(
+            validate_stats_time_range(&cfg_from_only).is_ok(),
+            "only from should be accepted"
+        );
+        let cfg_to_only = StatsConfig {
+            from: None,
+            to: Some("2024-01-15".to_string()),
+            top: None,
+        };
+        assert!(
+            validate_stats_time_range(&cfg_to_only).is_ok(),
+            "only to should be accepted"
+        );
+    }
+
+    #[test]
+    fn test_validate_stats_time_range_accepts_ordered() {
+        let cfg = StatsConfig {
+            from: Some("2024-01-01".to_string()),
+            to: Some("2024-01-31".to_string()),
+            top: None,
+        };
+        assert!(
+            validate_stats_time_range(&cfg).is_ok(),
+            "from < to should be accepted"
+        );
     }
 }
