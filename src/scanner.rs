@@ -42,7 +42,20 @@ where
     for file_path in log_files {
         log::info!("scanner: scanning {}", file_path.display());
 
-        let parser = build_parser(file_path)?;
+        let parser = match build_parser(file_path) {
+            Ok(p) => p,
+            Err(e) => {
+                let current_idx = log_files.iter().position(|f| f == file_path).unwrap_or(0);
+                let remaining = log_files.len() - current_idx - 1;
+                log::warn!(
+                    "scanner: aborting scan at {} ({} file(s) not yet scanned): {}",
+                    file_path.display(),
+                    remaining,
+                    e
+                );
+                return Err(e);
+            }
+        };
 
         let parse_errors_before = stats.parse_errors;
 
