@@ -8,6 +8,16 @@
 
 用户能够精确指定"导出哪些记录的哪些字段"——过滤逻辑清晰可配置，输出结果完全可控。
 
+## Current Milestone: v1.16 工程质量深化
+
+**Goal:** 在 v1.15 的基础上，全面提升代码结构、测试覆盖、文档质量和构建可复现性。
+
+**Target features:**
+- 代码结构整理 — cli/run 主逻辑、exporter/pipeline 模块、错误处理流程进一步重构
+- Cross.toml 固定 SHA digest — 替换 edge 浮动标签，提升构建可复现性
+- 文档完善 — README 更新 + CHANGELOG 补全 + config.toml 模板注释完善
+- 测试覆盖提升 — 运行覆盖率分析，按需补全关键路径
+
 ## Previous: v1.15 已交付
 
 **Shipped:** 2026-06-02
@@ -97,7 +107,14 @@
 
 ### Active
 
-(下一里程碑需求待 `/gsd:new-milestone` 定义)
+- [ ] **STRUCT-01**: 代码结构整理 — cli/run 主逻辑进一步拆分
+- [ ] **STRUCT-02**: 代码结构整理 — exporter/pipeline 模块重构
+- [ ] **STRUCT-03**: 代码结构整理 — 错误处理流程统一
+- [ ] **CROSS-01**: Cross.toml 固定 SHA digest（替换 edge 浮动标签）
+- [ ] **DOC-01**: README.md 更新（示例、安装说明、功能说明）
+- [ ] **DOC-02**: CHANGELOG.md 补全历史版本记录
+- [ ] **DOC-03**: config.toml 模板注释完善
+- [ ] **TEST-01**: 覆盖率分析并补全关键路径测试
 
 ### Out of Scope
 
