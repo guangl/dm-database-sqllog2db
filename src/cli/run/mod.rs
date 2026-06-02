@@ -347,9 +347,7 @@ fn run_sequential(
         }
     }
     exporter_manager.finalize()?;
-    if !quiet {
-        exporter_manager.log_stats();
-    }
+    (!quiet).then(|| exporter_manager.log_stats());
     Ok((per_file_counts, run_stats))
 }
 
