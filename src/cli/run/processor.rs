@@ -10,7 +10,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 /// 控制主循环对单条记录的导出结果响应。
-#[allow(dead_code)]
 pub(super) enum ExportAction {
     /// 正常导出（或被过滤后 `params_buffer` 已更新），继续处理下一条。
     Continue,
@@ -24,7 +23,7 @@ pub(super) enum ExportAction {
 ///
 /// `passes`：调用方已判断该记录是否通过过滤器。
 /// 仅在 `passes==false && do_normalize && record.tag.is_none()` 时更新 `params_buffer`（不导出）。
-#[allow(clippy::too_many_arguments, dead_code)]
+#[allow(clippy::too_many_arguments)]
 pub(super) fn normalize_and_export(
     record: &Sqllog,
     exporter_manager: &mut ExporterManager,
@@ -138,131 +137,61 @@ fn log_file_result(
     }
 }
 
+/// 每 1024 条记录更新进度条并检查中断信号。
+/// 返回 true 表示收到中断信号，调用方应跳出主循环。
+fn tick_progress(
+    pb: Option<&ProgressBar>,
+    records_in_file: usize,
+    interrupted: &Arc<AtomicBool>,
+) -> bool {
+    if records_in_file.trailing_zeros() >= 10 {
+        if let Some(pb) = pb {
+            pb.inc(1024);
+        }
+        if interrupted.load(Ordering::Relaxed) {
+            return true;
+        }
+    }
+    false
+}
+
 /// 处理单个日志文件，返回本文件实际导出的记录数。
 ///
 /// `remaining`: 最多再导出多少条记录（跨文件的剩余配额），`None` 表示不限制。
 /// `reset_pb`: 是否在文件开始时重置进度条计数；并行模式传 `false`，避免多线程互相重置。
+#[rustfmt::skip]
 pub(super) fn process_log_file(
-    file_path: &str,
-    file_index: usize,
-    total_files: usize,
-    exporter_manager: &mut ExporterManager,
-    pipeline: &Pipeline,
-    show_progress: bool,
-    remaining: Option<usize>,
-    interrupted: &Arc<AtomicBool>,
-    do_normalize: bool,
-    placeholder_override: Option<bool>,
-    params_buffer: &mut ParamBuffer,
-    ns_scratch: &mut Vec<u8>,
-    reset_pb: bool,
-    pb: Option<&ProgressBar>,
+    file_path: &str, file_index: usize, total_files: usize,
+    exporter_manager: &mut ExporterManager, pipeline: &Pipeline,
+    show_progress: bool, remaining: Option<usize>, interrupted: &Arc<AtomicBool>,
+    do_normalize: bool, placeholder_override: Option<bool>,
+    params_buffer: &mut ParamBuffer, ns_scratch: &mut Vec<u8>,
+    reset_pb: bool, pb: Option<&ProgressBar>,
 ) -> Result<(usize, ErrorStats)> {
-    // 清除上一个文件留下的残余参数，同时复用已分配的 HashMap 容量。
     params_buffer.clear();
-
-    // 从导出器读取性能指标标志：CSV 关闭时跳过性能指标输出（D-05/D-06）
     let include_pm = exporter_manager.csv_include_performance_metrics();
-
     let file_start = Instant::now();
-
-    let file_name = std::path::Path::new(file_path).file_name().map_or_else(
-        || file_path.to_string(),
-        |n| n.to_string_lossy().into_owned(),
-    );
-
-    setup_progress_bar(
-        pb,
-        reset_pb,
-        show_progress,
-        file_index,
-        total_files,
-        &file_name,
-    );
-
+    let file_name = std::path::Path::new(file_path).file_name()
+        .map_or_else(|| file_path.to_string(), |n| n.to_string_lossy().into_owned());
+    setup_progress_bar(pb, reset_pb, show_progress, file_index, total_files, &file_name);
     let parser = crate::scanner::build_parser(std::path::Path::new(file_path))?;
-
-    let mut records_in_file = 0usize;
-    let mut errors_in_file = 0usize;
-    let mut file_stats = ErrorStats::default();
-
+    let (mut records_in_file, mut errors_in_file, mut file_stats) =
+        (0usize, 0usize, ErrorStats::default());
     'outer: for result in parser.iter() {
         match result {
             Ok(record) => {
-                // 管线：使用 record 直接字段（parser 库已物化所有字段）。
-                let passes = if pipeline.is_empty() {
-                    true
-                } else {
-                    pipeline.run_with_meta(&record)
-                };
-
-                // PARAMS 记录（无 tag）在 do_normalize 时无论是否通过过滤都必须
-                // 更新 params_buffer，以便后续匹配 DML 记录能正确替换参数。
+                let passes = pipeline.is_empty() || pipeline.run_with_meta(&record);
                 let needs_processing = passes || (do_normalize && record.tag.is_none());
-                if needs_processing {
-                    if passes {
-                        // 快速路径：params_buffer 为空且当前是 DML 记录（有 tag），
-                        // 则不可能存在待替换参数，完全跳过 compute_normalized。
-                        let ns = if do_normalize
-                            && (!params_buffer.is_empty() || record.tag.is_none())
-                        {
-                            crate::pipeline::compute_normalized(
-                                &record,
-                                &record.sql,
-                                params_buffer,
-                                placeholder_override,
-                                ns_scratch,
-                            )
-                        } else {
-                            None
-                        };
-
-                        // 先检查配额，再聚合（CR-02：避免对未导出记录计入统计）
-                        if let Some(remaining) = remaining {
-                            if records_in_file >= remaining {
-                                break 'outer;
-                            }
-                        }
-
-                        let export_result =
-                            exporter_manager.export_one_preparsed(&record, include_pm, ns);
-                        match export_result {
-                            Ok(()) => {
-                                records_in_file += 1;
-                            }
-                            Err(ref e) if e.is_fatal() => {
-                                file_stats.set_fatal(e.to_string());
-                                eprintln!("[{}] {file_path}: {e}", e.severity());
-                                log::warn!("{file_path} | fatal export error: {export_result:?}");
-                                break 'outer;
-                            }
-                            Err(ref e) => {
-                                file_stats.add_export_error();
-                                eprintln!("[{}] {file_path}: {e}", e.severity());
-                                log::warn!("{file_path} | export error: {export_result:?}");
-                            }
-                        }
-
-                        // 每 1024 条更新进度并检查中断信号
-                        if records_in_file.trailing_zeros() >= 10 {
-                            if let Some(pb) = pb {
-                                pb.inc(1024);
-                            }
-                            if interrupted.load(Ordering::Relaxed) {
-                                break 'outer;
-                            }
-                        }
-                    } else {
-                        // 被过滤掉的 PARAMS 记录（do_normalize && record.tag.is_none()）：
-                        // 仍需更新 params_buffer。
-                        crate::pipeline::compute_normalized(
-                            &record,
-                            &record.sql,
-                            params_buffer,
-                            placeholder_override,
-                            ns_scratch,
-                        );
-                    }
+                if !needs_processing { continue; }
+                let action = normalize_and_export(
+                    &record, exporter_manager, include_pm, do_normalize,
+                    params_buffer, placeholder_override, ns_scratch,
+                    remaining, &mut records_in_file, &mut file_stats, file_path, passes,
+                );
+                match action {
+                    ExportAction::BreakQuota | ExportAction::BreakFatal => break 'outer,
+                    ExportAction::Continue if passes && tick_progress(pb, records_in_file, interrupted) => break 'outer,
+                    ExportAction::Continue => {}
                 }
             }
             Err(e) => {
@@ -272,18 +201,7 @@ pub(super) fn process_log_file(
             }
         }
     }
-
     let elapsed = file_start.elapsed().as_secs_f64();
-    log_file_result(
-        pb,
-        show_progress,
-        file_path,
-        file_index,
-        total_files,
-        records_in_file,
-        errors_in_file,
-        elapsed,
-    );
-
+    log_file_result(pb, show_progress, file_path, file_index, total_files, records_in_file, errors_in_file, elapsed);
     Ok((records_in_file, file_stats))
 }
