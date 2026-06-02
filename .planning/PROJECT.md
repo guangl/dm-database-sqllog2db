@@ -8,15 +8,27 @@
 
 用户能够精确指定"导出哪些记录的哪些字段"——过滤逻辑清晰可配置，输出结果完全可控。
 
-## Current Milestone: v1.14 stats 时间段过滤
+## Current Milestone: v1.15 工程质量全面提升
 
-**Goal:** 为 `stats` 子命令加入时间段过滤，用户可通过 CLI 参数或 config.toml 指定起止时间，stats 只统计该时间段内的记录。
+**Goal:** 补全测试覆盖、清理技术债务、建立 CI/CD 基础设施，为后续功能迭代打好工程基础。
 
 **Target features:**
-- `--from`/`--to` CLI 参数（如 `--from "2024-01-01"` `--to "2024-01-31"`）
-- config.toml `[stats]` 节新增 `from`/`to` 字段作为默认值
+- e2e CLI 全链路集成测试（覆盖 run/stats/validate/init 命令，含 edge case）
+- 代码重构清理（cli/run 模块拆分、stats 模块整理、clippy/技术债务）
+- GitHub Actions CI：push/PR 自动运行 test/clippy/fmt
+- GitHub Actions CD：打 tag 自动构建多平台二进制并发布到 GitHub Releases
+- 性能基准追踪（criterion benchmark 稳定化，CI 可选接入）
+
+## Previous: v1.14 已交付
+
+**Shipped:** 2026-06-02
+**Version:** v1.14 stats 时间段过滤（Phases 53–54）
+
+**已交付功能：**
+- `--from`/`--to` CLI 参数时间段过滤
+- config.toml `[stats]` 节 `from`/`to` 字段作为默认值
 - CLI 参数优先于 config 中的值
-- `StatsAccumulator` 在聚合前按时间段跳过不符合的记录
+- `StatsAccumulator` 在聚合前按时间段跳过不符合记录
 
 ## Previous: v1.13 已交付
 
@@ -68,13 +80,19 @@
 - ✓ SQL 标准化（参数替换为占位符）— v1.13
 - ✓ `--top N` 参数（默认 20）— v1.13
 - ✓ 输出格式复用 config.toml exporter — v1.13
+- ✓ `stats --from`/`--to` CLI 参数（时间段过滤）— v1.14
+- ✓ config.toml `[stats]` 节 `from`/`to` 字段 — v1.14
+- ✓ CLI 参数优先于 config 值 — v1.14
+- ✓ `StatsAccumulator` 按时间段跳过不符合记录 — v1.14
 
 ### Active
 
-- [ ] `stats --from`/`--to` CLI 参数（时间段过滤）— v1.14
-- [ ] config.toml `[stats]` 节 `from`/`to` 字段 — v1.14
-- [ ] CLI 参数优先于 config 值 — v1.14
-- [ ] `StatsAccumulator` 按时间段跳过不符合记录 — v1.14
+- [ ] e2e CLI 全链路集成测试 — v1.15
+- [ ] cli/run 模块拆分与代码清理 — v1.15
+- [ ] stats 模块重构整理 — v1.15
+- [ ] GitHub Actions CI（test/clippy/fmt） — v1.15
+- [ ] GitHub Actions CD（多平台构建 + GitHub Releases） — v1.15
+- [ ] criterion benchmark 稳定化 — v1.15
 
 ### Out of Scope
 
@@ -132,4 +150,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-01 — v1.14 milestone started*
+*Last updated: 2026-06-02 — v1.15 milestone started*
