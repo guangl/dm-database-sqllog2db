@@ -9,6 +9,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
+mod collector;
 mod filter_processor;
 mod parallel;
 mod prescan;
