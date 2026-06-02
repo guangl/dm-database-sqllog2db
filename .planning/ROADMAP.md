@@ -462,7 +462,7 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
   3. `tests/integration.rs` 包含 `stats --from/--to` 边界条件测试：空时间范围（from > to）给出明确错误、边界值（from == to）正常运行、无效格式（非日期字符串）被拒绝并退出码非零
   4. `cargo test` 全部通过，新增测试不依赖外部服务或网络
 **Plans**: 2 plans
-- [ ] 57-01-PLAN.md — validate_stats_time_range 新增 from ≤ to 跨字段检查（D-01/D-02）+ 4 个单元测试 + test_cli_stats_rejects_from_after_to e2e 测试覆盖 TEST-03
+- [x] 57-01-PLAN.md — validate_stats_time_range 新增 from ≤ to 跨字段检查（D-01/D-02）+ 4 个单元测试 + test_cli_stats_rejects_from_after_to e2e 测试覆盖 TEST-03
 - [ ] 57-02-PLAN.md — 新增 write_run_config_toml / write_run_sqlite_config_toml 两 helper + 4 个 e2e 测试（run CSV header+行数、run SQLite sqllog_records 表行数、init 新建成功、init 已存在退出非零）覆盖 TEST-01/TEST-02
 
 ### Phase 58: cli/run 函数清理
@@ -562,7 +562,7 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
 | 54. StatsAccumulator 时间过滤 | v1.14 | Complete | 2026-06-02 |
 | 55. CI/CD 基础设施修复 | 2/2 | Complete   | 2026-06-02 |
 | 56. stats 模块清理与 benchmark 稳定化 | 2/2 | Complete    | 2026-06-02 |
-| 57. e2e 测试扩展 | v1.15 | Not started | - |
+| 57. e2e 测试扩展 | 1/2 | In Progress|  |
 | 58. cli/run 函数清理 | v1.15 | Not started | - |
 
 ---
