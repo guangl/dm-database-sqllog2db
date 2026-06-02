@@ -2,7 +2,6 @@ use crate::error::{ErrorStats, Result};
 use crate::exporter::ExporterManager;
 use crate::pipeline::Pipeline;
 use crate::pipeline::normalizer::ParamBuffer;
-use dm_database_parser_sqllog::LogParserBuilder;
 use indicatif::ProgressBar;
 use log::info;
 use std::sync::Arc;
@@ -49,13 +48,7 @@ pub(super) fn process_log_file(
         }
     }
 
-    let parser = LogParserBuilder::new(file_path).build().map_err(|e| {
-        crate::error::Error::Parser(crate::error::ParserError::InvalidPath {
-            path: file_path.into(),
-            reason: format!("{e}"),
-            line_number: None,
-        })
-    })?;
+    let parser = crate::scanner::build_parser(std::path::Path::new(file_path))?;
 
     let mut records_in_file = 0usize;
     let mut errors_in_file = 0usize;
