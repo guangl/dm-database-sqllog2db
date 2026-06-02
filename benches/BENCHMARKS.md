@@ -717,3 +717,12 @@ gh run download <run-id> -n bench-results-<sha>
 4. 也可将两个 JSON 导入 Excel / Numbers 进行多 benchmark 批量对比。
 
 > 实施于 Phase 56（v1.15）— D-04
+
+---
+
+## Phase 56 — CI Benchmark Artifact Collection（v1.15）
+
+**Date:** 2026-06-02
+**Goal:** D-04 — CI artifact upload + download workflow（bench.yml）
+**Benchmark impact:** No new criterion benchmark groups introduced. Existing baselines
+(Phases 4/5/42/44) remain current. See "CI Benchmark Artifact 使用说明" above.
