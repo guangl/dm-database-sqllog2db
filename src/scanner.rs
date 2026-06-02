@@ -8,8 +8,6 @@ use std::path::PathBuf;
 ///
 /// - 文件路径不存在或无法打开时返回 `Err`，终止整个扫描。
 /// - 单条记录解析失败时调用 `stats.add_parse_error()` 并输出 `log::warn!`，不终止迭代。
-// Task 2 将使用此函数（stats/mod.rs 重构），届时 dead_code 警告自动消除。
-#[allow(dead_code)]
 pub(crate) fn scan_files<F>(
     log_files: &[PathBuf],
     on_record: &mut F,
