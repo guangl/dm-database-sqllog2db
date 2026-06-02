@@ -2,6 +2,7 @@
 
 ## Milestones
 
+- **v1.16 工程质量深化** — Phases 59–63 (active)
 - ✅ **v1.15 工程质量全面提升** — Phases 55–58 (shipped 2026-06-02)
 - ✅ **v1.14 stats 时间段过滤** — Phases 53–54 (shipped 2026-06-02)
 - ✅ **v1.13 SQL 统计分析** — Phases 50–52 (shipped 2026-06-01)
@@ -176,6 +177,14 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
 Full details: `.planning/milestones/v1.15-ROADMAP.md`
 
 </details>
+
+### v1.16 工程质量深化 (Phases 59–63)
+
+- [ ] **Phase 59: cli/run 与 exporter/pipeline 结构整理** — 识别剩余超 40 行函数并拆分，消除 exporter/pipeline 模块内重复代码
+- [ ] **Phase 60: 错误处理路径统一** — 统一错误转换和传播路径，删除冗余 unwrap/expect
+- [ ] **Phase 61: Cross.toml SHA 固定** — 将 edge 浮动标签替换为固定 SHA digest，提升构建可复现性
+- [ ] **Phase 62: 文档完善** — 更新 README、新建 CHANGELOG、补全 config.toml 模板注释
+- [ ] **Phase 63: 测试覆盖提升** — 运行覆盖率分析并按结果补全关键路径测试
 
 ## Phase Details
 
@@ -482,6 +491,63 @@ Full details: `.planning/milestones/v1.15-ROADMAP.md`
 **Plans**: 1 plan
 - [x] 58-01-PLAN.md — handle_run 拆分为 7 个私有辅助函数 (resolve_input_files / merge_trxid_prescan / make_progress_bar / run_csv_parallel / run_sqlite_parallel / run_sequential / print_run_summary) + handle_run 本体改造为 D-04 模式 (merged.as_ref().unwrap_or(cfg)) + 全函数体 ≤40 行验证 + cargo clippy/test/fmt 三道质量门禁 (CLEAN-02)
 
+### Phase 59: cli/run 与 exporter/pipeline 结构整理
+**Goal**: cli/run 中所有超过 40 行的函数（handle_run 以外）被语义拆分，exporter/pipeline 模块内重复代码消除，模块职责边界清晰
+**Depends on**: Phase 58
+**Requirements**: STRUCT-01, STRUCT-02
+**Success Criteria** (what must be TRUE):
+  1. `src/cli/run/` 目录下所有函数体不超过 40 行，每个函数名称反映单一职责（可通过代码审查 + `cargo clippy` 验证）
+  2. exporter 模块内的重复逻辑（如相同的字段序列化、路径创建逻辑）提取为共享函数，`git diff` 可见代码行数净减少
+  3. pipeline 模块的子模块边界清晰：过滤器定义、编译逻辑、执行逻辑分属不同文件或清晰命名的子模块，不存在跨职责的函数
+  4. `cargo test` 全部通过，无任何行为变化；`cargo clippy --all-targets -- -D warnings` + `cargo fmt --check` 通过
+**Plans**: TBD
+
+### Phase 60: 错误处理路径统一
+**Goal**: 整个代码库的错误转换和传播路径统一，冗余的 unwrap/expect 被替换为显式错误传播，错误信息清晰可追溯
+**Depends on**: Phase 59
+**Requirements**: STRUCT-03
+**Success Criteria** (what must be TRUE):
+  1. `grep -r 'unwrap\(\)\|expect(' src/` 的结果中，每个 unwrap/expect 均有注释说明其不可失败的原因，或已被替换为 `?` 传播
+  2. 错误从产生点到 main.rs 的传播路径一致：使用 `From` 自动转换而非手动 `.map_err`，且 From 实现位于 `src/error.rs`（或统一位置）
+  3. `cargo test` 全部通过；`cargo clippy --all-targets -- -D warnings` 通过，clippy 不报告 `unwrap_used` 或 `expect_used` 相关警告
+  4. 错误处理重构前后功能行为不变，已有 e2e 测试（Phase 57 新增）全部通过
+**Plans**: 1 plan
+  - [ ] 60-01-PLAN.md — 为 logging.rs:60 与 parallel.rs:87 添加 infallible 注释，并交付全代码库 unwrap/expect/map_err 审计 + cargo clippy/test 兜底验证
+
+### Phase 61: Cross.toml SHA 固定
+**Goal**: Cross.toml 中 aarch64-linux 构建镜像的 edge 浮动标签被替换为固定 SHA digest，任意时刻执行 `cross build` 都使用相同的镜像层，构建结果可复现
+**Depends on**: Phase 58 (不依赖代码重构，可独立执行；但按里程碑顺序排在 Phase 60 之后)
+**Requirements**: CROSS-01
+**Success Criteria** (what must be TRUE):
+  1. `Cross.toml` 中镜像引用格式为 `image = "ghcr.io/cross-rs/aarch64-unknown-linux-gnu@sha256:<digest>"`，不含 `:edge` 或其他浮动标签
+  2. `cross build --target aarch64-unknown-linux-gnu --dry-run`（或等效验证）可成功解析该镜像引用，无报错
+  3. `Cross.toml` 中包含注释记录该 SHA 对应的镜像日期或版本，便于日后审计和更新
+  4. `cargo clippy --all-targets -- -D warnings` + `cargo test` 通过（Cross.toml 变更不影响本地编译）
+**Plans**: TBD
+
+### Phase 62: 文档完善
+**Goal**: README 反映 v1.13–v1.15 全部新功能，CHANGELOG 完整覆盖 v1.0–v1.15 历史，config.toml init 模板每个字段均有内联注释
+**Depends on**: Phase 61
+**Requirements**: DOC-01, DOC-02, DOC-03
+**Success Criteria** (what must be TRUE):
+  1. README.md 包含 `stats` 子命令的用法示例（含 `--from`/`--to` 参数）、v1.15 CI/CD 修复说明，功能列表与当前代码一致
+  2. CHANGELOG.md 存在，采用 Keep a Changelog 格式（`## [Unreleased]`、`## [1.15.0]` 等标准节标题），覆盖 v1.0 至 v1.15 全部版本的 Added/Changed/Fixed 条目
+  3. `sqllog2db init -o /tmp/test.toml` 生成的文件中，`[stats]` 节的 `from`/`to` 字段和 `[filters]` 各子字段均有行内注释，无任何字段缺少注释
+  4. `cargo test` 中关于 `init` 模板注释存在性的断言（Phase 47 新增）仍全部通过
+**Plans**: TBD
+
+### Phase 63: 测试覆盖提升
+**Goal**: llvm-cov 覆盖率报告生成完毕，关键路径（过滤器 edge case、exporter 单元逻辑、错误路径）的行覆盖率相比分析前有可量化提升
+**Depends on**: Phase 62
+**Requirements**: TEST-01, TEST-02
+**Success Criteria** (what must be TRUE):
+  1. `cargo llvm-cov --html`（或 tarpaulin 等效）成功生成覆盖率报告，报告文件保存在 `target/llvm-cov/` 或等效路径，整体行覆盖率数字被记录
+  2. 覆盖率报告识别出至少 3 个覆盖不足区域（行覆盖率低于 60% 的函数或模块），在 Phase 计划文档中列出
+  3. 按分析结果补全的测试使识别出的覆盖不足区域行覆盖率达到 80% 以上，或有文档说明为何该路径难以测试（如 OS 相关错误路径）
+  4. `cargo test` 全部通过，新增测试不依赖外部服务或网络；`cargo clippy --all-targets -- -D warnings` 通过
+
+**Plans**: TBD
+
 ## Coverage Validation
 
 | Requirement | Phase |
@@ -539,8 +605,17 @@ Full details: `.planning/milestones/v1.15-ROADMAP.md`
 | TEST-02     | 57    |
 | TEST-03     | 57    |
 | CLEAN-02    | 58    |
+| STRUCT-01   | 59    |
+| STRUCT-02   | 59    |
+| STRUCT-03   | 60    |
+| CROSS-01    | 61    |
+| DOC-01      | 62    |
+| DOC-02      | 62    |
+| DOC-03      | 62    |
+| TEST-01     | 63    |
+| TEST-02     | 63    |
 
-**54/54 requirements mapped — coverage: 100%**
+**63/63 requirements mapped — coverage: 100%**
 
 ## Progress
 
@@ -566,11 +641,16 @@ Full details: `.planning/milestones/v1.15-ROADMAP.md`
 | 52. 统计输出与 Exporter 集成 | v1.13 | 1/1 | Complete | 2026-06-01 |
 | 53. 时间段配置与 CLI 参数 | v1.14 | 3/3 | Complete | 2026-06-01 |
 | 54. StatsAccumulator 时间过滤 | v1.14 | Complete | 2026-06-02 |
-| 55. CI/CD 基础设施修复 | 2/2 | Complete   | 2026-06-02 |
-| 56. stats 模块清理与 benchmark 稳定化 | 2/2 | Complete    | 2026-06-02 |
-| 57. e2e 测试扩展 | 2/2 | Complete    | 2026-06-02 |
-| 58. cli/run 函数清理 | 1/1 | Complete    | 2026-06-02 |
+| 55. CI/CD 基础设施修复 | v1.15 | 2/2 | Complete | 2026-06-02 |
+| 56. stats 模块清理与 benchmark 稳定化 | v1.15 | 2/2 | Complete | 2026-06-02 |
+| 57. e2e 测试扩展 | v1.15 | 2/2 | Complete | 2026-06-02 |
+| 58. cli/run 函数清理 | v1.15 | 1/1 | Complete | 2026-06-02 |
+| 59. cli/run 与 exporter/pipeline 结构整理 | v1.16 | Not started | - |
+| 60. 错误处理路径统一 | v1.16 | Not started | - |
+| 61. Cross.toml SHA 固定 | v1.16 | Not started | - |
+| 62. 文档完善 | v1.16 | Not started | - |
+| 63. 测试覆盖提升 | v1.16 | Not started | - |
 
 ---
 *Created: 2026-05-21 for milestone v1.10*
-*Updated: 2026-06-02 — v1.15 (Phases 55–58) roadmap added; CICD-01/02/03/04, CLEAN-01/02, TEST-01/02/03, BENCH-01 全部映射*
+*Updated: 2026-06-02 — v1.16 (Phases 59–63) roadmap added; STRUCT-01/02/03, CROSS-01, DOC-01/02/03, TEST-01/02 全部映射*
