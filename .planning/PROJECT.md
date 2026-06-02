@@ -87,8 +87,8 @@
 
 ### Active
 
-- [ ] e2e CLI 全链路集成测试 — v1.15
-- [ ] cli/run 模块拆分与代码清理 — v1.15
+- ✓ e2e CLI 全链路集成测试 — v1.15 (Phase 57)
+- ✓ cli/run 模块拆分与代码清理 — v1.15 (Phase 58)
 - [ ] stats 模块重构整理 — v1.15
 - [ ] GitHub Actions CI（test/clippy/fmt） — v1.15
 - [ ] GitHub Actions CD（多平台构建 + GitHub Releases） — v1.15
@@ -151,4 +151,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-02 after Phase 57*
+*Last updated: 2026-06-02 after Phase 58*
