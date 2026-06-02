@@ -31,7 +31,7 @@
 
 ### SQLite run 测试的验证深度（TEST-01）
 
-- **D-07:** SQLite 输出验证：文件存在 + 用 rusqlite 查询 `sqllog` 表记录数等于写入行数（rusqlite 已是项目依赖，无需新 dep）
+- **D-07:** SQLite 输出验证：文件存在 + 用 rusqlite 查询 `sqllog_records` 表记录数等于写入行数（rusqlite 已是项目依赖，无需新 dep）（修正：实际表名为 `sqllog_records`，见 RESEARCH.md Pitfall 1 + PATTERNS.md 确认）
 
 ### init CLI 测试（TEST-02）
 
