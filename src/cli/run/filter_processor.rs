@@ -42,6 +42,30 @@ fn build_or_group(
     }
 }
 
+fn build_include_groups(f: &FiltersFeature) -> Vec<Vec<Filter>> {
+    vec![
+        build_or_group(f.include.users.as_deref(), |fb, v| fb.username_eq(v)),
+        build_or_group(f.include.ips.as_deref(), |fb, v| fb.client_ip_eq(v)),
+        build_or_group(f.include.sessions.as_deref(), |fb, v| fb.sess_id_eq(v)),
+        build_or_group(f.include.threads.as_deref(), |fb, v| fb.thrd_id_eq(v)),
+        build_or_group(f.include.statements.as_deref(), |fb, v| fb.statement_eq(v)),
+        build_or_group(f.include.apps.as_deref(), |fb, v| fb.appname_eq(v)),
+        build_or_group(f.include.tags.as_deref(), |fb, v| fb.tag_eq(v)),
+    ]
+}
+
+fn build_exclude_groups(f: &FiltersFeature) -> Vec<Vec<Filter>> {
+    vec![
+        build_or_group(f.exclude.users.as_deref(), |fb, v| fb.username_eq(v)),
+        build_or_group(f.exclude.ips.as_deref(), |fb, v| fb.client_ip_eq(v)),
+        build_or_group(f.exclude.sessions.as_deref(), |fb, v| fb.sess_id_eq(v)),
+        build_or_group(f.exclude.threads.as_deref(), |fb, v| fb.thrd_id_eq(v)),
+        build_or_group(f.exclude.statements.as_deref(), |fb, v| fb.statement_eq(v)),
+        build_or_group(f.exclude.apps.as_deref(), |fb, v| fb.appname_eq(v)),
+        build_or_group(f.exclude.tags.as_deref(), |fb, v| fb.tag_eq(v)),
+    ]
+}
+
 impl FilterProcessor {
     fn from_feature(f: &FiltersFeature) -> Self {
         let mut ts_builder = FilterBuilder::new();
@@ -52,33 +76,12 @@ impl FilterProcessor {
             ts_builder = ts_builder.ts_lte(end.clone());
         }
         let base_filter = ts_builder.build();
-
-        let include_groups = vec![
-            build_or_group(f.include.users.as_deref(), |fb, v| fb.username_eq(v)),
-            build_or_group(f.include.ips.as_deref(), |fb, v| fb.client_ip_eq(v)),
-            build_or_group(f.include.sessions.as_deref(), |fb, v| fb.sess_id_eq(v)),
-            build_or_group(f.include.threads.as_deref(), |fb, v| fb.thrd_id_eq(v)),
-            build_or_group(f.include.statements.as_deref(), |fb, v| fb.statement_eq(v)),
-            build_or_group(f.include.apps.as_deref(), |fb, v| fb.appname_eq(v)),
-            build_or_group(f.include.tags.as_deref(), |fb, v| fb.tag_eq(v)),
-        ];
-
-        let exclude_groups = vec![
-            build_or_group(f.exclude.users.as_deref(), |fb, v| fb.username_eq(v)),
-            build_or_group(f.exclude.ips.as_deref(), |fb, v| fb.client_ip_eq(v)),
-            build_or_group(f.exclude.sessions.as_deref(), |fb, v| fb.sess_id_eq(v)),
-            build_or_group(f.exclude.threads.as_deref(), |fb, v| fb.thrd_id_eq(v)),
-            build_or_group(f.exclude.statements.as_deref(), |fb, v| fb.statement_eq(v)),
-            build_or_group(f.exclude.apps.as_deref(), |fb, v| fb.appname_eq(v)),
-            build_or_group(f.exclude.tags.as_deref(), |fb, v| fb.tag_eq(v)),
-        ];
-
+        let include_groups = build_include_groups(f);
+        let exclude_groups = build_exclude_groups(f);
         let trxid_set = f.include.trxids.clone();
-
         let has_meta_filters = include_groups.iter().any(|g| !g.is_empty())
             || exclude_groups.iter().any(|g| !g.is_empty())
             || trxid_set.as_ref().is_some_and(|s| !s.is_empty());
-
         Self {
             base_filter,
             include_groups,
