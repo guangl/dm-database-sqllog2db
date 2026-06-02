@@ -5,4 +5,5 @@ pub mod exporter;
 pub mod logging;
 pub(crate) mod parser;
 pub mod pipeline;
+pub(crate) mod scanner;
 pub mod stats;
