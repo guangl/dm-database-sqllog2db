@@ -637,3 +637,83 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 - [x] 全套测试通过（cargo test 无回归）
 - [x] 未引入新 unsafe 代码（D-06）
 - [x] CLAUDE.md BufWriter 16MB 描述与代码一致
+
+---
+
+## CI Benchmark Artifact 使用说明
+
+每次向 `main` 推送或向 `main` 提 PR 时，`.github/workflows/bench.yml` 自动运行全套 benchmark 并将结果上传为 GitHub Actions artifact，供手动下载与历史对比。
+
+> 当前 bench workflow 配置 `continue-on-error: true`，benchmark 失败不阻塞 PR merge，仅作 informational data collection。如需引入回归门控，应在独立 workflow 中实现（与 Phase 55/56 设计一致，未来 milestone 视需求评估）。
+
+### Artifact 命名规则
+
+- **CI 上传名称**：`bench-results-{github.sha}`（完整 40 位 SHA，由 `actions/upload-artifact@v4` 使用）
+- **Artifact 内文件名**：`bench-results-{short_sha}.json`（`scripts/collect_bench_results.sh` 使用 8 位短 SHA）
+- **保留时间**：60 天（`retention-days: 60`）
+- **来源 workflow**：`.github/workflows/bench.yml`
+- **触发条件**：PR to main + push to main
+
+### 下载方式
+
+**GitHub UI：**
+
+1. 进入仓库 Actions 页面
+2. 在左侧选择 "Benchmark" workflow
+3. 点击目标 workflow run
+4. 在页面底部 "Artifacts" 区域下载 `bench-results-<sha>`
+
+**gh CLI：**
+
+```bash
+# 列出最近 10 次 Benchmark workflow run
+gh run list --workflow=bench.yml --limit 10
+
+# 下载指定 run 的 artifact（将 <run-id> 替换为实际 run ID，<sha> 替换为对应 SHA 前 8 位）
+gh run download <run-id> -n bench-results-<sha>
+```
+
+### JSON 结构
+
+`bench-results-{short_sha}.json` 文件格式如下：
+
+```json
+{
+  "timestamp": "2026-MM-DDTHH:MM:SSZ",
+  "commit_sha": "<full 40-char SHA>",
+  "benchmarks": {
+    "<group>/<bench_id>": {
+      "mean_ns": 1234567,
+      "stddev_ns": 12345
+    }
+  }
+}
+```
+
+- `group` 与 `bench_id` 对应 criterion 目录结构（例如 `csv_export/10000`、`parser_throughput/1000`、`filters/no_pipeline`）
+- `mean_ns`：criterion `mean.point_estimate`（纳秒）
+- `stddev_ns`：criterion `std_dev.point_estimate`（纳秒）
+
+### 手动历史对比方法
+
+1. 下载两个不同 commit 的 artifact JSON 文件（例如 `bench-results-abc12345.json` 和 `bench-results-def67890.json`）
+
+2. 用 `jq` 提取目标 benchmark 的 mean：
+
+   ```bash
+   jq '.benchmarks["csv_export/10000"].mean_ns' bench-results-abc12345.json
+   jq '.benchmarks["csv_export/10000"].mean_ns' bench-results-def67890.json
+   ```
+
+3. 计算相对变化：
+
+   ```bash
+   # 以 Python 计算（new=新值，old=旧值，单位 ns）
+   python3 -c "old=1958000; new=1900000; print(f'{(new-old)/old*100:.2f}%')"
+   # 或使用 bc
+   echo "scale=2; (1900000 - 1958000) / 1958000 * 100" | bc
+   ```
+
+4. 也可将两个 JSON 导入 Excel / Numbers 进行多 benchmark 批量对比。
+
+> 实施于 Phase 56（v1.15）— D-04
