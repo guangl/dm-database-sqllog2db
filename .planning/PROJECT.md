@@ -111,8 +111,9 @@
 - 依赖精简（无 reqwest/rustls/self_update 等重依赖，仅新增 indicatif）
 - 当前代码量：~8,833 行 Rust（src）+ 1,503 行（tests）
 - 性能基线：~5.2M records/sec（合成 CSV），~1.55M records/sec（1.1GB 真实文件）
-- 测试覆盖：529 个测试（226 lib + 48+ integration + 1 jemalloc），全部通过
+- 测试覆盖：~558 个测试（226 lib + 69 integration + 1 jemalloc + 单元测试），全部通过
 - assert_cmd / predicates 加入 dev-dependencies，e2e CLI 测试覆盖大幅提升
+- Phase 57 新增：stats --from/--to 跨字段顺序校验，run CSV/SQLite 全链路断言，init 成功/冲突测试
 
 ## Constraints
 
@@ -150,4 +151,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-02 — v1.15 milestone started*
+*Last updated: 2026-06-02 after Phase 57*
