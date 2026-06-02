@@ -1,270 +1,310 @@
 # Pitfalls Research
 
-**Domain:** Rust CLI data processing tool — parsing DaMeng SQL logs, streaming to CSV/SQLite
-**Researched:** 2026-05-21
+**Domain:** Rust CLI — CI/CD 基础设施、跨平台构建、模块重构、e2e 测试、benchmark 稳定化
+**Researched:** 2026-06-02
 **Confidence:** HIGH
+
+---
 
 ## Critical Pitfalls
 
-### Pitfall 1: 错误类型重构时丢失 Fatal vs. Non-fatal 的界限
+### Pitfall 1: rusqlite bundled + cross 跨平台构建在 aarch64-linux 下失败
 
 **What goes wrong:**
-在 processor.rs 的热循环中（process_log_file 第 100 行），`exporter_manager.export_one_preparsed(...)?` 使用 `?` 传播错误——写入失败（如磁盘满）会直接终止整个导出流程。当前代码中 parse 错误单独走 `log::warn!` 路径（非致命），而 export 错误走 `?` 路径（致命）。添加"continue-on-error"时，开发者可能不加区分地让所有错误变为非致命，导致磁盘满等致命错误被静默忽略，用户最终得到不完整的输出文件而不自知。
+`rusqlite` 使用 `features = ["bundled"]` 时，cross-rs 用 Docker 容器构建 `aarch64-unknown-linux-gnu` 目标。cross 的 Docker 镜像虽然包含 aarch64 linker，但默认镜像不一定带 C 编译器工具链的完整头文件（`limits.h` 等）；`libsqlite3-sys` 的 bundled 构建需要用 `cc` crate 在目标架构下编译 C 代码，缺头文件会导致构建立即失败。已有 GitHub Issues 记录此问题（rusqlite#939、rusqlite#871）。
 
 **Why it happens:**
-- `#[from]` 自动生成 `From` impl，使得 `Exporter::export_one_preparsed` 返回的 `Result<()>` 能自动转化为 `Error::Export` 变体。热路径上开发者只需写 `?`，容易忘记区分哪些错误是致命的、哪些可以继续。
-- 当前 error.rs 的 `Error` 枚举将所有变体（Config/File/Parser/Export/Io）放在同一层级，没有"致命/非致命"分类标记。
-- processor.rs 中对 parse 错误的处理是"碰到 Err 就走 log::warn 然后 continue"，而不是返回错误结果——这是两条完全不同的路径。重构时容易把两条路径混用。
+- `bundled` 特性让 `libsqlite3-sys` 在编译时用 `cc` 编译内嵌的 SQLite C 源码，这是跨编译中最脆弱的步骤。
+- cross-rs 的官方镜像为常见 Rust-only 项目设计，不一定满足 C 依赖的构建需求。
+- release.yaml 当前使用 `use_cross: true` for `aarch64-unknown-linux-gnu`，但没有指定 cross 的自定义 `Cross.toml` 配置。
 
 **How to avoid:**
-1. 在 `Error` 枚举（或通过方法）显式标记哪些变体是 fatal 的：`fn is_fatal(&self) -> bool`。
-2. 热循环中单独处理可恢复错误——用 match 而非 `?`：匹配 `Err(Error::Export(ExportError::WriteFailed{..}))` 时记录警告并继续，匹配其他错误时终止。
-3. 为"记录级别"错误新建轻量级 `RecordError` 类型，与终止性 `FatalError` 类型分开。
-4. 调研 `#[error(transparent)]` 替代 `#[from]`+`#[error("...")]` 组合，获得更清晰的错误链。
+1. 在项目根创建 `Cross.toml`，为 `aarch64-unknown-linux-gnu` 指定带完整 C 工具链的 Docker 镜像：
+   ```toml
+   [target.aarch64-unknown-linux-gnu]
+   image = "ghcr.io/cross-rs/aarch64-unknown-linux-gnu:main"
+   ```
+2. 或者在 release.yaml 中为 cross 构建步骤设置 `CROSS_NO_WARNINGS=0`，先观察具体报错再针对性修复。
+3. 备选：使用 GitHub Actions 的 `ubuntu-latest` + 安装 `gcc-aarch64-linux-gnu` 原生交叉工具链，替代 cross。当 C 依赖较重时原生工具链比 Docker 更稳定。
+4. 在 CI 中先验证 cross 编译，再把它加入 release 门控——不要直接推 tag 触发 release 才发现编译失败。
 
 **Warning signs:**
-- 编译报错说 `?` 无法自动转换错误类型（重构时破坏了 `#[from]` 关系）。
-- 新增的错误变体没有 `is_fatal()` 覆盖，导致 `match` 语句出现未处理分支。
-- 测试中 `export_one_preparsed` 返回 `Err` 后，预期继续处理但实际终止了。
+- `cross build` 失败，错误信息包含 `cc: fatal error: limits.h: No such file or directory`。
+- `libsqlite3-sys` 构建失败，`bundled` 字样在错误中出现。
+- aarch64 构建 job 超时（cross 拉 Docker 镜像本身耗时较长）。
 
 **Phase to address:**
-ERR-01（错误类型细分）和 ERR-02（非致命错误继续处理）必须放在一起做，否则先细分再改 continue 会破坏已有逻辑。建议先设计 fatal/non-fatal 分类，再一次性重构热循环。
+CD 构建阶段（多平台 Release）。应在 v1.15 正式推 tag 前，先在 CI 中手动触发 aarch64 构建验证。
 
 ---
 
-### Pitfall 2: Stdin 输入与 LogParserBuilder 的文件路径假设冲突
+### Pitfall 2: criterion benchmark 在 CI 中产生假性回归报告
 
 **What goes wrong:**
-`dm-database-parser-sqllog` 的 `LogParserBuilder::new(path).build()` 内部调用 `fs::read(&self.path)` 从文件系统读取全部数据到 `Vec<u8>`。它不接受 `std::io::Read` trait 对象。这意味着：
-- **直接传入 "-" 不可行**——build() 会尝试打开名为 "-" 的文件。
-- **无法流式处理 stdin**——`LogParser` 内部持有 `Vec<u8>` 并基于 `&[u8]` 迭代，不支持分批数据到达。
-- **pre-scan 阶段也会崩溃**——`scan_for_trxids_by_transaction_filters` 同样调用 `LogParserBuilder::new(file_path)`，两种输入方式不能走同一条代码路径。
-
-此外，SqllogParser 的 `log_files()` 方法调用 `path.exists()`、`path.is_file()`、`std::fs::read_dir()`——这些对 stdin 全部不适用，会直接 panic 或返回空列表。
+Criterion.rs 的统计分析无法消除 GitHub Actions 虚拟机的基础噪声（通常 ±5-15%）。即使代码没有变化，也会频繁出现 "Performance has regressed" 的报告。如果把 benchmark 结果作为 CI 门控（阻断 merge），会产生大量假阳性，导致开发者开始绕过检查；如果不设门控，benchmark 数据形同虚设。
 
 **Why it happens:**
-- 上游 crate 的设计假设：所有数据通过文件路径加载到内存后再解析。这个假设在 v1.0 使用 mmap 时更强，当前 v1.1 改用 `fs::read` 后仍是"全量加载"模式。
-- 当前架构的层层抽象都围绕文件路径展开：`SqllogParser` -> `log_files()` -> `process_log_file(file_path, ...)` -> `LogParserBuilder::new(file_path)`。
-- 代码中没有任何一层使用 `io::Read` 抽象——每个函数都接收 `&str` 文件路径。
+- GitHub Actions 的 hosted runner 是共享虚拟机，CPU 时钟会因宿主机负载而波动，Criterion 的置信区间无法覆盖宿主机级别的噪声。
+- 当前 bench.yml 中已经设置 `continue-on-error: true`——这说明设计上已意识到 benchmark 不能作为硬性门控，但 `cargo bench` 的输出仍会影响开发者判断。
+- 项目已有 `collect_bench_results.sh` 收集 estimates.json，但没有对比历史 baseline——每次 CI 只能看到本次数值，缺乏趋势跟踪。
 
 **How to avoid:**
-1. 在 `LogParserBuilder` 层加 stdin 分支：如果路径是 `"-"`（或配置特殊标记），从 `std::io::stdin()` 读取全部数据到 `Vec<u8>`，然后手动构造 `LogParser { data, encoding }`（LogParser 的字段是 `pub(crate)` 但我们可以直接构造结构体，因为它是上游 crate 中的 pub 类型）。
-2. 或者：在 stdin 路径下禁用 pre-scan（事务级过滤需要预扫描，而 stdin 不能预扫描），回退到顺序过滤。
-3. 进度条在 stdin 模式下应显示"总字节数未知"的 spinner 风格，而非确定进度条，因为文件大小未知。
-4. 确保 `--help` 明确指出 stdin 的限制：不支持事务级过滤、不支持 pre-scan。
+1. **保持 `continue-on-error: true`**，永远不要把 criterion 在 CI 中的结果设为 merge 门控。
+2. 真正的性能门控使用集成测试中的 `test_csv_throughput_baseline`（当前已存在于 `tests/integration.rs:464`）——这是一个基于 release 构建的粗粒度门控，容差足够大（500K rec/s），不受 CI 噪声影响。
+3. 如果要跟踪趋势，使用 `benchmark-action/github-action-benchmark` 将历史数据存储在独立分支，对 ±15% 以上才告警。
+4. 在本地开发时使用 `--baseline` 对比（已在 BENCHMARKS.md 中记录），CI 中只做"编译检查"（`cargo bench --no-run`）。
 
 **Warning signs:**
-- 用户运行 `cat huge.log | sqllog2db run` 后立即报 `No such file or directory: '-'` 或类似的路径错误。
-- stdin 模式下 pre-scan 阶段仍然尝试打开文件。
-- 进度条在 stdin 模式下卡在 0% 或显示错误的总记录数。
+- CI benchmark job 每次都输出 "Performance has regressed"，但没有任何代码性能相关改动。
+- 开发者开始跳过 benchmark job 或在 PR 描述中写 "bench noise, not real regression"。
+- `bench.yml` 被修改为直接 skip 或 `cargo bench --no-run` 替代实际运行。
 
 **Phase to address:**
-PIPE-01（stdin 管道输入）。必须与 ERR-02（继续处理）协调——stdin 因为不能 pre-scan，事务级过滤会失效，这个限制需要清晰的错误信息告知用户。
+CI 基础设施阶段。bench.yml 的 "stabilization" 核心是明确 benchmark 在 CI 中的定位：*信息性，非门控*。
 
 ---
 
-### Pitfall 3: 进度条更新插入热循环导致性能退化
+### Pitfall 3: cli/run 模块拆分后，单元测试丢失对私有函数的访问权
 
 **What goes wrong:**
-当前 processor.rs 的热循环（约 5.2M records/sec）对每次记录做：解析、过滤、normalize、CSV 格式化写入。如果在每次记录后增加进度条更新（`progress_bar.inc(1)`），每调用一次就需要：
-- 获取内部锁（Mutex）
-- 计算并重新绘制进度条（Terminal I/O to stderr）
-- 至少一次系统调用
-
-以 5.2M records/sec 计算，每条记录约 192ns。一次进度条锁获取+I/O 操作大约是 1-10μs 级别——放进来性能会下降 50-100 倍。
+`src/cli/run/tests.rs` 使用 `use super::*` 访问同模块下的私有函数（如 `handle_run`、内部 helper）。如果把 `mod.rs` 中的部分函数移动到新的子模块（如 `orchestration.rs`），`tests.rs` 的 `super::*` 只能访问 `mod.rs` 的内容，移走的私有函数立即变得不可见，编译失败。
 
 **Why it happens:**
-- 进度条库（indicatif）的 `inc()` 每次都有内部锁和潜在终端 I/O，不是零开销。
-- 开发者看到 `inc()` 很简单，容易直接写在热循环里。
-- 当前代码已经有一个 `show_progress: bool` 参数和一个 per-file 级别的进度（`eprintln!("[{i}/{n}] ...")`），性能开销极小。替换成 per-record 进度条会反转这个设计。
+- Rust 的可见性规则：子模块可以访问父模块的私有项，但 `tests.rs`（通过 `#[path = "tests.rs"]` 或 `mod tests`）只是 `mod.rs` 的子模块，无法直接访问移走到兄弟模块的私有函数。
+- `use super::*` 是一个诱人的快捷方式，但它只能拿到直接父模块暴露的项。
+- 重构时容易先移动函数、后发现测试编译失败，此时需要决定"把函数改为 `pub(crate)`"还是"把测试移动到更合适的位置"。
 
 **How to avoid:**
-1. **保持 per-file 级别的进度显示**：每次打开新文件时更新时间，不在热循环内更新。当前的做法（`eprintln!("[{i}/{n}]")`）已经是最优方案。
-2. 如果确实需要 per-record 进度条，限定更新频率：每 N 条记录更新一次，N=1024 或更高（参考 processor.rs 已有的 `trailing_zeros() >= 10` 中断检测模式，复用这个计数器）。
-3. 使用 `AtomicU64` 做跨线程计数器，仅在主线程定期检查，避免 rayon 的并行线程互锁竞争。
-4. 进度条更新只在文件开关时做，不做 per-record 更新——这是当前架构的最优匹配。
+1. 重构前先列出 `tests.rs` 中测试的每个函数，标记其来源模块，确认移动计划不会切断访问链。
+2. 被单元测试使用的内部 helper 改为 `pub(super)` 或 `pub(crate)` 可见性，而非保持私有。
+3. 将单元测试随被测代码一起移动——如果 `process_log_file` 移到 `processor.rs`，对应的 unit test 也移过去，放在 `processor.rs` 底部的 `#[cfg(test)] mod tests { ... }` 块中。
+4. 使用 `#[allow(unused_imports)]` 配合 CI clippy `-D warnings`——如果 `use super::*` 引入了不再需要的导入，clippy 会立刻报错提示。
 
 **Warning signs:**
-- 添加进度条后基准测试从 5.2M records/sec 下降到 < 1M records/sec。
-- 在批量测试中观察到大量 stderr 输出（progress bar 重绘痕迹）。
-- CPU profile 显示 `std::sync::Mutex::lock` 或 `write(2, ...)` 系统调用占据大量时间。
+- 重构后 `cargo build` 成功但 `cargo test` 失败，报 `error[E0425]: cannot find function`。
+- `tests.rs` 中出现大量 `use crate::cli::run::新模块::函数名` 的手动引入，说明 `super::*` 已不够用。
+- 测试通过但 clippy 报 `unused_imports` 警告，说明部分 `super::*` 导入的函数已被移走。
 
 **Phase to address:**
-UX-01（进度显示）。实现时参考 processor.rs 第 102-108 行的 `records_in_file.trailing_zeros() >= 10` 模式，将进度更新与已有的中断检测对齐。
+代码重构阶段（cli/run 模块拆分）。重构第一步就应该运行 `cargo test` 而非只跑 `cargo build`。
 
 ---
 
-### Pitfall 4: 错误信息过度工程化——错误码系统 vs 内联上下文
+### Pitfall 4: release.yaml 中多个并行 job 同时上传到同一 GitHub Release 时的竞争条件
 
 **What goes wrong:**
-添加"更好的错误信息"时，一个常见倾向是设计数值错误码（E001、E002...）、错误目录文档、用户需要"查表"才能理解的模式。对于 sqllog2db 这样的 CLI 工具，用户只想看到一句话告诉我"哪错了+怎么修"，不需要翻文档查错误码。
-
-同时，另一个倾向是过度保留错误链导致信息冗余。当 `#[from]` 生成 `Error::Io(io::Error)`，上层再用 `#[error("IO error")]` 包装时，最终输出可能是 "IO error: IO error: file not found" 这种重复前缀。
+release.yaml 有 4 个并行的 matrix job（linux/aarch64/windows/macos），每个 job 都调用 `softprops/action-gh-release` 上传 artifact 并设置 `body_path`。当 4 个 job 几乎同时完成时，会出现：
+- 后完成的 job 覆盖之前 job 写入的 release notes（body）。
+- 第一个触发 release 创建的 job 和后续 job 的 body 合并出现竞争，导致最终 release body 内容随机。
+- v2.5.2 前的版本有已知的 `already_exists` 竞争 bug。
 
 **Why it happens:**
-- 从大型企业项目迁移过来的经验会自然引入错误码系统。
-- `thiserror` 的 `#[from]` 会让内部错误自动参与 Display，而外层再额外加描述就产生重复。
-- 开发者希望错误信息"专业"而设计层次过多的错误链。
+- 每个 matrix job 独立调用 `softprops/action-gh-release`，每次调用都会尝试"创建或更新" release。
+- `body_path` 参数在 GitHub API 中是 PATCH 操作，多个并发 PATCH 请求会互相覆盖。
+- 当前 `release.yaml` 使用的 `softprops/action-gh-release@v3` 是否包含竞争修复取决于 v3 的具体提交。
 
 **How to avoid:**
-1. **不要引入数值错误码**。sqllog2db 的领域确定性高（文件 IO、解析、导出），错误种类有限。对每个错误变体写一条清晰的中文/英文描述就够了，error.rs 目前已经做得不错。
-2. 错误信息包含三个要素：发生了什么、在哪发生的、怎么修。
-   - "发生了什么"：当前已有（如 "Configuration file not found"）
-   - "在哪发生的"：当前已有（文件路径、字段名）
-   - "怎么修"：**缺失的**。例如 "Configuration file not found: /path/to/config.toml. Run `sqllog2db init -o config.toml` to create a default config."
-3. 避免 `#[error("Export error: {0}")]` 这种包装——直接透传。使用 `#[error(transparent)]` 让内部错误直接通过 Display 暴露。
-4. 在热路径（parse error 已走 `log::warn!`）中避免不必要的 `Result` 上下文转换——给每条 parse error 添加行号、文件路径、记录摘要就足够了。
+1. **将 release body 的写入与 artifact 上传分离**：新增一个独立的 `create-release` job，在 matrix build 之前运行，只负责创建 release 和写入 changelog；matrix job 只负责 `files:` 上传，不设置 `body_path`。
+   ```yaml
+   needs: [create-release]
+   with:
+     body: ""  # 不重写 body
+     files: dist/${{ matrix.artifact }}
+   ```
+2. 或者升级 `softprops/action-gh-release` 到最新 patch 版本，该版本包含并发上传修复。
+3. 使用 `gh release upload` CLI 命令替代 action，CLI 只做文件上传，不修改 release metadata。
 
 **Warning signs:**
-- 建立了 `error_codes.rs` 或 `errors.md` 文件来枚举错误码。
-- PR 中的错误变更增加了错误链嵌套层数而非减少。
-- 用户反馈错误信息太"啰嗦"难以定位真正的问题（如多层 "Caused by:..."）。
+- 多次发布后发现 GitHub Release 的 body 内容不完整，只包含部分 changelog。
+- CI 日志显示 `409 Conflict` 或 `422 Unprocessable Entity` 错误。
+- Release artifact 文件有的出现有的不出现（上传中途失败）。
 
 **Phase to address:**
-UX-04（更好的错误信息）。与 ERR-01 和 ERR-02 放在一起做，因为错误类型细分直接影响错误信息的结构。
+CD 发布阶段。在推出第一个真实 tag 前，先用 `v0.0.0-test` tag 测试完整的 release 流程。
 
 ---
 
-### Pitfall 5: 清理死代码时遗漏测试引用或配置兼容性
+### Pitfall 5: actions/checkout 使用 v6 但与自托管 runner / 其他 action 不兼容
 
 **What goes wrong:**
-FIX-01（清理 normalize_template）和 FIX-03（清理 FileError::ReadFailed）表面上是"删代码"，但：
-- `normalize_template` 可能在测试模块有引用（先确认 src/ 下已无引用，但 `#[cfg(test)]` 模块可能仍然引用）。
-- `FileError::ReadFailed` 被移除后，任何现有的 `match` 表达式如果覆盖了 `FileError` 所有分支就会编译失败。
-- `ConfigError` 可能在不经意间被解构使用，移除变体导致 match 编译失败。
-- [template] 配置段（FIX-02）静默接受的问题：当前代码有 `template_deprecated: Option<toml::Value>` 字段，如果直接删除这个字段，旧配置仍然会被 serde 静默忽略（未知字段默认行为），起不到"拒绝"的效果。
+当前所有 workflow 使用 `actions/checkout@v6`。v6 于 2025 年底发布，但引入了一个 breaking change：凭证持久化路径硬编码了 GitHub Actions 的 runner 路径，导致与 Forgejo/Gitea/GitLab 等自托管 runner 完全不兼容。同时，`peter-evans/create-pull-request` 等热门 action 明确标注与 v6 不兼容（2025 年的公开 Issue）。虽然本项目目前只用 GitHub 官方 runner，但其他 action（如 `softprops/action-gh-release`）的内部实现可能假设 checkout v4 的行为。
 
 **Why it happens:**
-- Rust 编译器在 `match` 表达式上有穷尽性检查——移除 enum 变体后，所有 match 该 enum 的地方都会编译失败。在多人开发时，其他人可能添加了新的 match 分支。
-- serde 的默认行为是静默忽略未知字段——要显式拒绝需要 `#[serde(deny_unknown_fields)]`。
-- 至少运行 `cargo test` 才能发现测试中的引用，仅 `cargo build` 不够。
+- v6 在 2025 年底才发布，许多 action 的依赖文档仍指向 v4。
+- 版本号递增不代表向后兼容——GitHub action 的语义版本规范较松散。
+- CI 在本地测试时通过（checkout 成功），但某些 post-checkout 步骤失败时不容易关联到 checkout 版本。
 
 **How to avoid:**
-1. **三步确认法**：
-   - `cargo build` 确认编译通过
-   - `cargo test` 确认测试通过
-   - `grep -r "被删除的标识符" src/` 确认无任何残留引用
-2. 移除 `FileError::ReadFailed` 前，先确认没有任何 match `FileError` 的分支（因为其他变体没有匹配 ReadFailed 的情况）。直接从 enum 中删除，让编译器指出所有需要修改的位置。
-3. 对 `[template]` 配置段：不删除 `template_deprecated` 字段，而是在 `validate()` 中检查该字段并返回显式错误信息。或者为整个 `Config` 结构体添加 `#[serde(deny_unknown_fields)]`，但这需要确保所有字段都通过 serde 反序列化。
-4. 如果 enum 是公开的（pub），移除变体是公共 API 的破坏性变更——需要注意语义版本控制。
+1. 短期内：将 `actions/checkout@v6` 锁定到当前最新 stable commit SHA，避免 tag 漂移导致自动获取 breaking change：
+   ```yaml
+   uses: actions/checkout@v4  # 或指定具体 SHA
+   ```
+2. 长期：使用 commit SHA 固定所有第三方 action（包括 `dtolnay/rust-toolchain`、`Swatinem/rust-cache`、`taiki-e/install-action`），防止供应链攻击和非预期的版本更新。2025 年 3 月的 `tj-actions/changed-files` 事件（23,000+ 仓库受影响）是典型案例。
+3. 使用 `dependabot.yml`（已配置）定期更新 action 版本，但审查 changelog 再合并。
 
 **Warning signs:**
-- `cargo build` 成功后 `cargo test` 失败（测试中的引用）。
-- 用户报告使用 `[template]` 配置时静默无警告（说明拒绝机制没生效）。
-- `cargo clippy` 报 `used_underscore_binding` 警告（`template_deprecated` 字段被编译器诊断为未使用）。
+- CI 在 checkout 步骤后的 `git config` 或认证步骤失败。
+- 升级 checkout 版本后，`softprops/action-gh-release` 或其他 action 的上传步骤报 permission 错误。
+- 本地 `act` 测试正常但 GitHub Actions 运行异常。
 
 **Phase to address:**
-FIX-01/FIX-02/FIX-03。应该在 v1.10 项目一开始就做——这些是"低 hanging fruit"，清理完跑一遍全测试链就能验证。
+CI 基础设施阶段。在 workflow 编写时就锁定版本，而非使用浮动 tag。
 
 ---
 
-### Pitfall 6: 在热路径中新增错误分类时破坏内联和零成本抽象
+### Pitfall 6: e2e 测试（assert_cmd）在 Windows CI 上因路径分隔符或 stderr 输出格式失败
 
 **What goes wrong:**
-当前热路径（processor.rs:58-128、csv/writer.rs:22-209）经过精心优化：
-- `pipeline.is_empty()` 快速路径避免虚表调用
-- `BufWriter::with_capacity(2MB)` 减少系统调用
-- `itoa::Buffer` 复用避免分配
-- `line_buf: Vec<u8>` 复用避免 per-record 分配
-- `ns_scratch: Vec<u8>` 复用避免 per-record 分配
-
-如果在热路径中增加"记录每个错误的详细信息到 error log"、或"收集统计计数"、或"更新进度条"，这些看似小的改动可能会破坏内联、增加分支、增加分配或增加锁竞争，导致性能从 5.2M records/sec 显著下降。
+`assert_cmd` + `predicates` 的 e2e 测试在 macOS/Linux 通过，但在 Windows（`windows-latest` runner）失败：
+- 路径字符串中的 `\` vs `/` 导致 `contains("path/to/file")` 匹配失败。
+- Windows 上 `Command` 进程的 stderr/stdout 行尾是 `\r\n`，而 `contains("hint: ...")` 断言字符串只有 `\n`。
+- Windows 上 SQLite 文件锁定行为不同，可能导致"文件仍被进程持有"类的测试错误。
+- 临时目录路径包含空格（Windows 用户名带空格），而 config 文件中的路径未加引号。
 
 **Why it happens:**
-- 热路径优化的特点是"不做什么"——不做日志、不做锁、不做分配。新功能往往需要做这些事。
-- `#[inline]` 标注的函数（csv/writer.rs 第 22 行 `write_record_preparsed`）如果增加复杂度，编译器可能无法再内联。
-- 在多条 error 路径上增加分支会影响分支预测。
+- `assert_cmd` 的 `assert().stdout(contains("..."))` 对 Windows CRLF 换行敏感。
+- `tempfile::TempDir` 在 Windows 上返回 `C:\Users\RUNNER~1\AppData\Local\Temp\...` 格式路径，而代码中 `to_string_lossy().replace('\\', "/")` 转换不一定覆盖所有路径。
+- tests/integration.rs 已经有 `replace('\\', "/")` 模式（第 19 行），但新增的 e2e 测试可能忘记这一步。
 
 **How to avoid:**
-1. 在 processor.rs 中使用 `log::debug!` 而非 `log::warn!` 或 `log::info!` 来记录处理中的内部状态——debug 日志在默认日志级别下会被编译器优化掉（如果使用了 `log` crate 的条件编译）。
-2. 错误统计使用 `AtomicUsize`（无锁原子操作）而非 `Mutex<usize>`。
-3. 所有新增的"记录级别"处理只走 `match Err(e) => { log::warn!; continue }` 路径，不走 exporter 路径，避免锁/IO 开销。
-4. 在合并 PR 前执行 `cargo bench`（criterion 基准），确认性能退化 < 5%。
-5. CSV writer 的 `line_buf` 现在有一个 `clear()` -> `extend` -> `write_all` 模式。不要在热路径中复制 `line_buf` 或使用 `String`（UTF-8 验证开销）。
+1. 断言字符串避免包含路径分隔符——只断言错误 *类型* 而非路径内容：
+   ```rust
+   .stderr(predicates::str::contains("hint:"))
+   // 不要: .stderr(predicates::str::contains("/path/to/config.toml"))
+   ```
+2. 对需要断言路径的场景，用 `Path::display()` 输出再比较，或使用 `predicates::str::contains` 配合平台无关子串。
+3. 所有使用 `to_string_lossy()` 的地方统一加 `.replace('\\', "/")`（已有先例，参考 tests/integration.rs:19）。
+4. 在 CI matrix 中尽早加上 `windows-latest`，不要等 e2e 测试全部写完再测 Windows。
 
 **Warning signs:**
-- CI 中基准测试结果出现显著下降。
-- `perf` 或 `flamegraph` 显示新函数（如 `collect_error_stats`）占据大量 CPU 时间。
-- 热路径中出现 `String::new()`、`format!()`、`clone()`、`Mutex::lock()`、`HashMap::insert()`。
+- `cargo test` 在 `ubuntu-latest` 全部通过，但 `windows-latest` job 有 5-10 个测试失败。
+- 失败信息包含 `panicked at 'assertion failed'` 但 expected/actual 只差一个 `\r`。
+- Windows 上 `tempfile::TempDir` 清理失败（`PermissionDenied`），因为 SQLite 文件仍被持有。
 
 **Phase to address:**
-ERR-02（继续处理）和 UX-04（错误信息）。实现时先画清楚"这条 path 是否在 hot loop 内"，hot loop 外的处理可以随意，hot loop 内的必须逐行审查。
+e2e 测试阶段。每写一个 e2e 测试就在本地检查 Windows 兼容性（或在 CI 中保持三平台 matrix）。
+
+---
+
+### Pitfall 7: cargo-llvm-cov 覆盖率在重构后假性下降触发 CI 门控
+
+**What goes wrong:**
+ci.yaml 设置了 `cargo llvm-cov --fail-under-lines 70` 的硬性门控。重构（模块拆分、函数移动）后，覆盖率可能短暂下降：
+- 被移动到新文件的函数，如果原测试通过 `use super::*` 访问，重构后测试可能不再覆盖这些函数。
+- 内联优化（LTO=fat，opt-level=3）在 release 构建下会把小函数内联，导致 llvm-cov 认为某些代码行"未执行"。
+- `#[cfg(not(target_os = "windows"))]` 条件编译的代码在 Linux CI 上报告 100%，但 Windows 特定代码报告 0%，影响总覆盖率。
+
+**Why it happens:**
+- `cargo llvm-cov` 默认在 debug 构建下运行，但 `#[cfg(test)]` 只编译测试时有效的代码；条件编译分支在不匹配平台上根本不参与覆盖率统计。
+- 重构导致"私有函数可见性变化"时，原来能测的函数变成不可测，覆盖率下降。
+- 70% 的门控阈值在当前 529 个测试的项目中应该很容易达到，但任何测试覆盖率的计算公式变化（如新增大量未测试代码）都可能触发。
+
+**How to avoid:**
+1. 重构阶段**临时降低**覆盖率门控（如 60%），重构完成后再补充测试恢复到 70%+。
+2. 使用 `--ignore-filename-regex` 排除不易测试的 platform-specific 代码。
+3. 重构时优先保证测试能编译并通过，再关注覆盖率。
+4. `cargo llvm-cov` 只在 Linux 上运行（已配置），避免跨平台覆盖率统计混乱。
+
+**Warning signs:**
+- 重构 PR 中 CI coverage job 失败，但所有 test job 通过。
+- 覆盖率从 78% 突然降到 65%，但没有删除任何测试。
+- llvm-cov 报告中某个模块显示 0% 覆盖，但该模块明确有测试。
+
+**Phase to address:**
+代码重构阶段。重构前确认当前覆盖率基线，重构期间放宽门控，重构后补测试恢复。
+
+---
 
 ## 技术债务模式
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| `#[from]` 过度使用：为所有子错误添加 `#[from]` 属性 | 编写时只需写 `?`，template code 最少 | 丢失错误类型区分度；重构时 `From` 冲突；上层无法区分致命/非致命 | 错误类型少且不会扩展时可用，v1.10 扩展后应逐步替换为手动 From |
-| `toml::Value` 字段捕获废弃配置（template_deprecated、pipeline_deprecated） | 以最小成本检测旧配置 | 字段永远留在 struct 中，序列化时可能泄漏 | 临时迁移期（一个版本），不应长期保留。v1.10 应改为 validate() 中显式拒绝 |
-| `#[allow(clippy::...)]` 在热路径上 | 避免了 pedantic lint 误报 | 累积后掩盖真实问题 | 可接受，但每个 allow 应注释理由。Cargo.toml 中的全局 allow 比局部 allow 更差 |
+| benchmark CI 门控直接用 criterion 数值 | 看起来"严格" | CI 噪声产生假阳性，开发者开始绕过 | 永远不可接受；用集成测试中的粗粒度基准代替 |
+| 所有 CI 步骤跑在同一 `ubuntu-latest` job | 节省矩阵配置时间 | Windows/macOS 特有的 bug 到用户那才暴露 | 只有纯算法库才可接受；CLI 工具必须三平台测试 |
+| `actions/checkout@v6` 浮动 tag | 自动获得 action 更新 | 供应链攻击风险，v6 本身有已知兼容性问题 | 不可接受；应锁定到 SHA 或经测试的 minor tag |
+| release workflow 所有 job 都写 body_path | 少写一个"create release" job | 并发写入竞争，release notes 随机残缺 | 永远不可接受 |
+| e2e 测试硬编码路径字符串断言 | 写起来直观 | Windows CI 失败 | 临时本地调试可用，绝不提交 CI |
+| 模块重构后只跑 `cargo build` 确认 | 快（几秒） | `cargo test` 可能失败，模块可见性问题只在测试中暴露 | 永远不可接受；build 成功是必要非充分条件 |
+
+---
 
 ## 集成陷阱
 
 | 集成点 | 常见错误 | 正确做法 |
 |--------|----------|----------|
-| dm-database-parser-sqllog (LogParserBuilder) | 假设其 API 支持 stdin/stream | 它是全量加载模型，不支持流式。stdin 支持需要直接构造 `LogParser` 或 fork 修改上游 |
-| rayon 并行池 | pre-scan 和 parallel CSV 使用不同线程池（都是独立创建的），可能导致资源竞争 | 两个阶段共享线程池或明确 Serialize 执行顺序——当前设计已隔离，但需要注意 |
-| rusqlite + mmap_size (sqlite/mod.rs:37) | stdin 模式下 sqlite 还是写本地文件，没有问题。但如果未来输出到 stdout 会有冲突 | stdout 和 sqlite 互斥，当前设计已经限制为一种导出器，保持此限制 |
-| ctrlc crate (中断处理) | stdin 模式下 Ctrl+C 处理需要额外小心——stdin 关闭后可能要 flush 已导出数据 | 在 stdin EOF 后正常 finalize，中断信号只应中止读取阶段 |
+| `rusqlite bundled` + `cross` aarch64 | 假设 cross 默认镜像包含完整 C 工具链 | 添加 `Cross.toml` 指定含完整 gcc toolchain 的镜像，或改用原生交叉编译 |
+| `softprops/action-gh-release` 并行 job | 每个 matrix job 都设置 `body_path` | 分离"create release"（serial）和"upload artifact"（parallel）两个阶段 |
+| `cargo llvm-cov` + `cfg(test)` | 期望条件编译代码参与覆盖率计算 | 用 `--ignore-filename-regex` 排除平台特定代码，或接受这部分代码的低覆盖率 |
+| `assert_cmd` + Windows | 假设路径分隔符和行尾与 Unix 相同 | 统一用 `replace('\\', "/")` + 避免在断言中包含平台相关路径 |
+| `Swatinem/rust-cache` + matrix build | 所有平台共享同一 cache key | `rust-cache@v2` 默认已按 OS + toolchain 分 key，但要确认 `key:` 不被手动覆盖为固定值 |
+
+---
 
 ## 性能陷阱
 
 | 陷阱 | 症状 | 预防 | 何时爆发 |
 |------|------|------|----------|
-| 热循环内调用 progress_bar.inc() | 50-100 倍性能下降 | 每 1024 条更新一次（复用已有计数模式） | 在 5M records/sec 合成基准测试中立即暴露 |
-| 每个记录都写 error log | 大量 IO 写入，HDD 场景尤其严重 | 使用 `log::warn!`（默认写入文件）且限频率，或在内存中累积到阈值再写入 | 在包含大量解析错误的日志上 |
-| `String::from_utf8_lossy` 在热路径中 | 每条记录检查 UTF-8 合法性 | `Vec<u8>` 直接操作，仅在最后输出时验证 | 始终存在 |
-| 在 `export_one_preparsed` 中做额外的克隆或分配 | CSV writer 中 `line_buf` 使用 `clear`+`extend` 无分配 | 预分配 capacity、复用 buffer | 始终存在，但合成基准测试中放大 |
-| 在热路径中使用 `thiserror` 的 Display（`#[error("...")]`） | 错误构造时 format 分配 | 预先分配错误字符串或使用 Cow | 仅在错误路径触发时，不频繁则无害 |
+| CI benchmark 作为 merge 门控 | 每次 PR 都有假性 regression 报告 | 保持 `continue-on-error: true`，用集成测试做真正门控 | 第一次推代码时 |
+| `cargo bench --no-run` 不检测 benchmark 代码编译错误 | benchmark 代码改变后 CI 通过但本地 `cargo bench` 失败 | 定期在本地完整跑一次 bench | 当 bench 代码引用被重构的模块时 |
+| cross compile + LTO fat 构建时间 | release job 超过 30 分钟 | 对 cross 构建禁用 LTO（release profile 只在 native 构建时用 fat LTO）| 首次设置 CI CD 时 |
+| Windows 上 SQLite 文件锁 | e2e 测试偶发性失败，`tempfile::TempDir` drop 报 PermissionDenied | 测试结束前确保所有 Connection 已 drop，或用 `defer` 模式 | Windows 测试 CI 中 |
 
-## UX 陷阱
-
-| 陷阱 | 用户影响 | 更好的做法 |
-|------|----------|------------|
-| stdin 模式下 without progress 或无输入反馈 | 用户不知道程序是否卡住 | stdout 非交互时，eprintln 输出一行 "Processing stdin..." 即可 |
-| 错误信息没有"解决办法" | 用户知道哪错了但不知道如何修正 | 每条用户可见错误都附带建议，如 "Run `sqllog2db init -o config.toml` to create a default config" |
-| --help 文档与实际支持的 --stdin 等新参数不同步 | 用户不知道新功能存在 | 在帮助文本中明确标注 stdin 支持及其限制 |
-| 进度显示与日志输出混在一起 | stderr 被进度条和 log 信息同时占用，显示混乱 | 进度条独占 stderr 的"尾行"，日志走 log 文件；或进度条仅在非 quiet 且 stdout 不是 pipe 时显示 |
-| 对错误码的依赖 | 用户需要查表理解错误 | 直接写人类可读的错误信息，不要使用 E001/E002 等编码 |
+---
 
 ## "Looks Done But Isn't" 检查清单
 
-- [ ] **stdin 支持**: 不只是在 parser 层支持，pre-scan (prescan.rs:52) 也必须处理 stdin 不可 pre-scan 的情况——事务级过滤会静默失效，是否有警告？
-- [ ] **非致命错误继续**: 不只是修改错误类型，热循环 (processor.rs:58-128) 中的 `?` 必须改为 `match` + continue。导出器 (exporter/csv/mod.rs:203) 的 `write_all` 也需要捕获 Err 而非传播。
-- [ ] **进度显示**: `show_progress` 现在只是一个 bool，传入 process_log_file 后只在文件完成时输出。改为真实进度条后，需要确保在 Ctrl+C 中断时进度条正确关闭。
-- [ ] **错误信息改进**: 新增的错误变体必须在所有 `match Error` 的位置添加分支。当前 `handle_run` (cli/run/mod.rs:152) 只处理 `Error::Interrupted`，其他错误自然传播到 main——main 中的错误格式化需要同步更新。
-- [ ] **死代码清理**: 删除代码后运行 `cargo clippy --all-targets -- -D warnings`，不只是 `cargo build`。clippy 会检测未使用的导出项。
-- [ ] **配置验证**: `[template]` 拒绝逻辑需要在 `Config::validate()` 中实现，同时保持 `template_deprecated` 字段用于 serde 反序列化时的检测，才能给出友好的迁移提示。
+- [ ] **CI 三平台 test job**: 不只是 `cargo clippy`/`cargo fmt` 跑在 Linux——`cargo test` 必须覆盖 ubuntu/windows/macos 三平台，因为 e2e 测试、路径处理、stdin 行为都有平台差异。
+- [ ] **release workflow 测试**: 不只是 workflow 文件语法正确——必须推一个 `v0.0.0-test` tag 验证完整流程，包括 cross 构建、artifact 上传、release notes 生成。
+- [ ] **benchmark CI 定位**: 不只是 `cargo bench` 能跑完——必须明确 bench 是信息性（不阻断 merge）还是门控性（可阻断 merge），并在 workflow 中用 `continue-on-error` 体现。
+- [ ] **cli/run 重构后测试**: 不只是 `cargo build` 通过——`cargo test` 全量、`cargo clippy` 无 warnings、`cargo test --test integration` 跨平台全部通过。
+- [ ] **e2e 测试 Windows 兼容**: 不只是 macOS/Linux 通过——在 CI matrix 中加 `windows-latest` 并在第一天就运行，不要等所有测试写完才加。
+- [ ] **crates.io publish**: 不只是 `cargo publish` 命令存在——必须有 `CARGO_REGISTRY_TOKEN` secret、版本号与 git tag 一致的验证，以及 dry-run 测试（`cargo publish --dry-run`）。
+
+---
 
 ## 恢复策略
 
 | Pitfall | 恢复成本 | 恢复步骤 |
 |---------|----------|----------|
-| 错误类型重构导致匹配失败 | LOW | 编译器会明确显示哪些 match 缺少分支，逐处修复即可 |
-| 性能退化 | MEDIUM | 恢复之前版本的热路径，用 `git bisect` 定位退化提交，重新设计 |
-| stdin 路径下遗漏 pre-scan 警告 | LOW | 加一行 `warn!("stdin mode: transaction-level filters disabled")` |
-| 进度条导致性能崩溃 | MEDIUM | 移除 per-record 更新，改为每 1024 条或基于时间的更新 |
-| [template] 配置段仍然静默接受 | LOW | 在 `validate()` 中检查并报错；或在 struct 上添加 `#[serde(deny_unknown_fields)]` |
+| cross aarch64 构建失败 | MEDIUM | 添加 `Cross.toml` 指定正确镜像；或临时从 release matrix 中移除 aarch64 先发布其他平台 |
+| benchmark 假性回归 | LOW | 加 `continue-on-error: true`；改用 `cargo bench --no-run` 做编译检查 |
+| 模块重构后测试失败 | LOW-MEDIUM | 编译器错误信息精确定位失败点；调整可见性（`pub(super)`/`pub(crate)`）或移动测试位置 |
+| release body 被覆盖 | LOW | 重新手动编辑 GitHub Release notes；修复 workflow 分离 create/upload 步骤 |
+| Windows e2e 测试失败 | LOW | 识别 CRLF 或路径分隔符问题，加 `.replace('\\', "/")` 或用平台无关断言 |
+| 覆盖率门控触发 | LOW | 临时在 ci.yaml 中降低阈值（60%），重构完补测试恢复 |
+| cargo publish 意外发布错误版本 | HIGH | 立刻 `cargo yank --version X.Y.Z`；注意 yank 不删除代码，但阻止新依赖；下一步修复版本号再发布正确版本 |
+
+---
 
 ## 阶段映射
 
 | Pitfall | 预防阶段 | 验证方式 |
 |---------|----------|----------|
-| Pitfall 1: 致命/非致命界限模糊 | ERR-01 + ERR-02（必须同阶段做） | 单元测试验证注入 IO 错误后程序继续处理。冒烟测试验证磁盘满时给出清晰错误 |
-| Pitfall 2: stdin 与文件路径假设冲突 | PIPE-01 | stdin 模式下 `cargo test` 通过。手动测试 `echo "2025..." | cargo run -- run` 能正常工作 |
-| Pitfall 3: 热循环进度条性能退化 | UX-01 | `cargo bench` 对比 baseline，退化 < 5% |
-| Pitfall 4: 错误码过度工程化 | UX-04 + ERR-01 | PR 审查确保无数值错误码设计 |
-| Pitfall 5: 死代码清理遗漏测试/配置兼容 | FIX-01/02/03 | 三步骤：`cargo build` + `cargo test` + `grep -r 标识符 src/` |
-| Pitfall 6: 热路径破坏内联和零抽象 | ERR-02 + UX-01 | `cargo bench` + 代码审查确认热路径无分配/锁 |
+| Pitfall 1: rusqlite cross aarch64 构建失败 | CD 构建阶段（多平台 Release） | 推测试 tag 触发完整构建，4 个 matrix job 全部绿 |
+| Pitfall 2: criterion CI 假性回归 | CI 基础设施阶段（benchmark stabilization） | bench.yml 有 `continue-on-error: true`；merge 门控只依赖 integration test 的 `test_csv_throughput_baseline` |
+| Pitfall 3: 模块重构后测试访问私有函数失败 | 代码重构阶段（cli/run 模块拆分） | 重构每一步后运行 `cargo test` + `cargo clippy -- -D warnings` |
+| Pitfall 4: release job 并发竞争 | CD 发布阶段 | 测试 tag 验证 release notes 完整，4 个 artifact 全部出现 |
+| Pitfall 5: actions/checkout v6 兼容性 | CI 基础设施阶段（首次 CI setup） | 检查所有 action 版本；workflow 在推 PR 时全部通过 |
+| Pitfall 6: e2e 测试 Windows 兼容 | e2e 测试阶段 | CI matrix 含 `windows-latest`，`cargo test` 全部通过 |
+| Pitfall 7: 覆盖率假性下降阻断重构 | 代码重构阶段 | 重构前记录覆盖率基线；重构期间放宽门控；重构后补测试恢复 |
+
+---
 
 ## Sources
 
-- 代码分析：当前 processor.rs 热循环、error.rs 错误类型定义、LogParserBuilder 内部实现（source code at `~/.cargo/registry/src/.../dm-database-parser-sqllog-1.1.0/src/parser.rs`）
-- v1.7 审计报告：`.planning/milestones/v1.7-MILESTONE-AUDIT.md`（具体引用 normalize_template、FileError::ReadFailed、[template] 配置段三个已知债务）
-- thiserror 文档分析：`#[from]` 陷阱——对同一类型只能有一个 `#[from]` 变体；`#[from]` 生成自动 `From` impl；过度使用 `#[from]` 增加重构时冲突风险
-- indicatif 性能特征：内部锁机制 + 终端 I/O 开销，per-record 更新在高吞吐场景不可行
-- 当前性能基线：5.2M records/sec（合成基准），1.55M records/sec（1.1GB 真实文件）——来自 project CLAUDE.md
+- [Cross-compiling Rust on GitHub Actions](https://obviy.us/blog/cross-compiling-rust-on-gha/) — cross-rs 配置模式
+- [rusqlite #939: Cross compiling rusqlite failing with docker](https://github.com/rusqlite/rusqlite/issues/939) — bundled + cross 已知问题
+- [CI for performance: Reliable benchmarking in noisy environments](https://pythonspeed.com/articles/consistent-benchmarking-in-ci/) — criterion CI 噪声分析
+- [Criterion.rs FAQ](https://bheisler.github.io/criterion.rs/book/faq.html) — 官方承认 CI 噪声问题
+- [Pinning GitHub Actions for Enhanced Security](https://www.stepsecurity.io/blog/pinning-github-actions-for-enhanced-security-a-complete-guide) — SHA 固定最佳实践
+- [softprops/action-gh-release releases](https://github.com/softprops/action-gh-release/releases) — v2.5.2 并发上传竞争修复
+- [GitHub Releases API Race Condition](https://devactivity.com/insights/mastering-github-releases-avoiding-race-conditions-for-enhanced-engineering-productivity/) — release body 竞争分析
+- [How to test Rust CLI apps with assert_cmd](https://alexwlchan.net/2025/testing-rust-cli-apps-with-assert-cmd/) — assert_cmd 测试模式
+- [Test Organization — The Rust Book](https://doc.rust-lang.org/book/ch11-03-test-organization.html) — `#[cfg(test)]` 与模块可见性
+- [Move unit tests into separate files — rust-lang/rust #61097](https://github.com/rust-lang/rust/issues/61097) — `#[path]` 测试文件方案
+- [cargo-llvm-cov GitHub](https://github.com/taiki-e/cargo-llvm-cov) — 覆盖率工具已知问题
+- 项目代码审查：ci.yaml、release.yaml、bench.yml、tests/integration.rs、src/cli/run/tests.rs、Cargo.toml
 
 ---
-*Pitfalls research for: sqllog2db v1.10 quality improvements*
-*Researched: 2026-05-21*
+*Pitfalls research for: sqllog2db v1.15 CI/CD + 工程质量提升*
+*Researched: 2026-06-02*
