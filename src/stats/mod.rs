@@ -46,7 +46,7 @@ fn scan_files_into_accumulator(
         &mut scan_stats,
     )?;
     if scan_stats.has_errors() {
-        log::info!(
+        log::warn!(
             "stats: {} parse error(s) encountered during scan",
             scan_stats.parse_errors
         );
