@@ -559,7 +559,7 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
 | 53. 时间段配置与 CLI 参数 | v1.14 | 3/3 | Complete | 2026-06-01 |
 | 54. StatsAccumulator 时间过滤 | v1.14 | Complete | 2026-06-02 |
 | 55. CI/CD 基础设施修复 | 2/2 | Complete   | 2026-06-02 |
-| 56. stats 模块清理与 benchmark 稳定化 | 2/2 | Complete   | 2026-06-02 |
+| 56. stats 模块清理与 benchmark 稳定化 | 2/2 | Complete    | 2026-06-02 |
 | 57. e2e 测试扩展 | v1.15 | Not started | - |
 | 58. cli/run 函数清理 | v1.15 | Not started | - |
 

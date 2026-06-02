@@ -22,12 +22,12 @@
 
 ### 代码清理
 
-- [ ] **CLEAN-01**: stats 模块删除遗留 warn! 占位符，stats/output.rs 所有函数不超过 40 行
+- [x] **CLEAN-01**: stats 模块删除遗留 warn! 占位符，stats/output.rs 所有函数不超过 40 行
 - [ ] **CLEAN-02**: cli/run 模块中超 40 行的函数提取为私有函数（仅拆分确实超长的，不做预防性拆分）
 
 ### Benchmark 稳定化
 
-- [ ] **BENCH-01**: 确认 scripts/collect_bench_results.sh 存在（或补充创建），bench.yml 以信息性（non-blocking，continue-on-error）方式运行
+- [x] **BENCH-01**: 确认 scripts/collect_bench_results.sh 存在（或补充创建），bench.yml 以信息性（non-blocking，continue-on-error）方式运行
 
 ---
 
