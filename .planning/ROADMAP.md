@@ -169,7 +169,7 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
 
 - [x] **Phase 55: CI/CD 基础设施修复** — 修正 workflow action 版本、修复 release 竞争条件、添加 Cross.toml (completed 2026-06-02)
 - [x] **Phase 56: stats 模块清理与 benchmark 稳定化** — 删除遗留 warn! 占位符、检查函数长度、确认 benchmark 信息性运行 (completed 2026-06-02)
-- [ ] **Phase 57: e2e 测试扩展** — run/init/stats 子命令 CLI 全链路测试补全
+- [x] **Phase 57: e2e 测试扩展** — run/init/stats 子命令 CLI 全链路测试补全 (completed 2026-06-02)
 - [ ] **Phase 58: cli/run 函数清理** — 超 40 行函数提取为私有函数
 
 ## Phase Details
@@ -463,7 +463,7 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
   4. `cargo test` 全部通过，新增测试不依赖外部服务或网络
 **Plans**: 2 plans
 - [x] 57-01-PLAN.md — validate_stats_time_range 新增 from ≤ to 跨字段检查（D-01/D-02）+ 4 个单元测试 + test_cli_stats_rejects_from_after_to e2e 测试覆盖 TEST-03
-- [ ] 57-02-PLAN.md — 新增 write_run_config_toml / write_run_sqlite_config_toml 两 helper + 4 个 e2e 测试（run CSV header+行数、run SQLite sqllog_records 表行数、init 新建成功、init 已存在退出非零）覆盖 TEST-01/TEST-02
+- [x] 57-02-PLAN.md — 新增 write_run_config_toml / write_run_sqlite_config_toml 两 helper + 4 个 e2e 测试（run CSV header+行数、run SQLite sqllog_records 表行数、init 新建成功、init 已存在退出非零）覆盖 TEST-01/TEST-02
 
 ### Phase 58: cli/run 函数清理
 **Goal**: cli/run 模块中超过 40 行的函数被提取为私有辅助函数，代码可读性提升，已有 e2e 测试确认无行为变化
@@ -562,7 +562,7 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
 | 54. StatsAccumulator 时间过滤 | v1.14 | Complete | 2026-06-02 |
 | 55. CI/CD 基础设施修复 | 2/2 | Complete   | 2026-06-02 |
 | 56. stats 模块清理与 benchmark 稳定化 | 2/2 | Complete    | 2026-06-02 |
-| 57. e2e 测试扩展 | 1/2 | In Progress|  |
+| 57. e2e 测试扩展 | 2/2 | Complete   | 2026-06-02 |
 | 58. cli/run 函数清理 | v1.15 | Not started | - |
 
 ---
