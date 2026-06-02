@@ -1,264 +1,178 @@
-# Feature Research: sqllog2db v1.10 CLI Quality Improvements
+# Feature Research
 
-**Domain:** 达梦数据库 SQL 日志处理 CLI 工具（Rust 实现）
-**Researched:** 2026-05-21
-**Target Users:** 数据库管理员、使用达梦数据库的开发者
-**Confidence:** HIGH（主要基于当前代码分析 + 领域最佳实践）
+**Domain:** Rust CLI CI/CD 与工程质量改进（sqllog2db v1.15）
+**Researched:** 2026-06-02
+**Confidence:** HIGH
+
+---
 
 ## Feature Landscape
 
-### Table Stakes (Users Expect These)
+### Table Stakes（用户/团队预期必须有）
 
-用户不会因为这些功能"好评"，但缺失会产生强烈不满。
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| 非致命错误时继续处理 | 达梦日志量可达数 GB，单条解析失败不应中止整个导出流程 | LOW | **已实现。** `processor.rs` 中 parse error 写入日志后继续循环。需要补充的是：错误计数的统计汇总输出（当前仅在 info 日志中有 `{errors_in_file} errors`） |
-| `--quiet` 标志 | 所有 CLI 工具的基本礼仪，无冗余输出 | LOW | **已实现。** `-q` 全局标志存在，但验证：`run` 命令中 `quiet` 关闭 `show_progress` 和最终摘要，`init/validate` 子命令未传递 `quiet` |
-| `--help` 列出子命令和选项 | CLI 工具的基本可用保障 | LOW | **已实现。** clap derive 自动生成，但内容过简（无 examples，无典型工作流） |
-| 错误退出码区分 | 脚本调用时按 exit code 判断错误类型 | LOW | **已实现。** 四种退出码（配置/IO/导出/中断）定义清晰且有测试覆盖 |
-| 错误信息包含文件路径 | 多文件处理时知道哪个文件出问题 | MEDIUM | **部分实现。** `processor.rs` 的 warn 中有 `{file_path} \| {e:?}`，但顶层 `Error: {e}` 不是所有变体都携带路径。`FileError::WriteFailed` 带路径，`ParserError::PathNotFound` 带路径，但 `ConfigError::ParseFailed` 的格式化不含路径上下文提示 |
-| 输出不污染 stdout | CLI 工具的输出（CSV）不应与日志/进度混在一起 | LOW | **已实现。** 数据输出→文件，状态输出→stderr (`eprintln!`)，日志→文件 |
-
-### Should-Have (Expected for a Polished Tool)
-
-用户不会默认有，但遇上就会觉得"这才是专业工具"。
+缺少这些 = 工程质量感觉不完整，贡献者对项目失去信心。
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| 终端下实时进度显示 | 处理大文件（1GB+）时用户需要知道程序仍在工作 | MEDIUM | **缺失。** 当前用 `eprintln!` 逐文件输出起止行，无进度动画。需要引入 `indicatif` |
-| 进度条在管道模式静默 | `sqllog2db run ... 2>&1 \| tee log` 时进度动画不应误渲染 | LOW | 与进度显示配套：检测 stderr 是否为 TTY，非 TTY 时退化为文件级文本状态 |
-| stdin 管道输入 | `cat log.log \| sqllog2db run --input -` 是 Unix 用户的直觉 | MEDIUM | **缺失。** 当前 `SqllogParser` 仅支持文件系统路径。需要将 `LogParserBuilder` 接入 `io::stdin().lock()` |
-| 错误信息带行号/上下文 | 知道哪一行出错，而不只是"第50000行附近有格式错误" | MEDIUM | **缺失。** 当前 parse error 没有行号记录。需与 `dm-database-parser-sqllog` 配合获取行号 |
-| 处理结束的统计摘要 | 快速了解处理结果：总记录数、错误数、耗时、导出大小 | LOW | **已实现。** `handle_run` 最后输出格式化的摘要行 |
-| 配置验证的错误提示 | validate 子命令说清楚哪里配置不对，而非简单抛错误 | LOW | **部分实现。** `preflight.rs` 有专门检查，`validate` 返回 `ConfigError` 带详细原因。但缺少"修复建议" |
-| `--version` 输出 | 检查当前安装版本 | LOW | **已实现。** clap 的 `version` 属性自动生成 |
+| CI：push/PR 自动运行 `cargo test` | 每个成熟 Rust 项目标配，缺少则每次提交都是盲区 | LOW | 已有 ci.yaml 骨架（三平台矩阵），需验证正确性 |
+| CI：`cargo clippy -- -D warnings` 门控 | Rust 社区约定，lint 不过不能合并 | LOW | 已有 lint job，flag 已正确配置 |
+| CI：`cargo fmt --check` 格式门控 | 与 clippy 并列为 Rust CI 两个最基本检查 | LOW | 已有，与 clippy 在同一 job |
+| CD：打 tag 触发多平台二进制构建 | CLI 工具用户期望直接下载二进制，不想自行编译 | MEDIUM | release.yaml 已存在，覆盖 4 个 target（含 aarch64-linux cross） |
+| CD：上传到 GitHub Releases | 配合 tag 构建，是 CLI 工具发布的标准路径 | LOW | softprops/action-gh-release@v3 已配置 |
+| e2e：`run` 子命令主路径（完整文件输入 → CSV 输出 → 退出码 0） | 核心功能链路，没有则不算集成测试 | MEDIUM | 现有测试多为 handle_run 单元测试；缺纯 CLI argv 层面的 run→CSV 验证 |
+| e2e：`validate` 成功/失败退出码 | 退出码是 CLI 的契约，未测试则随时可能静默回归 | LOW | test_cli_validate_* 已有基础，可加强断言 |
+| e2e：`init` 子命令 CLI 路径（assert_cmd） | init 是用户第一个接触的命令，必须有 e2e 保障 | LOW | 现有测试用 handle_init 直接调用，缺 assert_cmd CLI 层 |
+| e2e：错误路径退出码 2（EXIT_FATAL） | 3 级退出码是 v1.10 设计决策，必须 e2e 验证 | LOW | test_cli_error_uses_hint_prefix 已覆盖部分；run→EXIT_FATAL 路径待验证 |
+| Cargo.lock 纳入版本控制 | 二进制项目约定，保证 CI 和本地复现构建 | LOW | 项目已有，非变更项 |
 
-### Differentiators (Competitive Advantage)
+### Differentiators（可提升工程竞争力的加分项）
 
-这些功能使 sqllog2db 在同类工具中脱颖而出。
+不是必须，但有则显著提升代码质量和维护效率。
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| 多级进度（文件级 + 总进度） | `indicatif` 支持 MultiProgress，同时显示当前文件进度条和总体进度条 | MEDIUM | 达梦日志常涉及数百个文件，多级进度让用户知道具体进度和整体进度 |
-| 错误按类别分组汇总 | 处理完显示"语法错误 5 条，IO 错误 2 条，跳过文件 1 个"的紧凑摘要 | LOW | 当前 `errors_in_file` 只在 info 日志中，用户要查看日志文件才能看到 |
-| stdin + 配置文件同时生效 | 管道输入时仍然应用配置中的 filter/replace 规则 | MEDIUM | 用户无需在管道模式下放弃完整功能集 |
-| 帮助文档含真实范例 | --help 中展示 3-4 个达梦场景的具体例子 | LOW | 直接降低新手使用门槛，体现对该领域的理解 |
-| 并行模式下不乱刷屏的输出 | 并行 CSV 时多线程 `eprintln!` 不会互相交错，而是各线程独立输出后汇总 | MEDIUM | 当前并行路径中 `process_log_file` 带 `reset_pb=false`，但多个文件的起止信息仍可能交错 |
+| 覆盖率门控（cargo-llvm-cov ≥70% 行覆盖） | 防止测试盲区扩大，量化覆盖率趋势 | MEDIUM | 已有 coverage job（--fail-under-lines 70），需验证在 CI 中稳定运行 |
+| e2e：`run` 子命令 SQLite 输出路径 | CSV/SQLite 双导出器都需要 e2e 保障 | MEDIUM | 现有 test_stats_sqlite_* 针对 stats，run→SQLite 纯 e2e 路径欠缺 |
+| e2e：`stats` 子命令含 --from/--to 过滤（边界条件） | v1.14 核心功能，e2e 测试锚定时间段过滤行为 | MEDIUM | test_cli_stats_with_cli_from_and_to_succeeds 已有，可加 edge case |
+| e2e：`run --quiet` 输出抑制验证（stderr 真正为空） | --quiet 是 v1.12 特性，需确认 e2e 层面真正静默 | LOW | test_cli_quiet_suppresses_summary 已存在，可加强断言 |
+| e2e：`run --verbose` 逐文件输出行为 | verbose 是 v1.12 特性，e2e 验证每文件一行输出 | LOW | test_cli_verbose_prints_processing_line_per_file 已有 |
+| e2e：hint: 前缀格式化验证（错误输出契约） | hint: 格式是 v1.12 设计契约，e2e 层面锁定 | LOW | test_cli_error_uses_hint_prefix 已部分覆盖 |
+| Benchmark CI 结果收集（JSON artifact 上传） | 使性能趋势可追踪，防止无声性能退化 | MEDIUM | bench.yml 已有 + collect_bench_results.sh，需稳定化 |
+| cli/run 模块内函数超 40 行的拆分 | 降低认知负担，符合项目"函数不超过 40 行"规范 | MEDIUM | filter_processor.rs 300 行；mod.rs handle_run 是 260 行的大函数 |
+| stats 模块超长函数清理（aggregate.rs 388 行，output.rs 354 行） | 两个文件超过 350 行，内部有超 40 行函数 | MEDIUM | 按照项目规范优先清理，重构前需 e2e 保护 |
+| CI：`cargo doc --no-deps` + RUSTDOCFLAGS=-D warnings | 防止 rustdoc 内联链接回归（v1.14 曾出现此问题） | LOW | 已有 documentation check job，需确认稳定性 |
+| CI：`cargo bench --no-run` 编译检查 | 确保 bench 代码不因普通代码变更而失去编译 | LOW | 已有 lint job 中的 Compile benchmarks 步骤 |
+| 依赖安全审计（cargo audit 定期 schedule 运行） | 捕获新出现的 CVE，rusqlite/bundled 依赖链深 | LOW | 当前无 audit job；可加到 weekly schedule，不阻塞 PR |
 
-### Anti-Features (Commonly Requested, Often Problematic)
+### Anti-Features（看似合理、实则有害）
 
-看起来好但实际有害的功能。
+| Feature | Why Requested | Why Problematic | Alternative |
+|---------|---------------|-----------------|-------------|
+| Windows e2e 测试中测试 stdin pipe 路径 | 覆盖率看上去更高 | Windows 无 `/dev/stdin`，assert_cmd 在 CI Windows runner 中无法可靠 spawn stdin pipe | 用 `#[cfg(not(target_os = "windows"))]` 跳过 stdin 相关 e2e；tests/integration.rs 已有此模式 |
+| Benchmark 回归门控（CI 失败阻塞 merge） | 想防止性能退化 | GitHub Actions 共享 runner 噪音约 20%，基准结果不可靠，门控产生大量误报 | `continue-on-error: true`（已有）+ 上传 JSON artifact 供人工比较，不作为 merge 门控 |
+| Codecov/Coveralls 第三方覆盖率服务接入 | 有好看的 badge | 需要 token 配置、外部服务依赖，为内部工具引入不必要复杂度 | `cargo-llvm-cov --fail-under-lines 70` 本地门控（已有），足够 |
+| trycmd 快照测试替代 assert_cmd | 测试代码量更少 | `.toml` 快照文件与 assert_cmd 混用增加认知负担；项目已有成熟 assert_cmd 模式，迁移收益低 | 继续用 assert_cmd + predicates，在已有 integration.rs 中扩充 |
+| 多版本 Rust toolchain 矩阵（stable/beta/nightly） | 最大化兼容性验证 | 项目设 `rust-version = "1.85"`，nightly/beta 测试意义有限，显著增加 CI 时间 | 仅 stable，依赖 dtolnay/rust-toolchain@stable（已有） |
+| 独立的 e2e 测试文件（tests/e2e.rs） | 看上去结构更清晰 | tests/integration.rs 已有 1940 行且测试命名良好，新建文件会分裂测试上下文，`cargo test --test` 过滤需改变 | 在 integration.rs 中新增 `mod e2e_run` / `mod e2e_stats` 模块分区，利用已有 helper |
+| CI 中运行 criterion 基准并以性能变化百分比门控 | 自动化性能保障 | CI runner 时钟不稳定，跨运行结果不可比较；criterion 需热身 + 多次迭代才能收敛，单次 CI 运行不可信 | 只编译基准（--no-run），运行时上传 JSON，人工或跨多次运行比较 |
 
-| Anti-Feature | Why Requested | Why Problematic | Alternative |
-|--------------|---------------|-----------------|-------------|
-| 自动检测 stdin（无 `--input` 标志） | "更简单，用户不用学新参数" | 1) 与 `--config` 中的 `sqllog.path` 冲突：stdin 和配置文件都有输入路径时听谁的？2) 用户在交互式终端忘记传输入参数时，会卡在 stdin 读取。3) Unix 惯例是显式 `-` 表示 stdin | 使用 `sqllog2db run --input -` 显式选择 stdin。配置文件中 `sqllog.path` 在 stdin 模式下忽略（或静默覆盖） |
-| 实时输出记录到 stdout（tail -f 模式） | "想实时看到每一条导出的 SQL" | 1) 导出到 CSV 时需要 stdout 是干净的数据渠道。2) 5M records/sec 下实时打印是灾难性瓶颈 | 用进度条显示处理速率。需要"实时查看"的用户可以查错误日志或配置较低日志级别后观察文件 |
-| 逐条记录的进度条 | "想看到文件内部的具体进度" | 1) 达梦日志格式不支持预先获取行数，无法计算百分比。2) 逐条更新每行会产生大量终端刷新，~5M/s 速率下不可行 | 文件级进度 + 最终统计摘要。已完成文件数/总文件数的进度条 |
-| man page / 完整文档站集成 | "专业工具需要有手册页" | 1) 项目文档已独立部署在 GitHub Pages。2) man page 需要额外构建步骤和 CI 维护。3) 当前社区主要在 README 和配置文件注释中查找用法 | --help 中的 examples 足够覆盖 90% 使用场景 |
-| 彩色输出 | "让输出更好看" | 1) 依赖 `ansi_term`/`colored` crate。2) 管道时输出乱码。3) 对效率工具的用户来说"好看"次于"准确"和"快" | 使用符号前缀（`✓` `⚠` `✗`）+ 粗体/普通区分，无需颜色 crate。若用户确实需要颜色，可考虑在 --help 风格的彩色输出中少量使用（clap 已支持） |
-| --verbose 输出调试级别的每条记录信息 | "我要追踪每条记录的过滤决策" | 会产生毁灭性的输出量（数百万行），实际不可用 | 用专门的 `--dry-run`（统计模式，不导出）或限定范围的 `--filter-debug` 输出过滤后被丢弃的记录 ID |
-| JSON 格式的错误输出 | "方便机器解析" | 当前目标用户是 DBA，不是 CI 系统。JSON 输出增加了一倍的错误处理复杂度 | 结构化但人类可读的文本错误输出。未来需要 machine-readable 输出时再加 `--output-format json` |
-| 暂停/恢复进度 | "处理过程中能暂停" | 1) 单线程流式架构不支持暂停后恢复。2) 暂停期间日志文件可能被滚动。3) 用户可以用 `Ctrl+C` 中断后用 `--limit` 跳过已完成部分 | Ctrl+C 中断 + restart 时用 filter 跳过已处理部分。这是 v1.7 移除断点续传模块的原因 |
-| 自动打开输出文件 | "处理完直接打开结果" | 1) 破坏 CLI 的 composeability。2) 需要平台相关的打开命令。3) DBA 不需要编辑器打开 CSV | 在摘要中打印输出路径，让用户自己决定 |
+---
 
 ## Feature Dependencies
 
 ```
-[Progress Bar (MultiProgress)]
-    └──requires──> [indicatif crate] (~120KB 新增依赖)
-    └──requires──> [is-terminal detection]
-    └──requires──> [progress 与 log 不交错]
-                        └──requires──> [run 模式 logging.init(log_to_stdout=false)]
+GitHub Actions CI（test/clippy/fmt）
+    └──requires──> cargo test 全部通过（包括现有 e2e）
 
-[Stdin Pipe Input]
-    └──requires──> [--input CLI flag on run subcommand]
-    └──requires──> [SqllogParser 支持 io::stdin().lock() 路径]
-    └──requires──> [LogParserBuilder 的 stdin 适配]
-    └──optional──> [Stdin 模式静音进度显示（无文件数可预知）]
+GitHub Actions CD（多平台构建 + Releases）
+    └──requires──> CHANGELOG.md 中存在对应版本条目（extract changelog 步骤）
+    └──独立于 CI，在 tag push 时触发
 
-[Better Error Messages]
-    └──requires──> [行号跟踪从 dm-database-parser-sqllog 传递]
-    └──enhances──> [错误按类别分组汇总]
-    └──enhances──> [非致命错误继续处理]
+e2e CLI 集成测试（run/stats/validate/init）
+    └──requires──> assert_cmd + predicates（已在 dev-dependencies）
+    └──enhances──> CI 覆盖率门控（覆盖率随 e2e 增加而提升）
+    └──should precede──> cli/run 模块拆分（e2e 是重构的安全网）
 
-[Better --help]
-    └──requires──> [clap after_help / examples 属性]
-    └──enhances──> [用户 onboarding 体验]
+cli/run 模块拆分
+    └──conflicts with──> 同时修改 e2e 测试（防止重构导致测试变更难以审查）
+    └──should follow──> e2e 测试覆盖 run 路径
 
-[Error Statistics Summary]
-    └──requires──> [processor loop 中持久化错误计数器]
-    └──enhances──> [handle_run 最终输出]
+stats 模块重构整理
+    └──enhances──> stats e2e 测试稳定性（重构后函数边界更清晰）
+    └──should follow──> stats e2e 测试覆盖
+
+Criterion benchmark 稳定化
+    └──requires──> scripts/collect_bench_results.sh 正确运行
+    └──enhances──> bench.yml CI artifact 上传
 ```
 
 ### Dependency Notes
 
-- **Progress Bar + indicatif**: 这是合理的取舍。当前 0 依赖实现（`eprintln!`）的功能极度简陋，`indicatif` 是 Rust CLI 生态的事实标准，约 120KB 编译产物增量。需要配合 `indicatif-log-bridge` 防止日志输出与进度条渲染交错（当前 `logging::init_logging` 的 `log_to_stdout=false` 参数已在设计中预留了这个需求）。
-- **Stdin Path**: `SqllogParser` 的 `log_files()` 方法在 stdin 模式下不应被调用（没有文件列表）。需要新增 `SqllogParser::from_reader()` 或修改 run 命令的分支逻辑，使 stdin 模式跳过文件发现和 preflight 检查。
-- **行号传递**: 当前 `dm-database-parser-sqllog` 的 `LogParserBuilder::iter()` 返回的 `Result<Sqllog>` 不包含行号。需要在 parser crate 中新增行号字段或在 wrapper 层包装带行号的迭代器。
-
-## MVP Recommendation for v1.10
-
-### Must Have (P0)
-
-按实现复杂度降序：
-
-| # | Feature | Rationale | Est. Complexity |
-|---|---------|-----------|-----------------|
-| 1 | 错误类型细分（IO/格式/配置/解析）+ 非致命错误继续 | 审计遗留修复，安全前提 | MEDIUM（已有误差基？） |
-| 2 | 技术债清理（FIX-01/02/03） | 审计要求 | LOW（代码清理） |
-| 3 | 更好的错误信息上下文——文件路径 + 行号 | 直接影响用户处理问题的效率 | MEDIUM（需 parser crate 配合） |
-| 4 | stdin 管道输入 (`--input -`) | 核心功能补齐 | MEDIUM（流式架构已就绪） |
-| 5 | --help 增强（examples） | 低成本高回报 | LOW |
-| 6 | 核心验证（Phase 33） | 质量保障 | MEDIUM（测试用例） |
-
-### Should Have (P1)
-
-| # | Feature | Rationale | Est. Complexity |
-|---|---------|-----------|-----------------|
-| 7 | 终端下进度条显示（indicatif） | 用户体验显著提升 | MEDIUM（新增依赖 + MultiProgress 实现） |
-| 8 | 错误统计摘要 | 处理完一眼知道结果 | LOW |
-| 9 | 进度条在管道模式自动退化为文本 | 兼容性考虑 | LOW（is-terminal 检测） |
-
-### Defer (P2+)
-
-| # | Feature | Why Defer | Complexity |
-|---|---------|-----------|------------|
-| 10 | 并行模式下不乱刷屏的输出 | 当前并行已有关注（reset_pb=false），偶尔交错不影响正确性 | MEDIUM |
-| 11 | 错误按类别分组汇总 | 当前日志系统已记录各类错误，汇总是增值功能 | LOW（但仍需 P0/P1 完成后） |
-| 12 | stdout 输出到终端时的格式美化（符号前缀） | 当前 `eprintln!` 已有 `✓` 前缀，够用 | LOW |
-| 13 | stdin + config filter 组合测试 | 功能依赖 P0 的 stdin 实现完成后自然覆盖 | LOW（测试用例） |
-
-### Feature Prioritization Matrix
-
-| Feature | User Value | Implementation Cost | Priority |
-|---------|------------|---------------------|----------|
-| 错误类型细分 + continue-on-error | HIGH | LOW | P0 |
-| 技术债清理 | MEDIUM | LOW | P0 |
-| 更好错误信息（路径 + 行号） | HIGH | MEDIUM | P0 |
-| stdin 管道输入 | HIGH | MEDIUM | P0 |
-| --help 增强（examples） | MEDIUM | LOW | P0 |
-| Phase 33 核心验证 | HIGH | MEDIUM | P0 |
-| 进度条（indicatif） | MEDIUM | MEDIUM | P1 |
-| 错误统计摘要 | MEDIUM | LOW | P1 |
-| 管道模式自动退化为文本 | LOW | LOW | P1 |
-| 并行模式不乱刷屏 | LOW | MEDIUM | P2 |
-| 错误分组汇总 | LOW | LOW | P2 |
-| stdout 输出美化（符号） | LOW | LOW | P2 |
-
-## Competitor Feature Analysis
-
-当前直接竞品较少——达梦 SQL 日志解析是一个小众领域。以下比较基于通用的日志处理 CLI 工具（`grep`, `awk`, `jq`, `pv` 等）的用户期望。
-
-| Feature | grep/awk | pv (pipe viewer) | sqllog2db (当前) | sqllog2db (v1.10 目标) |
-|---------|----------|-------------------|------------------|------------------------|
-| 进度显示 | 无进度，输出完成后统计行数 | 精确字节进度条 | 逐文件 `[i/N]` 文本 | indicatif MultiProgress + 文件级进度 |
-| stdin 支持 | `cat \| grep` 是核心使用场景 | 设计目的就是管道 | 不支持 | `--input -` |
-| 错误信息 | `grep: path: No such file or directory` | 极简 | `Error: {e}` 基本完整 | 带行号/路径/建议 |
-| 非致命错误处理 | 继续读取下一个文件 | 无此概念 | 已实现 | 保持 + 增强统计 |
-| 帮助文档 | 巨量选择（GNU manual） | `pv --help` 清晰列出 flags | 基本 clap 输出 | 添加 examples 和工作流 |
-| 统计摘要 | `grep -c` 或 `wc -l` | 结束时显示速率/总量 | `{records} records total` | 增加错误/跳过/耗时 |
-| 彩色语法高亮 | grep --color | 无 | 无 | 不追求（anti-feature） |
-| 退出码区分 | 0=匹配, 1=不匹配, 2=错误 | 0/1 | 4 种退出码 | 保持 + 确认覆盖 |
-
-## Sources
-
-- 代码分析：sqllog2db 源码（所有模块已阅读）
-- 生态参考：`indicatif` crate 文档（crates.io, v0.18.4）
-- 生态参考：`is-terminal` crate（crates.io, v0.4.17，clap 的 `is_terminal_polyfill` 已存在于依赖树）
-- Unix CLI 设计惯例：stdin `-` 惯例（POSIX 标准，被 tar, cat, git 等广泛采用）
-- 错误信息设计参考：Rust CLI error message patterns（thiserror 的最佳实践）
-- 项目需求：`.planning/PROJECT.md` 中定义的 v1.10 目标
-
-## 技术方案概要
-
-### 进度条实现
-
-```rust
-// 核心选择：indicatif 0.18.x，原因：
-// 1. Rust CLI 领域事实标准（161M+ 下载量）
-// 2. MultiProgress 支持多级进度条（当前文件 + 总体）
-// 3. 自动检测 TTY（on_tty() 方法），管道时静默
-// 4. 与 log crate 配合：init_logging(log_to_stdout=false) + indicatif-log-bridge 可选
-
-// 方案：file-level MultiProgress
-// - 总进度条（底部）：已完成文件数 / 总文件数，`[████░░░░] 3/5`
-// - 当前文件进度条（顶部）：当前文件名 + indeterminate spinner（因行数未知）
-// - 完成一个文件后：总进度条前进一步，当前文件进度条替换为完成的文件名
-
-// 管道模式（stderr 非 TTY）：退化为当前行为 `[i/N] file.log`
-```
-
-### Stdin Pipe 实现
-
-```rust
-// 在 Cli::Commands::Run 中增加：
-// #[arg(short = 'i', long = "input")]
-// input: Option<String>  // None = 使用配置文件中的 sqllog.path; Some("-") = stdin
-
-// 在 handle_run 中：
-// match input {
-//     Some("-") => process_stdin(...),   // 跳过 SqllogParser::log_files()
-//     Some(path) => override config path, // 临时覆盖 sqllog.path
-//     None => use cfg.sqllog.path,        // 默认行为
-// }
-
-// process_stdin:
-// - LogParserBuilder::from_reader(io::stdin().lock())  // 需要 dm-database-parser-sqllog 支持
-// - 跳过 preflight 检查
-// - 跳过预扫描（无文件列表）
-// - 跳过并行模式
-// - 进度条退化为 indeterminate（未知总大小）
-```
-
-### 错误信息增强
-
-```
-// 当前错误格式：
-// Error: Write failed /path/to/file: Permission denied (os error 13)
-
-// 增强后格式（按场景分层）：
-// ✗ [EXPORT ERROR] /path/to/output.csv 写入失败 → 权限被拒绝
-//   Hint: 检查输出目录的写入权限，当前用户可能没有 /export/ 目录的写权限
-//   Fix:   sqllog2db run -c config.toml --set exporter.csv.file=/tmp/output.csv
-//
-// ✗ [PARSE ERROR] /var/log/dm/sqllog_20250521.log: 第 487 行解析失败
-//   Reason: 预期 TIMESTAMP 格式为 YYYY-MM-DD HH:MM:SS.FFF
-//   Context: "2025-05-21 10:30:28 这是一行不完整的日志"
-//   Hint: 此行不符合达梦 SQL 日志标准格式，可能是跨行截断或日志记录损坏
-```
-
-### --help 增强
-
-```
-// 当前效果：
-// sqllog2db-run
-// Run the log export task
-// Usage: sqllog2db run [OPTIONS]
-//
-// Options:
-//   -c, --config <CONFIG>  Configuration file path [default: config.toml]
-
-// 增强效果：
-// sqllog2db-run
-// 解析达梦 SQL 日志并导出到 CSV 或 SQLite
-//
-// Usage: sqllog2db run [OPTIONS] [--input <PATH>]
-//
-// Options:
-//   -c, --config <CONFIG>  配置文件路径 [default: config.toml] [env: SQLLOG2DB_CONFIG]
-//   -i, --input <PATH>     输入源（文件或 "-" 表示 stdin）[default: 从配置文件读取]
-//   -q, --quiet            关闭进度显示
-//   -v, --verbose...       详细输出（-v debug, -vv trace）
-//
-// Examples:
-//   sqllog2db run -c config.toml                             从目录处理所有 .log 文件
-//   cat /var/log/dm/2025-05-21.log | sqllog2db run --input -  管道输入
-//   sqllog2db run -c config.toml --set sqllog.path="/tmp/log" 覆盖输入路径
-//   sqllog2db run -c config.toml -q                           静默模式（仅错误输出）
-```
+- **CD 需要 CHANGELOG.md 版本条目**：release.yaml 的 `Extract changelog` 步骤用 awk 从 CHANGELOG.md 提取版本发布说明，若无对应版本节则回退为通用文本，不会 fail，但发布说明质量差。
+- **e2e 测试依赖已有 assert_cmd**：assert_cmd 和 predicates 已在 dev-dependencies，无需添加新依赖。
+- **模块重构必须在 e2e 测试之后**：重构改变内部结构，e2e 测试是重构的安全网，两者应在不同 phase。
+- **覆盖率门控依赖 e2e 测试增加**：新增 e2e 测试后覆盖率会提升，有助于持续满足 ≥70% 门控。
 
 ---
 
-*Feature research for: sqllog2db v1.10 CLI quality improvements*
-*Researched: 2026-05-21*
+## MVP Definition
+
+### v1.15 Launch With（必须交付）
+
+这些是 v1.15 里程碑"工程质量全面提升"必须交付的项目。
+
+- [ ] CI workflow 稳定运行（test/clippy/fmt 全部绿色，三平台） — 工程基础，无此则后续 PR 无保障
+- [ ] CD workflow 稳定运行（4 个 target 构建 + GitHub Releases） — 交付物门控
+- [ ] e2e：`run` 子命令全链路（CSV 输出、多文件、边界条件） — 核心功能链路
+- [ ] e2e：`stats` 子命令含时间段过滤（--from/--to 组合，edge cases） — v1.14 特性的 e2e 锁定
+- [ ] e2e：`validate` 成功/失败路径退出码强化断言 — 已有基础，补全
+- [ ] e2e：`init` CLI 路径（assert_cmd 而非 handle_init 直接调用） — 补完 init 的 e2e 层
+
+### Add After Validation（v1.15 后期阶段）
+
+- [ ] cli/run 模块内超 40 行函数的拆分 — 触发条件：e2e 全部通过提供安全网之后
+- [ ] stats 模块超 40 行函数的清理 — 同上，有测试保障后进行
+- [ ] cargo audit 定期 schedule job — 触发条件：基础 CI/CD 稳定后附加
+
+### Future Consideration（v1.16+）
+
+- [ ] bench CI 历史对比（跨 PR 比较 JSON artifact） — 需要额外脚本/服务，当前收集已够
+- [ ] 覆盖率 badge（本地生成 SVG，不依赖外部服务） — 需要 GitHub Pages 集成
+
+---
+
+## Feature Prioritization Matrix
+
+| Feature | User Value | Implementation Cost | Priority |
+|---------|------------|---------------------|----------|
+| CI test/clippy/fmt 门控（稳定化） | HIGH | LOW（已有骨架） | P1 |
+| CD 多平台构建 + Releases（稳定化） | HIGH | LOW（已有骨架） | P1 |
+| e2e run 子命令全链路 | HIGH | MEDIUM | P1 |
+| e2e stats + 时间段过滤 | HIGH | MEDIUM | P1 |
+| e2e init CLI 路径 | MEDIUM | LOW | P1 |
+| e2e validate 退出码强化 | MEDIUM | LOW | P1 |
+| 覆盖率门控（≥70%，验证稳定） | MEDIUM | LOW（已有） | P2 |
+| cli/run 模块超长函数拆分 | MEDIUM | MEDIUM | P2 |
+| stats 模块超长函数清理 | MEDIUM | MEDIUM | P2 |
+| benchmark 稳定化（artifact 上传） | LOW | MEDIUM | P2 |
+| cargo audit schedule | LOW | LOW | P3 |
+
+**Priority key:**
+- P1: v1.15 里程碑必须交付
+- P2: v1.15 里程碑尽量交付，不影响发布
+- P3: 后续版本
+
+---
+
+## Ecosystem Reference（工程模式对比）
+
+以下为 Rust CLI 项目 CI/CD 的行业参考，非竞争者分析。
+
+| Practice | 行业惯例（ripgrep/fd 等） | sqllog2db v1.14 现状 | v1.15 目标 |
+|---------|--------------------------|---------------------|-----------|
+| 三平台 CI | ubuntu/windows/macos | 已有 ✓ | 确认稳定 |
+| 覆盖率门控 | 许多项目无，有则 ≥60-80% | ≥70% 行覆盖 ✓ | 确认稳定运行 |
+| 多平台 CD | 含 musl、arm 等 target | 4 个 target（含 aarch64-linux cross） ✓ | 确认稳定 |
+| 基准追踪 | criterion + artifact 上传 | bench.yml + collect_bench_results.sh | 需稳定化 |
+| assert_cmd e2e | 标准做法 | 已用，覆盖 stats/validate/verbose/quiet 路径 | 补全 run/init e2e 层 |
+| cargo doc 编译检查 | 常见 CI 步骤 | 已有 RUSTDOCFLAGS=-D warnings ✓ | 确认稳定 |
+| 依赖安全审计 | cargo audit 定期运行 | 无 | 可选附加 |
+
+---
+
+## Sources
+
+- assert_cmd crate 文档: https://docs.rs/assert_cmd
+- predicates crate 文档: https://docs.rs/predicates
+- alexwlchan 2025 assert_cmd 实践: https://alexwlchan.net/2025/testing-rust-cli-apps-with-assert-cmd/
+- rust-cli book testing 章节: https://rust-cli.github.io/book/tutorial/testing.html
+- cargo-llvm-cov: https://github.com/taiki-e/cargo-llvm-cov
+- cross-rs GitHub Actions: https://blog.ediri.io/how-to-cross-compile-your-rust-applications-using-cross-rs-and-github-actions
+- actions-rust-lang/audit: https://github.com/actions-rust-lang/audit
+- 项目现有工作流: .github/workflows/ci.yaml, release.yaml, bench.yml
+- 项目现有集成测试: tests/integration.rs（65 个 #[test]，24 处 assert_cmd 用法，1940 行）
+
+---
+
+*Feature research for: Rust CLI CI/CD 与工程质量改进*
+*Researched: 2026-06-02*

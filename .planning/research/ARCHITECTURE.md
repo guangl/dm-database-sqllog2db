@@ -1,575 +1,364 @@
-# Architecture Research — v1.10 Quality Features Integration
+# Architecture Research
 
-**Domain:** Rust CLI tool for parsing DM database SQL logs
-**Researched:** 2026-05-21
-**Confidence:** HIGH (based on direct codebase analysis of existing architecture)
+**Domain:** Rust CLI 工具 — v1.15 CI/CD 基础设施 + 模块重构
+**Researched:** 2026-06-02
+**Confidence:** HIGH（基于直接代码阅读，无推断）
 
-## Data Flow Overview (Existing)
+## 现状评估
+
+### 已有 CI/CD 文件（不需要新建）
+
+`.github/workflows/` 目录下已存在完整的 workflow 文件：
+
+| 文件 | 用途 | 状态 |
+|------|------|------|
+| `ci.yaml` | test (3 平台矩阵) + lint + coverage | 已存在，功能完整 |
+| `release.yaml` | tag 触发多平台构建 + crates.io 发布 | 已存在，功能完整 |
+| `bench.yml` | PR/push 触发 criterion benchmark | 已存在，功能完整 |
+| `pages.yml` | site/ 变更时部署 GitHub Pages | 已存在 |
+| `lychee.yml` | 链接检查 | 已存在 |
+
+v1.15 的 CI/CD 任务不是新建 workflow，而是验证和修复现有 workflow 的问题（如 `actions/checkout@v6` 使用了不存在的版本号，实际 latest 是 `v4`）。
+
+### cli/run 模块现状
 
 ```
-sqllog2db run -c config.toml
+src/cli/run/
+├── mod.rs               263 行  编排入口（handle_run），路由到三条路径
+├── filter_processor.rs  300 行  FilterProcessor + build_pipeline
+├── parallel.rs          225 行  CSV 并行路径 + concat_csv_parts
+├── prescan.rs           137 行  事务 ID 预扫描
+├── processor.rs         174 行  process_log_file（单文件处理核心）
+├── sqlite_parallel.rs   225 行  SQLite 并行路径
+└── tests.rs             253 行  mod.rs 的集成测试
+```
+
+`mod.rs` 当前 263 行，不是需要拆分的大文件。现有子模块划分已经合理——每个关注点已经独立成文件。
+
+### stats 模块现状
+
+```
+src/stats/           业务逻辑层（数据域）
+├── mod.rs           213 行  run_stats 编排 + scan_files + write_stats_output
+├── aggregate.rs     388 行  StatsAccumulator（BinaryHeap + HashMap）
+├── normalize.rs     159 行  SQL 标准化状态机
+├── config.rs        240 行  StatsConfig + validate_time_str
+└── output.rs        354 行  CSV/SQLite 输出
+
+src/cli/stats/       CLI 适配层
+└── mod.rs           147 行  handle_stats + merge_stats_options + 单元测试
+```
+
+stats 模块职责划分清晰，不需要重组，只需小幅清理。
+
+## 系统概览
+
+```
+src/main.rs
+    ↓ (dispatch by subcommand)
+    ├── cli/run/mod.rs (handle_run)
+    │       ↓ stdin/file discovery
+    │       ├── run/prescan.rs         事务 ID 两阶段预扫描
+    │       ├── run/filter_processor.rs  Pipeline 构建
+    │       ├── run/processor.rs       单文件流式处理
+    │       ├── run/parallel.rs        CSV 并行 + 合并
+    │       └── run/sqlite_parallel.rs SQLite 并行
+    │               ↓
+    │           exporter/ (CSV / SQLite)
     │
-    ▼
-handle_run()                          [src/cli/run/mod.rs]
+    ├── cli/stats/mod.rs (handle_stats)
+    │       ↓ CLI 参数合并
+    │       └── stats/mod.rs (run_stats)
+    │               ├── stats/aggregate.rs  StatsAccumulator
+    │               ├── stats/normalize.rs  SQL 标准化
+    │               └── stats/output.rs     CSV/SQLite 输出
     │
-    ├─ SqllogParser::new(path).log_files()   [src/parser.rs]
-    │   └─ Returns Vec<PathBuf> (sorted .log files)
-    │
-    ├─ scan_for_trxids()               [src/cli/run/prescan.rs]
-    │   └─ Only if transaction-level filters configured
-    │
-    ├─ build_pipeline()                [src/cli/run/filter_processor.rs]
-    │
-    ├─ [branch] use_parallel?
-    │   ├─ YES: process_csv_parallel()  [src/cli/run/parallel.rs]
-    │   │   └─ rayon par_iter per file
-    │   └─ NO:  sequential loop
-    │       └─ process_log_file() per file  [src/cli/run/processor.rs]
-    │           └─ LogParserBuilder::new(path).build().iter()
-    │               └─ Hot loop: parse → filter → export_one_preparsed()
-    │
-    └─ summary output (eprintln!)
+    ├── cli/init.rs (handle_init)
+    └── cli/validate.rs (handle_validate)
+
+.github/workflows/
+    ├── ci.yaml       push/PR to main: test + lint + coverage
+    ├── release.yaml  tag v*: 多平台构建 + GitHub Releases + crates.io
+    └── bench.yml     push/PR: criterion benchmark (continue-on-error)
+
+tests/
+    ├── integration.rs    1940 行  assert_cmd e2e + handler 直调
+    └── jemalloc_peak.rs   159 行  内存峰值回归
 ```
 
-### Component Boundaries
+## 组件职责边界
 
-| Component | File | Responsibility | Communicates With |
-|-----------|------|----------------|-------------------|
-| `handle_run` | `cli/run/mod.rs` | Main orchestration: file discovery, pipeline build, loop orchestrator | `SqllogParser`, `Pipeline`, `ExporterManager`, `process_log_file`, `process_csv_parallel` |
-| `SqllogParser` | `parser.rs` | File/glob pattern discovery, path validation | Filesystem, `LogParserBuilder` |
-| `process_log_file` | `cli/run/processor.rs` | Single-file hot loop: parse records through pipeline to exporter | `LogParserBuilder`, `Pipeline`, `ExporterManager` |
-| `Pipeline` | `pipeline/mod.rs` | Ordered filter execution, `is_empty()` fast path | `LogProcessor` trait implementations |
-| `ExporterManager` | `exporter/mod.rs` | Factory + enum dispatch to active exporter | `CsvExporter` or `SqliteExporter` |
-| `Error` types | `error.rs` | Typed errors: `ConfigError`, `ParserError`, `FileError`, `ExportError`, `Io`, `Interrupted` | All components via `Result<T>` |
-| `preflight` | `preflight.rs` | Pre-run validation of paths and output writability | `SqllogParser`, filesystem |
+| 组件 | 职责 | 对外接口 |
+|------|------|----------|
+| `cli/run/mod.rs` | 路由到三条处理路径（CSV 并行/SQLite 并行/顺序），组装进度条与统计摘要 | `pub fn handle_run(cfg, quiet, verbose, interrupted) -> Result<ErrorStats>` |
+| `cli/run/processor.rs` | 单文件流式处理：解析→过滤→标准化→导出，每 1024 条更新进度 | `pub(super) fn process_log_file(...)` |
+| `cli/run/prescan.rs` | 事务过滤器的两阶段预扫描，收集事务 ID 集合 | `pub(super) fn scan_for_trxids_by_transaction_filters(...)` |
+| `cli/run/filter_processor.rs` | 把 `FiltersFeature` 配置编译为 `FilterProcessor`，构建 `Pipeline` | `pub(super) fn build_pipeline(cfg)` |
+| `cli/run/parallel.rs` | CSV 多文件 rayon 并行解析 + `concat_csv_parts` 合并 | `pub(super) fn process_csv_parallel(...)` |
+| `cli/run/sqlite_parallel.rs` | SQLite 多文件 rayon 并行解析，各文件独立写入后合并 | `pub(super) fn process_sqlite_parallel(...)` |
+| `stats/aggregate.rs` | `StatsAccumulator`：流式累积慢 SQL（BinaryHeap）和高频 SQL（HashMap），含时间过滤 | `pub StatsAccumulator::new/update/into_results` |
+| `stats/normalize.rs` | SQL 字面量替换为 `?` 的状态机 | `pub fn normalize_sql(sql) -> String` |
+| `stats/output.rs` | 将聚合结果写入 CSV（两个文件）或 SQLite（两张表） | `pub fn write_csv_stats / write_sqlite_stats` |
+| `cli/stats/mod.rs` | CLI 层：合并 CLI 参数与 config 优先级，调用 `stats::run_stats` | `pub fn handle_stats(cfg, top, from, to)` |
 
-### Data Flow Characteristics
+## 推荐项目结构（v1.15 目标状态）
 
-- **Single-threaded streaming** (parallel path is CSV-only with per-file parallelism via rayon)
-- **Constant memory**: records processed one-at-a-time, only `BufWriter` buffer allocated
-- **File-level parallelism**: parallel path splits files across threads, each thread has own CSV temp file
-- **Zero-overhead fast path**: `pipeline.is_empty()` check avoids filter overhead
-- **Pre-scan**: two-pass for transaction-level filters (scan for trxids, then filter by trxid)
+```
+src/cli/run/
+├── mod.rs              handle_run（编排，目标不超过 270 行）
+├── filter_processor.rs FilterProcessor + build_pipeline（现状良好）
+├── parallel.rs         CSV 并行路径（现状良好）
+├── prescan.rs          事务 ID 预扫描（现状良好）
+├── processor.rs        单文件处理核心（现状良好）
+├── sqlite_parallel.rs  SQLite 并行路径（现状良好）
+└── tests.rs            模块内集成测试
+
+src/cli/stats/
+└── mod.rs              handle_stats + merge_stats_options
+                        （147 行，现状良好，确认删除遗留 warn! 占位符）
+
+src/stats/
+├── mod.rs              run_stats 编排（现状良好）
+├── aggregate.rs        StatsAccumulator（现状良好）
+├── config.rs           StatsConfig + validate_time_str（现状良好）
+├── normalize.rs        SQL 标准化（现状良好）
+└── output.rs           统计输出（354 行，检查子函数是否超 40 行）
+
+tests/
+├── integration.rs      扩展 e2e 覆盖（stats/run/validate/init edge case）
+└── jemalloc_peak.rs    内存峰值（保持）
+
+.github/workflows/
+├── ci.yaml             修复 actions 版本号（checkout@v6 → @v4）
+├── release.yaml        修复 actions 版本号
+└── bench.yml           验证 scripts/collect_bench_results.sh 存在
+```
+
+## 架构模式
+
+### 模式 1：pub(super) 内部模块隔离
+
+**什么：** `cli/run/` 子模块全部使用 `pub(super)` 可见性，只有 `mod.rs` 暴露 `pub fn handle_run`。
+
+**何时使用：** 当一个功能由多个协作文件组成，但对外只有一个入口时。
+
+**优点：** 外部（tests/）只能通过 `handle_run` 测试，强制集成测试视角；内部重构不影响接口。
+
+**v1.15 注意点：** `tests/integration.rs` 直接 `use dm_database_sqllog2db::cli::run::handle_run`，这依赖 `cli::run` 模块在 lib crate 中可见。验证 `src/lib.rs` 中的 `pub mod cli` 层级是否正确。
+
+### 模式 2：双层 stats 分离（CLI 层 vs 业务层）
+
+**什么：** `cli/stats/mod.rs` 只处理 CLI 参数优先级合并，`src/stats/` 只处理业务逻辑。
+
+**何时使用：** 当 CLI 参数合并逻辑和业务聚合逻辑必须各自可独立测试时。
+
+**现状：** 分离已经存在且正确。`merge_stats_options` 有完整单元测试，`run_stats` 有独立集成测试。不需要变动。
+
+### 模式 3：handler 直调 + assert_cmd 双层 e2e
+
+**什么：** `tests/integration.rs` 同时包含：
+1. 直接调用 `handle_run/handle_init/handle_validate` 的 handler 集成测试（快速，无进程开销）
+2. 通过 `assert_cmd::Command::cargo_bin("sqllog2db")` 的完整 e2e CLI 测试（慢，验证 clap 参数解析）
+
+**v1.15 扩展策略：** 新增 e2e 测试时先判断——业务逻辑正确性用 handler 直调（快 10x）；CLI 参数格式、stderr 输出格式、exit code 用 assert_cmd。
+
+## 数据流
+
+### run 命令处理流
+
+```
+handle_run(cfg, quiet, verbose, interrupted)
+    ↓
+SqllogParser::log_files()  glob 展开，返回 Vec<PathBuf>
+    ↓ (stdin 检测：is_empty && !is_terminal)
+    ↓
+has_transaction_filters? → scan_for_trxids_by_transaction_filters()
+                           → merge_found_trxids() → 修改 cfg 副本
+    ↓
+build_pipeline(cfg)  编译 FilterProcessor
+
+路由判断（互斥）：
+  use_csv_parallel      → process_csv_parallel()    (rayon)
+  use_sqlite_parallel   → process_sqlite_parallel()  (rayon)
+  否则                  → 顺序：for each file { process_log_file() }
+
+    ↓
+摘要输出到 stderr (unless quiet)
+```
+
+### stats 命令处理流
+
+```
+handle_stats(cfg, top, from, to)
+    ↓ merge_stats_options  CLI > config > default
+    ↓
+run_stats(merged_cfg, effective_top)
+    ↓ validate_stats_time_range
+    ↓ SqllogParser::log_files()
+    ↓
+for each file { LogParserBuilder → iter() → accumulator.update(record) }
+    ↓ StatsAccumulator::into_results()  BinaryHeap + HashMap → Vec
+    ↓
+write_stats_output(cfg, slow_rows, frequent_rows)
+    CSV 优先 → write_csv_stats (slow_sql.csv + frequent_sql.csv)
+    SQLite   → write_sqlite_stats (slow_sql table + frequent_sql table)
+```
+
+## CI/CD 集成点
+
+### 现有 ci.yaml 三个 job
+
+| Job | 触发 | 运行环境 | 关键命令 |
+|-----|------|----------|---------|
+| `test` | push/PR to main | ubuntu + windows + macos | `cargo test` + release 性能基线 |
+| `lint` | push/PR to main | ubuntu-latest | `cargo fmt --check` + `cargo clippy` + `cargo doc` + `cargo bench --no-run` |
+| `coverage` | push/PR to main | ubuntu-latest | `cargo llvm-cov --fail-under-lines 70` |
+
+### 当前 workflow 的版本问题（阻塞性）
+
+所有 workflow 文件使用 `actions/checkout@v6`，但 GitHub Actions `checkout` 最新版本是 `v4`。如果这些 workflow 从未实际运行过，`v6` 会导致立即失败：
+
+```yaml
+# 当前（错误）
+- uses: actions/checkout@v6
+
+# 应改为
+- uses: actions/checkout@v4
+```
+
+同样问题存在于 `release.yaml`（含 `taiki-e/install-action@v2`、`softprops/action-gh-release@v3`）和 `bench.yml`（含 `actions/upload-artifact@v7`）。
+
+### release.yaml 多平台矩阵
+
+| Target | OS | 工具 | 注意 |
+|--------|-----|------|------|
+| x86_64-unknown-linux-gnu | ubuntu | cargo | 无 |
+| aarch64-unknown-linux-gnu | ubuntu | cross | 需要 Docker 守护进程 |
+| x86_64-pc-windows-msvc | windows | cargo | 无 |
+| aarch64-apple-darwin | macos | cargo | 无 |
+
+CHANGELOG.md 必须存在，release.yaml 用 `awk "/## \[${VERSION}\]/,/## \[/"` 从中提取 release notes。
+
+### bench.yml 依赖
+
+```bash
+scripts/collect_bench_results.sh   # bench.yml 第 32 行调用此脚本
+```
+
+如果此脚本不存在，bench job 会失败（但 `continue-on-error: true` 所以不阻塞 PR）。
+
+## 重构边界分析
+
+### cli/run/mod.rs 拆分评估
+
+**结论：不需要拆分。** 当前 263 行，已经是经过多轮重构后的精简形态：
+
+- `handle_run` 本身约 230 行（含注释），主要是三条路径的路由逻辑
+- 所有可提取的业务函数已经在子模块中（`processor.rs`、`prescan.rs` 等）
+- 剩余逻辑是高度相关的条件分支（stdin 检测、并行路由判断、进度条管理、摘要输出），强行拆分会增加复杂度
+
+如果需要清理：唯一合理的提取是将"摘要输出"（约 30 行）提取为私有函数，但这不改变模块结构。
+
+### stats 模块整理评估
+
+**结论：结构已合理，只需删除遗留代码。** 根据 ROADMAP Phase 54 计划备注：
+
+- `cli/stats/mod.rs`：删除 "not yet active" warn! 占位符
+- `src/stats/output.rs`（354 行）：检查 `write_csv_stats` 和 `write_sqlite_stats` 各自是否超过 40 行，必要时提取子函数
+
+## v1.15 变更分类（新建 vs 修改）
+
+### 仅修改的文件（不新建模块）
+
+| 文件 | 变更类型 | 原因 |
+|------|----------|------|
+| `.github/workflows/ci.yaml` | 修改 | 修复 `checkout@v6` → `v4` |
+| `.github/workflows/release.yaml` | 修改 | 修复 actions 版本，验证多平台构建 |
+| `.github/workflows/bench.yml` | 修改 | 确认 `scripts/collect_bench_results.sh` 路径 |
+| `tests/integration.rs` | 扩展 | 新增 edge case：stats --from/--to、run 中断、validate 错误 |
+| `src/cli/stats/mod.rs` | 小幅清理 | 删除遗留 warn! 占位符 |
+| `src/stats/output.rs` | 可选重构 | 如子函数超过 40 行则提取 |
+
+### 可能新建的文件
+
+| 文件 | 条件 | 用途 |
+|------|------|------|
+| `scripts/collect_bench_results.sh` | 如果不存在 | bench.yml 第 32 行依赖此脚本 |
+| `CHANGELOG.md` | 如果不存在 | release.yaml 从中提取 release notes |
+| `tests/e2e_stats.rs` | 可选（integration.rs 超 2000 行时） | 拆分 stats e2e 测试 |
+
+## 构建顺序（依赖顺序）
+
+**Phase A：CI/CD 修复（无代码依赖，优先执行）**
+1. 修复所有 workflow 文件中的 actions 版本号（`checkout@v6` → `v4` 等）
+2. 确认 `scripts/collect_bench_results.sh` 存在，否则新建占位
+3. 验证 CHANGELOG.md 格式符合 release.yaml 的 awk 提取模式
+
+**Phase B：代码清理（独立，与 A 并行可进行）**
+4. 删除 `cli/stats/mod.rs` 中的遗留 warn! 占位符
+5. 检查 `stats/output.rs` 函数长度，超 40 行则拆分子函数
+
+**Phase C：测试扩展（依赖 A+B 完成后功能稳定）**
+6. 扩展 `tests/integration.rs`：stats 子命令 edge case（--from/--to 边界、无匹配记录、无效格式）
+7. 扩展 `tests/integration.rs`：run 子命令 edge case（中断标志预置、多文件并行一致性）
+8. 运行 `cargo llvm-cov --fail-under-lines 70` 验证覆盖率门禁通过
+
+**Phase D：性能基准稳定化（依赖 C 通过）**
+9. 确认 `cargo bench --no-run` 编译通过（ci.yaml lint job 已包含此步骤）
+10. 验证 `cargo bench` 在本地可完整运行（bench.yml 的 continue-on-error 不是应对编译失败的借口）
+
+## 反模式
+
+### 反模式 1：在 handle_run 中内联业务逻辑
+
+**错误做法：** 将过滤、标准化、并行合并等逻辑直接写在 `mod.rs` 的 `handle_run` 中。
+
+**为何有问题：** `mod.rs` 膨胀，子模块独立测试性下降。
+
+**正确做法：** 现有结构已经正确——业务逻辑在 `pub(super)` 子模块，`handle_run` 只做路由。
+
+### 反模式 2：stats CLI 层直接访问 StatsAccumulator
+
+**错误做法：** `cli/stats/mod.rs` 直接创建 `StatsAccumulator` 并调用 `update()`。
+
+**为何有问题：** CLI 层应只关心参数合并，业务细节泄漏会破坏分离。
+
+**正确做法：** 现有结构正确——`cli/stats/mod.rs` 调用 `crate::stats::run_stats`，不直接操作 accumulator。
+
+### 反模式 3：e2e 测试全部使用 assert_cmd
+
+**错误做法：** 所有新测试都用 `Command::cargo_bin("sqllog2db")` 调用进程。
+
+**为何有问题：** assert_cmd 测试每次都启动新进程，比 handler 直调慢 5-10 倍，CI 时间显著增加。
+
+**正确做法：** 业务逻辑测试用 `handle_run/handle_stats` 直调；只有 CLI 参数格式、exit code、stderr 格式用 assert_cmd。
+
+### 反模式 4：用 continue-on-error 掩盖 workflow 问题
+
+**错误做法：** `bench.yml` 设置 `continue-on-error: true` 后就认为 benchmark 脚本不需要维护。
+
+**为何有问题：** `scripts/collect_bench_results.sh` 缺失时 benchmark 数据不会被上传，CI artifact 一直为空。
+
+**正确做法：** `continue-on-error` 只用于"性能回退不阻塞 merge"的语义，脚本本身必须存在且可运行。
+
+## 集成点总结
+
+| 边界 | 通信方式 | 注意事项 |
+|------|----------|----------|
+| `ci.yaml` ↔ Cargo | `cargo test/clippy/fmt/doc/bench` | `bench --no-run` 验证编译，不运行 benchmark |
+| `release.yaml` ↔ cross | `cross build --release --target aarch64` | cross 用 Docker，CI runner 需要 Docker 守护进程 |
+| `bench.yml` ↔ `scripts/` | `bash scripts/collect_bench_results.sh` | 脚本必须存在 |
+| `release.yaml` ↔ CHANGELOG.md | `awk` 提取版本段落 | 格式必须是 `## [VERSION]`，否则 release notes 为空 |
+| `tests/integration.rs` ↔ lib | `use dm_database_sqllog2db::cli::run::handle_run` | lib.rs 必须 `pub mod cli` |
+| `assert_cmd` ↔ binary | `Command::cargo_bin("sqllog2db")` | 需要 `[[bin]] name = "sqllog2db"` 已注册在 Cargo.toml |
+
+## 来源
+
+- 直接代码阅读：`src/cli/run/mod.rs`、`src/cli/stats/mod.rs`、`src/stats/mod.rs`（HIGH）
+- `.github/workflows/` 全部文件直接阅读（HIGH）
+- `Cargo.toml` 直接阅读（HIGH）
+- `.planning/PROJECT.md` + `.planning/ROADMAP.md`（HIGH）
 
 ---
-
-## Feature 1: Typed Error with Continue-on-Error (ERR-01, ERR-02)
-
-### Current State
-
-Error types in `src/error.rs` already have a reasonable hierarchy:
-- `Error` enum with `Config`, `File`, `Parser`, `Export`, `Io`, `Interrupted` variants
-- Each variant delegates to sub-error types via `#[from]`
-
-Parse errors in the hot loop (`processor.rs:123-131`) are already non-fatal — they are logged as `warn!` and processing continues:
-```rust
-Err(e) => {
-    errors_in_file += 1;
-    log::warn!("{file_path} | {e:?}");
-}
-```
-
-However, **exporter errors** (line 100 `export_one_preparsed(...)?`) are fatal — the `?` propagates and terminates the entire run.
-
-### Integration Points
-
-#### Point 1: Hot loop in `processor.rs` — export error handling
-
-**File:** `src/cli/run/processor.rs`, lines 98-101
-
-**Current code:**
-```rust
-exporter_manager.export_one_preparsed(&record, include_pm, ns)?;
-records_in_file += 1;
-```
-
-**Change:** Wrap exporter call in match, log error and continue:
-```rust
-match exporter_manager.export_one_preparsed(&record, include_pm, ns) {
-    Ok(()) => records_in_file += 1,
-    Err(e) => {
-        errors_in_file += 1;
-        log::warn!("{file_path} | export error: {e}");
-    }
-}
-```
-
-**Risk:** LOW. Pattern already used for parse errors. Need to ensure `errors_in_file` is propagated back to caller and displayed correctly.
-
-#### Point 2: Error type refinement — `ParseError` needs context fields
-
-**File:** `src/error.rs`
-
-**Change:** Add `source_path: Option<PathBuf>` and `line_number: Option<u64>` fields to relevant error variants. The upstream `dm-database-parser-sqllog` crate already provides `line_number` in its `ParseError::InvalidFormat` variant.
-
-**Risk:** LOW. Adding Option fields is backward-compatible for match patterns.
-
-#### Point 3: Error counting and reporting
-
-**File:** `src/cli/run/mod.rs`, summary output (lines 140-151)
-
-**Change:** Include error count in the final summary. Currently `total_records` is tracked but error count is per-file only. Need to accumulate total errors across all files.
-
-**Risk:** LOW. Mechanical change.
-
-### Module Impact Summary
-
-| File | Change | Risk |
-|------|--------|------|
-| `src/error.rs` | Add `source_path`, `line_number` to `ParseError` | LOW |
-| `src/cli/run/processor.rs` | Wrap `export_one_preparsed` in match, increment error counter | LOW |
-| `src/cli/run/mod.rs` | Aggregate error count across files, display in summary | LOW |
-
----
-
-## Feature 2: Stdin Input (PIPE-01)
-
-### Current State
-
-`SqllogConfig.path` is always a filesystem path. `SqllogParser::scan_log_files()` calls `path.exists()`, `path.is_file()`, `path.is_dir()` — all filesystem operations.
-
-`LogParserBuilder::new(path).build()` from the upstream crate calls `fs::read(&self.path)` — it reads the **entire file into memory** as `Vec<u8>`, then parses records from the in-memory buffer. It does not support `io::Read` trait input.
-
-### Architecture Decision: Platform Stdin Path Mapping
-
-**Approach:** Map a magic path value `"-"` to the platform's stdin device path. On Unix: `/dev/stdin`. On Windows: `CONIN$`.
-
-This is the minimal-change approach because:
-1. `LogParserBuilder` and `LogParser` read the entire file into memory via `fs::read()` — this is fine for stdin too (pipe input is never truly streaming at the parser level)
-2. No changes needed to the upstream crate
-3. `/dev/stdin` is a standard Unix convention, `/dev/stdin` on macOS is supported
-4. The rest of the pipeline is path-agnostic
-
-**Why not alternative approaches:**
-- **Writing a custom stdin parser**: duplicates crate logic for multi-line record boundary detection
-- **Temp file**: breaks constant-memory guarantee, adds I/O overhead
-- **`io::Read` adapter on `LogParser`**: not supported by the upstream crate API
-
-### Integration Points
-
-#### Point 1: Stdin detection in `SqllogConfig`
-
-**File:** `src/config/sqllog.rs`
-
-**Change:** Add `const STDIN_MARKER: &str = "-"` and method:
-```rust
-impl SqllogConfig {
-    pub fn is_stdin(&self) -> bool {
-        self.path.trim() == "-"
-    }
-    
-    /// Returns platform stdin device path
-    pub fn stdin_device_path() -> &'static str {
-        if cfg!(target_os = "windows") { "CONIN$" } else { "/dev/stdin" }
-    }
-}
-```
-
-**Risk:** LOW. Pure addition, no behavioral change for existing paths.
-
-#### Point 2: Orchestration in `handle_run`
-
-**File:** `src/cli/run/mod.rs`
-
-**Change:** Before file scanning, check stdin mode:
-```rust
-if cfg.sqllog.is_stdin() {
-    // Bypass SqllogParser, skip file scanning
-    // Build LogParserBuilder directly with stdin device path
-    // Process as single virtual file "-"
-    // Skip parallel path (stdin is always sequential)
-} else {
-    // existing file-based flow
-}
-```
-
-**Detailed flow for stdin:**
-1. Build `LogParserBuilder::new(SqllogConfig::stdin_device_path()).build()`
-2. Call a new function `process_stdin()` (or reuse `process_log_file` with the stdin path)
-3. Display file name as `"-"` instead of `/dev/stdin`
-4. Skip preflight log path check for stdin mode
-5. Skip pre-scan for transaction filters (no file to pre-scan; stdin cannot be pre-scanned)
-
-**Risk:** MEDIUM. The `process_log_file` function uses `file_path` for `LogParserBuilder::new()`. Passing `/dev/stdin` works but display labels need adjustment. The `file_name` extraction in `process_log_file` (line 39-41) would show `"stdin"` from `/dev/stdin` — acceptable but subtle.
-
-#### Point 3: Preflight adjustment
-
-**File:** `src/preflight.rs`
-
-**Change:** In `check_log_path()`, skip filesystem checks when path is stdin marker:
-```rust
-fn check_log_path(path_str: &str, result: &mut PreflightResult) {
-    if path_str.trim() == "-" {
-        return; // stdin mode, skip path validation
-    }
-    // ... existing checks
-}
-```
-
-**Risk:** LOW. Early return avoids filesystem operations on non-file path.
-
-#### Point 4: Pre-scan bypass for stdin
-
-**File:** `src/cli/run/mod.rs`, around lines 44-58
-
-**Change:** Skip `scan_for_trxids_by_transaction_filters` when stdin mode (stdin data can't be pre-scanned). Transaction-level filters combined with stdin input should either be rejected with a clear error message, or trxid pre-scan should be skipped and filters applied per-record (with degraded semantics).
-
-**Recommendation:** Print a warning when stdin + transaction filters are combined: "transaction-level filters with stdin input cannot pre-scan — filters will apply per-record only"
-
-**Risk:** MEDIUM. This is a semantic change — transaction-level filters lose their "keep whole transaction" property with stdin.
-
-#### Point 5: CLI flag or convention documentation
-
-**File:** `src/cli/opts.rs`
-
-**Change:** Update `--help` to document stdin convention:
-```rust
-/// Path to SQL log files (directory, file, glob pattern, or "-" for stdin)
-```
-
-**Risk:** LOW.
-
-### Module Impact Summary
-
-| File | Change | Risk |
-|------|--------|------|
-| `src/config/sqllog.rs` | Add `is_stdin()`, `stdin_device_path()` | LOW |
-| `src/cli/run/mod.rs` | Branch on stdin: bypass file scan, build parser directly, skip parallel path | MEDIUM |
-| `src/preflight.rs` | Skip log path check when stdin | LOW |
-| `src/cli/opts.rs` | Document `-` convention in help | LOW |
-
----
-
-## Feature 3: Progress Display (UX-01)
-
-### Current State
-
-Progress is basic `eprintln!` statements:
-- Per-file start: `"[{idx}/{total}] {filename}"` (in `process_log_file` line 45)
-- Per-file completion: `"✓ [{idx}/{total}] {path} — {count}{errors}, {elapsed:.2}s"` (line 146)
-- `show_progress: bool` is `!quiet` (from `make_progress_bar` in `filter_processor.rs`)
-- No per-record progress during file processing
-
-### Architecture Decision: Carriage Return + Periodic Update
-
-**Approach:** Use `\r` (carriage return) for in-place single-line progress updates, updated every N records. Zero new dependencies. Compatible with both sequential and parallel paths.
-
-**Format:** `"\r[{file_index}/{total_files}] {file_name} | {count} records | {elapsed:.1}s | {rate:.0}/s"`
-
-**Update frequency:** Every 1024 records (aligned with existing interrupt check at line 104-107).
-
-### Integration Points
-
-#### Point 1: Hot loop progress update
-
-**File:** `src/cli/run/processor.rs`, after line 107 (existing interrupt check)
-
-**Change:** Add progress update alongside interrupt check:
-```rust
-// Every 1024 records: check interrupt + update progress
-if records_in_file.trailing_zeros() >= 10 {
-    if show_progress {
-        let elapsed = file_start.elapsed().as_secs_f64();
-        let rate = if elapsed > 0.0 { records_in_file as f64 / elapsed } else { 0.0 };
-        eprint!("\r[{file_index}/{total_files}] {file_name} | {records_in_file} records, {elapsed:.1}s ({rate:.0}/s)");
-    }
-    if interrupted.load(Ordering::Relaxed) {
-        break 'outer;
-    }
-}
-```
-
-**Risk:** LOW. Non-blocking, single-line update. `\r` is a standard terminal escape.
-
-#### Point 2: Clear progress line before file-completion message
-
-**File:** `src/cli/run/processor.rs`, before the completion eprintln at line 145
-
-**Change:** Clear the in-place progress line:
-```rust
-if show_progress && records_in_file > 0 {
-    eprint!("\r\x1b[K"); // Clear line
-}
-```
-
-**Risk:** LOW.
-
-#### Point 3: Remove redundant per-file start message
-
-If progress line already shows `[{idx}/{total}] {filename}`, the start eprintln at line 45 becomes redundant when `show_progress` is true.
-
-**Change:** Conditionally skip start eprintln when progress display is active:
-```rust
-if reset_pb && show_progress {
-    // Progress display will show file info inline
-    // eprintln!("[{file_index}/{total_files}] {file_name}");  // conditional
-}
-```
-
-**Risk:** LOW.
-
-#### Point 4: Parallel path progress
-
-**File:** `src/cli/run/parallel.rs`
-
-**Challenge:** Multiple threads writing to stderr with `\r` will interleave. The simplest approach: keep current per-file start/completion `eprintln!` for parallel path (no per-record progress). Per-record progress is most useful for large single-file sequential runs.
-
-**Risk:** LOW. Parallel progress is a future enhancement.
-
-### Module Impact Summary
-
-| File | Change | Risk |
-|------|--------|------|
-| `src/cli/run/processor.rs` | Add `\r` progress line after interrupt check, clear before completion msg | LOW |
-| `src/cli/run/parallel.rs` | No change (keep current eprintln progress) | LOW |
-
----
-
-## Feature 4: Better Help and Error Messages (UX-02, UX-03, UX-04)
-
-### Current State
-
-**CLI help** (`src/cli/opts.rs`):
-- Minimal `about` and `long_about` strings
-- Basic arg descriptions
-- No examples in help text
-- No environment variable documentation beyond `SQLLOG2DB_CONFIG`
-
-**Error display** (`src/main.rs`):
-- Simple `eprintln!("Error: {e}")`
-
-**Summary output** (`src/cli/run/mod.rs`, lines 140-151):
-- Basic single-line summary with elapsed time, record count, skipped count
-- No error count display (will be added by ERR-02)
-
-### Integration Points
-
-#### Point 1: CLI help text improvements
-
-**File:** `src/cli/opts.rs`
-
-**Changes:**
-1. Add `after_help` or `after_long_help` with usage examples
-2. Improve command descriptions: `run`, `init`, `validate`
-3. Document env var conventions (`SQLLOG2DB_CONFIG`)
-4. Document stdin convention `-`
-
-**Example addition:**
-```rust
-#[command(
-    after_help = "EXAMPLES:\n  \
-        sqllog2db init -o config.toml           Generate default config\n  \
-        sqllog2db run -c config.toml            Run with config file\n  \
-        cat sqllogs/2025-01.log | sqllog2db run -c config.toml -- -  Read from stdin\n  \
-        sqllog2db validate -c config.toml       Validate config",
-)]
-```
-
-**Risk:** LOW. Pure markup change, no logic impact.
-
-#### Point 2: Error display improvements
-
-**File:** `src/main.rs` and `src/cli/run/mod.rs`
-
-**Current error display:**
-```rust
-Err(e) => {
-    let code = exit_code_for(&e);
-    if code != EXIT_INTERRUPTED {
-        eprintln!("Error: {e}");
-    }
-    std::process::exit(code);
-}
-```
-
-**Changes:**
-1. Add error context: include file path, line number in error strings
-2. Add suggestion for actionable errors (e.g., "Tip: run 'sqllog2db init' to generate a config")
-3. For parse errors with `line_number`, include it in the error message
-4. Use ANSI color codes for error severity (red for errors, yellow for warnings) — lightweight, no new dependency
-
-**ErrorWithContext struct (optional):**
-```rust
-pub struct ErrorWithContext {
-    pub error: Error,
-    pub source_path: Option<PathBuf>,
-    pub line_number: Option<u64>,
-    pub suggestion: Option<String>,
-}
-```
-
-**Risk:** LOW. Color codes work on most modern terminals. Display logic is straightforward.
-
-#### Point 3: Summary output improvement
-
-**File:** `src/cli/run/mod.rs`, summary section (lines 140-151)
-
-**Current:**
-```rust
-eprintln!("\n✓ SQL Log Export Task Completed{mode_label} in {elapsed:.2}s — {total_records} records total{skip_label}");
-```
-
-**Changes:**
-1. Include error count in summary (after ERR-02 adds it)
-2. Add human-friendly rate display (records/sec)
-3. Mention output file path
-4. Add ANSI green checkmark for success, red X for errors
-5. Show file count
-
-**Example improved:**
-```
-✓ SQL Log Export Task Completed in 12.34s  
-   Files: 5 (1 skipped)  
-   Records: 125,432 exported | 3 errors  
-   Output: export/out.csv  
-   Rate: 10,162 records/s
-```
-
-**Risk:** LOW. Display-only change.
-
-### Module Impact Summary
-
-| File | Change | Risk |
-|------|--------|------|
-| `src/cli/opts.rs` | Improve `after_help`, arg descriptions, examples | LOW |
-| `src/main.rs` | Color-coded error display, suggestions | LOW |
-| `src/cli/run/mod.rs` | Structured summary with error count, rate, file count | LOW |
-| `src/error.rs` | (Optional) `ErrorWithContext` struct or context fields | LOW |
-
----
-
-## Build Order and Dependencies
-
-```
-                 ┌──────────────────────┐
-                 │  Wave 1: Foundation   │
-                 ├──────────────────────┤
-                 │ ERR-01: Error types   │◄──── Independent
-                 │  (refinement)         │
-                 │                       │
-                 │ UX-03: CLI help text  │◄──── Independent
-                 │  (after_help, docs)   │
-                 └───────┬──────────────┘
-                         │
-                         ▼
-                 ┌──────────────────────┐
-                 │  Wave 2: Core Logic   │
-                 ├──────────────────────┤
-                 │ ERR-02: Continue-on-  │◄──── Depends on ERR-01
-                 │  error in hot loop   │      (uses refined error types)
-                         │
-                 ┌───────┴──────────────┐
-                 │                      │
-                 ▼                      ▼
-        ┌──────────────────┐  ┌──────────────────┐
-        │  Wave 3: Features │  │  Wave 3: UX       │
-        ├──────────────────┤  ├──────────────────┤
-        │ PIPE-01: Stdin    │  │ UX-04: Error     │
-        │  input            │  │  context msgs    │
-        │                   │  │                  │
-        │ UX-01: Progress   │  │                  │
-        │  display          │  │                  │
-        └──────────────────┘  └──────────────────┘
-                         │
-                         ▼
-                 ┌──────────────────────┐
-                 │  Wave 4: Polish      │
-                 ├──────────────────────┤
-                 │ UX-02: Summary       │◄──── Depends on ERR-02
-                 │  output formatting   │      (needs error count)
-                 └──────────────────────┘
-```
-
-### Wave 1 (Parallelizable)
-| Task | Files | Est. Effort | Rationale |
-|------|-------|-------------|-----------|
-| ERR-01: Error type refinement | `error.rs`, config errors | Small | Foundation, sets error patterns for all others |
-| UX-03: CLI help text | `cli/opts.rs` | Small | Pure markup, zero risk |
-
-### Wave 2
-| Task | Files | Est. Effort | Rationale |
-|------|-------|-------------|-----------|
-| ERR-02: Continue-on-error in hot loop | `processor.rs`, `run/mod.rs` | Medium | Core behavioral change, test-heavy |
-
-### Wave 3 (Parallelizable)
-| Task | Files | Est. Effort | Rationale |
-|------|-------|-------------|-----------|
-| PIPE-01: Stdin input | `sqllog.rs`, `run/mod.rs`, `preflight.rs` | Medium | New code path, needs edge case handling |
-| UX-01: Progress display | `processor.rs` | Small | Hot loop addition, display-only |
-| UX-04: Error context | `error.rs`, `main.rs` | Small | Error message formatting |
-
-### Wave 4
-| Task | Files | Est. Effort | Rationale |
-|------|-------|-------------|-----------|
-| UX-02: Summary output | `run/mod.rs` | Small | Needs ERR-02 error counts |
-
-### Key Dependency: ERR-02 blocks UX-02
-
-The summary output improvement depends on error counts being available from ERR-02. All other wave 3/4 tasks are independent of each other.
-
-### Risk: Stdin + Transaction Filters
-
-Combining stdin input with transaction-level filters (`indicators.*` or `sql.*` in config) loses the "keep whole transaction" property because pre-scan is impossible on a stream. This should emit a warning and degrade gracefully (apply filters per-record).
-
----
-
-## Edge Cases and Constraints
-
-### Stdin
-1. **No data piped**: `is_terminal()` check → error with suggestion "pipe log data to stdin or specify a file path"
-2. **Empty pipe**: `cat /dev/null | sqllog2db run -c config.toml -- -` → handle gracefully (0 records)
-3. **Parallel path incompatible**: stdin is always sequential
-4. **Pre-scan incompatible**: emit warning when transaction filters + stdin
-
-### Continue-on-Error
-1. **All records errored**: Should still exit cleanly with non-zero count
-2. **Exporter fatal errors**: e.g., disk full — should still propagate (can't continue meaningfully)
-3. **Error counting**: Must distinguish parse errors from export errors in summary
-
-### Progress
-1. **Piped output**: `2>&1 | ...` includes progress lines. When stderr is piped, `\r` sequences appear raw. Detect piped stderr via `is_terminal()` on stderr and disable `\r` progress (fall back to per-file eprintln)
-2. **Very fast processing**: At 5.2M records/sec, progress updates at 1024-record intervals would fire ~5000 times/sec — too fast for visible updates. Add rate-limiting: update at most every 100ms
-
-### Help/Errors
-1. **Subcommand-specific help**: `sqllog2db run --help` should show run-specific examples
-2. **Color in non-terminal**: Detect whether stderr is a terminal before using ANSI codes
-3. **i18n**: Error messages are currently in Chinese. Keep consistent with existing style
-
----
-
-## Files Changed Summary
-
-### New Files
-*(None — all changes are modifications to existing files)*
-
-### Modified Files
-
-| File | Features Touched | Nature of Change |
-|------|-----------------|------------------|
-| `src/error.rs` | ERR-01, UX-04 | Add context fields to error variants, optional suggestion |
-| `src/cli/run/processor.rs` | ERR-02, UX-01 | Export error handling (match instead of `?`), progress `\r` updates, error counting |
-| `src/cli/run/mod.rs` | ERR-02, PIPE-01, UX-02 | Stdin branch in orchestration, aggregate error counts, improved summary |
-| `src/config/sqllog.rs` | PIPE-01 | `is_stdin()`, `stdin_device_path()` methods |
-| `src/preflight.rs` | PIPE-01 | Skip log path check for stdin mode |
-| `src/cli/opts.rs` | UX-03 | Rich after_help, examples, arg descriptions |
-| `src/main.rs` | UX-04 | Color-coded error display, suggestions |
-
-### Integration Risk Summary
-
-| Integration | Risk Level | Mitigation |
-|-------------|-----------|------------|
-| Continue-on-error + exporter errors | LOW | Same pattern as existing parse error handling |
-| Stdin + transaction filters | MEDIUM | Graceful degradation with warning; document limitation |
-| Stdin + parallel path | LOW | Stdin bypasses parallel branch entirely |
-| Progress + very fast processing | LOW | Rate-limiting at 100ms intervals |
-| Progress + piped stderr | LOW | Detect non-terminal stderr, disable `\r` |
-| Error context + existing match patterns | LOW | Optional fields, backward-compatible Display |
-
----
-
-## Sources
-
-- Direct codebase analysis of all modules in `/Users/guang/Projects/sqllog2db/src/`
-- `dm-database-parser-sqllog` crate v1.1.0 source at `~/.cargo/registry/src/.../dm-database-parser-sqllog-1.1.0/src/parser.rs` (confirms `LogParserBuilder` uses `fs::read` internally, no `io::Read` support)
-- Project requirements: `.planning/PROJECT.md`
-- Rust `std::io::Stdin::is_terminal()`: stable since Rust 1.70
+*Architecture research for: sqllog2db v1.15 CI/CD + module refactoring*
+*Researched: 2026-06-02*

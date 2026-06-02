@@ -1,259 +1,153 @@
-# Technology Stack
+# Stack Research
 
-**Project:** sqllog2db v1.10 quality/UX improvements
-**Researched:** 2026-05-21
+**Domain:** CI/CD and engineering quality for a Rust CLI project
+**Researched:** 2026-06-02
+**Confidence:** HIGH (all actions versions verified via GitHub releases pages)
 
 ## Recommended Stack
 
-### New Dependencies
+### Core GitHub Actions (CI Workflow)
 
-| Dependency | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| `indicatif` | `0.18` (latest 0.18.4) | Progress bars and spinners | Progress bar IS the UX feature. Terminal-aware output, ETA, rate formatting, `MultiProgress` for parallel mode. Replaces fragile `\r` + `eprintln!` that conflicts with `env_logger` output and breaks in parallel mode. |
+| Action | Version | Purpose | Why Recommended |
+|--------|---------|---------|-----------------|
+| `actions/checkout` | `v6` | Repo checkout | Current stable (v6.0.1, Nov 2025). Requires Actions runner ≥ v2.327.1 (all GitHub-hosted runners qualify). |
+| `dtolnay/rust-toolchain` | `stable` (ref-based, no version pin) | Install Rust stable + components | De-facto standard for Rust CI. Supports `components: clippy, rustfmt`. Use `@stable` tag, not `@v1` — dtolnay's action uses rev-based selection. |
+| `Swatinem/rust-cache` | `v2` | Cache `~/.cargo` and `target/` | Cuts cold-cache build time by 60–80%. v2.9.1 is current (Apr 2026). Smart key invalidation on `Cargo.lock` / `rust-toolchain` changes. |
+| `taiki-e/install-action` | `v2` | Install `cargo-llvm-cov`, `cross` | Zero-friction binary installation from GitHub Releases. Supports tool-name shorthand (`@cargo-llvm-cov`). Current: v2.x (actively maintained). |
+| `actions/upload-artifact` | `v4` | Upload bench results, coverage | v4 is minimum required for GitHub Pages artifacts; v3 deprecated Jan 2025. v7 exists but requires workflow changes — v4 is safe, well-supported. |
 
-### No New Dependencies Needed
+### Core GitHub Actions (CD / Release Workflow)
 
-| Feature | Approach | Rationale |
-|---------|----------|-----------|
-| ERR-01 Typed errors | Enrich `thiserror` variants with context fields | `thiserror` already in use. Add `line_number`, `suggestion` fields to existing variants. |
-| ERR-02 Continue-on-error | `match` + `log::warn!` (existing pattern) | Parse errors already handled this way. No library change needed. |
-| PIPE-01 Stdin input | `"/dev/stdin"` path passed to `LogParserBuilder` | On Unix/macOS, `LogParserBuilder::new("/dev/stdin").build()` calls `fs::read("/dev/stdin")` which reads all stdin bytes into memory -- same behavior as `fs::read(file)`. Zero-dep, works immediately. |
-| UX-03 Better help | `after_help`, `long_about` on clap derive | Pure doc-string improvement. clap 4.6.1 already has all needed capabilities via `derive` feature. |
-| UX-04 Error context | Enrich `thiserror` Display + add `suggestion()` method | File path, line number, suggestion hint included in `#[error("...")]` format strings. |
-| UX-02 Output colors | Conditional ANSI escape codes + `std::io::IsTerminal` | `IsTerminal` trait stable since Rust 1.70. Two ANSI codes needed (bold, green for OK, red for error). Not worth a crate. |
+| Action | Version | Purpose | Why Recommended |
+|--------|---------|---------|-----------------|
+| `actions/checkout` | `v6` | Repo checkout on tag push | Same as CI. |
+| `dtolnay/rust-toolchain` | `stable` | Install Rust + target | Use `targets: ${{ matrix.target }}` to add cross-compile target. |
+| `Swatinem/rust-cache` | `v2` | Cache deps per target | Include `key: ${{ matrix.target }}` to avoid cache key collisions between targets. |
+| `taiki-e/install-action` | `v2` | Install `cross` for aarch64 | `tool: cross` installs cross-rs for Docker-based cross-compilation. |
+| `softprops/action-gh-release` | `v2` | Upload binaries to GitHub Release | v3 (Node 24) released Apr 2025 but v2 remains recommended — it is the last stable Node 20 line (v2.6.2) and the most widely tested. Current workflow uses v3; downgrade to v2 is safe and more conservative. |
 
-## New Dependency Details
+### Cross-Compilation Toolchain
 
-### indicatif 0.18
+| Target | Runner | Tool | Notes |
+|--------|--------|------|-------|
+| `x86_64-unknown-linux-gnu` | `ubuntu-latest` | native `cargo build` | No cross-compile needed. rusqlite `bundled` feature compiles SQLite from source via `cc` crate — works natively. |
+| `aarch64-unknown-linux-gnu` | `ubuntu-latest` | `cross` (Docker-based) | cross-rs provides pre-built Docker images with correct sysroot. Required because ubuntu-latest is x86_64. |
+| `x86_64-pc-windows-msvc` | `windows-latest` | native `cargo build` | MSVC runner has Visual C++ build tools. rusqlite `bundled` uses `cc` crate which calls MSVC's `cl.exe` — works without extra setup. |
+| `aarch64-apple-darwin` | `macos-latest` | native `cargo build` | GitHub's `macos-latest` runner is now Apple Silicon (M1/M2). Add `x86_64-apple-darwin` as a second macOS target if Intel support is needed. |
 
-```toml
-indicatif = "0.18"
-# No rayon feature needed for v1.10 — we use MultiProgress for parallel mode,
-# not ParallelProgressIterator. Add if Rayon parallel-iterator tracking is desired.
-# indicatif = { version = "0.18", features = ["rayon"] }
+### Code Coverage
+
+| Tool | Version | Purpose | Why |
+|------|---------|---------|-----|
+| `cargo-llvm-cov` | latest (via install-action) | LLVM-based line coverage | The only production-ready Rust coverage tool for CI. Installed via `taiki-e/install-action@cargo-llvm-cov`. Requires `llvm-tools-preview` component. `--fail-under-lines 70` enforces the gate. |
+
+### Benchmark CI
+
+| Tool | Version | Purpose | Why |
+|------|---------|---------|-----|
+| `benchmark-action/github-action-benchmark` | `v1` (v1.22.1) | Store/compare criterion results over time | Reads criterion's `--output-format bencher` JSON, stores history in gh-pages branch, posts PR comments on regression. Free, no external service needed. Recommended over bencher.dev for self-hosted projects without SaaS budget. |
+
+## Existing Workflow Issues to Fix
+
+The current `.github/workflows/` files have several version problems that need correction in v1.15:
+
+| File | Issue | Fix |
+|------|-------|-----|
+| `ci.yaml` | `actions/upload-artifact@v7` — v7 requires ESM/Node24 changes | Downgrade to `@v4` which is stable and widely supported |
+| `ci.yaml` | `actions/checkout@v6` — actually correct and current | Keep |
+| `release.yaml` | `softprops/action-gh-release@v3` — Node 24 runtime, may not be needed yet | Acceptable but `@v2` (v2.6.2) is safer for compatibility |
+| `bench.yml` | `actions/upload-artifact@v7` — same v7 issue | Downgrade to `@v4` |
+| `bench.yml` | Calls `scripts/collect_bench_results.sh` which may not exist | Verify script exists or replace with github-action-benchmark |
+
+## Installation / Setup
+
+```bash
+# No new Cargo.toml dependencies needed for CI/CD infrastructure
+# All tooling is GitHub Actions actions or external CLI tools installed in CI
+
+# To test CI locally before pushing:
+cargo test --verbose
+cargo clippy --all-targets -- -D warnings
+cargo fmt --all -- --check
+cargo doc --no-deps
+cargo bench --no-run   # just compile benchmarks
+
+# Coverage locally (requires cargo-llvm-cov):
+cargo install cargo-llvm-cov
+cargo llvm-cov --fail-under-lines 70
 ```
-
-**Dependency weight:** Light. indicatif depends on `console` (terminal width, term detection) and `portable-atomic` (atomic operations). The `console` crate is widely used and lightweight.
-
-**Integration with existing architecture:**
-- Current: `make_progress_bar(quiet: bool) -> bool` returns `!quiet`
-- Change: `make_progress_bar() -> Option<ProgressBar>` returns progress bar or `None`
-- Sequential mode: `ProgressBar::new_spinner().with_style(...)` for indeterminate, or `ProgressBar::new(total)` if count known from pre-scan
-- Record loop: `bar.inc(1)` after each successful export
-- File complete: `bar.set_message(...)` or `println(...)` for per-file summary
-- Parallel mode: `MultiProgress` with per-file bars; each rayon task creates and manages its own bar via `MultiProgress::add()`
-- Completion: `bar.finish_and_clear()` or `bar.finish_with_message(...)`
-
-**Why not `\r` + `eprint!`?** Four problems with the zero-dependency approach:
-1. `env_logger` writes to stderr -- `\r` updates fight with structured log output, causing interleaved garbage
-2. Parallel mode (rayon): multiple threads writing `\r` to the same terminal is unsynchronized chaos
-3. After progress, the per-file summary `eprintln!("[1/5] File X — N records")` is stuck in the middle of the bar
-4. No ETA, no rate formatting, no terminal width handling
-
-These are not abstract concerns -- the existing code already has `eprintln!` progress interleaved with `info!()` log calls, and the parallel mode (`process_csv_parallel`) skips progress entirely because it causes issues.
 
 ## Alternatives Considered
 
-| Feature | Recommended | Alternative | Why Not |
-|---------|-------------|-------------|---------|
-| Progress bars | `indicatif 0.18` | `\r` + `eprint!` | Breaks with env_logger, unsynchronized in parallel mode, no ETA (see analysis above) |
-| Error formatting | Enriched thiserror | `miette 7.6.0` (with fancy) | miette adds ~15 transitive deps for source-code-snippet display. SQL log errors are file:line oriented, not source-code oriented. thiserror enrichment covers 95% of value at 0% of the dependency cost. |
-| Terminal detection | `std::io::IsTerminal` | `atty` crate | `IsTerminal` is stable stdlib since Rust 1.70. Project already uses Rust 1.85. No reason to add atty. |
-| Stdin parsing | `/dev/stdin` path mapping | Custom stdin parser | Duplicates upstream parser's record boundary detection logic. `fs::read("/dev/stdin")` in the parser is equivalent to stdin-to-bytes. Only works on Unix -- acceptable since DaMeng database is a Unix/Linux environment. |
-| Top-level errors | Current `Error` enum | `anyhow` / `eyre` | Would lose structured variant dispatch needed for exit codes. Current pattern already provides per-variant Display + exit code mapping. |
-| Error colors | Conditional ANSI codes | `termcolor` / `owo-colors` | We only need 2-3 codes in one place (the completion summary line). Not worth a crate. |
-| Shell completions | Out of scope for v1.10 | `clap_complete` | Shell completion is a distribution concern, not a UX priority for v1.10. |
-| Structured tracing | Keep `log` + `env_logger` | `tracing` + `tracing-subscriber` | tracing adds span overhead for no benefit in a single-threaded streaming architecture. Current logging is sufficient. |
+| Recommended | Alternative | When to Use Alternative |
+|-------------|-------------|-------------------------|
+| `dtolnay/rust-toolchain` | `actions-rust-lang/setup-rust-toolchain` | `setup-rust-toolchain` adds problem matchers and Rust-specific annotations. Use if you want PR annotations pointing directly to clippy warnings. Slightly heavier. |
+| `Swatinem/rust-cache` | Manual `actions/cache` with `~/.cargo` key | Manual cache gives more control over key strategy. Use if rust-cache's automatic key logic causes stale-cache bugs (rare). |
+| `softprops/action-gh-release` (v2) | `gh release create` (GitHub CLI) | `gh` CLI is already available on all GitHub-hosted runners. Use for simpler workflows where body generation from markdown is not needed. Less config, more scripting. |
+| `cross` for aarch64-linux | `cargo zigbuild` | `cargo zigbuild` uses Zig's C compiler as cross-linker, no Docker needed. Lighter but less battle-tested with rusqlite `bundled` C compilation. Prefer `cross` for this project. |
+| `benchmark-action/github-action-benchmark` | `bencher.dev` (SaaS) | bencher.dev has better statistical regression detection (change-point algorithm) and a dashboard. Use if free tier is sufficient and you want zero-maintenance setup. Requires API key secret. |
+| Native macOS Intel target | `x86_64-apple-darwin` added to matrix | Add only if users report Intel Mac issues. Current `macos-latest` = Apple Silicon covers the majority. |
 
-## What NOT to Add
+## What NOT to Use
 
 | Avoid | Why | Use Instead |
 |-------|-----|-------------|
-| `miette` | Heavy dep (fancy feature pulls in owo-colors, unicode-width, etc.) for marginal benefit in this domain. Error context (file:line) is achievable with thiserror alone. | Enriched thiserror variants with `line_number: u64`, `detail: String`, `suggestion: &'static str` |
-| `anyhow` / `eyre` | Would erase structured error type dispatch needed for exit codes in `main.rs`. | Current `thiserror::Error` enum |
-| `atty` | Unnecessary -- stdlib has `IsTerminal` since 1.70 | `std::io::stdin().is_terminal()` |
-| `console` | Already a transitive dep of indicatif. Only add directly if Term::is_terminal() or Term::size() needed separately. | Wait until indicatif is the only consumer |
-| `owo-colors` / `yansi` / `colored` | Only need 2-3 ANSI codes for the completion summary. Overkill. | `format!("\x1b[32m...")` + `IsTerminal` |
-| `human-panic` | `panic=abort` in release profile. Panics should not occur. If they do, backtrace is more useful. | Not needed |
-| `dialoguer` | Interactive prompts not relevant for batch CLI tool | Not applicable |
-| `clap_complete` | Shell completion out of scope for v1.10 | Defer |
-| `tracing` | Span overhead with no benefit for streaming architecture | Keep `log` + `env_logger` |
+| `actions/upload-artifact@v3` | Deprecated January 2025; removed from GitHub Marketplace | `@v4` |
+| `actions/upload-artifact@v7` | Requires ESM output and Node 24 runtime; introduced breaking interface changes | `@v4` (stable, widely tested) |
+| `cargo-tarpaulin` | Older coverage tool, slower, less accurate than llvm-cov, known false negatives with integration tests | `cargo-llvm-cov` |
+| `cargo-dist` | Generates opinionated CI infrastructure and `dist.toml` config. Valuable for crates.io-first projects with many targets. Overkill when you already have hand-crafted workflows and want full control. | Hand-crafted release.yaml (current approach) |
+| `release-plz` | Automates `CHANGELOG.md` and version bumps via PR. Useful for libraries; adds overhead for a single-maintainer CLI tool where manual tagging is fine. | Manual `git tag v1.x.x && git push --tags` |
+| `x86_64-unknown-linux-musl` target | rusqlite `bundled` requires C compilation; musl cross-compilation with SQLite has known segfault issues in cross-rs containers. | `x86_64-unknown-linux-gnu` (glibc, works reliably) |
 
-## Installation
+## Cross-Compilation Matrix (Final Recommendation)
 
-```bash
-# Add progress bar support
-cargo add indicatif@0.18
+```yaml
+matrix:
+  include:
+    # Linux x86_64 — native, glibc, most portable for Linux servers
+    - os: ubuntu-latest
+      target: x86_64-unknown-linux-gnu
+      use_cross: false
 
-# Everything else uses existing deps or stdlib
-cargo build --release
+    # Linux ARM64 — cross-compiled via Docker; covers servers, Raspberry Pi, AWS Graviton
+    - os: ubuntu-latest
+      target: aarch64-unknown-linux-gnu
+      use_cross: true
+
+    # Windows x86_64 — native MSVC; rusqlite bundled works with cl.exe
+    - os: windows-latest
+      target: x86_64-pc-windows-msvc
+      use_cross: false
+
+    # macOS ARM64 — native on M1/M2 runner; covers modern Macs
+    - os: macos-latest
+      target: aarch64-apple-darwin
+      use_cross: false
 ```
 
-## Integration Points with Existing Architecture
+This is exactly what the current `release.yaml` has — the matrix is correct. The main issues are action version pinning and the missing `${{ matrix.os }}` in artifact naming for Windows `.exe` files.
 
-### Error Enrichment (ERR-01, UX-04) -- `src/error.rs`
+## Version Compatibility Notes
 
-Current:
-```rust
-#[derive(Debug, Error)]
-pub enum ParserError {
-    #[error("Path not found: {path}")]
-    PathNotFound { path: PathBuf },
-    #[error("Invalid path {path}: {reason}")]
-    InvalidPath { path: PathBuf, reason: String },
-    #[error("Failed to read directory {path}: {reason}")]
-    ReadDirFailed { path: PathBuf, reason: String },
-}
-```
-
-Change: Add `ParseFailed` variant with line number and suggestion. Add `suggestion()` method to `Error`:
-```rust
-#[error("Parse error at {path}:{line}: {detail}")]
-ParseFailed {
-    path: PathBuf,
-    line: u64,
-    detail: String,
-}
-```
-
-Add to `Error`:
-```rust
-impl Error {
-    pub fn suggestion(&self) -> Option<&'static str> {
-        match self {
-            Self::Parser(ParserError::ParseFailed { .. }) => {
-                Some("Check if the log line follows the expected format")
-            }
-            // ...
-            _ => None,
-        }
-    }
-}
-```
-
-Top-level display in `main.rs`:
-```rust
-Err(e) => {
-    let code = exit_code_for(&e);
-    eprintln!("Error: {e}");
-    if let Some(suggestion) = e.suggestion() {
-        eprintln!("  Suggestion: {suggestion}");
-    }
-    std::process::exit(code);
-}
-```
-
-### Continue-on-Error (ERR-02) -- `src/cli/run/processor.rs`
-
-Current pattern (already working):
-```rust
-Err(e) => {
-    errors_in_file += 1;
-    log::warn!("{file_path} | {e:?}");
-}
-```
-
-Change: The current `parse_record` errors are already non-fatal. The improvement is:
-- Move exporter errors (write failures) to non-fatal as well — log and skip record instead of aborting file
-- Wrap exporter call in `if let Err(e) = exporter_manager.export_one_preparsed(...)` with warning
-- Let file-level errors (cannot open file) remain fatal
-
-This separation needs:
-- Distinguish "per-record export error" (non-fatal, continue) from "fatal I/O error" (abort)
-- Add a counter for record-level export failures, shown in summary
-
-### Stdin (PIPE-01) -- `src/cli/run/mod.rs`
-
-Current discovery path:
-```
-SqllogParser::new(&cfg.sqllog.path).log_files()  // discovers .log files in directory
-```
-
-Change: Before file discovery, check for piped stdin:
-```rust
-use std::io::IsTerminal;
-
-let use_stdin = cfg.sqllog.path == "-" || !std::io::stdin().is_terminal();
-```
-
-When stdin is detected:
-- Skip file discovery
-- Treat as a single "file" named `-` (stdin)
-- The parser crate limitation: `LogParserBuilder::new("/dev/stdin").build()` works on Unix
-
-**Platform concern:** `/dev/stdin` is Unix-only. The project primarily targets Unix environments (DaMeng database ecosystem). If Windows support is needed later, a conditional compilation branch or `from_bytes()` API on the parser would be the proper solution.
-
-### Progress (UX-01) -- `src/cli/run/filter_processor.rs` + `processor.rs`
-
-Change `make_progress_bar`:
-```rust
-use indicatif::{ProgressBar, ProgressStyle};
-
-pub(super) fn make_progress_bar(quiet: bool) -> Option<ProgressBar> {
-    if quiet { return None; }
-    let pb = ProgressBar::new_spinner();
-    pb.set_style(
-        ProgressStyle::default_spinner()
-            .template("{spinner} [{elapsed_precise}] {pos} records ({per_sec})")
-            .unwrap()
-    );
-    pb.enable_steady_tick(std::time::Duration::from_millis(100));
-    Some(pb)
-}
-```
-
-The `show_progress: bool` parameter changes to `show_progress: Option<&ProgressBar>` across the call chain. Each successful export does `if let Some(pb) = show_progress { pb.inc(1); }`.
-
-For parallel mode: the `process_csv_parallel` function creates a `MultiProgress`, spawns one `ProgressBar` per file, and each rayon task updates its own bar.
-
-### Better Help (UX-03) -- `src/cli/opts.rs`
-
-Current:
-```rust
-#[command(
-    name = "sqllog2db",
-    version,
-    about = "Parse DM database SQL logs and export to CSV/SQLite",
-    long_about = "A lightweight and efficient CLI tool..."
-)]
-```
-
-Add:
-```rust
-#[command(
-    name = "sqllog2db",
-    version,
-    about = "Parse DM database SQL logs and export to CSV/SQLite",
-    long_about = "A lightweight and efficient CLI tool for parsing DM database SQL logs (streaming) and exporting to CSV or SQLite.",
-    after_help = "EXAMPLES:\n  sqllog2db run -c config.toml          # Export using config\n  cat log.sql | sqllog2db run -c cfg    # Pipe stdin\n  sqllog2db init -o config.toml         # Generate default config",
-    max_term_width = 80,               # Readable on narrow terminals
-)]
-```
-
-Add value hints for better shell completion:
-```rust
-#[arg(short = 'c', long = "config", default_value = "config.toml",
-      value_hint = clap::ValueHint::FilePath)]
-config: String,
-```
-
-## Version Compatibility
-
-| Package | Compatible With | Notes |
-|---------|-----------------|-------|
-| `indicatif 0.18` | `rayon 1.x` (optional feature) | The `rayon` feature enables `ParallelProgressIterator`. Not needed if using `MultiProgress` manually. |
-| `indicatif 0.18` | Any env_logger/log | indicatif draws to stderr by default by using `ProgressDrawTarget::Stderr`. Log output is also stderr. This works because indicatif manages cursor position. If log output conflicts, use `ProgressDrawTarget::Hidden` or increase log interval. |
-| `--stdin` via `/dev/stdin` | Unix/macOS only | DaMeng runs on Linux, Windows DaMeng not common in practice. Acceptable for current scope. |
+| Component | Rust Version Constraint | Notes |
+|-----------|------------------------|-------|
+| `cargo-llvm-cov` | Requires `llvm-tools-preview` component | Install via `dtolnay/rust-toolchain` with `components: llvm-tools-preview` |
+| `cross` | Works with stable Rust | Requires Docker on the runner; ubuntu-latest has Docker pre-installed |
+| `criterion 0.7` (current) | Rust 1.65+ | Already in Cargo.toml as dev-dependency |
+| `rusqlite 0.39` bundled | C compiler on runner | Works on all 4 targets above; confirmed no musl issues with gnu targets |
 
 ## Sources
 
-- [crates.io indicatif 0.18.4 API](https://crates.io/api/v1/crates/indicatif) — version verified (published 2026-02-14), features documented
-- [docs.rs indicatif](https://docs.rs/indicatif/latest/) — API docs, rayon integration, ProgressStyle templates (Context7 CLI lookup)
-- [docs.rs miette 7.6.0](https://docs.rs/miette/latest/) — thiserror integration verified; dependency weight assessed (Context7 CLI lookup)
-- [docs.rs clap](https://docs.rs/clap/latest/) — help_template, after_help, value_hint documentation (Context7 CLI lookup)
-- [dm-database-parser-sqllog v1.1.0 source](https://github.com/guangl/dm-database-parser-sqllog/tree/v1.1.0) — Confirmed `LogParserBuilder::build()` only supports `fs::read(path)`. No `from_reader()` or `from_bytes()` API. `parse_record()` is public for manual record processing.
-- [Rust std::io::IsTerminal](https://doc.rust-lang.org/stable/std/io/trait.IsTerminal.html) — Stable since Rust 1.70. MSRV 1.85 confirmed.
-- `Cargo.toml` — existing deps verified: thiserror 2.0.18, clap 4.6.1 (features: derive, env), log/env_logger present
-- `src/error.rs` — Current error types analyzed for enrichment opportunities
-- `src/cli/run/processor.rs` — Continue-on-error pattern verified (parse errors already non-fatal)
-- `src/cli/run/mod.rs` — Main orchestration analyzed for progress bar and stdin integration points
+- [actions/checkout releases](https://github.com/actions/checkout/releases) — v6.0.1 confirmed current stable (Nov 2025)
+- [dtolnay/rust-toolchain README](https://github.com/dtolnay/rust-toolchain) — ref-based versioning, `@stable` recommended
+- [Swatinem/rust-cache releases](https://github.com/swatinem/rust-cache/releases) — v2.9.1 confirmed (Apr 2026)
+- [taiki-e/install-action releases](https://github.com/taiki-e/install-action/releases) — v2.x active, cargo-llvm-cov support confirmed
+- [softprops/action-gh-release releases](https://github.com/softprops/action-gh-release/releases) — v3.0.0 (Node 24), v2.6.2 (Node 20 last stable)
+- [actions/upload-artifact releases](https://github.com/actions/upload-artifact/releases) — v4.x stable, v3 deprecated Jan 2025, v7 current
+- [benchmark-action/github-action-benchmark releases](https://github.com/benchmark-action/github-action-benchmark/releases) — v1.22.1 (May 2026)
+- [cross-rs/cross GitHub](https://github.com/cross-rs/cross) — Docker-based cross-compilation, aarch64-linux-gnu supported
+- WebSearch: rusqlite bundled + MSVC/cross-compile CI — confirmed gnu targets work; musl has known issues (avoid)
+
+---
+*Stack research for: CI/CD and engineering quality — Rust CLI (sqllog2db v1.15)*
+*Researched: 2026-06-02*
