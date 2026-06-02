@@ -148,14 +148,14 @@ EXAMPLES:
             help = "Number of top records per table. Must be >= 1 (default: 20)."
         )]
         top: Option<u32>,
-        /// Start of time range (overrides config [stats].from)
+        /// Start of time range (overrides config `[stats].from`)
         #[arg(
             long = "from",
             value_name = "DATETIME",
             help = "Start of time range. Formats: \"YYYY-MM-DD\" or \"YYYY-MM-DD HH:MM:SS\". Overrides config [stats].from."
         )]
         from: Option<String>,
-        /// End of time range (overrides config [stats].to)
+        /// End of time range (overrides config `[stats].to`)
         #[arg(
             long = "to",
             value_name = "DATETIME",
