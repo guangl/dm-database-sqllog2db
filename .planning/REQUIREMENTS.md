@@ -16,9 +16,9 @@
 
 ### e2e 测试
 
-- [ ] **TEST-01**: run 子命令 CLI 全链路测试——给定真实输入文件，验证 CSV 输出内容与退出码；给定真实输入文件，验证 SQLite 输出与退出码
-- [ ] **TEST-02**: init 子命令 assert_cmd 测试——验证生成 config.toml 的 CLI 行为、文件存在与退出码
-- [ ] **TEST-03**: stats 子命令 --from/--to 边界条件 e2e 测试（空范围、边界值、无效格式拒绝）
+- [x] **TEST-01**: run 子命令 CLI 全链路测试——给定真实输入文件，验证 CSV 输出内容与退出码；给定真实输入文件，验证 SQLite 输出与退出码
+- [x] **TEST-02**: init 子命令 assert_cmd 测试——验证生成 config.toml 的 CLI 行为、文件存在与退出码
+- [x] **TEST-03**: stats 子命令 --from/--to 边界条件 e2e 测试（空范围、边界值、无效格式拒绝）
 
 ### 代码清理
 
