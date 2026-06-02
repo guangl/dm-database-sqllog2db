@@ -2,7 +2,7 @@
 
 ## Milestones
 
-- **v1.15 工程质量全面提升** — Phases 55–58 (in progress)
+- ✅ **v1.15 工程质量全面提升** — Phases 55–58 (shipped 2026-06-02)
 - ✅ **v1.14 stats 时间段过滤** — Phases 53–54 (shipped 2026-06-02)
 - ✅ **v1.13 SQL 统计分析** — Phases 50–52 (shipped 2026-06-01)
 - ✅ **v1.12 CLI 体验全面提升** — Phases 46–49 (shipped 2026-06-01)
@@ -165,12 +165,17 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
 - [x] **Phase 53: 时间段配置与 CLI 参数** — 扩展 StatsConfig、opts.rs 新增 --from/--to、格式验证与优先级合并 (completed 2026-06-01)
 - [x] **Phase 54: StatsAccumulator 时间过滤** — 在聚合层按 ts 字段跳过时间段外的记录 (completed 2026-06-02)
 
-### v1.15 工程质量全面提升 (Phases 55–58)
+<details>
+<summary>✅ v1.15 工程质量全面提升 (Phases 55–58) — SHIPPED 2026-06-02</summary>
 
 - [x] **Phase 55: CI/CD 基础设施修复** — 修正 workflow action 版本、修复 release 竞争条件、添加 Cross.toml (completed 2026-06-02)
 - [x] **Phase 56: stats 模块清理与 benchmark 稳定化** — 删除遗留 warn! 占位符、检查函数长度、确认 benchmark 信息性运行 (completed 2026-06-02)
 - [x] **Phase 57: e2e 测试扩展** — run/init/stats 子命令 CLI 全链路测试补全 (completed 2026-06-02)
 - [x] **Phase 58: cli/run 函数清理** — 超 40 行函数提取为私有函数 (completed 2026-06-02)
+
+Full details: `.planning/milestones/v1.15-ROADMAP.md`
+
+</details>
 
 ## Phase Details
 
