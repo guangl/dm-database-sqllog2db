@@ -1,8 +1,30 @@
 //! 公共日志文件扫描模块（v1.15 Phase 56 D-01）：被 stats 与 run 共用，统一 parse error 处理（计数 + `log::warn!`）
 
 use crate::error::{Error, ErrorStats, ParserError, Result};
-use dm_database_parser_sqllog::LogParserBuilder;
+use dm_database_parser_sqllog::{LogParser, LogParserBuilder};
 use std::path::PathBuf;
+
+/// 构建单文件解析器（D-03）：将 parser 创建与 `InvalidPath` 错误构造封装于此，
+/// 供 `process_log_file` 等需要自行控制迭代循环的调用方使用。
+///
+/// - 路径含非 UTF-8 字节时返回 `Err(ParserError::InvalidPath)`。
+/// - 文件不存在或无法打开时返回 `Err(ParserError::InvalidPath)`。
+pub(crate) fn build_parser(file_path: &std::path::Path) -> Result<LogParser> {
+    let file_path_str = file_path.to_str().ok_or_else(|| {
+        Error::Parser(ParserError::InvalidPath {
+            path: file_path.to_path_buf(),
+            reason: "non-UTF8 path".to_string(),
+            line_number: None,
+        })
+    })?;
+    LogParserBuilder::new(file_path_str).build().map_err(|err| {
+        Error::Parser(ParserError::InvalidPath {
+            path: file_path.to_path_buf(),
+            reason: format!("{err}"),
+            line_number: None,
+        })
+    })
+}
 
 /// 扫描一组日志文件，对每条成功解析的记录调用 `on_record` 回调。
 ///
@@ -19,23 +41,7 @@ where
     for file_path in log_files {
         log::info!("scanner: scanning {}", file_path.display());
 
-        let file_path_str = file_path.to_str().ok_or_else(|| {
-            Error::Parser(ParserError::InvalidPath {
-                path: file_path.clone(),
-                reason: "non-UTF8 path".to_string(),
-                line_number: None,
-            })
-        })?;
-
-        let parser = LogParserBuilder::new(file_path_str)
-            .build()
-            .map_err(|err| {
-                Error::Parser(ParserError::InvalidPath {
-                    path: file_path.clone(),
-                    reason: format!("{err}"),
-                    line_number: None,
-                })
-            })?;
+        let parser = build_parser(file_path)?;
 
         let parse_errors_before = stats.parse_errors;
 
