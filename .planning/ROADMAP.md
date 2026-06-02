@@ -168,7 +168,7 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
 ### v1.15 工程质量全面提升 (Phases 55–58)
 
 - [x] **Phase 55: CI/CD 基础设施修复** — 修正 workflow action 版本、修复 release 竞争条件、添加 Cross.toml (completed 2026-06-02)
-- [ ] **Phase 56: stats 模块清理与 benchmark 稳定化** — 删除遗留 warn! 占位符、检查函数长度、确认 benchmark 信息性运行
+- [x] **Phase 56: stats 模块清理与 benchmark 稳定化** — 删除遗留 warn! 占位符、检查函数长度、确认 benchmark 信息性运行 (completed 2026-06-02)
 - [ ] **Phase 57: e2e 测试扩展** — run/init/stats 子命令 CLI 全链路测试补全
 - [ ] **Phase 58: cli/run 函数清理** — 超 40 行函数提取为私有函数
 
@@ -450,7 +450,7 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
   4. `.github/workflows/bench.yml` 中 benchmark job 设置 `continue-on-error: true`，不作为 merge 门控
 **Plans**: 2 plans
 - [x] 56-01-PLAN.md — 新建 src/scanner.rs 公共扫描模块（D-01）+ src/lib.rs 注册 pub(crate) mod scanner + src/stats/mod.rs 重构 scan_files_into_accumulator 调用 scanner（D-02）+ grep/awk 验证 CLEAN-01 静态条件（cli/stats 无 warn!、output.rs 函数 ≤40 行）
-- [ ] 56-02-PLAN.md — src/cli/run/processor.rs 接入 scanner（D-03，限定 parser 创建+迭代循环范围，签名不变）+ benches/BENCHMARKS.md 追加 CI Artifact 使用说明章节（D-04，命名规则/下载方式/JSON 结构/手动对比方法）+ stat/grep 验证 BENCH-01 静态条件
+- [x] 56-02-PLAN.md — src/cli/run/processor.rs 接入 scanner（D-03，限定 parser 创建+迭代循环范围，签名不变）+ benches/BENCHMARKS.md 追加 CI Artifact 使用说明章节（D-04，命名规则/下载方式/JSON 结构/手动对比方法）+ stat/grep 验证 BENCH-01 静态条件
 
 ### Phase 57: e2e 测试扩展
 **Goal**: run/init/stats 子命令均有 CLI 全链路 assert_cmd 测试，涵盖正常路径、退出码、边界条件，为后续重构提供安全网
@@ -559,7 +559,7 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
 | 53. 时间段配置与 CLI 参数 | v1.14 | 3/3 | Complete | 2026-06-01 |
 | 54. StatsAccumulator 时间过滤 | v1.14 | Complete | 2026-06-02 |
 | 55. CI/CD 基础设施修复 | 2/2 | Complete   | 2026-06-02 |
-| 56. stats 模块清理与 benchmark 稳定化 | 1/2 | In Progress|  |
+| 56. stats 模块清理与 benchmark 稳定化 | 2/2 | Complete   | 2026-06-02 |
 | 57. e2e 测试扩展 | v1.15 | Not started | - |
 | 58. cli/run 函数清理 | v1.15 | Not started | - |
 
