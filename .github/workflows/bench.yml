@@ -6,12 +6,19 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   benchmark:
     name: Run Benchmarks
+    # NOTE: This job is data-collection-only. No regression gate is enforced.
+    # Benchmark artifacts are uploaded per-commit for manual inspection.
+    # To add regression detection, consider integrating bencher or
+    # criterion-compare-action and downloading the previous baseline artifact.
     runs-on: ubuntu-latest
     timeout-minutes: 30
     # Bench 失败不阻塞 PR merge（仅作 informational）
@@ -30,8 +37,6 @@ jobs:
 
       - name: Collect benchmark results
         run: bash scripts/collect_bench_results.sh
-        env:
-          GITHUB_SHA: ${{ github.sha }}
 
       - name: Upload benchmark artifact
         uses: actions/upload-artifact@v4
