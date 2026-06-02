@@ -564,7 +564,7 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
 | 55. CI/CD 基础设施修复 | 2/2 | Complete   | 2026-06-02 |
 | 56. stats 模块清理与 benchmark 稳定化 | 2/2 | Complete    | 2026-06-02 |
 | 57. e2e 测试扩展 | 2/2 | Complete    | 2026-06-02 |
-| 58. cli/run 函数清理 | 1/1 | Complete   | 2026-06-02 |
+| 58. cli/run 函数清理 | 1/1 | Complete    | 2026-06-02 |
 
 ---
 *Created: 2026-05-21 for milestone v1.10*
