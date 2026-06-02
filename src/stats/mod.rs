@@ -27,7 +27,8 @@ pub fn run_stats(cfg: &Config, top_n: u32) -> Result<()> {
             inputs: cfg.sqllog.inputs.clone(),
         }));
     }
-    let mut accumulator = StatsAccumulator::new(top_n);
+    let mut accumulator =
+        StatsAccumulator::new(top_n, cfg.stats.from.clone(), cfg.stats.to.clone());
     scan_files_into_accumulator(&log_files, &mut accumulator)?;
     let (slow_rows, frequent_rows) = accumulator.into_results();
     write_stats_output(cfg, &slow_rows, &frequent_rows)

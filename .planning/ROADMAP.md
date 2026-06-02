@@ -339,7 +339,7 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
 **Depends on**: Phase 48
 **Requirements**: INPUT-01, INPUT-02
 **Success Criteria** (what must be TRUE):
-  1. `input = ["sqllogs/*.log"]` 在 config.toml 中被解析后自动展开为所有匹配的 `.log` 文件，`cargo test` 包含此场景的单元测试
+  1. `input = ["sqllogs/*.log"]` 在 config.toml 中被解析后自动展开为所有匹配的 `.log` 文件,`cargo test` 包含此场景的单元测试
   2. `sqllog2db run -c config.toml --input 'logs/*.log'` 从命令行接收 glob 并展开，输出结果与手动列出所有文件一致
   3. 无匹配文件时给出明确错误（`error: glob pattern 'sqllogs/*.log' matched 0 files`），而非静默空输出
   4. glob 与直接路径混合使用时（如 `--input file1.log --input 'dir/*.log'`）均能正确处理
@@ -415,7 +415,8 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
   2. `--from` 和 `--to` 均未设置时，聚合结果与未加时间过滤的结果完全一致（无行为变化）
   3. 只设置 `--from`（不设 `--to`）时，只过滤早于 `from` 的记录，晚于 `from` 的记录均被统计；只设置 `--to` 时，只过滤晚于 `to` 的记录
   4. `cargo clippy --all-targets -- -D warnings` + `cargo test` 全部通过，性能无明显退化（字符串前缀比较不引入额外分配）
-**Plans**: TBD
+**Plans**: 1 plan
+- [ ] 54-01-PLAN.md — StatsAccumulator 新增 from/to 字段与 in_range 守卫 + update 范围外 return + run_stats 调用点接入 cfg.stats.from/to + 删除 cli/stats/mod.rs "not yet active" warn 占位 + 11 个单元测试（6 迁移 + 5 新过滤）+ 2 个端到端 stats --from/--to CLI 测试
 
 ## Coverage Validation
 

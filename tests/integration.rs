@@ -1871,3 +1871,70 @@ fn test_init_template_contains_stats_section() {
         "template should contain format hint YYYY-MM-DD HH:MM:SS"
     );
 }
+
+// ── Phase 54 stats time-range filter integration tests ──
+
+#[test]
+fn test_stats_from_to_filters_to_single_day() {
+    use assert_cmd::Command;
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_file = dir.path().join("input.log");
+    let lines = [
+        "2024-01-14 10:00:00.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT * FROM t WHERE id=1. EXECTIME: 10(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.",
+        "2024-01-15 10:00:00.001 (EP[0] sess:0x0002 user:U trxid:2 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT * FROM t WHERE id=2. EXECTIME: 20(ms) ROWCOUNT: 1(rows) EXEC_ID: 2.",
+        "2024-01-16 10:00:00.001 (EP[0] sess:0x0003 user:U trxid:3 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT * FROM t WHERE id=3. EXECTIME: 30(ms) ROWCOUNT: 1(rows) EXEC_ID: 3.",
+    ];
+    std::fs::write(&log_file, lines.join("\n") + "\n").unwrap();
+    let cfg_path = make_stats_csv_config(dir.path(), &log_file);
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args([
+            "stats",
+            "-c",
+            cfg_path.to_str().unwrap(),
+            "--from",
+            "2024-01-15",
+            "--to",
+            "2024-01-15",
+        ])
+        .assert()
+        .success();
+    let slow_csv = dir.path().join("out").join("slow_sql.csv");
+    let content = std::fs::read_to_string(&slow_csv).unwrap();
+    let data_lines: Vec<&str> = content.lines().skip(1).filter(|l| !l.is_empty()).collect();
+    assert_eq!(
+        data_lines.len(),
+        1,
+        "only 2024-01-15 record should be included"
+    );
+    assert!(
+        data_lines[0].contains("2024-01-15"),
+        "timestamp should be 2024-01-15"
+    );
+}
+
+#[test]
+fn test_stats_no_from_to_filters_nothing() {
+    use assert_cmd::Command;
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_file = dir.path().join("input.log");
+    let lines = [
+        "2024-01-14 10:00:00.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT * FROM t WHERE id=1. EXECTIME: 10(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.",
+        "2024-01-16 10:00:00.001 (EP[0] sess:0x0002 user:U trxid:2 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT * FROM t WHERE id=2. EXECTIME: 20(ms) ROWCOUNT: 1(rows) EXEC_ID: 2.",
+    ];
+    std::fs::write(&log_file, lines.join("\n") + "\n").unwrap();
+    let cfg_path = make_stats_csv_config(dir.path(), &log_file);
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["stats", "-c", cfg_path.to_str().unwrap(), "--top", "10"])
+        .assert()
+        .success();
+    let slow_csv = dir.path().join("out").join("slow_sql.csv");
+    let content = std::fs::read_to_string(&slow_csv).unwrap();
+    let data_lines: Vec<&str> = content.lines().skip(1).filter(|l| !l.is_empty()).collect();
+    assert_eq!(
+        data_lines.len(),
+        2,
+        "all records should be included when no time filter"
+    );
+}
