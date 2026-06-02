@@ -2,11 +2,90 @@ use crate::error::{ErrorStats, Result};
 use crate::exporter::ExporterManager;
 use crate::pipeline::Pipeline;
 use crate::pipeline::normalizer::ParamBuffer;
+use dm_database_parser_sqllog::Sqllog;
 use indicatif::ProgressBar;
 use log::info;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
+
+/// 控制主循环对单条记录的导出结果响应。
+#[allow(dead_code)]
+pub(super) enum ExportAction {
+    /// 正常导出（或被过滤后 `params_buffer` 已更新），继续处理下一条。
+    Continue,
+    /// 达到导出配额上限，跳出主循环。
+    BreakQuota,
+    /// 遇到 fatal 导出错误，跳出主循环。
+    BreakFatal,
+}
+
+/// 对单条已过滤的记录执行归一化 + 导出 + 错误处理。
+///
+/// `passes`：调用方已判断该记录是否通过过滤器。
+/// 仅在 `passes==false && do_normalize && record.tag.is_none()` 时更新 `params_buffer`（不导出）。
+#[allow(clippy::too_many_arguments, dead_code)]
+pub(super) fn normalize_and_export(
+    record: &Sqllog,
+    exporter_manager: &mut ExporterManager,
+    include_pm: bool,
+    do_normalize: bool,
+    params_buffer: &mut ParamBuffer,
+    placeholder_override: Option<bool>,
+    ns_scratch: &mut Vec<u8>,
+    remaining: Option<usize>,
+    records_in_file: &mut usize,
+    file_stats: &mut ErrorStats,
+    file_path: &str,
+    passes: bool,
+) -> ExportAction {
+    if !passes {
+        // 被过滤的 PARAMS 记录：仅更新 params_buffer，不导出。
+        crate::pipeline::compute_normalized(
+            record,
+            &record.sql,
+            params_buffer,
+            placeholder_override,
+            ns_scratch,
+        );
+        return ExportAction::Continue;
+    }
+    let ns = if do_normalize && (!params_buffer.is_empty() || record.tag.is_none()) {
+        crate::pipeline::compute_normalized(
+            record,
+            &record.sql,
+            params_buffer,
+            placeholder_override,
+            ns_scratch,
+        )
+    } else {
+        None
+    };
+    if let Some(remaining) = remaining {
+        if *records_in_file >= remaining {
+            return ExportAction::BreakQuota;
+        }
+    }
+    let export_result = exporter_manager.export_one_preparsed(record, include_pm, ns);
+    match export_result {
+        Ok(()) => {
+            *records_in_file += 1;
+            ExportAction::Continue
+        }
+        Err(ref e) if e.is_fatal() => {
+            file_stats.set_fatal(e.to_string());
+            eprintln!("[{}] {file_path}: {e}", e.severity());
+            log::warn!("{file_path} | fatal export error: {export_result:?}");
+            ExportAction::BreakFatal
+        }
+        Err(ref e) => {
+            file_stats.add_export_error();
+            eprintln!("[{}] {file_path}: {e}", e.severity());
+            log::warn!("{file_path} | export error: {export_result:?}");
+            ExportAction::Continue
+        }
+    }
+}
 
 /// 处理单个日志文件，返回本文件实际导出的记录数。
 ///
