@@ -6,6 +6,7 @@ mod logging;
 mod parser;
 mod pipeline;
 mod preflight;
+mod scanner;
 mod stats;
 
 use config::Config;
