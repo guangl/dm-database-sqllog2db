@@ -170,7 +170,7 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
 - [x] **Phase 55: CI/CD 基础设施修复** — 修正 workflow action 版本、修复 release 竞争条件、添加 Cross.toml (completed 2026-06-02)
 - [x] **Phase 56: stats 模块清理与 benchmark 稳定化** — 删除遗留 warn! 占位符、检查函数长度、确认 benchmark 信息性运行 (completed 2026-06-02)
 - [x] **Phase 57: e2e 测试扩展** — run/init/stats 子命令 CLI 全链路测试补全 (completed 2026-06-02)
-- [ ] **Phase 58: cli/run 函数清理** — 超 40 行函数提取为私有函数
+- [x] **Phase 58: cli/run 函数清理** — 超 40 行函数提取为私有函数 (completed 2026-06-02)
 
 ## Phase Details
 
@@ -475,7 +475,7 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
   3. `cargo test` 全部通过（包含 Phase 57 新增的 e2e 测试），无任何行为变化
   4. `cargo clippy --all-targets -- -D warnings` + `cargo fmt --check` 通过，无新增警告
 **Plans**: 1 plan
-- [ ] 58-01-PLAN.md — handle_run 拆分为 7 个私有辅助函数 (resolve_input_files / merge_trxid_prescan / make_progress_bar / run_csv_parallel / run_sqlite_parallel / run_sequential / print_run_summary) + handle_run 本体改造为 D-04 模式 (merged.as_ref().unwrap_or(cfg)) + 全函数体 ≤40 行验证 + cargo clippy/test/fmt 三道质量门禁 (CLEAN-02)
+- [x] 58-01-PLAN.md — handle_run 拆分为 7 个私有辅助函数 (resolve_input_files / merge_trxid_prescan / make_progress_bar / run_csv_parallel / run_sqlite_parallel / run_sequential / print_run_summary) + handle_run 本体改造为 D-04 模式 (merged.as_ref().unwrap_or(cfg)) + 全函数体 ≤40 行验证 + cargo clippy/test/fmt 三道质量门禁 (CLEAN-02)
 
 ## Coverage Validation
 
@@ -564,7 +564,7 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
 | 55. CI/CD 基础设施修复 | 2/2 | Complete   | 2026-06-02 |
 | 56. stats 模块清理与 benchmark 稳定化 | 2/2 | Complete    | 2026-06-02 |
 | 57. e2e 测试扩展 | 2/2 | Complete    | 2026-06-02 |
-| 58. cli/run 函数清理 | v1.15 | Not started | - |
+| 58. cli/run 函数清理 | 1/1 | Complete   | 2026-06-02 |
 
 ---
 *Created: 2026-05-21 for milestone v1.10*
