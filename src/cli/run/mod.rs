@@ -313,6 +313,37 @@ fn run_sequential(
     let mut exporter_manager = ExporterManager::from_config(final_cfg)?;
     exporter_manager.initialize()?;
     info!("Parsing and exporting SQL logs...");
+    let (per_file_counts, run_stats) = run_file_loop(
+        log_files,
+        &mut exporter_manager,
+        pipeline,
+        do_normalize,
+        placeholder_override,
+        verbose,
+        show_progress,
+        pb,
+        interrupted,
+    )?;
+    exporter_manager.finalize()?;
+    (!quiet).then(|| exporter_manager.log_stats());
+    Ok((per_file_counts, run_stats))
+}
+
+/// 逐文件循环：为每个日志文件调用 `process_log_file`，fatal 时提前返回错误。
+/// 返回 `(per_file_counts, run_stats)`。
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::fn_params_excessive_bools)]
+fn run_file_loop(
+    log_files: &[PathBuf],
+    exporter_manager: &mut ExporterManager,
+    pipeline: &crate::pipeline::Pipeline,
+    do_normalize: bool,
+    placeholder_override: Option<bool>,
+    verbose: bool,
+    show_progress: bool,
+    pb: Option<&ProgressBar>,
+    interrupted: &Arc<AtomicBool>,
+) -> Result<(Vec<(PathBuf, usize)>, ErrorStats)> {
     let mut params_buffer = crate::pipeline::normalizer::ParamBuffer::default();
     let mut ns_scratch: Vec<u8> = Vec::with_capacity(4096);
     let mut per_file_counts: Vec<(PathBuf, usize)> = Vec::with_capacity(log_files.len());
@@ -326,7 +357,7 @@ fn run_sequential(
             &log_file.to_string_lossy(),
             idx + 1,
             log_files.len(),
-            &mut exporter_manager,
+            exporter_manager,
             pipeline,
             show_progress,
             None,
@@ -347,8 +378,6 @@ fn run_sequential(
             }));
         }
     }
-    exporter_manager.finalize()?;
-    (!quiet).then(|| exporter_manager.log_stats());
     Ok((per_file_counts, run_stats))
 }
 
