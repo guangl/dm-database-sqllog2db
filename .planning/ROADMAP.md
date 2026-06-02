@@ -461,7 +461,9 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
   2. `tests/integration.rs` 包含 `init` 子命令的 assert_cmd 测试：`sqllog2db init -o /tmp/config.toml` 成功生成文件并退出码 0；文件已存在时不加 `--force` 退出码非零并输出错误信息
   3. `tests/integration.rs` 包含 `stats --from/--to` 边界条件测试：空时间范围（from > to）给出明确错误、边界值（from == to）正常运行、无效格式（非日期字符串）被拒绝并退出码非零
   4. `cargo test` 全部通过，新增测试不依赖外部服务或网络
-**Plans**: TBD
+**Plans**: 2 plans
+- [ ] 57-01-PLAN.md — validate_stats_time_range 新增 from ≤ to 跨字段检查（D-01/D-02）+ 4 个单元测试 + test_cli_stats_rejects_from_after_to e2e 测试覆盖 TEST-03
+- [ ] 57-02-PLAN.md — 新增 write_run_config_toml / write_run_sqlite_config_toml 两 helper + 4 个 e2e 测试（run CSV header+行数、run SQLite sqllog_records 表行数、init 新建成功、init 已存在退出非零）覆盖 TEST-01/TEST-02
 
 ### Phase 58: cli/run 函数清理
 **Goal**: cli/run 模块中超过 40 行的函数被提取为私有辅助函数，代码可读性提升，已有 e2e 测试确认无行为变化
