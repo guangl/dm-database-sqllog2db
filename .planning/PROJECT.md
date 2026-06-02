@@ -8,13 +8,28 @@
 
 用户能够精确指定"导出哪些记录的哪些字段"——过滤逻辑清晰可配置，输出结果完全可控。
 
-## Current Milestone: v1.14 stats 时间段过滤
+## Previous: v1.15 已交付
 
-**Goal:** 为 `stats` 子命令加入时间段过滤，用户可通过 CLI 参数或 config.toml 指定起止时间，stats 只统计该时间段内的记录。
+**Shipped:** 2026-06-02
+**Version:** v1.15 工程质量全面提升（Phases 55–58）
 
-**Target features:**
-- `--from`/`--to` CLI 参数（如 `--from "2024-01-01"` `--to "2024-01-31"`）
-- config.toml `[stats]` 节新增 `from`/`to` 字段作为默认值
+**已交付功能：**
+- GitHub Actions workflow action 版本修复（@v6/@v7 → @v4，6 处）
+- release.yaml artifact 暂存 + 独立 create-release job，消除 4 并行 job 竞争条件
+- Cross.toml 新建，aarch64-linux 跨编译 cross-rs edge 镜像配置
+- `pub(crate) mod scanner` 公共模块，stats/run 共享同一文件扫描实现
+- 5 条 e2e CLI 全链路测试（run CSV/SQLite、init 成功/冲突、stats from>to 拒绝），集成测试总数 69 条
+- handle_run（234 行）拆分为 7 个语义清晰私有辅助函数，逻辑语句数 ~37
+- BENCHMARKS.md CI Artifact 使用指南
+
+## Previous: v1.14 已交付
+
+**Shipped:** 2026-06-02
+**Version:** v1.14 stats 时间段过滤（Phases 53–54）
+
+**已交付功能：**
+- `--from`/`--to` CLI 参数时间段过滤
+- config.toml `[stats]` 节 `from`/`to` 字段作为默认值
 - CLI 参数优先于 config 中的值
 - `StatsAccumulator` 在聚合前按时间段跳过不符合的记录
 
@@ -68,13 +83,21 @@
 - ✓ SQL 标准化（参数替换为占位符）— v1.13
 - ✓ `--top N` 参数（默认 20）— v1.13
 - ✓ 输出格式复用 config.toml exporter — v1.13
+- ✓ `stats --from`/`--to` CLI 参数（时间段过滤）— v1.14
+- ✓ config.toml `[stats]` 节 `from`/`to` 字段 — v1.14
+- ✓ CLI 参数优先于 config 值 — v1.14
+- ✓ `StatsAccumulator` 按时间段跳过不符合记录 — v1.14
+- ✓ GitHub Actions CI workflow 修复（@v4 版本锁定，三平台矩阵）— v1.15
+- ✓ GitHub Actions CD workflow 修复（artifact 暂存 + 独立 create-release，四平台构建）— v1.15
+- ✓ Cross.toml aarch64-linux 跨编译配置 — v1.15
+- ✓ `scanner` 公共模块（stats/run 共享文件扫描实现）— v1.15
+- ✓ e2e CLI 全链路集成测试（run/init/stats，69 个集成测试）— v1.15
+- ✓ cli/run handle_run 拆分（7 个私有辅助函数，逻辑语句数 ~37）— v1.15
+- ✓ criterion benchmark 稳定化（non-blocking CI，BENCHMARKS.md 指南）— v1.15
 
 ### Active
 
-- [ ] `stats --from`/`--to` CLI 参数（时间段过滤）— v1.14
-- [ ] config.toml `[stats]` 节 `from`/`to` 字段 — v1.14
-- [ ] CLI 参数优先于 config 值 — v1.14
-- [ ] `StatsAccumulator` 按时间段跳过不符合记录 — v1.14
+(下一里程碑需求待 `/gsd:new-milestone` 定义)
 
 ### Out of Scope
 
@@ -93,8 +116,11 @@
 - 依赖精简（无 reqwest/rustls/self_update 等重依赖，仅新增 indicatif）
 - 当前代码量：~8,833 行 Rust（src）+ 1,503 行（tests）
 - 性能基线：~5.2M records/sec（合成 CSV），~1.55M records/sec（1.1GB 真实文件）
-- 测试覆盖：529 个测试（226 lib + 48+ integration + 1 jemalloc），全部通过
+- 测试覆盖：~558 个测试（226 lib + 69 integration + 1 jemalloc + 单元测试），全部通过
 - assert_cmd / predicates 加入 dev-dependencies，e2e CLI 测试覆盖大幅提升
+- Phase 57 新增：stats --from/--to 跨字段顺序校验，run CSV/SQLite 全链路断言，init 成功/冲突测试
+- Phase 58 新增：`pub(crate) mod scanner` 公共模块，stats/run 共享文件扫描逻辑；handle_run 拆分 7 个私有函数
+- v1.15 基础设施：GitHub Actions CI/CD workflow 全面修复，Cross.toml aarch64-linux 跨编译支持
 
 ## Constraints
 
@@ -120,6 +146,9 @@
 | validate 静默通过策略（D-03） | 仅错误时才输出，减少噪音 | ✓ Good (v1.12) |
 | verbose 语义从日志级别→运行展示 | `-vv` 不再有效，语义更清晰 | ✓ Good (v1.12) |
 | inputs: Vec<String> 替代 path: String | 支持 glob，旧键检测迁移友好 | ✓ Good (v1.12) |
+| release artifact 暂存 + 独立 create-release job | 消除 4 并行 job 竞争写入 release notes | ✓ Good (v1.15) |
+| scanner 公共模块 pub(crate) 可见性 | 与 pub(crate) mod parser 保持一致，stats/run DRY | ✓ Good (v1.15) |
+| handle_run 物理行数 override 接受 | cargo fmt 展开所致，逻辑语句数 ~37 满足设计意图 | ✓ Good (v1.15) |
 
 ## Evolution
 
@@ -132,4 +161,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-01 — v1.14 milestone started*
+*Last updated: 2026-06-02 after v1.15 milestone*

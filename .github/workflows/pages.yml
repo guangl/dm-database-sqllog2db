@@ -9,9 +9,6 @@ concurrency:
   group: pages
   cancel-in-progress: true
 
-env:
-  CARGO_TERM_COLOR: always
-
 jobs:
   deploy:
     name: Deploy
@@ -19,7 +16,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       - name: Install mdBook
         uses: peaceiris/actions-mdbook@v2
         with:

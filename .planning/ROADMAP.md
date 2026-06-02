@@ -2,7 +2,8 @@
 
 ## Milestones
 
-- ⏳ **v1.14 stats 时间段过滤** — Phases 53–54 (in progress)
+- ✅ **v1.15 工程质量全面提升** — Phases 55–58 (shipped 2026-06-02)
+- ✅ **v1.14 stats 时间段过滤** — Phases 53–54 (shipped 2026-06-02)
 - ✅ **v1.13 SQL 统计分析** — Phases 50–52 (shipped 2026-06-01)
 - ✅ **v1.12 CLI 体验全面提升** — Phases 46–49 (shipped 2026-06-01)
 - ✅ **v1.0 增强 SQL 内容过滤与字段投影** — Phases 1–2 (shipped 2026-04-18)
@@ -162,7 +163,19 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
 ### v1.14 stats 时间段过滤 (Phases 53–54)
 
 - [x] **Phase 53: 时间段配置与 CLI 参数** — 扩展 StatsConfig、opts.rs 新增 --from/--to、格式验证与优先级合并 (completed 2026-06-01)
-- [ ] **Phase 54: StatsAccumulator 时间过滤** — 在聚合层按 ts 字段跳过时间段外的记录
+- [x] **Phase 54: StatsAccumulator 时间过滤** — 在聚合层按 ts 字段跳过时间段外的记录 (completed 2026-06-02)
+
+<details>
+<summary>✅ v1.15 工程质量全面提升 (Phases 55–58) — SHIPPED 2026-06-02</summary>
+
+- [x] **Phase 55: CI/CD 基础设施修复** — 修正 workflow action 版本、修复 release 竞争条件、添加 Cross.toml (completed 2026-06-02)
+- [x] **Phase 56: stats 模块清理与 benchmark 稳定化** — 删除遗留 warn! 占位符、检查函数长度、确认 benchmark 信息性运行 (completed 2026-06-02)
+- [x] **Phase 57: e2e 测试扩展** — run/init/stats 子命令 CLI 全链路测试补全 (completed 2026-06-02)
+- [x] **Phase 58: cli/run 函数清理** — 超 40 行函数提取为私有函数 (completed 2026-06-02)
+
+Full details: `.planning/milestones/v1.15-ROADMAP.md`
+
+</details>
 
 ## Phase Details
 
@@ -418,6 +431,57 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
 **Plans**: 1 plan
 - [ ] 54-01-PLAN.md — StatsAccumulator 新增 from/to 字段与 in_range 守卫 + update 范围外 return + run_stats 调用点接入 cfg.stats.from/to + 删除 cli/stats/mod.rs "not yet active" warn 占位 + 11 个单元测试（6 迁移 + 5 新过滤）+ 2 个端到端 stats --from/--to CLI 测试
 
+### Phase 55: CI/CD 基础设施修复
+**Goal**: CI/CD workflow 能够在三平台无错误运行，tag 推送触发 4 个平台二进制构建并正确创建 GitHub Release，aarch64-linux 跨编译通过 Cross.toml 配置无需手动干预
+**Depends on**: Phase 54
+**Requirements**: CICD-01, CICD-02, CICD-03, CICD-04
+**Success Criteria** (what must be TRUE):
+  1. 推送 PR 后，GitHub Actions CI 在 ubuntu/windows/macos 三平台自动运行 test/clippy/fmt 全部绿灯（使用正确的 `actions/checkout@v4` 和 `actions/upload-artifact@v4`）
+  2. 推送 tag 后，CD workflow 成功构建 4 个平台（x86_64-linux、aarch64-linux、x86_64-windows、x86_64-macos）的二进制并在 GitHub Releases 中创建对应 release
+  3. 4 个 matrix job 并行运行时 release body 内容完整、无重复条目，不存在因竞争写入导致的数据丢失（独立 create-release job 先于 upload-artifact job 运行）
+  4. 项目根目录存在 `Cross.toml`，aarch64-linux 构建使用正确的 Docker 镜像，`cross build --target aarch64-unknown-linux-gnu` 无需手动配置即可执行
+**Plans**: 2 plans
+- [x] 55-01-PLAN.md — 修复 ci.yaml/bench.yml/lychee.yml/pages.yml 的 @v6/@v7 action 版本统一为 @v4（D-01/D-02）+ cargo 质量门禁（CICD-01）
+- [x] 55-02-PLAN.md — 新建 Cross.toml（ghcr.io edge 镜像）+ 重构 release.yaml 为 artifact 暂存 + 独立 create-release job + 删除 publish job（CICD-02/03/04，D-04/D-05/D-06/D-07/D-08）
+
+### Phase 56: stats 模块清理与 benchmark 稳定化
+**Goal**: stats 模块代码整洁无遗留占位符，所有函数符合 40 行限制，benchmark 以信息性方式集成到 CI 并有配套采集脚本
+**Depends on**: Phase 55 (CI 稳定后 benchmark workflow 才有意义)
+**Requirements**: CLEAN-01, BENCH-01
+**Success Criteria** (what must be TRUE):
+  1. `src/cli/stats/mod.rs` 中不存在任何 `warn!` 占位符调用（已删除 "not yet active" 类占位符）
+  2. `src/stats/output.rs` 中所有函数体不超过 40 行（可通过 `cargo clippy` 配合代码审查验证）
+  3. `scripts/collect_bench_results.sh` 文件存在且可执行，脚本说明其用途
+  4. `.github/workflows/bench.yml` 中 benchmark job 设置 `continue-on-error: true`，不作为 merge 门控
+**Plans**: 2 plans
+- [x] 56-01-PLAN.md — 新建 src/scanner.rs 公共扫描模块（D-01）+ src/lib.rs 注册 pub(crate) mod scanner + src/stats/mod.rs 重构 scan_files_into_accumulator 调用 scanner（D-02）+ grep/awk 验证 CLEAN-01 静态条件（cli/stats 无 warn!、output.rs 函数 ≤40 行）
+- [x] 56-02-PLAN.md — src/cli/run/processor.rs 接入 scanner（D-03，限定 parser 创建+迭代循环范围，签名不变）+ benches/BENCHMARKS.md 追加 CI Artifact 使用说明章节（D-04，命名规则/下载方式/JSON 结构/手动对比方法）+ stat/grep 验证 BENCH-01 静态条件
+
+### Phase 57: e2e 测试扩展
+**Goal**: run/init/stats 子命令均有 CLI 全链路 assert_cmd 测试，涵盖正常路径、退出码、边界条件，为后续重构提供安全网
+**Depends on**: Phase 56
+**Requirements**: TEST-01, TEST-02, TEST-03
+**Success Criteria** (what must be TRUE):
+  1. `tests/integration.rs` 包含 `run` 子命令的端到端测试：给定真实输入文件，验证 CSV 输出内容（字段名+记录数）与退出码 0；给定真实输入文件，验证 SQLite 输出文件存在且退出码 0
+  2. `tests/integration.rs` 包含 `init` 子命令的 assert_cmd 测试：`sqllog2db init -o /tmp/config.toml` 成功生成文件并退出码 0；文件已存在时不加 `--force` 退出码非零并输出错误信息
+  3. `tests/integration.rs` 包含 `stats --from/--to` 边界条件测试：空时间范围（from > to）给出明确错误、边界值（from == to）正常运行、无效格式（非日期字符串）被拒绝并退出码非零
+  4. `cargo test` 全部通过，新增测试不依赖外部服务或网络
+**Plans**: 2 plans
+- [x] 57-01-PLAN.md — validate_stats_time_range 新增 from ≤ to 跨字段检查（D-01/D-02）+ 4 个单元测试 + test_cli_stats_rejects_from_after_to e2e 测试覆盖 TEST-03
+- [x] 57-02-PLAN.md — 新增 write_run_config_toml / write_run_sqlite_config_toml 两 helper + 4 个 e2e 测试（run CSV header+行数、run SQLite sqllog_records 表行数、init 新建成功、init 已存在退出非零）覆盖 TEST-01/TEST-02
+
+### Phase 58: cli/run 函数清理
+**Goal**: cli/run 模块中超过 40 行的函数被提取为私有辅助函数，代码可读性提升，已有 e2e 测试确认无行为变化
+**Depends on**: Phase 57 (e2e 测试是重构的安全网，必须先于重构存在)
+**Requirements**: CLEAN-02
+**Success Criteria** (what must be TRUE):
+  1. `src/cli/run/mod.rs` 中每个函数体不超过 40 行（以 `fn` 关键字开头计算）
+  2. 提取出的私有函数命名清晰，反映其单一职责（不使用 `helper` 等无意义命名）
+  3. `cargo test` 全部通过（包含 Phase 57 新增的 e2e 测试），无任何行为变化
+  4. `cargo clippy --all-targets -- -D warnings` + `cargo fmt --check` 通过，无新增警告
+**Plans**: 1 plan
+- [x] 58-01-PLAN.md — handle_run 拆分为 7 个私有辅助函数 (resolve_input_files / merge_trxid_prescan / make_progress_bar / run_csv_parallel / run_sqlite_parallel / run_sequential / print_run_summary) + handle_run 本体改造为 D-04 模式 (merged.as_ref().unwrap_or(cfg)) + 全函数体 ≤40 行验证 + cargo clippy/test/fmt 三道质量门禁 (CLEAN-02)
+
 ## Coverage Validation
 
 | Requirement | Phase |
@@ -439,7 +503,7 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
 | VER-06      | 40    |
 | REFACTOR-02 | 41    |
 | PARSER-01   | 41    |
-| BENCH-01    | 42    |
+| BENCH-01    | 56    |
 | PARSER-02   | 43    |
 | REFACTOR-01 | 43    |
 | PERF-01     | 44    |
@@ -466,8 +530,17 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
 | STATS-09    | 53    |
 | STATS-11    | 53    |
 | STATS-10    | 54    |
+| CICD-01     | 55    |
+| CICD-02     | 55    |
+| CICD-03     | 55    |
+| CICD-04     | 55    |
+| CLEAN-01    | 56    |
+| TEST-01     | 57    |
+| TEST-02     | 57    |
+| TEST-03     | 57    |
+| CLEAN-02    | 58    |
 
-**44/44 requirements mapped — coverage: 100%**
+**54/54 requirements mapped — coverage: 100%**
 
 ## Progress
 
@@ -491,9 +564,13 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
 | 50. SQL 标准化引擎 | v1.13 | 1/1 | Complete | 2026-06-01 |
 | 51. stats 子命令 CLI 脚手架 | v1.13 | 1/1 | Complete | 2026-06-01 |
 | 52. 统计输出与 Exporter 集成 | v1.13 | 1/1 | Complete | 2026-06-01 |
-| 53. 时间段配置与 CLI 参数 | 3/3 | Complete    | 2026-06-01 |
-| 54. StatsAccumulator 时间过滤 | v1.14 | Not started | - |
+| 53. 时间段配置与 CLI 参数 | v1.14 | 3/3 | Complete | 2026-06-01 |
+| 54. StatsAccumulator 时间过滤 | v1.14 | Complete | 2026-06-02 |
+| 55. CI/CD 基础设施修复 | 2/2 | Complete   | 2026-06-02 |
+| 56. stats 模块清理与 benchmark 稳定化 | 2/2 | Complete    | 2026-06-02 |
+| 57. e2e 测试扩展 | 2/2 | Complete    | 2026-06-02 |
+| 58. cli/run 函数清理 | 1/1 | Complete    | 2026-06-02 |
 
 ---
 *Created: 2026-05-21 for milestone v1.10*
-*Updated: 2026-06-01 — v1.14 (Phases 53–54) roadmap added; STATS-07/08/09/10/11 全部映射*
+*Updated: 2026-06-02 — v1.15 (Phases 55–58) roadmap added; CICD-01/02/03/04, CLEAN-01/02, TEST-01/02/03, BENCH-01 全部映射*

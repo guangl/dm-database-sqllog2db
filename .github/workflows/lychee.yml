@@ -16,21 +16,18 @@ on:
       - 'docs/*.md'
       - 'site/**/*.md'
 
-env:
-  CARGO_TERM_COLOR: always
-
 jobs:
   link-check:
     name: Check Links
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - name: Restore lychee cache
         uses: actions/cache@v5
         with:
           path: .lycheecache
-          key: lychee-${{ github.sha }}
+          key: lychee-${{ hashFiles('README.md', 'CHANGELOG.md') }}
           restore-keys: lychee-
 
       - name: Run lychee link checker

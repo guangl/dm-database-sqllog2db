@@ -67,12 +67,8 @@ fn test_handle_run_empty_dir_returns_no_files_found() {
 
 #[test]
 #[cfg(not(target_os = "windows"))]
-fn test_handle_run_empty_dir_unix_behavior() {
-    // Unix: empty inputs trigger stdin pipe fallback or NoFilesFound depending on tty;
-    // NoFilesFound exit-code path covered indirectly by C3 end-to-end test
-    // (legacy path key rejection achieves the same SC3 non-zero-exit + hint guarantee
-    // without stdin tty interference, because ConfigError fires before file scanning).
-}
+#[ignore = "stdin tty behavior is non-deterministic in CI; covered indirectly by C3"]
+fn test_handle_run_empty_dir_unix_behavior() {}
 
 #[test]
 fn test_handle_run_multi_file() {
@@ -1129,7 +1125,7 @@ fn test_cli_default_summary_omits_per_file_counts() {
 /// Verify that legacy [sqllog] path = "..." key is rejected via validate subcommand
 /// with stderr containing sqllog.path, inputs, and hint: (SC3 main validation path).
 #[test]
-fn test_validate_rejects_legacy_sqllog_path_key_via_cli() {
+fn test_validate_rejects_legacy_sqllog_path_key_via_rust_api() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("legacy_sqllog.toml");
     std::fs::write(
@@ -1937,4 +1933,168 @@ fn test_stats_no_from_to_filters_nothing() {
         2,
         "all records should be included when no time filter"
     );
+}
+
+/// P57-SC5 / STATS-12: stats CLI 在 --from 晚于 --to 时退出非零，stderr 包含字段名与 "must be <=" 文案（D-01/D-02）。
+#[test]
+fn test_cli_stats_rejects_from_after_to() {
+    use assert_cmd::Command;
+    use predicates::str::contains;
+
+    let dir = tempfile::tempdir().unwrap();
+    let cfg_path = make_stats_config_file(dir.path());
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["stats", "-c"])
+        .arg(&cfg_path)
+        .args(["--from", "2024-01-31", "--to", "2024-01-01"])
+        .assert()
+        .failure()
+        .stderr(contains("stats.from"))
+        .stderr(contains("must be <="))
+        .stderr(contains("2024-01-31"));
+}
+
+// ── Phase 57 e2e helpers (TEST-01 / TEST-02) ──────────────────────────────────
+
+/// Phase 57 TEST-01: 生成 run 命令的 CSV 配置文件（inputs 字段填日志目录路径）。
+fn write_run_config_toml(
+    dir: &std::path::Path,
+    log_dir: &std::path::Path,
+    csv_output: &std::path::Path,
+) -> std::path::PathBuf {
+    let cfg_path = dir.join("run_config.toml");
+    let content = format!(
+        "[sqllog]\ninputs = [\"{}\"]\n[exporter.csv]\nfile = \"{}\"\noverwrite = true\n",
+        log_dir.to_string_lossy().replace('\\', "/"),
+        csv_output.to_string_lossy().replace('\\', "/"),
+    );
+    std::fs::write(&cfg_path, content).unwrap();
+    cfg_path
+}
+
+/// Phase 57 TEST-01: 生成 run 命令的 `SQLite` 配置文件（默认表名 `sqllog_records`）。
+fn write_run_sqlite_config_toml(
+    dir: &std::path::Path,
+    log_dir: &std::path::Path,
+    db_output: &std::path::Path,
+) -> std::path::PathBuf {
+    let cfg_path = dir.join("run_sqlite_config.toml");
+    let content = format!(
+        "[sqllog]\ninputs = [\"{}\"]\n[exporter.sqlite]\ndatabase_url = \"{}\"\n",
+        log_dir.to_string_lossy().replace('\\', "/"),
+        db_output.to_string_lossy().replace('\\', "/"),
+    );
+    std::fs::write(&cfg_path, content).unwrap();
+    cfg_path
+}
+
+/// TEST-01 (Phase 57): run 子命令 CLI 输出 CSV header 与记录数（D-04/D-05/D-06）。
+#[test]
+fn test_cli_run_csv_output_header_and_row_count() {
+    use assert_cmd::Command;
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_dir = dir.path().join("logs");
+    std::fs::create_dir_all(&log_dir).unwrap();
+    let record_count = 10usize;
+    write_test_log(&log_dir.join("test.log"), record_count);
+
+    let csv_file = dir.path().join("out.csv");
+    let cfg_path = write_run_config_toml(dir.path(), &log_dir, &csv_file);
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["run", "-c"])
+        .arg(&cfg_path)
+        .assert()
+        .success();
+
+    let content = std::fs::read_to_string(&csv_file).unwrap();
+    let mut lines = content.lines();
+    let expected_header = dm_database_sqllog2db::pipeline::FIELD_NAMES.join(",");
+    assert_eq!(
+        lines.next().unwrap(),
+        expected_header,
+        "CSV header must match FIELD_NAMES order"
+    );
+    let data_count = lines.filter(|l| !l.is_empty()).count();
+    assert_eq!(
+        data_count, record_count,
+        "row count must match written records"
+    );
+}
+
+/// TEST-01 (Phase 57): run 子命令 CLI 输出 `SQLite` 文件存在与表 `sqllog_records` 记录数（D-07，表名修正）。
+#[test]
+fn test_cli_run_sqlite_output_row_count() {
+    use assert_cmd::Command;
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_dir = dir.path().join("logs");
+    std::fs::create_dir_all(&log_dir).unwrap();
+    let record_count = 5usize;
+    write_test_log(&log_dir.join("test.log"), record_count);
+
+    let db_file = dir.path().join("out.db");
+    let cfg_path = write_run_sqlite_config_toml(dir.path(), &log_dir, &db_file);
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["run", "-c"])
+        .arg(&cfg_path)
+        .assert()
+        .success();
+
+    assert!(db_file.exists(), "SQLite output file must exist");
+
+    let conn = rusqlite::Connection::open(&db_file).unwrap();
+    let count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM sqllog_records", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(
+        count,
+        i64::try_from(record_count).unwrap(),
+        "sqllog_records table row count must match"
+    );
+}
+
+/// TEST-02 (Phase 57): init 子命令 CLI 在新路径下成功创建配置文件并退出 0。
+#[test]
+fn test_cli_init_creates_file_exit_0() {
+    use assert_cmd::Command;
+    let dir = tempfile::TempDir::new().unwrap();
+    let out_file = dir.path().join("new_config.toml");
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["init", "-o"])
+        .arg(&out_file)
+        .assert()
+        .success();
+
+    assert!(out_file.exists(), "init must create the config file");
+    let content = std::fs::read_to_string(&out_file).unwrap();
+    assert!(
+        content.contains("[sqllog]"),
+        "generated config must contain [sqllog] section"
+    );
+}
+
+/// TEST-02 (Phase 57): init 子命令 CLI 在目标文件已存在且未传 --force 时退出非零，stderr 包含 "already exists"。
+#[test]
+fn test_cli_init_existing_file_without_force_exits_nonzero() {
+    use assert_cmd::Command;
+    use predicates::str::contains;
+
+    let dir = tempfile::TempDir::new().unwrap();
+    let out_file = dir.path().join("existing.toml");
+    std::fs::write(&out_file, "existing content").unwrap();
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["init", "-o"])
+        .arg(&out_file)
+        .assert()
+        .failure()
+        .stderr(contains("already exists"));
 }

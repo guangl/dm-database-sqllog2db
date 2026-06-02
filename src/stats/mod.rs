@@ -12,7 +12,7 @@ pub use config::StatsConfig;
 pub use config::validate_time_str;
 
 use crate::config::Config;
-use crate::error::{Error, ParserError, Result};
+use crate::error::{Error, ErrorStats, ParserError, Result};
 use aggregate::StatsAccumulator;
 
 /// 执行统计分析：流式扫描日志文件，聚合慢 SQL 与高频 SQL，写入 CSV 或 `SQLite` 输出。
@@ -34,35 +34,22 @@ pub fn run_stats(cfg: &Config, top_n: u32) -> Result<()> {
     write_stats_output(cfg, &slow_rows, &frequent_rows)
 }
 
-/// 扫描全部日志文件，逐条喂给聚合器（解析失败记 warn 不终止）。
+/// 扫描全部日志文件，逐条喂给聚合器（解析失败计入 `ErrorStats` 不终止）。
 fn scan_files_into_accumulator(
     log_files: &[std::path::PathBuf],
     accumulator: &mut StatsAccumulator,
 ) -> Result<()> {
-    for file_path in log_files {
-        log::info!("stats: scanning {}", file_path.display());
-        let file_path_str = file_path.to_str().ok_or_else(|| {
-            Error::Parser(ParserError::InvalidPath {
-                path: file_path.clone(),
-                reason: "non-UTF8 path".to_string(),
-                line_number: None,
-            })
-        })?;
-        let parser = dm_database_parser_sqllog::LogParserBuilder::new(file_path_str)
-            .build()
-            .map_err(|err| {
-                Error::Parser(ParserError::InvalidPath {
-                    path: file_path.clone(),
-                    reason: format!("{err}"),
-                    line_number: None,
-                })
-            })?;
-        for parse_result in parser.iter() {
-            match parse_result {
-                Ok(record) => accumulator.update(&record),
-                Err(err) => log::warn!("parse error in {}: {err}", file_path.display()),
-            }
-        }
+    let mut scan_stats = ErrorStats::default();
+    crate::scanner::scan_files(
+        log_files,
+        &mut |record| accumulator.update(record),
+        &mut scan_stats,
+    )?;
+    if scan_stats.has_errors() {
+        log::warn!(
+            "stats: {} parse error(s) encountered during scan",
+            scan_stats.parse_errors
+        );
     }
     Ok(())
 }

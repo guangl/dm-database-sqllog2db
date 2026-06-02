@@ -1,5 +1,38 @@
 # Milestones: sqllog2db
 
+## v1.15 — 工程质量全面提升
+
+**Shipped:** 2026-06-02  
+**Phases:** 55–58 | **Plans:** 7 | **Commits:** 32  
+**Duration:** 2026-06-02 → 2026-06-02 (~1 day)  
+**Code changes:** 47 files, +6,406 / -257 lines
+
+### Delivered
+
+补全测试覆盖、清理技术债务、建立 CI/CD 基础设施：GitHub Actions workflow action 版本修复 + release 竞争条件消除、Cross.toml aarch64-linux 跨编译配置、`scanner` 公共模块提取统一扫描逻辑、5 条 e2e CLI 全链路测试（run/init/stats）、cli/run handle_run 拆分为 7 个私有辅助函数。
+
+### Key Accomplishments
+
+1. GitHub Actions 4 个 workflow 文件中 6 处无效 @v6/@v7 action 版本修复为 @v4（CICD-01）
+2. release.yaml 重构为 artifact 暂存 + 独立 create-release job，消除 4 并行 job 竞争条件（CICD-02/03）
+3. Cross.toml 新建，aarch64-linux 跨编译 cross-rs edge 镜像配置（CICD-04）
+4. `pub(crate) mod scanner` 新建，stats/run 共享同一文件扫描实现，CLEAN-01 静态断言通过（CLEAN-01）
+5. 5 条 e2e CLI 测试新增（run CSV/SQLite、init 成功/冲突、stats from>to 拒绝），集成测试总数 69 条（TEST-01/02/03）
+6. handle_run（234 行）拆分为 7 个语义清晰的私有辅助函数，逻辑语句数 ~37（CLEAN-02）
+
+### Archives
+
+- `.planning/milestones/v1.15-ROADMAP.md` — 完整 Phase 细节
+- `.planning/milestones/v1.15-REQUIREMENTS.md` — 需求归档（10/10 满足，含 2 项 override）
+- `.planning/milestones/v1.15-MILESTONE-AUDIT.md` — 审计报告（tech_debt，无阻塞性 gap）
+
+### Known Gaps
+
+- CICD-01/02：代码静态验证通过，GitHub Actions 运行时行为（三平台 CI + 四平台 CD）需人工推送 PR/tag 后确认
+- Cross.toml 使用浮动 edge tag，构建不完全可复现（后续里程碑可固定 SHA digest）
+
+---
+
 ## v1.12 — CLI 体验全面提升
 
 **Shipped:** 2026-06-01  
