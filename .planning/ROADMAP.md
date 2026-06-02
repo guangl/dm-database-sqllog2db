@@ -474,7 +474,8 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
   2. 提取出的私有函数命名清晰，反映其单一职责（不使用 `helper` 等无意义命名）
   3. `cargo test` 全部通过（包含 Phase 57 新增的 e2e 测试），无任何行为变化
   4. `cargo clippy --all-targets -- -D warnings` + `cargo fmt --check` 通过，无新增警告
-**Plans**: TBD
+**Plans**: 1 plan
+- [ ] 58-01-PLAN.md — handle_run 拆分为 7 个私有辅助函数 (resolve_input_files / merge_trxid_prescan / make_progress_bar / run_csv_parallel / run_sqlite_parallel / run_sequential / print_run_summary) + handle_run 本体改造为 D-04 模式 (merged.as_ref().unwrap_or(cfg)) + 全函数体 ≤40 行验证 + cargo clippy/test/fmt 三道质量门禁 (CLEAN-02)
 
 ## Coverage Validation
 
