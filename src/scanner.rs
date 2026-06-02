@@ -7,8 +7,9 @@ use std::path::PathBuf;
 /// 构建单文件解析器（D-03）：将 parser 创建与 `InvalidPath` 错误构造封装于此，
 /// 供 `process_log_file` 等需要自行控制迭代循环的调用方使用。
 ///
-/// - 路径含非 UTF-8 字节时返回 `Err(ParserError::InvalidPath)`。
-/// - 文件不存在或无法打开时返回 `Err(ParserError::InvalidPath)`。
+/// - 路径含非 UTF-8 字节时返回 `Err(ParserError::InvalidPath { reason: "non-UTF8 path" })`。
+/// - 文件不存在或打开失败时也返回 `Err(ParserError::InvalidPath)`（非 `PathNotFound`）。
+///   如需区分两者，请检查 `reason` 字段。
 pub(crate) fn build_parser(file_path: &std::path::Path) -> Result<LogParser> {
     let file_path_str = file_path.to_str().ok_or_else(|| {
         Error::Parser(ParserError::InvalidPath {
