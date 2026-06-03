@@ -313,7 +313,7 @@ fn run_sequential(
     let mut exporter_manager = ExporterManager::from_config(final_cfg)?;
     exporter_manager.initialize()?;
     info!("Parsing and exporting SQL logs...");
-    let (per_file_counts, run_stats) = run_file_loop(
+    let loop_result = run_file_loop(
         log_files,
         &mut exporter_manager,
         pipeline,
@@ -323,9 +323,12 @@ fn run_sequential(
         show_progress,
         pb,
         interrupted,
-    )?;
-    exporter_manager.finalize()?;
+    );
+    // 无论 loop_result 成功与否都调用 finalize，确保 BufWriter 数据落盘
+    let finalize_result = exporter_manager.finalize();
     (!quiet).then(|| exporter_manager.log_stats());
+    let (per_file_counts, run_stats) = loop_result?;
+    finalize_result?;
     Ok((per_file_counts, run_stats))
 }
 
