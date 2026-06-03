@@ -564,6 +564,85 @@ mod tests {
         );
     }
 
+    // ===== ErrorStats =====
+
+    #[test]
+    fn test_error_stats_add_and_count() {
+        let mut s = ErrorStats::default();
+        s.add_parse_error();
+        s.add_export_error();
+        assert_eq!(s.total_errors, 2);
+        assert_eq!(s.parse_errors, 1);
+        assert_eq!(s.export_errors, 1);
+        assert!(
+            s.has_errors(),
+            "has_errors should be true after adding errors"
+        );
+        assert!(
+            !s.has_fatal(),
+            "has_fatal should be false when no fatal set"
+        );
+    }
+
+    #[test]
+    fn test_error_stats_set_fatal_and_has_fatal() {
+        let mut s = ErrorStats::default();
+        assert!(!s.has_fatal());
+        s.set_fatal("catastrophic failure".into());
+        assert!(s.has_fatal(), "has_fatal should be true after set_fatal");
+        assert_eq!(s.fatal_error.as_deref(), Some("catastrophic failure"));
+    }
+
+    #[test]
+    fn test_error_stats_merge_first_fatal_wins() {
+        let mut a = ErrorStats::default();
+        a.set_fatal("first".into());
+        let mut b = ErrorStats::default();
+        b.set_fatal("second".into());
+        a.merge(&b);
+        assert_eq!(
+            a.fatal_error.as_deref(),
+            Some("first"),
+            "merge must not overwrite an existing fatal_error"
+        );
+    }
+
+    #[test]
+    fn test_error_stats_merge_propagates_fatal_when_base_has_none() {
+        let mut a = ErrorStats::default();
+        let mut b = ErrorStats::default();
+        b.set_fatal("only".into());
+        a.merge(&b);
+        assert_eq!(
+            a.fatal_error.as_deref(),
+            Some("only"),
+            "merge should propagate fatal_error when base has none"
+        );
+    }
+
+    #[test]
+    fn test_error_stats_merge_accumulates_counts() {
+        let mut a = ErrorStats::default();
+        a.add_parse_error();
+        a.add_parse_error();
+        let mut b = ErrorStats::default();
+        b.add_export_error();
+        a.merge(&b);
+        assert_eq!(a.total_errors, 3, "merge should sum total_errors");
+        assert_eq!(
+            a.parse_errors, 2,
+            "parse_errors should carry over from base"
+        );
+        assert_eq!(a.export_errors, 1, "export_errors should add from other");
+    }
+
+    #[test]
+    fn test_error_stats_default_has_no_errors() {
+        let s = ErrorStats::default();
+        assert!(!s.has_errors(), "default ErrorStats should have no errors");
+        assert!(!s.has_fatal(), "default ErrorStats should have no fatal");
+    }
+
     // ===== ErrorSeverity Display =====
 
     #[test]
