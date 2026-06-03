@@ -190,6 +190,7 @@ pub(super) fn process_log_file(
     let parser = crate::scanner::build_parser(std::path::Path::new(file_path))?;
     let (mut records_in_file, mut errors_in_file, mut file_stats) =
         (0usize, 0usize, ErrorStats::default());
+    let mut total_processed = 0usize;
     'outer: for result in parser.iter() {
         match result {
             Ok(record) => {
@@ -201,9 +202,14 @@ pub(super) fn process_log_file(
                     params_buffer, placeholder_override, ns_scratch,
                     remaining, &mut records_in_file, &mut file_stats, file_path, passes,
                 );
+                total_processed = total_processed.wrapping_add(1);
                 match action {
                     ExportAction::BreakQuota | ExportAction::BreakFatal => break 'outer,
                     ExportAction::Continue if passes && tick_progress(pb, records_in_file, interrupted) => break 'outer,
+                    // 过滤掉的记录也以相同节奏（每 1024 条）检查中断，与并行路径保持一致
+                    ExportAction::Continue if !passes
+                        && total_processed.trailing_zeros() >= 10
+                        && interrupted.load(Ordering::Relaxed) => break 'outer,
                     ExportAction::Continue => {}
                 }
             }
