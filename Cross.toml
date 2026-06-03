@@ -1,13 +1,16 @@
 # cross-rs 跨编译配置
 # 官方镜像：https://github.com/cross-rs/cross/pkgs/container/aarch64-unknown-linux-gnu
 #
-# SHA 已固定为可复现构建。通过以下命令获取当前 edge 标签的 digest：
+# SHA 已固定为可复现构建。通过以下命令获取当前 edge 标签的 amd64 digest：
 #   docker manifest inspect ghcr.io/cross-rs/aarch64-unknown-linux-gnu:edge --verbose
+#   从输出的 manifests 数组中，取 platform.architecture == "amd64" 的 digest 值。
+#   注意：应使用宿主机（x86_64/amd64）平台的 digest，而非 arm64。
 #
 # 镜像信息：
 #   镜像: ghcr.io/cross-rs/aarch64-unknown-linux-gnu
 #   标签: edge (主分支最新构建)
-#   SHA: de04c9cd16fb41658de2eb0177481cb2fc717128b784d565bafcb000250508d7
+#   SHA: sha256:de04c9cd16fb41658de2eb0177481cb2fc717128b784d565bafcb000250508d7
 #   查询时间: 2026-06-03
+#   更新时机: cross-rs 发布新版本时，或发现镜像安全漏洞时手动刷新。
 [target.aarch64-unknown-linux-gnu]
 image = "ghcr.io/cross-rs/aarch64-unknown-linux-gnu@sha256:de04c9cd16fb41658de2eb0177481cb2fc717128b784d565bafcb000250508d7"
