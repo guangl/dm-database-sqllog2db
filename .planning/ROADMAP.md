@@ -184,7 +184,7 @@ Full details: `.planning/milestones/v1.15-ROADMAP.md`
 - [x] **Phase 60: 错误处理路径统一** — 统一错误转换和传播路径，删除冗余 unwrap/expect (completed 2026-06-03)
 - [x] **Phase 61: Cross.toml SHA 固定** — 将 edge 浮动标签替换为固定 SHA digest，提升构建可复现性 (completed 2026-06-03)
 - [x] **Phase 62: 文档完善** — 更新 README、新建 CHANGELOG、补全 config.toml 模板注释 (completed 2026-06-03)
-- [ ] **Phase 63: 测试覆盖提升** — 运行覆盖率分析并按结果补全关键路径测试
+- [x] **Phase 63: 测试覆盖提升** — 运行覆盖率分析并按结果补全关键路径测试 (completed 2026-06-03)
 
 ## Phase Details
 
@@ -554,7 +554,7 @@ Full details: `.planning/milestones/v1.15-ROADMAP.md`
 - [x] 63-01-PLAN.md — baseline 覆盖率报告生成 + pipeline/filters/types.rs mod tests（间接覆盖 serde_helpers.rs + 旧格式/混合格式 + has_filters 分支）
 - [x] 63-02-PLAN.md — exporter/csv/tests.rs has_metrics=false 与字段投影分支测试 + exporter/sqlite/tests.rs conn_ref Err / 字段投影 / pragma 间接验证测试
 - [x] 63-03-PLAN.md — error.rs mod tests 末尾追加 12+ 个错误变体方法测试 + cli/run/prescan.rs 新建 mod tests 覆盖 build_indicator_filters/build_sql_exclude_filters 边界
-- [ ] 63-04-PLAN.md — 重新运行 cargo llvm-cov 采集 after 数字 + 生成 63-COVERAGE-REPORT.md 对比报告（baseline → after + 难以测试路径 D-04 文档化）+ 三道质量门禁验证
+- [x] 63-04-PLAN.md — 重新运行 cargo llvm-cov 采集 after 数字 + 生成 63-COVERAGE-REPORT.md 对比报告（baseline → after + 难以测试路径 D-04 文档化）+ 三道质量门禁验证
 
 ## Coverage Validation
 
@@ -657,7 +657,7 @@ Full details: `.planning/milestones/v1.15-ROADMAP.md`
 | 60. 错误处理路径统一 | 1/1 | Complete    | 2026-06-03 |
 | 61. Cross.toml SHA 固定 | v1.16 | 1/1 | Complete | 2026-06-03 |
 | 62. 文档完善 | 3/3 | Complete    | 2026-06-03 |
-| 63. 测试覆盖提升 | 3/4 | In Progress|  |
+| 63. 测试覆盖提升 | 4/4 | Complete   | 2026-06-03 |
 
 ---
 *Created: 2026-05-21 for milestone v1.10*

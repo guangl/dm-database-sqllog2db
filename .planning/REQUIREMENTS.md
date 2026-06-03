@@ -20,14 +20,14 @@
 
 ### 文档完善（DOC）
 
-- [ ] **DOC-01**: README.md 更新，添加 v1.13（stats）、v1.14（--from/--to）、v1.15（CI/CD 修复）新功能示例，更新完整功能列表
-- [ ] **DOC-02**: CHANGELOG.md 新建，采用 Keep a Changelog 格式，补全 v1.0 至 v1.15 全部版本变更记录
-- [ ] **DOC-03**: config.toml init 模板全字段内联注释确认/补全（v1.12 已完成部分，本次补全遗漏字段）
+- [x] **DOC-01**: README.md 更新，添加 v1.13（stats）、v1.14（--from/--to）、v1.15（CI/CD 修复）新功能示例，更新完整功能列表
+- [x] **DOC-02**: CHANGELOG.md 新建，采用 Keep a Changelog 格式，补全 v1.0 至 v1.15 全部版本变更记录
+- [x] **DOC-03**: config.toml init 模板全字段内联注释确认/补全（v1.12 已完成部分，本次补全遗漏字段）
 
 ### 测试覆盖提升（TEST）
 
-- [ ] **TEST-01**: 运行 cargo-llvm-cov 或 cargo-tarpaulin 生成当前覆盖率报告，识别覆盖不足区域
-- [ ] **TEST-02**: 按覆盖率分析结果，补全关键路径测试（过滤器 edge case、exporter 单元测试、错误路径测试等，优先级按覆盖率缺口决定）
+- [x] **TEST-01**: 运行 cargo-llvm-cov 或 cargo-tarpaulin 生成当前覆盖率报告，识别覆盖不足区域
+- [x] **TEST-02**: 按覆盖率分析结果，补全关键路径测试（过滤器 edge case、exporter 单元测试、错误路径测试等，优先级按覆盖率缺口决定）
 
 ---
 
