@@ -7,6 +7,43 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+type ParseResults = Vec<Result<Option<(PathBuf, Vec<(Sqllog, Option<String>)>, usize)>>>;
+
+/// 创建 rayon 线程池并并行解析所有文件，返回原始结果列表。
+///
+/// 每个文件调用 `super::collector::collect_log_file`；中断信号检查在每个任务开始前进行。
+fn run_parallel_parse(
+    log_files: &[PathBuf],
+    pipeline: &Pipeline,
+    jobs: usize,
+    do_normalize: bool,
+    placeholder_override: Option<bool>,
+    interrupted: &Arc<AtomicBool>,
+) -> Result<ParseResults> {
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(jobs)
+        .build()
+        .map_err(|e| Error::Io(std::io::Error::other(e)))?;
+    Ok(pool.install(|| {
+        log_files
+            .par_iter()
+            .map(|file| {
+                if interrupted.load(Ordering::Relaxed) {
+                    return Ok(None);
+                }
+                let (rows, parse_errors) = super::collector::collect_log_file(
+                    file,
+                    pipeline,
+                    do_normalize,
+                    placeholder_override,
+                    interrupted,
+                )?;
+                Ok(Some((file.clone(), rows, parse_errors)))
+            })
+            .collect()
+    }))
+}
+
 /// 在 rayon 线程池中并行解析所有文件，返回每个文件的 `(path, Vec<(Sqllog, Option<String>)>)`。
 ///
 /// 返回 `(collected, skipped_files, total_parse_errors)`，其中 `collected` 保留 path 与记录的对应关系。
@@ -18,30 +55,14 @@ fn parallel_collect(
     placeholder_override: Option<bool>,
     interrupted: &Arc<AtomicBool>,
 ) -> Result<(Vec<(PathBuf, Vec<(Sqllog, Option<String>)>)>, usize, usize)> {
-    let pool = rayon::ThreadPoolBuilder::new()
-        .num_threads(jobs)
-        .build()
-        .map_err(|e| Error::Io(std::io::Error::other(e)))?;
-
-    let results: Vec<Result<Option<(PathBuf, Vec<(Sqllog, Option<String>)>, usize)>>> = pool
-        .install(|| {
-            log_files
-                .par_iter()
-                .map(|file| {
-                    if interrupted.load(Ordering::Relaxed) {
-                        return Ok(None);
-                    }
-                    let (rows, parse_errors) = super::collector::collect_log_file(
-                        file,
-                        pipeline,
-                        do_normalize,
-                        placeholder_override,
-                        interrupted,
-                    )?;
-                    Ok(Some((file.clone(), rows, parse_errors)))
-                })
-                .collect()
-        });
+    let results = run_parallel_parse(
+        log_files,
+        pipeline,
+        jobs,
+        do_normalize,
+        placeholder_override,
+        interrupted,
+    )?;
 
     let mut collected: Vec<(PathBuf, Vec<(Sqllog, Option<String>)>)> =
         Vec::with_capacity(log_files.len());
