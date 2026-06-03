@@ -111,14 +111,14 @@ enable = false
 
 # --- Indicator filters (transaction-level: match retains the whole transaction; requires pre-scan) ---
 [filter.indicators]
-# exec_ids = [257809109, 257809110]
-# min_runtime_ms = 1000
-# min_row_count = 100
+# exec_ids = [257809109, 257809110]   # Transaction-level: retain whole transaction if any record's exec_id matches
+# min_runtime_ms = 1000               # Transaction-level: retain whole transaction if any statement's runtime (ms) >= threshold
+# min_row_count = 100                 # Transaction-level: retain whole transaction if any statement's row_count >= threshold
 
 # --- SQL filters (transaction-level: match retains the whole transaction; requires pre-scan) ---
 [filter.sql]
-# includes = ["FROM USER_TABLES", "DELETE FROM"]
-# excludes = ["SELECT 1", "DUAL"]
+# includes = ["FROM USER_TABLES", "DELETE FROM"]   # Transaction-level: retain whole transaction if any SQL text contains any substring listed
+# excludes = ["SELECT 1", "DUAL"]                  # Transaction-level: drop whole transaction if any SQL text contains any substring listed
 
 # --- Stats subcommand time-range filter (optional) ---
 [stats]
