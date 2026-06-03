@@ -251,3 +251,154 @@ fn test_sqlite_parallel_matches_sequential() {
     );
     assert!(std::fs::metadata(&par_db).unwrap().len() > 0);
 }
+
+// ── Gap 1: normalize_and_export with passes=false + do_normalize=true ──────────
+//
+// 行为要求：当 passes=false 且 do_normalize=true 且 record.tag.is_none() 时，
+// 函数应更新 params_buffer（不导出），返回 ExportAction::Continue，
+// records_in_file 保持为 0。
+#[test]
+fn test_normalize_and_export_filtered_params_updates_buffer() {
+    use super::processor::{ExportAction, normalize_and_export};
+    use crate::error::ErrorStats;
+    use crate::exporter::CsvExporter;
+    use crate::exporter::ExporterManager;
+    use crate::pipeline::normalizer::ParamBuffer;
+    use dm_database_parser_sqllog::Sqllog;
+
+    let dir = tempfile::TempDir::new().unwrap();
+    let csv_path = dir.path().join("out.csv");
+
+    let exporter = CsvExporter::new(&csv_path);
+    let mut manager = ExporterManager::from_csv(exporter);
+    manager.initialize().unwrap();
+
+    // PARAMS 记录：tag=None，sql 包含 PARAMS(…) 语法
+    let record = Sqllog {
+        ts: "2024-01-01 00:00:00.000".to_string(),
+        tag: None,
+        ep: 0,
+        sess_id: "sess_gap1".to_string(),
+        thrd_id: "t1".to_string(),
+        username: "usr".to_string(),
+        trxid: "tx1".to_string(),
+        statement: "stmt_gap1".to_string(),
+        appname: "app".to_string(),
+        client_ip: "127.0.0.1".to_string(),
+        sql: "PARAMS(SEQNO, TYPE, DATA)={(0, VARCHAR, 'hello')}".to_string(),
+        exectime: 0.0,
+        rowcount: 0,
+        exec_id: 0,
+    };
+
+    let mut params_buffer: ParamBuffer = ParamBuffer::new();
+    let mut ns_scratch: Vec<u8> = Vec::new();
+    let mut records_in_file: usize = 0;
+    let mut file_stats = ErrorStats::default();
+
+    let action = normalize_and_export(
+        &record,
+        &mut manager,
+        true, // include_pm
+        true, // do_normalize: PARAMS buf 应被更新
+        &mut params_buffer,
+        None, // placeholder_override
+        &mut ns_scratch,
+        None, // remaining (no quota)
+        &mut records_in_file,
+        &mut file_stats,
+        "test_file.log",
+        false, // passes=false → 不导出
+    );
+
+    // 必须返回 Continue（不是 BreakQuota 或 BreakFatal）
+    assert!(
+        matches!(action, ExportAction::Continue),
+        "passes=false 路径应返回 Continue"
+    );
+    // 不应有任何记录被导出
+    assert_eq!(
+        records_in_file, 0,
+        "passes=false 时 records_in_file 应保持为 0，实际为 {records_in_file}"
+    );
+    // params_buffer 应已被更新（PARAMS 记录已解析入缓冲区）
+    let buf_key = ("sess_gap1".to_string(), "stmt_gap1".to_string());
+    assert!(
+        params_buffer.contains_key(&buf_key),
+        "passes=false+do_normalize=true 下 PARAMS 记录应写入 params_buffer，\
+         但 key ({:?}) 不存在; buffer keys={:?}",
+        buf_key,
+        params_buffer.keys().collect::<Vec<_>>()
+    );
+}
+
+// ── Gap 2: normalize_and_export BreakQuota path ─────────────────────────────
+//
+// 行为要求：当 passes=true 且 remaining=Some(0)（配额耗尽）时，
+// 函数应返回 ExportAction::BreakQuota，records_in_file 保持为 0（不导出）。
+#[test]
+fn test_normalize_and_export_quota_hit_returns_break_quota() {
+    use super::processor::{ExportAction, normalize_and_export};
+    use crate::error::ErrorStats;
+    use crate::exporter::CsvExporter;
+    use crate::exporter::ExporterManager;
+    use crate::pipeline::normalizer::ParamBuffer;
+    use dm_database_parser_sqllog::Sqllog;
+
+    let dir = tempfile::TempDir::new().unwrap();
+    let csv_path = dir.path().join("out.csv");
+
+    let mut manager = ExporterManager::from_csv(CsvExporter::new(&csv_path));
+    manager.initialize().unwrap();
+
+    // 普通 SEL 记录，passes=true
+    let record = Sqllog {
+        ts: "2024-01-01 00:00:00.000".to_string(),
+        tag: Some("SEL".to_string()),
+        ep: 0,
+        sess_id: "sess_gap2".to_string(),
+        thrd_id: "t2".to_string(),
+        username: "usr".to_string(),
+        trxid: "tx2".to_string(),
+        statement: "stmt_gap2".to_string(),
+        appname: "app".to_string(),
+        client_ip: "127.0.0.1".to_string(),
+        sql: "SELECT 1".to_string(),
+        exectime: 1.0,
+        rowcount: 1,
+        exec_id: 42,
+    };
+
+    let mut params_buffer: ParamBuffer = ParamBuffer::new();
+    let mut ns_scratch: Vec<u8> = Vec::new();
+    let mut records_in_file: usize = 0;
+    let mut file_stats = ErrorStats::default();
+
+    // remaining=Some(0) 表示配额已耗尽（records_in_file=0 >= remaining=0）
+    let action = normalize_and_export(
+        &record,
+        &mut manager,
+        true,  // include_pm
+        false, // do_normalize
+        &mut params_buffer,
+        None,
+        &mut ns_scratch,
+        Some(0), // remaining=0 → 配额已耗尽
+        &mut records_in_file,
+        &mut file_stats,
+        "test_file.log",
+        true, // passes=true → 否则直接 Continue
+    );
+
+    // 必须返回 BreakQuota
+    assert!(
+        matches!(action, ExportAction::BreakQuota),
+        "remaining=Some(0) 且 passes=true 应返回 BreakQuota，\
+         但得到了 Continue 或 BreakFatal"
+    );
+    // 不应有任何记录被导出
+    assert_eq!(
+        records_in_file, 0,
+        "BreakQuota 路径下 records_in_file 应保持为 0，实际为 {records_in_file}"
+    );
+}

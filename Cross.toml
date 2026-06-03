@@ -1,14 +1,16 @@
 # cross-rs 跨编译配置
 # 官方镜像：https://github.com/cross-rs/cross/pkgs/container/aarch64-unknown-linux-gnu
 #
-# TODO(supply-chain): `edge` 是浮动标签（等于 main 分支最新构建），每次调用可能
-# 指向不同镜像层，导致：
-#   1. 构建不可复现 —— 相同源码两次 release 可能产出不同二进制
-#   2. 供应链风险 —— 上游镜像被篡改或破坏时无任何审查门槛
-# 修复方式：将 image 改为固定 SHA digest（推荐）或具体版本标签，例如：
-#   image = "ghcr.io/cross-rs/aarch64-unknown-linux-gnu@sha256:<digest>"
-# 可通过以下命令获取当前 digest：
-#   docker manifest inspect ghcr.io/cross-rs/aarch64-unknown-linux-gnu:edge --verbose | grep digest
-# `latest` 标签对应 0.2.5（3 年前），故暂用 `edge` 作为权宜之计。
+# SHA 已固定为可复现构建。通过以下命令获取当前 edge 标签的 amd64 digest：
+#   docker manifest inspect ghcr.io/cross-rs/aarch64-unknown-linux-gnu:edge --verbose
+#   从输出的 manifests 数组中，取 platform.architecture == "amd64" 的 digest 值。
+#   注意：应使用宿主机（x86_64/amd64）平台的 digest，而非 arm64。
+#
+# 镜像信息：
+#   镜像: ghcr.io/cross-rs/aarch64-unknown-linux-gnu
+#   标签: edge (主分支最新构建)
+#   SHA: sha256:de04c9cd16fb41658de2eb0177481cb2fc717128b784d565bafcb000250508d7
+#   查询时间: 2026-06-03
+#   更新时机: cross-rs 发布新版本时，或发现镜像安全漏洞时手动刷新。
 [target.aarch64-unknown-linux-gnu]
-image = "ghcr.io/cross-rs/aarch64-unknown-linux-gnu:edge"
+image = "ghcr.io/cross-rs/aarch64-unknown-linux-gnu@sha256:de04c9cd16fb41658de2eb0177481cb2fc717128b784d565bafcb000250508d7"

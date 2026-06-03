@@ -87,38 +87,38 @@ enable = false
 # --- Include filters (record-level, AND semantics: every configured field must match) ---
 # Metadata fields use exact string matching.
 [filter.include]
-# users = ["SYSDBA"]
-# ips = ["127.0.0.1", "192.168.1.100"]
-# sessions = ["0x7f41435437a8"]
-# threads = ["2188515"]
-# statements = ["INS", "UPD", "DEL"]
-# apps = ["DMSQL"]
-# tags = ["[SEL]"]
-# start_ts = "2023-01-01 00:00:00"
-# end_ts   = "2023-01-01 23:59:59"
-# trxids = ["257809109", "257809110"]
+# users      = ["SYSDBA"]                       # Exact-match list of usernames to include
+# ips        = ["127.0.0.1", "192.168.1.100"]   # Exact-match list of client IP addresses to include
+# sessions   = ["0x7f41435437a8"]               # Exact-match list of session IDs (hex strings) to include
+# threads    = ["2188515"]                       # Exact-match list of thread IDs to include
+# statements = ["INS", "UPD", "DEL"]            # Statement types to include (INS/UPD/DEL/SEL/SET/OTH/ORA)
+# apps       = ["DMSQL"]                        # Exact-match list of application names to include
+# tags       = ["[SEL]"]                        # Exact-match list of record tags to include (e.g. [SEL], [INS])
+# start_ts   = "2023-01-01 00:00:00"            # Inclusive lower bound of record timestamp (format: YYYY-MM-DD HH:MM:SS)
+# end_ts     = "2023-01-01 23:59:59"            # Inclusive upper bound of record timestamp (format: YYYY-MM-DD HH:MM:SS)
+# trxids     = ["257809109", "257809110"]        # Exact-match list of transaction IDs to include
 
 # --- Exclude filters (record-level, OR-veto: any match drops the record) ---
 # Metadata fields use exact string matching.
 [filter.exclude]
-# users = ["guest", "anon"]
-# ips = ["10.0.0.1", "172.16.0.1"]
-# sessions = ["0x0000000000000000"]
-# threads = ["0"]
-# statements = ["SEL", "SET"]
-# apps = ["monitor", "health"]
-# tags = ["[SET]", "[OTH]"]
+# users      = ["guest", "anon"]                # Exact-match list of usernames to exclude
+# ips        = ["10.0.0.1", "172.16.0.1"]       # Exact-match list of client IP addresses to exclude
+# sessions   = ["0x0000000000000000"]           # Exact-match list of session IDs (hex strings) to exclude
+# threads    = ["0"]                            # Exact-match list of thread IDs to exclude
+# statements = ["SEL", "SET"]                   # Statement types to exclude (INS/UPD/DEL/SEL/SET/OTH/ORA)
+# apps       = ["monitor", "health"]            # Exact-match list of application names to exclude
+# tags       = ["[SET]", "[OTH]"]              # Exact-match list of record tags to exclude
 
 # --- Indicator filters (transaction-level: match retains the whole transaction; requires pre-scan) ---
 [filter.indicators]
-# exec_ids = [257809109, 257809110]
-# min_runtime_ms = 1000
-# min_row_count = 100
+# exec_ids = [257809109, 257809110]   # Transaction-level: retain whole transaction if any record's exec_id matches
+# min_runtime_ms = 1000               # Transaction-level: retain whole transaction if any statement's runtime (ms) >= threshold
+# min_row_count = 100                 # Transaction-level: retain whole transaction if any statement's row_count >= threshold
 
 # --- SQL filters (transaction-level: match retains the whole transaction; requires pre-scan) ---
 [filter.sql]
-# includes = ["FROM USER_TABLES", "DELETE FROM"]
-# excludes = ["SELECT 1", "DUAL"]
+# includes = ["FROM USER_TABLES", "DELETE FROM"]   # Transaction-level: retain whole transaction if any SQL text contains any substring listed
+# excludes = ["SELECT 1", "DUAL"]                  # Transaction-level: drop whole transaction if any SQL text contains any substring listed
 
 # --- Stats subcommand time-range filter (optional) ---
 [stats]

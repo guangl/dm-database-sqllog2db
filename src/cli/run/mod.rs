@@ -9,6 +9,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
+mod collector;
 mod filter_processor;
 mod parallel;
 mod prescan;
@@ -68,7 +69,6 @@ pub fn handle_run(
             final_cfg,
             &pipeline,
             jobs,
-            show_progress,
             interrupted,
             do_normalize,
             placeholder_override,
@@ -85,7 +85,6 @@ pub fn handle_run(
             final_cfg,
             &pipeline,
             jobs,
-            show_progress,
             interrupted,
             do_normalize,
             placeholder_override,
@@ -223,7 +222,6 @@ fn run_csv_parallel(
     final_cfg: &Config,
     pipeline: &crate::pipeline::Pipeline,
     jobs: usize,
-    show_progress: bool,
     interrupted: &Arc<AtomicBool>,
     do_normalize: bool,
     placeholder_override: Option<bool>,
@@ -244,7 +242,6 @@ fn run_csv_parallel(
         final_cfg,
         pipeline,
         jobs,
-        show_progress,
         interrupted,
         do_normalize,
         placeholder_override,
@@ -262,7 +259,6 @@ fn run_sqlite_parallel(
     final_cfg: &Config,
     pipeline: &crate::pipeline::Pipeline,
     jobs: usize,
-    show_progress: bool,
     interrupted: &Arc<AtomicBool>,
     do_normalize: bool,
     placeholder_override: Option<bool>,
@@ -283,7 +279,6 @@ fn run_sqlite_parallel(
         final_cfg,
         pipeline,
         jobs,
-        show_progress,
         interrupted,
         do_normalize,
         placeholder_override,
@@ -312,6 +307,40 @@ fn run_sequential(
     let mut exporter_manager = ExporterManager::from_config(final_cfg)?;
     exporter_manager.initialize()?;
     info!("Parsing and exporting SQL logs...");
+    let loop_result = run_file_loop(
+        log_files,
+        &mut exporter_manager,
+        pipeline,
+        do_normalize,
+        placeholder_override,
+        verbose,
+        show_progress,
+        pb,
+        interrupted,
+    );
+    // 无论 loop_result 成功与否都调用 finalize，确保 BufWriter 数据落盘
+    let finalize_result = exporter_manager.finalize();
+    (!quiet).then(|| exporter_manager.log_stats());
+    let (per_file_counts, run_stats) = loop_result?;
+    finalize_result?;
+    Ok((per_file_counts, run_stats))
+}
+
+/// 逐文件循环：为每个日志文件调用 `process_log_file`，fatal 时提前返回错误。
+/// 返回 `(per_file_counts, run_stats)`。
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::fn_params_excessive_bools)]
+fn run_file_loop(
+    log_files: &[PathBuf],
+    exporter_manager: &mut ExporterManager,
+    pipeline: &crate::pipeline::Pipeline,
+    do_normalize: bool,
+    placeholder_override: Option<bool>,
+    verbose: bool,
+    show_progress: bool,
+    pb: Option<&ProgressBar>,
+    interrupted: &Arc<AtomicBool>,
+) -> Result<(Vec<(PathBuf, usize)>, ErrorStats)> {
     let mut params_buffer = crate::pipeline::normalizer::ParamBuffer::default();
     let mut ns_scratch: Vec<u8> = Vec::with_capacity(4096);
     let mut per_file_counts: Vec<(PathBuf, usize)> = Vec::with_capacity(log_files.len());
@@ -325,7 +354,7 @@ fn run_sequential(
             &log_file.to_string_lossy(),
             idx + 1,
             log_files.len(),
-            &mut exporter_manager,
+            exporter_manager,
             pipeline,
             show_progress,
             None,
@@ -337,17 +366,15 @@ fn run_sequential(
             true,
             pb,
         )?;
-        per_file_counts.push((log_file.clone(), processed));
-        run_stats.merge(&file_stats);
+        // 先检查 fatal，再合并统计：fatal 路径直接返回，合并无意义
         if file_stats.has_fatal() {
-            return Err(Error::Export(crate::error::ExportError::WriteFailed {
-                path: log_file.into(),
+            return Err(Error::Export(crate::error::ExportError::DatabaseFailed {
                 reason: file_stats.fatal_error.unwrap_or_default(),
             }));
         }
+        per_file_counts.push((log_file.clone(), processed));
+        run_stats.merge(&file_stats);
     }
-    exporter_manager.finalize()?;
-    (!quiet).then(|| exporter_manager.log_stats());
     Ok((per_file_counts, run_stats))
 }
 

@@ -234,6 +234,62 @@ fn test_init_template_has_sqlite_field_comments() {
     );
 }
 
+#[test]
+fn test_init_template_has_filter_inline_comments() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let config_path = dir.path().join("config.toml");
+    handle_init(config_path.to_str().unwrap(), false).unwrap();
+    let content = std::fs::read_to_string(&config_path).unwrap();
+    assert!(
+        content.contains("Exact-match list of usernames to include"),
+        "filter.include must have users inline comment"
+    );
+    assert!(
+        content.contains("Exact-match list of client IP addresses to include"),
+        "filter.include must have ips inline comment"
+    );
+    assert!(
+        content.contains("Exact-match list of session IDs (hex strings) to include"),
+        "filter.include must have sessions inline comment"
+    );
+    assert!(
+        content.contains("Exact-match list of usernames to exclude"),
+        "filter.exclude must have users inline comment"
+    );
+    assert!(
+        content.contains("Exact-match list of client IP addresses to exclude"),
+        "filter.exclude must have ips inline comment"
+    );
+    assert!(
+        content.contains("Exact-match list of session IDs (hex strings) to exclude"),
+        "filter.exclude must have sessions inline comment"
+    );
+    assert!(
+        content.contains(
+            "Transaction-level: retain whole transaction if any record's exec_id matches"
+        ),
+        "filter.indicators must have exec_ids inline comment"
+    );
+    assert!(
+        content.contains("Transaction-level: retain whole transaction if any statement's runtime (ms) >= threshold"),
+        "filter.indicators must have min_runtime_ms inline comment"
+    );
+    assert!(
+        content.contains(
+            "Transaction-level: retain whole transaction if any statement's row_count >= threshold"
+        ),
+        "filter.indicators must have min_row_count inline comment"
+    );
+    assert!(
+        content.contains("Transaction-level: retain whole transaction if any SQL text contains any substring listed"),
+        "filter.sql must have includes inline comment"
+    );
+    assert!(
+        content.contains("Transaction-level: drop whole transaction if any SQL text contains any substring listed"),
+        "filter.sql must have excludes inline comment"
+    );
+}
+
 // ── handle_validate tests ────────────────────────────────────────────────────
 
 #[test]

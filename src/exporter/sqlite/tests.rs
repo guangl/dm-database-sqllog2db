@@ -132,9 +132,14 @@ fn test_sqlite_from_config() {
         table_name: "records".to_string(),
         overwrite: true,
         append: false,
-        batch_size: 10_000,
+        batch_size: 42_000,
     };
     let mut exporter = SqliteExporter::from_config(&cfg);
+    // 验证 from_config 正确映射 batch_size 字段（默认值是 10_000，这里用 42_000 区分）
+    assert_eq!(
+        exporter.batch_size, cfg.batch_size,
+        "from_config must map batch_size correctly"
+    );
     exporter.initialize().unwrap();
     exporter.finalize().unwrap();
     assert!(dbfile.exists());
@@ -224,9 +229,28 @@ fn test_sqlite_stats_snapshot() {
 
 #[test]
 fn test_sqlite_debug_format() {
-    let exporter = SqliteExporter::new("/tmp/debug.db".to_string(), "tbl".to_string(), true, false);
+    let dir = tempfile::TempDir::new().unwrap();
+    let dbfile = dir.path().join("debug.db");
+    let exporter = SqliteExporter::new(
+        dbfile.to_string_lossy().into_owned(),
+        "my_table".to_string(),
+        true,
+        false,
+    );
     let s = format!("{exporter:?}");
-    assert!(s.contains("SqliteExporter"));
+    assert!(
+        s.contains("SqliteExporter"),
+        "Debug output should contain struct name"
+    );
+    // 验证 Debug 输出包含关键字段，而非只检查结构名
+    assert!(
+        s.contains("my_table"),
+        "Debug output should contain table_name, got: {s}"
+    );
+    assert!(
+        s.contains("database_url"),
+        "Debug output should contain database_url field, got: {s}"
+    );
 }
 
 #[test]
@@ -461,4 +485,172 @@ fn test_sqlite_batch_commit() {
         count, 5,
         "5 条记录经过批量提交后必须全部持久化，实际: {count}"
     );
+}
+
+// ---- 新增覆盖测试（Plan 02 Task 2）----
+
+#[test]
+fn test_sqlite_export_without_initialize_returns_err() {
+    // 覆盖 mod.rs:209-212 conn=None 的 ok_or_else 分支 + db_err 调用
+    let dir = tempfile::TempDir::new().unwrap();
+    let dbfile = dir.path().join("no_init.db");
+    let logfile = dir.path().join("t.log");
+    std::fs::write(
+        &logfile,
+        "2025-01-15 10:30:28.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT 1. EXECTIME: 1(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.\n",
+    )
+    .unwrap();
+
+    // 构造 exporter 但不调用 initialize()，conn = None
+    let mut exporter = SqliteExporter::new(
+        dbfile.to_string_lossy().into(),
+        "tbl".to_string(),
+        true,
+        false,
+    );
+
+    let parser = LogParserBuilder::new(logfile.to_str().unwrap())
+        .build()
+        .unwrap();
+    for record in parser.iter().flatten() {
+        let result = exporter.export(&record);
+        assert!(result.is_err(), "未调用 initialize() 时 export 应返回 Err");
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("not initialized"),
+            "错误消息应含 'not initialized'，实际: {err_msg}"
+        );
+    }
+}
+
+#[test]
+fn test_sqlite_export_one_normalized_without_initialize_returns_err() {
+    // 覆盖 export_one_normalized → export_one_preparsed 未初始化路径
+    let dir = tempfile::TempDir::new().unwrap();
+    let dbfile = dir.path().join("no_init2.db");
+    let logfile = dir.path().join("t.log");
+    std::fs::write(
+        &logfile,
+        "2025-01-15 10:30:28.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT 1. EXECTIME: 1(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.\n",
+    )
+    .unwrap();
+
+    let mut exporter = SqliteExporter::new(
+        dbfile.to_string_lossy().into(),
+        "tbl".to_string(),
+        true,
+        false,
+    );
+
+    let parser = LogParserBuilder::new(logfile.to_str().unwrap())
+        .build()
+        .unwrap();
+    for record in parser.iter().flatten() {
+        let result = exporter.export_one_normalized(&record, Some("SELECT 1"));
+        assert!(
+            result.is_err(),
+            "未初始化时 export_one_normalized 应返回 Err"
+        );
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("not initialized"),
+            "错误消息应含 'not initialized'，实际: {err_msg}"
+        );
+    }
+}
+
+#[test]
+fn test_sqlite_initialize_succeeds_and_creates_db() {
+    // 验证 initialize() 成功执行 initialize_pragmas + CREATE TABLE 并创建 DB 文件。
+    // journal_mode=OFF 是会话级 pragma，不持久化到连接关闭后，所以在连接期间验证。
+    let dir = tempfile::TempDir::new().unwrap();
+    let dbfile = dir.path().join("pragma.db");
+
+    {
+        let mut exporter = SqliteExporter::new(
+            dbfile.to_string_lossy().into(),
+            "tbl".to_string(),
+            true,
+            false,
+        );
+        let result = exporter.initialize();
+        assert!(
+            result.is_ok(),
+            "initialize() 应成功（initialize_pragmas 已正确执行），实际: {result:?}"
+        );
+        exporter.finalize().unwrap();
+    } // exporter drop，释放 EXCLUSIVE 锁
+
+    // DB 文件应存在且非空（pragma 和 CREATE TABLE 均已执行）
+    assert!(dbfile.exists(), "DB 文件应在 initialize 后存在");
+    assert!(
+        dbfile.metadata().unwrap().len() > 0,
+        "DB 文件不应为空（至少含 SQLite header）"
+    );
+
+    // 验证 tbl 表已创建（CREATE TABLE IF NOT EXISTS 由 initialize 执行）
+    let conn = rusqlite::Connection::open(&dbfile).unwrap();
+    let table_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='tbl'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(
+        table_count, 1,
+        "initialize 应创建目标表 'tbl'，实际: {table_count}"
+    );
+}
+
+#[test]
+fn test_sqlite_projection_subset_export() {
+    // 覆盖 export_one_preparsed 中 ordered_indices 字段投影非全量路径
+    use crate::pipeline::FieldMask;
+
+    let dir = tempfile::TempDir::new().unwrap();
+    let logfile = dir.path().join("t.log");
+    let dbfile = dir.path().join("proj.db");
+    write_test_log(&logfile, 3);
+
+    let parser = LogParserBuilder::new(logfile.to_str().unwrap())
+        .build()
+        .unwrap();
+    let records: Vec<_> = parser.iter().filter_map(std::result::Result::ok).collect();
+
+    {
+        let mut exporter = SqliteExporter::new(
+            dbfile.to_string_lossy().into(),
+            "proj_tbl".to_string(),
+            true,
+            false,
+        );
+        exporter.normalize = false;
+        exporter.field_mask =
+            FieldMask::from_names(&["ts".to_string(), "username".to_string(), "sql".to_string()])
+                .unwrap();
+        exporter.ordered_indices = vec![0, 4, 10]; // ts=0, username=4, sql=10
+        exporter.initialize().unwrap();
+        for r in &records {
+            exporter.export(r).unwrap();
+        }
+        exporter.finalize().unwrap();
+    } // exporter drop，释放 EXCLUSIVE 锁
+
+    // 重新打开 DB 验证投影列结构
+    let conn = rusqlite::Connection::open(&dbfile).unwrap();
+    let count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM proj_tbl", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(count, 3, "应插入 3 条记录，实际: {count}");
+
+    // 验证表只有 3 列（ts, username, sql）
+    let col_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('proj_tbl')",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(col_count, 3, "投影后表应有 3 列，实际: {col_count}");
 }

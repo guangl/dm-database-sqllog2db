@@ -19,7 +19,7 @@
 
 - **流式解析器**：单线程顺序处理单个文件、目录中的 `.log` 文件或 glob 模式匹配的文件。无论文件大小，内存保持恒定——工具流式处理记录而非加载到内存中。
 - **灵活的输入模式**：支持单文件路径、目录自动扫描（递归查找 `.log` 文件）或 glob 模式（如 `./logs/2025-*.log`）。结果按路径排序以在多次运行间保持确定性顺序。
-- **CSV 导出器**：2 MB `BufWriter` 配合 `itoa` 零分配整数格式化，实现高吞吐、低延迟输出。`memchr` 的 SIMD 加速字节搜索处理 CSV 转义。
+- **CSV 导出器**：16 MB `BufWriter` 配合 `itoa` 零分配整数格式化，实现高吞吐、低延迟输出。`memchr` 的 SIMD 加速字节搜索处理 CSV 转义。
 - **SQLite 导出器**：批量事务配合性能 `PRAGMA` 调优（synchronous off、mmap size、cache size）和预编译语句实现批量插入吞吐量。多文件场景支持 rayon 并行解析路径（`sqlite_parallel.rs`）。
 - **优先级路由的 ExporterManager**：每次运行只有一个导出器处于活动状态；两者同时配置时 CSV 优先。`Exporter` trait 允许基准测试在不修改生产代码的情况下注入模拟导出器。
 
@@ -119,6 +119,13 @@ sqllog2db stats -c config.toml
 sqllog2db stats -c config.toml --top 10
 ```
 
+指定时间范围统计（v1.14+，仅聚合 `ts` 字段落入 `--from` 与 `--to` 区间的记录）：
+
+```bash
+sqllog2db stats -c config.toml --from 2024-01-01 --to 2024-01-31
+sqllog2db stats -c config.toml --from "2024-01-01 00:00:00" --to "2024-01-31 23:59:59" --top 20
+```
+
 详细用法参见[快速入门指南](./docs/quickstart.md)。
 
 ## 配置
@@ -161,6 +168,15 @@ overwrite = true
 
 通过 Ctrl+C 优雅关闭会在当前批次完成后停止。退出码：0（成功）、2（配置错误）、3（文件/解析错误）、4（导出错误）、130（用户中断）。
 
+## 版本亮点
+
+### v1.15.0 — CI/CD 修复（2026-06-02）
+
+- 修复 `ci.yaml`、`bench.yml`、`lychee.yml`、`pages.yml` 中误升级的 `actions/checkout@v6` 与 `actions/upload-artifact@v7`，全部回退到 `@v4`（Phase 55）
+- 新增 `Cross.toml`，将 aarch64-linux 跨编译镜像 `ghcr.io/cross-rs/aarch64-unknown-linux-gnu` 锁定到 SHA256 摘要，保证可复现构建（Phase 55 + Phase 61）
+- 重构 `release.yaml`：拆出独立 `create-release` job 在 4 个 matrix 构建 job 之前运行，消除并行写入 release body 的竞争条件（Phase 55）
+- `cli/run` 模块重构：`handle_run` 拆分为 7 个私有辅助函数，`run_sequential` 压缩到 ≤40 行，并新建 `scanner` 公共扫描模块（Phase 58 + Phase 56）
+
 ## 链接
 
 - [GitHub 仓库](https://github.com/guangl/sqllog2db)
@@ -176,4 +192,3 @@ overwrite = true
 ## 许可证
 
 基于 Apache License, Version 2.0 许可。详见 [LICENSE](./LICENSE)。
-E)。

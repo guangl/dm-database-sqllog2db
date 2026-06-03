@@ -6,7 +6,7 @@ use std::fmt::Write as FmtWrite;
 use std::fs::OpenOptions;
 use std::io::Write as IoWrite;
 use std::path::Path;
-use std::sync::{Arc, LazyLock, Mutex};
+use std::sync::{LazyLock, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 // 使用 LazyLock 缓存日志级别映射表，避免每次查找时重新构建
@@ -57,7 +57,7 @@ fn format_utc_timestamp() -> String {
         buf,
         "{y:04}-{m:02}-{d:02} {hours:02}:{mins:02}:{secs_part:02}",
     )
-    .unwrap();
+    .unwrap(); // infallible: writing to a String never fails
     buf
 }
 
@@ -87,41 +87,21 @@ pub fn init_logging(config: &LoggingConfig, log_to_stdout: bool) -> Result<()> {
         })?;
     }
 
-    // 从路径中提取基础文件名（去掉扩展名）
-    let file_stem = log_path
-        .file_stem()
-        .and_then(|n| n.to_str())
-        .ok_or_else(|| {
-            Error::File(FileError::CreateDirectoryFailed {
-                path: log_path.to_path_buf(),
-                reason: "Invalid filename".to_string(),
-            })
-        })?;
-
-    let extension = log_path
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("log");
-
-    // 创建简单的追加日志文件（不做滚动），更轻量：使用 Arc<Mutex<File>> 作为共享 writer
-    let log_file_path = parent_dir.join(format!("{file_stem}.{extension}"));
     let file = OpenOptions::new()
         .create(true)
         .append(true)
-        .open(&log_file_path)
+        .open(log_path)
         .map_err(|e| {
             Error::File(FileError::CreateDirectoryFailed {
-                path: log_file_path.clone(),
+                path: log_path.to_path_buf(),
                 reason: e.to_string(),
             })
         })?;
 
-    let shared_file = Arc::new(Mutex::new(file));
-
     // 自定义简单 Logger，写入文件，可选同时输出到 stdout
     struct SimpleLogger {
         level: LevelFilter,
-        file: Arc<Mutex<std::fs::File>>,
+        file: Mutex<std::fs::File>,
         log_to_stdout: bool,
     }
 
@@ -164,7 +144,7 @@ pub fn init_logging(config: &LoggingConfig, log_to_stdout: bool) -> Result<()> {
 
     let logger = SimpleLogger {
         level,
-        file: shared_file.clone(),
+        file: Mutex::new(file),
         log_to_stdout,
     };
 
@@ -173,11 +153,11 @@ pub fn init_logging(config: &LoggingConfig, log_to_stdout: bool) -> Result<()> {
         Ok(()) => {
             log::set_max_level(level);
         }
-        Err(e) => {
-            // If already initialized, we just ignore it for integration tests
-            // but we can still print a message to the original stdout if needed
-            // However, in a CLI tool, this usually only happens during tests
-            let _ = e;
+        Err(_) => {
+            eprintln!(
+                "warning: logging already initialized; config {:?} ignored",
+                config.file
+            );
         }
     }
 

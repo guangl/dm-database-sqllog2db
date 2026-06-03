@@ -5,7 +5,53 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.13] - 2026-06-01
+## [Unreleased]
+
+### CI/CD
+
+- **Cross.toml SHA256 digest 固定**：将 `aarch64-unknown-linux-gnu` 构建镜像从浮动 `:edge` 标签替换为固定 `@sha256:de04c9cd16fb41658de2eb0177481cb2fc717128b784d565bafcb000250508d7`，任意时刻执行 `cross build` 均使用相同镜像层，构建结果可复现（CROSS-01，Phase 61）
+
+## [1.15.0] - 2026-06-02
+
+### CI/CD
+
+- **GitHub Actions 版本统一**：修复 `.github/workflows/` 下 `ci.yaml`、`bench.yml`、`lychee.yml`、`pages.yml` 中误升级的 `actions/checkout@v6` 与 `actions/upload-artifact@v7`，全部回退到 `@v4`（CICD-01，Phase 55）
+- **aarch64-linux 跨编译镜像配置**：新建 `Cross.toml` 锁定 `ghcr.io/cross-rs/aarch64-unknown-linux-gnu` 镜像（初期使用浮动 tag，v1.16 进一步替换为 SHA256 摘要）（CICD-04，Phase 55）
+- **release workflow 竞争修复**：重构 `release.yaml`，拆出独立 `create-release` job 先于 4 个 matrix build job 运行，消除并行写入 release body 的竞争条件（CICD-02 + CICD-03，Phase 55）
+
+### Changed
+
+- **`cli/run/mod.rs` 拆分**：`handle_run` 提取为 7 个私有辅助函数（`resolve_input_files` / `merge_trxid_prescan` / `make_progress_bar` / `run_csv_parallel` / `run_sqlite_parallel` / `run_sequential` / `print_run_summary`），所有函数体 ≤40 行（CLEAN-02，Phase 58）
+- **公共扫描模块**：新建 `src/scanner.rs` 抽取共享文件扫描逻辑，`stats` 模块与 `cli/run/processor.rs` 统一调用（Phase 56）
+
+### Added
+
+- **run / init 子命令端到端测试**：`tests/integration.rs` 新增 4 个 e2e 测试覆盖 TEST-01 + TEST-02——run 子命令 CSV 输出（字段名 + 记录数 + 退出码 0）、run 子命令 SQLite `sqllog_records` 表行数、init 子命令成功路径、init 子命令文件已存在时退出非零（Phase 57）
+- **stats 时间范围跨字段校验**：`validate_stats_time_range` 新增 from ≤ to 检查 + 4 个单元测试 + 1 个 e2e 测试（TEST-03，Phase 57）
+
+### Fixed
+
+- **删除 stats 模块占位符**：移除 `src/cli/stats/mod.rs` 中遗留的 "not yet active" `warn!` 占位符调用（CLEAN-01，Phase 56）
+- **benchmark 文档完善**：`benches/BENCHMARKS.md` 追加 CI Artifact 使用说明章节（命名规则、下载方式、JSON 结构、手动对比方法），benchmark workflow 设置 `continue-on-error: true` 不作为 merge 门控（BENCH-01，Phase 56）
+
+---
+
+## [1.14.0] - 2026-06-02
+
+### Added
+
+- **`stats` 命令时间范围过滤**：新增 `--from` / `--to` CLI 参数与 `config.toml` `[stats]` 节 `from` / `to` 字段，支持 `YYYY-MM-DD` 与 `YYYY-MM-DD HH:MM:SS` 两种格式；CLI 参数优先级高于 config（覆盖 STATS-07/08/09/11，Phase 53）
+- **`StatsAccumulator` 时间过滤接入**：在聚合阶段按 `ts` 字段跳过窗口外记录，慢 SQL 与高频 SQL 两张表共享同一过滤逻辑，无 `--from`/`--to` 时行为与未过滤完全一致（覆盖 STATS-10，Phase 54）
+- **`config.toml init` 模板**：追加 `[stats]` 节注释段，列出 `from`/`to`/`top` 三字段及格式示例与说明（Phase 53）
+- **测试覆盖**：`tests/integration.rs` 新增 7 个 stats e2e 测试覆盖 STATS-07–11（Phase 53）+ 2 个 --from/--to 时间过滤效果测试（Phase 54）
+
+### Changed
+
+- **`opts.rs` Stats 变体**：`--top` 参数改为 `Option<u32>`，配合 CLI > config 优先级合并语义（Phase 53）
+
+---
+
+## [1.13.0] - 2026-06-01
 
 ### Added
 
@@ -18,7 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.12] - 2026-05-28
+## [1.12.0] - 2026-05-28
 
 ### Added
 
@@ -39,7 +85,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.11] - 2026-05-25
+## [1.11.0] - 2026-05-25
 
 ### Added
 
@@ -69,7 +115,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.10] - 2026-05-21
+## [1.10.0] - 2026-05-21
 
 ### Added
 
@@ -85,23 +131,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.9] - 2026-05-20
-
-### Removed
-
-- **6 non-essential dependencies**: removed `mimalloc` (custom allocator), `ahash` (custom hasher), `compact_str` (compact string), `smallvec` (small vector), `indicatif` (progress bar), and `chrono` (time formatting). These were unnecessary for the core streaming parse-export pipeline and their removal reduces binary size and compile time.
-- **`S: BuildHasher` generic parameter**: removed from `compute_normalized()` to simplify the API surface.
-
-### Changed
-
-- **rusqlite feature trim**: reduced rusqlite features to `bundled` only, removing unnecessary optional features.
-- **BufWriter capacity**: reduced from 16MB to 2MB for lower memory footprint without throughput regression.
-- **Time handling**: replaced `chrono::Local` with `std::time::SystemTime` UTC computation, eliminating the chrono dependency.
-- **Progress reporting**: replaced indicatif spinner with `eprintln!` output for simpler, dependency-free progress reporting.
-
----
-
-## [1.7] - 2026-05-19
+## [1.7.0] - 2026-05-19
 
 ### Removed
 
@@ -119,7 +149,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.6] - 2026-05-19
+## [1.6.0] - 2026-05-19
 
 ### Added
 
@@ -134,7 +164,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.5] - 2026-05-18
+## [1.5.0] - 2026-05-18
 
 ### Added
 
@@ -145,7 +175,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.4] - 2026-05-18
+## [1.4.0] - 2026-05-18
 
 ### Changed
 
@@ -161,7 +191,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.3] - 2026-05-17
+## [1.3.0] - 2026-05-17
 
 ### Added
 
@@ -186,7 +216,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.2] - 2026-05-15
+## [1.2.0] - 2026-05-15
 
 ### Added
 
@@ -239,7 +269,7 @@ The 0.x series (0.1.0 through 0.10.7) covered the initial development of sqllog2
 
 - Streaming SQL log parsing with multi-file, directory, and glob input modes
 - Multi-exporter architecture (CSV, JSONL, SQLite, DuckDB, PostgreSQL, Oracle, DM) -- later simplified to CSV + SQLite
-- Feature flags for conditional compilation (`[csv]`, `[jsonl]`, `[sqlite]`, `[filters]`) -- later removed for unified binary
+- Feature flags for conditional compilation (`[csv]`, `[jsonl]`, `[sqlite]`, `[filters]`, `replace_parameters`, `full`) -- later removed for unified binary
 - CLI commands: `init`, `validate`, `run`, `stats`, `digest`, `show-config`, `completions`, `man`
 - GB18030 encoding support, `replace_parameters` SQL normalization
 - Error logging, progress bar, exit codes, graceful shutdown (SIGINT)
@@ -250,15 +280,19 @@ The 0.x series (0.1.0 through 0.10.7) covered the initial development of sqllog2
 
 See git history for full details.
 
-[1.11]: https://github.com/guangl/sqllog2db/releases/tag/v1.11
-[1.10]: https://github.com/guangl/sqllog2db/releases/tag/v1.10
-[1.9]: https://github.com/guangl/sqllog2db/releases/tag/v1.9
-[1.7]: https://github.com/guangl/sqllog2db/releases/tag/v1.7
-[1.6]: https://github.com/guangl/sqllog2db/releases/tag/v1.6
-[1.5]: https://github.com/guangl/sqllog2db/releases/tag/v1.5
-[1.4]: https://github.com/guangl/sqllog2db/releases/tag/v1.4
-[1.3]: https://github.com/guangl/sqllog2db/releases/tag/v1.3
+[Unreleased]: https://github.com/guangl/sqllog2db/compare/v1.15.0...HEAD
+[1.15.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.15.0
+[1.14.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.14.0
+[1.13.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.13.0
+[1.12.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.12.0
+[1.11.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.11.0
+[1.10.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.10.0
+[1.7.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.7.0
+[1.6.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.6.0
+[1.5.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.5.0
+[1.4.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.4.0
+[1.3.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.3.0
 [1.2.1]: https://github.com/guangl/sqllog2db/releases/tag/v1.2.1
-[1.2]: https://github.com/guangl/sqllog2db/releases/tag/v1.2
-[1.0.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.0
+[1.2.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.2.0
+[1.0.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.0.0
 [0.x]: https://github.com/guangl/sqllog2db/releases/tag/v0.10.7
