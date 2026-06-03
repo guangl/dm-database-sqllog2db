@@ -135,3 +135,83 @@ pub(super) fn scan_for_trxids_by_transaction_filters(
 
     Ok(matched.into_iter().collect())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::pipeline::filters::types::{IndicatorFilters, SqlFilters};
+
+    #[test]
+    fn test_build_indicator_filters_min_row_count_zero() {
+        let indicators = IndicatorFilters {
+            min_row_count: Some(0),
+            ..IndicatorFilters::default()
+        };
+        let filters = build_indicator_filters(&indicators);
+        assert_eq!(
+            filters.len(),
+            1,
+            "min_row_count=0 应构建一个全匹配 Filter（FilterBuilder::new().build() 分支）"
+        );
+    }
+
+    #[test]
+    fn test_build_indicator_filters_min_row_count_positive() {
+        let indicators = IndicatorFilters {
+            min_row_count: Some(5),
+            ..IndicatorFilters::default()
+        };
+        let filters = build_indicator_filters(&indicators);
+        assert_eq!(
+            filters.len(),
+            1,
+            "min_row_count=5 应构建一个带 rowcount_gt(4) 约束的 Filter"
+        );
+    }
+
+    #[test]
+    fn test_build_indicator_filters_empty_returns_empty() {
+        let indicators = IndicatorFilters::default();
+        let filters = build_indicator_filters(&indicators);
+        assert_eq!(filters.len(), 0, "所有字段均为 None 时应返回空 Vec<Filter>");
+    }
+
+    #[test]
+    fn test_build_sql_exclude_filters_multiple_returns_correct_count() {
+        let sf = SqlFilters {
+            excludes: Some(vec![
+                "SELECT 1".into(),
+                "DROP".into(),
+                "DELETE FROM x".into(),
+            ]),
+            includes: None,
+        };
+        let filters = build_sql_exclude_filters(&sf);
+        assert_eq!(
+            filters.len(),
+            3,
+            "3 个 exclude 模式应构建 3 个 Filter（非空 excludes 分支）"
+        );
+    }
+
+    #[test]
+    fn test_build_sql_exclude_filters_none_returns_empty() {
+        let sf = SqlFilters::default();
+        let filters = build_sql_exclude_filters(&sf);
+        assert_eq!(
+            filters.len(),
+            0,
+            "excludes=None 应通过 unwrap_or(&[]) 返回空 Vec<Filter>"
+        );
+    }
+
+    #[test]
+    fn test_build_sql_include_filters_multiple() {
+        let sf = SqlFilters {
+            includes: Some(vec!["SELECT".into(), "UPDATE".into()]),
+            excludes: None,
+        };
+        let filters = build_sql_include_filters(&sf);
+        assert_eq!(filters.len(), 2, "2 个 include 模式应构建 2 个 Filter");
+    }
+}
