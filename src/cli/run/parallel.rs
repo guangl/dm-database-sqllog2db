@@ -42,6 +42,7 @@ pub(super) fn concat_csv_parts(
     };
     let mut writer = std::io::BufWriter::with_capacity(2 * 1024 * 1024, file);
 
+    let mut parts_to_remove: Vec<&Path> = Vec::with_capacity(parts.len());
     for (idx, (part_path, _)) in parts.iter().enumerate() {
         let part_file = std::fs::File::open(part_path)?;
         let mut reader = BufReader::new(part_file);
@@ -56,11 +57,18 @@ pub(super) fn concat_csv_parts(
         }
 
         std::io::copy(&mut reader, &mut writer)?;
-        std::fs::remove_file(part_path)?;
+        // reader 在此处离开作用域并 drop，文件句柄关闭后才删除（Windows 兼容性）
+        parts_to_remove.push(part_path.as_path());
     }
 
     use std::io::Write as _;
+    // 先 flush 确保所有数据已落盘，再删除临时文件；flush 失败时保留临时文件便于诊断
     writer.flush()?;
+    for p in parts_to_remove {
+        if let Err(e) = std::fs::remove_file(p) {
+            log::warn!("failed to remove temp part {}: {e}", p.display());
+        }
+    }
     Ok(())
 }
 
