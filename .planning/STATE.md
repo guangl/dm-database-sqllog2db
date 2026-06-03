@@ -18,10 +18,10 @@ stopped_at: Phase 60 complete (1/1) — ready to discuss Phase 61
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-02 for v1.16 milestone)
+See: .planning/PROJECT.md (updated 2026-06-03)
 
 **Core value:** 用户能够精确指定"导出哪些记录的哪些字段"——过滤逻辑清晰可配置，输出结果完全可控
-**Current focus:** Phase 61 — cross toml sha
+**Current focus:** Phase 61 — cross-toml-sha
 
 ## Current Position
 
