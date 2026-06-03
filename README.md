@@ -19,7 +19,7 @@
 
 - **流式解析器**：单线程顺序处理单个文件、目录中的 `.log` 文件或 glob 模式匹配的文件。无论文件大小，内存保持恒定——工具流式处理记录而非加载到内存中。
 - **灵活的输入模式**：支持单文件路径、目录自动扫描（递归查找 `.log` 文件）或 glob 模式（如 `./logs/2025-*.log`）。结果按路径排序以在多次运行间保持确定性顺序。
-- **CSV 导出器**：2 MB `BufWriter` 配合 `itoa` 零分配整数格式化，实现高吞吐、低延迟输出。`memchr` 的 SIMD 加速字节搜索处理 CSV 转义。
+- **CSV 导出器**：16 MB `BufWriter` 配合 `itoa` 零分配整数格式化，实现高吞吐、低延迟输出。`memchr` 的 SIMD 加速字节搜索处理 CSV 转义。
 - **SQLite 导出器**：批量事务配合性能 `PRAGMA` 调优（synchronous off、mmap size、cache size）和预编译语句实现批量插入吞吐量。多文件场景支持 rayon 并行解析路径（`sqlite_parallel.rs`）。
 - **优先级路由的 ExporterManager**：每次运行只有一个导出器处于活动状态；两者同时配置时 CSV 优先。`Exporter` trait 允许基准测试在不修改生产代码的情况下注入模拟导出器。
 
