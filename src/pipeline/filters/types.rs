@@ -545,4 +545,53 @@ mod tests {
             "exclude has_filters should be true when tags is set"
         );
     }
+
+    // ── SqlFilters::has_filters 边缘情况 ──────────────────────────
+
+    #[test]
+    fn test_sql_filters_has_filters_excludes_only_returns_true() {
+        // excludes-only（无 includes）应返回 true
+        let sf = SqlFilters {
+            includes: None,
+            excludes: Some(vec!["DROP".to_string()]),
+        };
+        assert!(
+            sf.has_filters(),
+            "SqlFilters with excludes-only should return has_filters=true"
+        );
+    }
+
+    #[test]
+    fn test_sql_filters_has_filters_some_empty_vec_returns_false() {
+        // Some(vec![]) 是空集合，不应算作有过滤器
+        let sf = SqlFilters {
+            includes: Some(vec![]),
+            excludes: Some(vec![]),
+        };
+        assert!(
+            !sf.has_filters(),
+            "SqlFilters with Some(vec![]) for both fields should return has_filters=false"
+        );
+    }
+
+    #[test]
+    fn test_sql_filters_has_filters_none_both_returns_false() {
+        let sf = SqlFilters::default();
+        assert!(
+            !sf.has_filters(),
+            "SqlFilters with both None should return has_filters=false"
+        );
+    }
+
+    #[test]
+    fn test_sql_filters_has_filters_includes_only_returns_true() {
+        let sf = SqlFilters {
+            includes: Some(vec!["SELECT".to_string()]),
+            excludes: None,
+        };
+        assert!(
+            sf.has_filters(),
+            "SqlFilters with includes-only should return has_filters=true"
+        );
+    }
 }
