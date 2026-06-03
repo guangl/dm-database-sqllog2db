@@ -136,8 +136,12 @@ fn test_csv_append_mode() {
         exporter.finalize().unwrap();
     }
     let second_count = std::fs::read_to_string(&outfile).unwrap().lines().count();
-    // Append adds rows (no header on second write)
-    assert!(second_count > first_count);
+    // append mode must add only data rows (no second header): first_count + records written
+    assert_eq!(
+        second_count,
+        first_count + records.len(),
+        "append mode must add only data rows, not a second header"
+    );
 }
 
 #[test]
