@@ -132,9 +132,14 @@ fn test_sqlite_from_config() {
         table_name: "records".to_string(),
         overwrite: true,
         append: false,
-        batch_size: 10_000,
+        batch_size: 42_000,
     };
     let mut exporter = SqliteExporter::from_config(&cfg);
+    // 验证 from_config 正确映射 batch_size 字段（默认值是 10_000，这里用 42_000 区分）
+    assert_eq!(
+        exporter.batch_size, cfg.batch_size,
+        "from_config must map batch_size correctly"
+    );
     exporter.initialize().unwrap();
     exporter.finalize().unwrap();
     assert!(dbfile.exists());
@@ -228,12 +233,24 @@ fn test_sqlite_debug_format() {
     let dbfile = dir.path().join("debug.db");
     let exporter = SqliteExporter::new(
         dbfile.to_string_lossy().into_owned(),
-        "tbl".to_string(),
+        "my_table".to_string(),
         true,
         false,
     );
     let s = format!("{exporter:?}");
-    assert!(s.contains("SqliteExporter"));
+    assert!(
+        s.contains("SqliteExporter"),
+        "Debug output should contain struct name"
+    );
+    // 验证 Debug 输出包含关键字段，而非只检查结构名
+    assert!(
+        s.contains("my_table"),
+        "Debug output should contain table_name, got: {s}"
+    );
+    assert!(
+        s.contains("database_url"),
+        "Debug output should contain database_url field, got: {s}"
+    );
 }
 
 #[test]
