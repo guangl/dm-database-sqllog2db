@@ -550,7 +550,11 @@ Full details: `.planning/milestones/v1.15-ROADMAP.md`
   3. 按分析结果补全的测试使识别出的覆盖不足区域行覆盖率达到 80% 以上，或有文档说明为何该路径难以测试（如 OS 相关错误路径）
   4. `cargo test` 全部通过，新增测试不依赖外部服务或网络；`cargo clippy --all-targets -- -D warnings` 通过
 
-**Plans**: TBD
+**Plans**: 4 plans
+- [ ] 63-01-PLAN.md — baseline 覆盖率报告生成 + pipeline/filters/types.rs mod tests（间接覆盖 serde_helpers.rs + 旧格式/混合格式 + has_filters 分支）
+- [ ] 63-02-PLAN.md — exporter/csv/tests.rs has_metrics=false 与字段投影分支测试 + exporter/sqlite/tests.rs conn_ref Err / 字段投影 / pragma 间接验证测试
+- [ ] 63-03-PLAN.md — error.rs mod tests 末尾追加 12+ 个错误变体方法测试 + cli/run/prescan.rs 新建 mod tests 覆盖 build_indicator_filters/build_sql_exclude_filters 边界
+- [ ] 63-04-PLAN.md — 重新运行 cargo llvm-cov 采集 after 数字 + 生成 63-COVERAGE-REPORT.md 对比报告（baseline → after + 难以测试路径 D-04 文档化）+ 三道质量门禁验证
 
 ## Coverage Validation
 
@@ -652,7 +656,7 @@ Full details: `.planning/milestones/v1.15-ROADMAP.md`
 | 59. cli/run 与 exporter/pipeline 结构整理 | 6/6 | Complete   | 2026-06-03 |
 | 60. 错误处理路径统一 | 1/1 | Complete    | 2026-06-03 |
 | 61. Cross.toml SHA 固定 | v1.16 | 1/1 | Complete | 2026-06-03 |
-| 62. 文档完善 | 3/3 | Complete   | 2026-06-03 |
+| 62. 文档完善 | 3/3 | Complete    | 2026-06-03 |
 | 63. 测试覆盖提升 | v1.16 | Not started | - |
 
 ---
