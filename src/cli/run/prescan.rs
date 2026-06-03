@@ -79,7 +79,9 @@ pub(super) fn scan_log_file_for_matches(file_path: &str, cfg: &Config) -> Vec<St
             let indicator_match = !indicator_filters.is_empty()
                 && indicator_filters.iter().any(|f| f.matches(record));
 
-            let sql_match = !indicator_match && has_sql_filters && {
+            // SQL match is an independent path — not subordinate to indicator match.
+            // Both filter types evaluate independently; trxid is collected if either matches.
+            let sql_match = has_sql_filters && {
                 let include_ok = sql_include_filters.is_empty()
                     || sql_include_filters.iter().any(|f| f.matches(record));
                 let exclude_ok = sql_exclude_filters.is_empty()
