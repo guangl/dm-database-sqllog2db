@@ -7,7 +7,6 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use super::collector;
-use super::processor::process_log_file;
 
 /// 每个并行任务的返回值：`Some((orig_path, temp_path, count, file_stats))` 或 `None`（跳过/中断）。
 type TaskResult = Option<(PathBuf, PathBuf, usize, ErrorStats)>;
@@ -67,7 +66,6 @@ pub(super) fn concat_csv_parts(
 
 /// 准备临时 CSV parts 目录，与输出文件相邻（避免跨设备 copy）。
 /// 若父目录不可写，退回到系统临时目录。
-#[allow(dead_code)]
 fn setup_parts_dir(output_path: &Path) -> Result<PathBuf> {
     let stem = output_path
         .file_stem()
@@ -92,7 +90,6 @@ fn setup_parts_dir(output_path: &Path) -> Result<PathBuf> {
 /// 将单文件收集到的记录 Vec 写入临时 CSV 文件。
 ///
 /// 返回实际写入的记录数（等于 `rows.len()`）。
-#[allow(dead_code)]
 fn write_records_to_csv(
     rows: Vec<(Sqllog, Option<String>)>,
     temp_path: &Path,
@@ -124,7 +121,7 @@ fn write_records_to_csv(
 /// 收集到 `Vec<(Sqllog, Option<String>)>`，再写入临时 CSV。单文件内存占用约
 /// `records × (sizeof(Sqllog) + Option<String>)` 字节；超大文件场景可在后续
 /// `ParallelRunConfig` 重构时切换回流式写入。
-#[allow(clippy::too_many_arguments, dead_code)]
+#[allow(clippy::too_many_arguments)]
 fn run_parallel_tasks(
     log_files: &[PathBuf],
     csv_include_performance_metrics: bool,
@@ -177,113 +174,13 @@ fn run_parallel_tasks(
     Ok(results)
 }
 
-/// 并行 CSV 处理：每个文件独立跑在 rayon 线程上，各写一个临时 CSV，
-/// 最终按文件原始顺序拼接成一个完整 CSV。
+/// 收集并行任务结果，分离成功项与错误，合并错误统计。
 ///
-/// 返回：`(已处理文件列表, 跳过文件数, 解析错误统计)`，已处理列表顺序与 `log_files` 一致。
-/// 适用条件：CSV 导出 + 多文件 + jobs > 1 + 无 limit。
-#[allow(clippy::too_many_arguments)]
-pub(super) fn process_csv_parallel(
-    log_files: &[PathBuf],
-    cfg: &crate::config::Config,
-    pipeline: &Pipeline,
-    jobs: usize,
-    show_progress: bool,
-    interrupted: &Arc<AtomicBool>,
-    do_normalize: bool,
-    placeholder_override: Option<bool>,
-    field_mask: FieldMask,
-    ordered_indices: &[usize],
-) -> Result<(Vec<(PathBuf, usize)>, usize, ErrorStats)> {
-    use rayon::prelude::*;
-
-    let csv_cfg = cfg
-        .exporter
-        .csv
-        .as_ref()
-        .expect("parallel CSV requires CSV exporter");
-    let output_path = Path::new(&csv_cfg.file);
-    let append_to_existing = csv_cfg.append && output_path.exists();
-
-    // 临时目录与最终输出文件相邻，避免跨设备 copy；
-    // 若父目录不可写（如 /dev/null），退回到系统临时目录。
-    let parts_dir = {
-        let stem = output_path
-            .file_stem()
-            .unwrap_or_default()
-            .to_string_lossy();
-        let dir_name = format!(".{stem}_parts_{}", std::process::id());
-        let preferred = output_path
-            .parent()
-            .filter(|p| !p.as_os_str().is_empty())
-            .unwrap_or(Path::new("."));
-        std::fs::create_dir_all(preferred)?;
-        let candidate = preferred.join(&dir_name);
-        if std::fs::create_dir_all(&candidate).is_ok() {
-            candidate
-        } else {
-            let fallback = std::env::temp_dir().join(&dir_name);
-            std::fs::create_dir_all(&fallback)?;
-            fallback
-        }
-    };
-
-    let total_files = log_files.len();
-
-    // 构建独立线程池，避免干扰全局 rayon 池（预扫描阶段已用）
-    let pool = rayon::ThreadPoolBuilder::new()
-        .num_threads(jobs)
-        .build()
-        .map_err(|e| Error::Io(std::io::Error::other(e)))?;
-
-    // 每个任务返回 Some((orig_path, temp_path, count, file_stats)) 或 None（跳过/中断）
-    let results: Vec<Result<TaskResult>> = pool.install(|| {
-        log_files
-            .par_iter()
-            .enumerate()
-            .map(|(idx, file)| {
-                if interrupted.load(Ordering::Relaxed) {
-                    return Ok(None);
-                }
-
-                let temp_path = parts_dir.join(format!("{idx:08}.csv"));
-                let mut exporter = CsvExporter::new(&temp_path);
-                exporter.normalize = do_normalize;
-                exporter.field_mask = field_mask;
-                exporter.ordered_indices = ordered_indices.to_vec();
-                exporter.include_performance_metrics = csv_cfg.include_performance_metrics;
-                let mut em = ExporterManager::from_csv(exporter);
-                em.initialize()?;
-
-                let mut params_buf = crate::pipeline::normalizer::ParamBuffer::default();
-                let mut ns_scratch = Vec::with_capacity(4096);
-
-                let (count, file_stats) = process_log_file(
-                    &file.to_string_lossy(),
-                    idx + 1,
-                    total_files,
-                    &mut em,
-                    pipeline,
-                    show_progress,
-                    None,
-                    interrupted,
-                    do_normalize,
-                    placeholder_override,
-                    &mut params_buf,
-                    &mut ns_scratch,
-                    false, // 并行模式：不重置进度条，避免多线程互相重置计数
-                    None,  // no progress bar in parallel mode
-                )?;
-
-                em.finalize()?;
-                Ok(Some((file.clone(), temp_path, count, file_stats)))
-            })
-            .collect()
-    });
-
-    // 收集成功的任务；遇到错误先清理再返回
-    // (orig, temp, count) 三元组，保持 rayon 的原始文件顺序
-    let mut parts_info: Vec<(PathBuf, PathBuf, usize)> = Vec::with_capacity(log_files.len());
+/// 若任何任务失败，清理已生成的临时 part 文件并返回首个错误（`parts_dir` 目录本身由调用方清理）。
+fn collect_parallel_results(
+    results: Vec<Result<TaskResult>>,
+) -> Result<(Vec<(PathBuf, PathBuf, usize)>, ErrorStats, usize)> {
+    let mut parts_info: Vec<(PathBuf, PathBuf, usize)> = Vec::with_capacity(results.len());
     let mut parallel_stats = ErrorStats::default();
     let mut first_err: Option<Error> = None;
     let mut skipped = 0usize;
@@ -306,11 +203,23 @@ pub(super) fn process_csv_parallel(
         for (_, temp, _) in &parts_info {
             let _ = std::fs::remove_file(temp);
         }
-        let _ = std::fs::remove_dir_all(&parts_dir);
         return Err(e);
     }
+    Ok((parts_info, parallel_stats, skipped))
+}
 
-    // 拼接：只用 (temp_path, count) 传给 concat_csv_parts
+/// 拼接并行生成的 CSV parts 到最终输出文件，并清理临时目录。
+///
+/// 返回 `(per_file_counts, skipped, parallel_stats)` 供 `handle_run` 消费。
+fn finalize_concat(
+    parts_info: Vec<(PathBuf, PathBuf, usize)>,
+    output_path: &Path,
+    overwrite: bool,
+    append_to_existing: bool,
+    parts_dir: &Path,
+    skipped: usize,
+    parallel_stats: ErrorStats,
+) -> Result<(Vec<(PathBuf, usize)>, usize, ErrorStats)> {
     let parts_for_concat: Vec<(PathBuf, usize)> = parts_info
         .iter()
         .map(|(_, temp, count)| (temp.clone(), *count))
@@ -318,18 +227,16 @@ pub(super) fn process_csv_parallel(
     let concat_result = concat_csv_parts(
         &parts_for_concat,
         output_path,
-        csv_cfg.overwrite,
+        overwrite,
         append_to_existing,
     );
     // 无论拼接成功与否都清理临时目录，避免磁盘满等错误导致残留
-    let _ = std::fs::remove_dir_all(&parts_dir);
+    let _ = std::fs::remove_dir_all(parts_dir);
     // 拼接失败且非追加模式时，删除已部分写入的输出文件，避免遗留截断的 CSV
     if concat_result.is_err() && !append_to_existing {
         let _ = std::fs::remove_file(output_path);
     }
     concat_result?;
-
-    // 返回 (已处理文件列表, 跳过文件数, 解析错误统计)，供 handle_run 消费
     Ok((
         parts_info
             .into_iter()
@@ -338,4 +245,61 @@ pub(super) fn process_csv_parallel(
         skipped,
         parallel_stats,
     ))
+}
+
+/// 并行 CSV 处理：每个文件独立跑在 rayon 线程上，各写一个临时 CSV，
+/// 最终按文件原始顺序拼接成一个完整 CSV。
+///
+/// 返回：`(已处理文件列表, 跳过文件数, 解析错误统计)`，已处理列表顺序与 `log_files` 一致。
+/// 适用条件：CSV 导出 + 多文件 + jobs > 1 + 无 limit。
+#[allow(clippy::too_many_arguments)]
+pub(super) fn process_csv_parallel(
+    log_files: &[PathBuf],
+    cfg: &crate::config::Config,
+    pipeline: &Pipeline,
+    jobs: usize,
+    show_progress: bool,
+    interrupted: &Arc<AtomicBool>,
+    do_normalize: bool,
+    placeholder_override: Option<bool>,
+    field_mask: FieldMask,
+    ordered_indices: &[usize],
+) -> Result<(Vec<(PathBuf, usize)>, usize, ErrorStats)> {
+    let _ = show_progress;
+    let csv_cfg = cfg
+        .exporter
+        .csv
+        .as_ref()
+        .expect("parallel CSV requires CSV exporter");
+    let output_path = Path::new(&csv_cfg.file);
+    let append_to_existing = csv_cfg.append && output_path.exists();
+    let parts_dir = setup_parts_dir(output_path)?;
+    let results = run_parallel_tasks(
+        log_files,
+        csv_cfg.include_performance_metrics,
+        pipeline,
+        jobs,
+        interrupted,
+        do_normalize,
+        placeholder_override,
+        field_mask,
+        ordered_indices,
+        &parts_dir,
+    )?;
+    let (parts_info, parallel_stats, skipped) = match collect_parallel_results(results) {
+        Ok(v) => v,
+        Err(e) => {
+            let _ = std::fs::remove_dir_all(&parts_dir);
+            return Err(e);
+        }
+    };
+    finalize_concat(
+        parts_info,
+        output_path,
+        csv_cfg.overwrite,
+        append_to_existing,
+        &parts_dir,
+        skipped,
+        parallel_stats,
+    )
 }
