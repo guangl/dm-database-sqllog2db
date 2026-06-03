@@ -372,14 +372,14 @@ fn run_file_loop(
             true,
             pb,
         )?;
-        per_file_counts.push((log_file.clone(), processed));
-        run_stats.merge(&file_stats);
+        // 先检查 fatal，再合并统计：fatal 路径直接返回，合并无意义
         if file_stats.has_fatal() {
-            return Err(Error::Export(crate::error::ExportError::WriteFailed {
-                path: log_file.into(),
+            return Err(Error::Export(crate::error::ExportError::DatabaseFailed {
                 reason: file_stats.fatal_error.unwrap_or_default(),
             }));
         }
+        per_file_counts.push((log_file.clone(), processed));
+        run_stats.merge(&file_stats);
     }
     Ok((per_file_counts, run_stats))
 }
