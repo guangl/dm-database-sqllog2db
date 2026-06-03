@@ -104,12 +104,12 @@
 - ✓ e2e CLI 全链路集成测试（run/init/stats，69 个集成测试）— v1.15
 - ✓ cli/run handle_run 拆分（7 个私有辅助函数，逻辑语句数 ~37）— v1.15
 - ✓ criterion benchmark 稳定化（non-blocking CI，BENCHMARKS.md 指南）— v1.15
+- ✓ 生产代码 unwrap/expect 全部注释说明 infallible 或改为 ? — v1.16（Phase 60）
 
 ### Active
 
 - [ ] **STRUCT-01**: 代码结构整理 — cli/run 主逻辑进一步拆分
 - [ ] **STRUCT-02**: 代码结构整理 — exporter/pipeline 模块重构
-- [ ] **STRUCT-03**: 代码结构整理 — 错误处理流程统一
 - [ ] **CROSS-01**: Cross.toml 固定 SHA digest（替换 edge 浮动标签）
 - [ ] **DOC-01**: README.md 更新（示例、安装说明、功能说明）
 - [ ] **DOC-02**: CHANGELOG.md 补全历史版本记录
@@ -178,4 +178,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-02 after v1.15 milestone*
+*Last updated: 2026-06-03 after Phase 60 (error-handling) complete*
