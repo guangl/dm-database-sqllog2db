@@ -181,7 +181,7 @@ Full details: `.planning/milestones/v1.15-ROADMAP.md`
 ### v1.16 工程质量深化 (Phases 59–63)
 
 - [x] **Phase 59: cli/run 与 exporter/pipeline 结构整理** — 识别剩余超 40 行函数并拆分，消除 exporter/pipeline 模块内重复代码 (completed 2026-06-03)
-- [ ] **Phase 60: 错误处理路径统一** — 统一错误转换和传播路径，删除冗余 unwrap/expect
+- [x] **Phase 60: 错误处理路径统一** — 统一错误转换和传播路径，删除冗余 unwrap/expect (completed 2026-06-03)
 - [ ] **Phase 61: Cross.toml SHA 固定** — 将 edge 浮动标签替换为固定 SHA digest，提升构建可复现性
 - [ ] **Phase 62: 文档完善** — 更新 README、新建 CHANGELOG、补全 config.toml 模板注释
 - [ ] **Phase 63: 测试覆盖提升** — 运行覆盖率分析并按结果补全关键路径测试
@@ -512,7 +512,7 @@ Full details: `.planning/milestones/v1.15-ROADMAP.md`
   3. `cargo test` 全部通过；`cargo clippy --all-targets -- -D warnings` 通过，clippy 不报告 `unwrap_used` 或 `expect_used` 相关警告
   4. 错误处理重构前后功能行为不变，已有 e2e 测试（Phase 57 新增）全部通过
 **Plans**: 1 plan
-  - [ ] 60-01-PLAN.md — 为 logging.rs:60 与 parallel.rs:87 添加 infallible 注释，并交付全代码库 unwrap/expect/map_err 审计 + cargo clippy/test 兜底验证
+  - [x] 60-01-PLAN.md — 为 logging.rs:60 与 parallel.rs:87 添加 infallible 注释，并交付全代码库 unwrap/expect/map_err 审计 + cargo clippy/test 兜底验证
 
 ### Phase 61: Cross.toml SHA 固定
 **Goal**: Cross.toml 中 aarch64-linux 构建镜像的 edge 浮动标签被替换为固定 SHA digest，任意时刻执行 `cross build` 都使用相同的镜像层，构建结果可复现
@@ -646,7 +646,7 @@ Full details: `.planning/milestones/v1.15-ROADMAP.md`
 | 57. e2e 测试扩展 | v1.15 | 2/2 | Complete | 2026-06-02 |
 | 58. cli/run 函数清理 | v1.15 | 1/1 | Complete | 2026-06-02 |
 | 59. cli/run 与 exporter/pipeline 结构整理 | 6/6 | Complete   | 2026-06-03 |
-| 60. 错误处理路径统一 | v1.16 | Not started | - |
+| 60. 错误处理路径统一 | 1/1 | Complete   | 2026-06-03 |
 | 61. Cross.toml SHA 固定 | v1.16 | Not started | - |
 | 62. 文档完善 | v1.16 | Not started | - |
 | 63. 测试覆盖提升 | v1.16 | Not started | - |
