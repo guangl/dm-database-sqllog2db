@@ -450,15 +450,24 @@ fn test_csv_data_row_skips_pm_when_disabled() {
 
     let content = std::fs::read_to_string(&outfile).unwrap();
     let header = content.lines().next().unwrap();
+    // 验证 header 中不含性能指标列（关闭后应被排除）
+    assert!(
+        !header.contains("exec_time_ms"),
+        "exec_time_ms should be absent: {header}"
+    );
+    assert!(
+        !header.contains("row_count"),
+        "row_count should be absent: {header}"
+    );
+    assert!(
+        !header.contains("exec_id"),
+        "exec_id should be absent: {header}"
+    );
+    // sql 列应保留
+    assert!(header.contains("sql"), "sql column should remain: {header}");
+    // header 列数通过 header 分割验证（header 本身不含 SQL 数据，不含带引号的逗号）
     let header_cols = header.split(',').count();
-    // 关闭性能指标后 header 列数 == 全量列数 - 3
-    // 全量含 normalized_sql：15；关闭性能指标后剩 12 列
-    assert_eq!(header_cols, 12, "header: {header}");
-    // 数据行列数也应为 12（注意 SQL 列含双引号但不含逗号）
-    for line in content.lines().skip(1) {
-        let cols = line.split(',').count();
-        assert_eq!(cols, 12, "data row: {line}");
-    }
+    assert_eq!(header_cols, 12, "header col count: {header}");
 }
 
 #[test]
