@@ -273,4 +273,49 @@ mod tests {
             "3 个 exec_ids 应产生 3 个独立的 Filter（每个 ID 一个）"
         );
     }
+
+    /// 验证 `scan_for_trxids_by_transaction_filters` 跨文件去重并正确收集匹配 trxid。
+    #[test]
+    fn test_scan_for_trxids_by_transaction_filters_dedup_across_files() {
+        use std::fmt::Write as _;
+
+        let dir = tempfile::TempDir::new().unwrap();
+
+        // 写两个文件，file1 含 trxid 0/1，file2 含 trxid 1/2（trxid=1 跨文件重复）
+        let write_log = |filename: &str, ids: &[usize]| {
+            let path = dir.path().join(filename);
+            let mut buf = String::new();
+            for &i in ids {
+                writeln!(
+                    buf,
+                    "2025-01-15 10:30:28.001 (EP[0] sess:0x{i:04x} user:U trxid:{i} stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT {i}. EXECTIME: 1(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.",
+                ).unwrap();
+            }
+            std::fs::write(&path, &buf).unwrap();
+            path
+        };
+
+        let file1 = write_log("a.log", &[0, 1]);
+        let file2 = write_log("b.log", &[1, 2]);
+
+        let cfg = Config {
+            filter: Some(FiltersFeature {
+                enable: true,
+                indicators: IndicatorFilters {
+                    min_row_count: Some(0),
+                    ..IndicatorFilters::default()
+                },
+                ..FiltersFeature::default()
+            }),
+            ..Config::default()
+        };
+
+        let mut matched = scan_for_trxids_by_transaction_filters(&[file1, file2], &cfg, 2).unwrap();
+        matched.sort();
+        assert_eq!(
+            matched,
+            vec!["0".to_string(), "1".to_string(), "2".to_string()],
+            "跨文件应返回去重后的 trxid 列表，实际: {matched:?}"
+        );
+    }
 }
