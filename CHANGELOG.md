@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-06-02
+
+### Added
+
+- **`stats` 命令时间范围过滤**：新增 `--from` / `--to` CLI 参数与 `config.toml` `[stats]` 节 `from` / `to` 字段，支持 `YYYY-MM-DD` 与 `YYYY-MM-DD HH:MM:SS` 两种格式；CLI 参数优先级高于 config（覆盖 STATS-07/08/09/11，Phase 53）
+- **`StatsAccumulator` 时间过滤接入**：在聚合阶段按 `ts` 字段跳过窗口外记录，慢 SQL 与高频 SQL 两张表共享同一过滤逻辑，无 `--from`/`--to` 时行为与未过滤完全一致（覆盖 STATS-10，Phase 54）
+- **`config.toml init` 模板**：追加 `[stats]` 节注释段，列出 `from`/`to`/`top` 三字段及格式示例与说明（Phase 53）
+- **测试覆盖**：`tests/integration.rs` 新增 7 个 stats e2e 测试覆盖 STATS-07–11（Phase 53）+ 2 个 --from/--to 时间过滤效果测试（Phase 54）
+
+### Changed
+
+- **`opts.rs` Stats 变体**：`--top` 参数改为 `Option<u32>`，配合 CLI > config 优先级合并语义（Phase 53）
+
+---
+
 ## [1.13.0] - 2026-06-01
 
 ### Added
@@ -236,6 +251,7 @@ The 0.x series (0.1.0 through 0.10.7) covered the initial development of sqllog2
 
 See git history for full details.
 
+[1.14.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.14.0
 [1.13.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.13.0
 [1.12.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.12.0
 [1.11.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.11.0
