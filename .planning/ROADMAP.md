@@ -523,7 +523,8 @@ Full details: `.planning/milestones/v1.15-ROADMAP.md`
   2. `cross build --target aarch64-unknown-linux-gnu --dry-run`（或等效验证）可成功解析该镜像引用，无报错
   3. `Cross.toml` 中包含注释记录该 SHA 对应的镜像日期或版本，便于日后审计和更新
   4. `cargo clippy --all-targets -- -D warnings` + `cargo test` 通过（Cross.toml 变更不影响本地编译）
-**Plans**: TBD
+**Plans**: 1 plan
+- [ ] 61-01-PLAN.md — 获取 ghcr.io/cross-rs/aarch64-unknown-linux-gnu:edge 当前 SHA256 digest + 更新 Cross.toml 为 @sha256: 格式 + 添加源信息注释 + cargo clippy/test 验证 (CROSS-01)
 
 ### Phase 62: 文档完善
 **Goal**: README 反映 v1.13–v1.15 全部新功能，CHANGELOG 完整覆盖 v1.0–v1.15 历史，config.toml init 模板每个字段均有内联注释
@@ -653,4 +654,4 @@ Full details: `.planning/milestones/v1.15-ROADMAP.md`
 
 ---
 *Created: 2026-05-21 for milestone v1.10*
-*Updated: 2026-06-02 — v1.16 (Phases 59–63) roadmap added; STRUCT-01/02/03, CROSS-01, DOC-01/02/03, TEST-01/02 全部映射*
+*Updated: 2026-06-03 — Phase 61 planning complete; Phase 61 plan created (61-01-PLAN.md)*
