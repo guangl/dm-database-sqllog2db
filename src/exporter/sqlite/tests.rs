@@ -462,3 +462,158 @@ fn test_sqlite_batch_commit() {
         "5 条记录经过批量提交后必须全部持久化，实际: {count}"
     );
 }
+
+// ---- 新增覆盖测试（Plan 02 Task 2）----
+
+#[test]
+fn test_sqlite_export_without_initialize_returns_err() {
+    // 覆盖 mod.rs:209-212 conn=None 的 ok_or_else 分支 + db_err 调用
+    let dir = tempfile::TempDir::new().unwrap();
+    let dbfile = dir.path().join("no_init.db");
+    let logfile = dir.path().join("t.log");
+    std::fs::write(
+        &logfile,
+        "2025-01-15 10:30:28.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT 1. EXECTIME: 1(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.\n",
+    )
+    .unwrap();
+
+    // 构造 exporter 但不调用 initialize()，conn = None
+    let mut exporter = SqliteExporter::new(
+        dbfile.to_string_lossy().into(),
+        "tbl".to_string(),
+        true,
+        false,
+    );
+
+    let parser = LogParserBuilder::new(logfile.to_str().unwrap())
+        .build()
+        .unwrap();
+    for record in parser.iter().flatten() {
+        let result = exporter.export(&record);
+        assert!(result.is_err(), "未调用 initialize() 时 export 应返回 Err");
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("not initialized"),
+            "错误消息应含 'not initialized'，实际: {err_msg}"
+        );
+    }
+}
+
+#[test]
+fn test_sqlite_export_one_normalized_without_initialize_returns_err() {
+    // 覆盖 export_one_normalized → export_one_preparsed 未初始化路径
+    let dir = tempfile::TempDir::new().unwrap();
+    let dbfile = dir.path().join("no_init2.db");
+    let logfile = dir.path().join("t.log");
+    std::fs::write(
+        &logfile,
+        "2025-01-15 10:30:28.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT 1. EXECTIME: 1(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.\n",
+    )
+    .unwrap();
+
+    let mut exporter = SqliteExporter::new(
+        dbfile.to_string_lossy().into(),
+        "tbl".to_string(),
+        true,
+        false,
+    );
+
+    let parser = LogParserBuilder::new(logfile.to_str().unwrap())
+        .build()
+        .unwrap();
+    for record in parser.iter().flatten() {
+        let result = exporter.export_one_normalized(&record, Some("SELECT 1"));
+        assert!(
+            result.is_err(),
+            "未初始化时 export_one_normalized 应返回 Err"
+        );
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("not initialized"),
+            "错误消息应含 'not initialized'，实际: {err_msg}"
+        );
+    }
+}
+
+#[test]
+fn test_sqlite_initialize_pragmas_applied() {
+    // 覆盖 initialize_pragmas 调用路径 + 验证 initialize() 返回 Ok
+    // initialize() 调用 initialize_pragmas，若 pragmas 执行成功则返回 Ok
+    let dir = tempfile::TempDir::new().unwrap();
+    let dbfile = dir.path().join("pragma.db");
+
+    {
+        let mut exporter = SqliteExporter::new(
+            dbfile.to_string_lossy().into(),
+            "tbl".to_string(),
+            true,
+            false,
+        );
+        // initialize() 内部调用 initialize_pragmas；返回 Ok 即表示 pragma 未 panic
+        let result = exporter.initialize();
+        assert!(
+            result.is_ok(),
+            "initialize() 应成功（initialize_pragmas 已正确执行），实际: {result:?}"
+        );
+        exporter.finalize().unwrap();
+    } // exporter drop，释放 EXCLUSIVE 锁
+
+    // DB 文件应存在且非空（pragma 和 CREATE TABLE 均已执行）
+    assert!(dbfile.exists(), "DB 文件应在 initialize 后存在");
+    assert!(
+        dbfile.metadata().unwrap().len() > 0,
+        "DB 文件不应为空（至少含 SQLite header）"
+    );
+}
+
+#[test]
+fn test_sqlite_projection_subset_export() {
+    // 覆盖 export_one_preparsed 中 ordered_indices 字段投影非全量路径
+    use crate::pipeline::FieldMask;
+
+    let dir = tempfile::TempDir::new().unwrap();
+    let logfile = dir.path().join("t.log");
+    let dbfile = dir.path().join("proj.db");
+    write_test_log(&logfile, 3);
+
+    let parser = LogParserBuilder::new(logfile.to_str().unwrap())
+        .build()
+        .unwrap();
+    let records: Vec<_> = parser.iter().filter_map(std::result::Result::ok).collect();
+
+    {
+        let mut exporter = SqliteExporter::new(
+            dbfile.to_string_lossy().into(),
+            "proj_tbl".to_string(),
+            true,
+            false,
+        );
+        exporter.normalize = false;
+        exporter.field_mask =
+            FieldMask::from_names(&["ts".to_string(), "username".to_string(), "sql".to_string()])
+                .unwrap();
+        exporter.ordered_indices = vec![0, 4, 10]; // ts=0, username=4, sql=10
+        exporter.initialize().unwrap();
+        for r in &records {
+            exporter.export(r).unwrap();
+        }
+        exporter.finalize().unwrap();
+    } // exporter drop，释放 EXCLUSIVE 锁
+
+    // 重新打开 DB 验证投影列结构
+    let conn = rusqlite::Connection::open(&dbfile).unwrap();
+    let count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM proj_tbl", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(count, 3, "应插入 3 条记录，实际: {count}");
+
+    // 验证表只有 3 列（ts, username, sql）
+    let col_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('proj_tbl')",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(col_count, 3, "投影后表应有 3 列，实际: {col_count}");
+}
