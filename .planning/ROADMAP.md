@@ -657,7 +657,7 @@ Full details: `.planning/milestones/v1.15-ROADMAP.md`
 | 60. 错误处理路径统一 | 1/1 | Complete    | 2026-06-03 |
 | 61. Cross.toml SHA 固定 | v1.16 | 1/1 | Complete | 2026-06-03 |
 | 62. 文档完善 | 3/3 | Complete    | 2026-06-03 |
-| 63. 测试覆盖提升 | 4/4 | Complete   | 2026-06-03 |
+| 63. 测试覆盖提升 | 4/4 | Complete    | 2026-06-03 |
 
 ---
 *Created: 2026-05-21 for milestone v1.10*
