@@ -158,7 +158,8 @@ fn test_csv_empty_export_is_noop() {
 
 #[test]
 fn test_csv_debug_format() {
-    let exporter = CsvExporter::new("/tmp/debug.csv");
+    let dir = tempfile::TempDir::new().unwrap();
+    let exporter = CsvExporter::new(dir.path().join("debug.csv"));
     let s = format!("{exporter:?}");
     assert!(s.contains("CsvExporter"));
 }
@@ -227,8 +228,9 @@ fn test_write_csv_escaped_no_quotes() {
 #[test]
 fn test_csv_from_config() {
     use crate::config;
+    let dir = tempfile::TempDir::new().unwrap();
     let cfg = config::CsvExporterConfig {
-        file: "/tmp/cfg.csv".to_string(),
+        file: dir.path().join("cfg.csv").to_string_lossy().into_owned(),
         overwrite: true,
         append: false,
         ..config::CsvExporterConfig::default()
@@ -236,6 +238,11 @@ fn test_csv_from_config() {
     let exporter = CsvExporter::from_config(&cfg);
     let s = format!("{exporter:?}");
     assert!(s.contains("CsvExporter"));
+    // 验证 from_config 正确映射 include_performance_metrics 字段
+    assert_eq!(
+        exporter.include_performance_metrics, cfg.include_performance_metrics,
+        "from_config must map include_performance_metrics correctly"
+    );
 }
 
 #[test]

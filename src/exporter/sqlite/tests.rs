@@ -224,7 +224,14 @@ fn test_sqlite_stats_snapshot() {
 
 #[test]
 fn test_sqlite_debug_format() {
-    let exporter = SqliteExporter::new("/tmp/debug.db".to_string(), "tbl".to_string(), true, false);
+    let dir = tempfile::TempDir::new().unwrap();
+    let dbfile = dir.path().join("debug.db");
+    let exporter = SqliteExporter::new(
+        dbfile.to_string_lossy().into_owned(),
+        "tbl".to_string(),
+        true,
+        false,
+    );
     let s = format!("{exporter:?}");
     assert!(s.contains("SqliteExporter"));
 }
