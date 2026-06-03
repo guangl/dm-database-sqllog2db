@@ -57,7 +57,7 @@ fn format_utc_timestamp() -> String {
         buf,
         "{y:04}-{m:02}-{d:02} {hours:02}:{mins:02}:{secs_part:02}",
     )
-    .unwrap();
+    .unwrap(); // infallible: writing to a String never fails
     buf
 }
 
