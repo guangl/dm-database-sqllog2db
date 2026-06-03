@@ -19,6 +19,24 @@ pub(super) enum ExportAction {
     BreakFatal,
 }
 
+/// 被过滤的 PARAMS 记录仅更新 `params_buffer`，不导出。
+///
+/// 在 `normalize_and_export` 的 `!passes` 路径调用，封装 `compute_normalized` 调用。
+fn update_params_buffer_only(
+    record: &Sqllog,
+    params_buffer: &mut ParamBuffer,
+    placeholder_override: Option<bool>,
+    ns_scratch: &mut Vec<u8>,
+) {
+    let _ = crate::pipeline::compute_normalized(
+        record,
+        &record.sql,
+        params_buffer,
+        placeholder_override,
+        ns_scratch,
+    );
+}
+
 /// 对单条已过滤的记录执行归一化 + 导出 + 错误处理。
 ///
 /// `passes`：调用方已判断该记录是否通过过滤器。
@@ -39,14 +57,7 @@ pub(super) fn normalize_and_export(
     passes: bool,
 ) -> ExportAction {
     if !passes {
-        // 被过滤的 PARAMS 记录：仅更新 params_buffer，不导出。
-        crate::pipeline::compute_normalized(
-            record,
-            &record.sql,
-            params_buffer,
-            placeholder_override,
-            ns_scratch,
-        );
+        update_params_buffer_only(record, params_buffer, placeholder_override, ns_scratch);
         return ExportAction::Continue;
     }
     let ns = if do_normalize && (!params_buffer.is_empty() || record.tag.is_none()) {
