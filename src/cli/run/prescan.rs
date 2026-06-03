@@ -141,6 +141,8 @@ pub(super) fn scan_for_trxids_by_transaction_filters(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::Config;
+    use crate::pipeline::FiltersFeature;
     use crate::pipeline::filters::types::{IndicatorFilters, SqlFilters};
 
     #[test]
@@ -215,5 +217,60 @@ mod tests {
         };
         let filters = build_sql_include_filters(&sf);
         assert_eq!(filters.len(), 2, "2 个 include 模式应构建 2 个 Filter");
+    }
+
+    /// 验证 `min_row_count=0` 的 `FilterBuilder::new().build()` 分支产生全匹配过滤器：
+    /// 扫描真实日志文件时所有记录的 trxid 均应被返回。
+    #[test]
+    fn test_min_row_count_zero_matches_all_records() {
+        use std::fmt::Write as _;
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let logfile = dir.path().join("test.log");
+
+        // 写入 3 条不同 trxid 的记录（rowcount 故意各不相同）
+        let mut buf = String::new();
+        for i in 0..3_usize {
+            writeln!(
+                buf,
+                "2025-01-15 10:30:28.001 (EP[0] sess:0x{i:04x} user:U trxid:{i} stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT {i}. EXECTIME: 1(ms) ROWCOUNT: {i}(rows) EXEC_ID: {i}.",
+            ).unwrap();
+        }
+        std::fs::write(&logfile, &buf).unwrap();
+
+        let cfg = Config {
+            filter: Some(FiltersFeature {
+                enable: true,
+                indicators: IndicatorFilters {
+                    min_row_count: Some(0),
+                    ..IndicatorFilters::default()
+                },
+                ..FiltersFeature::default()
+            }),
+            ..Config::default()
+        };
+
+        let matched = scan_log_file_for_matches(logfile.to_str().unwrap(), &cfg);
+        assert_eq!(
+            matched.len(),
+            3,
+            "min_row_count=0 应匹配所有记录（全匹配 Filter），实际匹配: {matched:?}",
+        );
+    }
+
+    /// 验证 `exec_ids` 过滤器正确产生独立的 `Filter`——每个 ID 一个 `Filter`
+    #[test]
+    fn test_build_indicator_filters_exec_ids_multiple() {
+        use std::collections::HashSet;
+        let indicators = IndicatorFilters {
+            exec_ids: Some(HashSet::from([1_i64, 2, 42])),
+            ..IndicatorFilters::default()
+        };
+        let filters = build_indicator_filters(&indicators);
+        assert_eq!(
+            filters.len(),
+            3,
+            "3 个 exec_ids 应产生 3 个独立的 Filter（每个 ID 一个）"
+        );
     }
 }
