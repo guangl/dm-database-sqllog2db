@@ -35,7 +35,8 @@ pub(super) fn concat_csv_parts(
             .open(output_path)?
     } else {
         OpenOptions::new()
-            .create(true)
+            .create_new(!overwrite)
+            .create(overwrite)
             .write(true)
             .truncate(overwrite)
             .open(output_path)?
