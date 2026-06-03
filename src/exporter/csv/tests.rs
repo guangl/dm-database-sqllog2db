@@ -488,3 +488,264 @@ fn test_csv_default_include_pm_true_keeps_existing_behavior() {
     assert!(header.contains("row_count"));
     assert!(header.contains("exec_id"));
 }
+
+// ---- 新增覆盖测试（Plan 02 Task 1）----
+
+#[test]
+fn test_csv_all_zero_metrics_outputs_empty_columns() {
+    // 覆盖 writer.rs:82 的 b",," 分支：has_metrics=false（exec_id=0 && exectime=0.0 && rowcount=0）
+    use crate::pipeline::FieldMask;
+
+    let dir = tempfile::TempDir::new().unwrap();
+    let log = dir.path().join("zero.log");
+    // EXECTIME: 0(ms) ROWCOUNT: 0(rows) EXEC_ID: 0 => has_metrics = false
+    std::fs::write(
+        &log,
+        "2025-01-15 10:30:28.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT 1. EXECTIME: 0(ms) ROWCOUNT: 0(rows) EXEC_ID: 0.\n",
+    )
+    .unwrap();
+
+    let out = dir.path().join("out.csv");
+    let mut exporter = CsvExporter::new(&out);
+    // 全量字段（FieldMask::ALL），走 writer.rs:46 全量路径
+    exporter.field_mask = FieldMask::ALL;
+    exporter.initialize().unwrap();
+
+    let parser = LogParserBuilder::new(log.to_str().unwrap())
+        .build()
+        .unwrap();
+    for record in parser.iter().flatten() {
+        exporter.export(&record).unwrap();
+    }
+    exporter.finalize().unwrap();
+
+    let content = std::fs::read_to_string(&out).unwrap();
+    let data_row = content.lines().nth(1).unwrap();
+    // has_metrics=false 时，exec_time_ms/row_count/exec_id 三列为空，输出 ",,"
+    assert!(
+        data_row.contains(",,"),
+        "has_metrics=false 时数据行应含 ',,' 表示空指标列，实际: {data_row}"
+    );
+}
+
+#[test]
+fn test_csv_projection_subset_emits_only_requested_columns() {
+    // 覆盖 writer.rs:93 非全量分支 + idx=0/1/2 match 分支
+    use crate::pipeline::FieldMask;
+
+    let dir = tempfile::TempDir::new().unwrap();
+    let log = dir.path().join("t.log");
+    write_test_log(&log, 3);
+
+    let out = dir.path().join("out.csv");
+    let mut exporter = CsvExporter::new(&out);
+    exporter.normalize = false;
+    // 设置三字段投影：ts(0), ep(1), sess_id(2)
+    exporter.field_mask =
+        FieldMask::from_names(&["ts".to_string(), "ep".to_string(), "sess_id".to_string()])
+            .unwrap();
+    exporter.ordered_indices = vec![0, 1, 2];
+    exporter.initialize().unwrap();
+
+    let parser = LogParserBuilder::new(log.to_str().unwrap())
+        .build()
+        .unwrap();
+    for record in parser.iter().flatten() {
+        exporter.export(&record).unwrap();
+    }
+    exporter.finalize().unwrap();
+
+    let content = std::fs::read_to_string(&out).unwrap();
+    let header = content.lines().next().unwrap();
+    assert_eq!(
+        header, "ts,ep,sess_id",
+        "header 应只含投影字段，实际: {header}"
+    );
+
+    // 每行数据只有 3 列
+    for (i, line) in content.lines().skip(1).enumerate() {
+        let col_count = line.split(',').count();
+        assert_eq!(col_count, 3, "数据行 {i} 应有 3 列，实际: {line}");
+    }
+}
+
+#[test]
+fn test_csv_projection_statement_appname_client_ip_tag() {
+    // 覆盖 writer.rs idx=6/7/8/9 四条 match 分支
+    use crate::pipeline::FieldMask;
+
+    let dir = tempfile::TempDir::new().unwrap();
+    let log = dir.path().join("t.log");
+    std::fs::write(
+        &log,
+        "2025-01-15 10:30:28.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x99 appname:MyApp ip:10.0.0.1) [SEL] SELECT 1. EXECTIME: 1(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.\n",
+    )
+    .unwrap();
+
+    let out = dir.path().join("out.csv");
+    let mut exporter = CsvExporter::new(&out);
+    exporter.normalize = false;
+    exporter.field_mask = FieldMask::from_names(&[
+        "statement".to_string(),
+        "appname".to_string(),
+        "client_ip".to_string(),
+        "tag".to_string(),
+    ])
+    .unwrap();
+    exporter.ordered_indices = vec![6, 7, 8, 9]; // statement/appname/client_ip/tag
+    exporter.initialize().unwrap();
+
+    let parser = LogParserBuilder::new(log.to_str().unwrap())
+        .build()
+        .unwrap();
+    for record in parser.iter().flatten() {
+        exporter.export(&record).unwrap();
+    }
+    exporter.finalize().unwrap();
+
+    let content = std::fs::read_to_string(&out).unwrap();
+    let header = content.lines().next().unwrap();
+    assert_eq!(
+        header, "statement,appname,client_ip,tag",
+        "header 应含 statement/appname/client_ip/tag，实际: {header}"
+    );
+    let data = content.lines().nth(1).unwrap();
+    // appname 字段应含 MyApp
+    assert!(
+        data.contains("MyApp"),
+        "数据行应含 appname=MyApp，实际: {data}"
+    );
+    // client_ip 字段应含 10.0.0.1
+    assert!(
+        data.contains("10.0.0.1"),
+        "数据行应含 client_ip=10.0.0.1，实际: {data}"
+    );
+}
+
+#[test]
+fn test_csv_projection_zero_metrics_skips_idx_11_12_13() {
+    // 覆盖 writer.rs:161/172/183 has_metrics=false 时不写 itoa 的分支（投影路径）
+    use crate::pipeline::FieldMask;
+
+    let dir = tempfile::TempDir::new().unwrap();
+    let log = dir.path().join("zero.log");
+    // EXEC_ID=0, EXECTIME=0, ROWCOUNT=0 => has_metrics = false
+    std::fs::write(
+        &log,
+        "2025-01-15 10:30:28.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT 1. EXECTIME: 0(ms) ROWCOUNT: 0(rows) EXEC_ID: 0.\n",
+    )
+    .unwrap();
+
+    let out = dir.path().join("out.csv");
+    let mut exporter = CsvExporter::new(&out);
+    exporter.normalize = false;
+    // 仅投影性能指标三列 idx=11/12/13
+    exporter.field_mask = FieldMask::from_names(&[
+        "exec_time_ms".to_string(),
+        "row_count".to_string(),
+        "exec_id".to_string(),
+    ])
+    .unwrap();
+    exporter.ordered_indices = vec![11, 12, 13];
+    exporter.initialize().unwrap();
+
+    let parser = LogParserBuilder::new(log.to_str().unwrap())
+        .build()
+        .unwrap();
+    for record in parser.iter().flatten() {
+        exporter.export(&record).unwrap();
+    }
+    exporter.finalize().unwrap();
+
+    let content = std::fs::read_to_string(&out).unwrap();
+    let data_row = content.lines().nth(1).unwrap();
+    // has_metrics=false 时投影路径下三列均为空，数据行应为 ",,"
+    assert_eq!(
+        data_row, ",,",
+        "has_metrics=false 时投影路径下三列均应为空，实际: {data_row}"
+    );
+}
+
+#[test]
+fn test_csv_projection_with_normalize_idx_14() {
+    // 覆盖 writer.rs:187-194 idx=14 normalize=true 分支
+    use crate::pipeline::FieldMask;
+
+    let dir = tempfile::TempDir::new().unwrap();
+    let log = dir.path().join("t.log");
+    std::fs::write(
+        &log,
+        "2025-01-15 10:30:28.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT * FROM t WHERE id=1. EXECTIME: 1(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.\n",
+    )
+    .unwrap();
+
+    let out = dir.path().join("out.csv");
+    let mut exporter = CsvExporter::new(&out);
+    exporter.normalize = true;
+    // 仅投影 normalized_sql 列（idx=14）
+    exporter.field_mask = FieldMask::from_names(&["normalized_sql".to_string()]).unwrap();
+    exporter.ordered_indices = vec![14];
+    exporter.initialize().unwrap();
+
+    let normalized_sql = "SELECT * FROM t WHERE id=?";
+    let parser = LogParserBuilder::new(log.to_str().unwrap())
+        .build()
+        .unwrap();
+    for record in parser.iter().flatten() {
+        exporter
+            .export_one_normalized(&record, Some(normalized_sql))
+            .unwrap();
+    }
+    exporter.finalize().unwrap();
+
+    let content = std::fs::read_to_string(&out).unwrap();
+    let header = content.lines().next().unwrap();
+    assert_eq!(
+        header, "normalized_sql",
+        "header 应为 normalized_sql，实际: {header}"
+    );
+    let data = content.lines().nth(1).unwrap();
+    assert!(
+        data.contains(normalized_sql),
+        "数据行应含 normalized SQL，实际: {data}"
+    );
+}
+
+#[test]
+fn test_csv_projection_with_normalize_none_emits_empty_idx_14() {
+    // 覆盖 writer.rs:189-193 normalized_sql=None 时 idx=14 输出空的子分支
+    use crate::pipeline::FieldMask;
+
+    let dir = tempfile::TempDir::new().unwrap();
+    let log = dir.path().join("t.log");
+    std::fs::write(
+        &log,
+        "2025-01-15 10:30:28.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT 1. EXECTIME: 1(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.\n",
+    )
+    .unwrap();
+
+    let out = dir.path().join("out.csv");
+    let mut exporter = CsvExporter::new(&out);
+    exporter.normalize = true;
+    // 仅投影 normalized_sql 列（idx=14），但传入 None
+    exporter.field_mask = FieldMask::from_names(&["normalized_sql".to_string()]).unwrap();
+    exporter.ordered_indices = vec![14];
+    exporter.initialize().unwrap();
+
+    let parser = LogParserBuilder::new(log.to_str().unwrap())
+        .build()
+        .unwrap();
+    for record in parser.iter().flatten() {
+        // 传入 None，期望 idx=14 列为空
+        exporter.export_one_normalized(&record, None).unwrap();
+    }
+    exporter.finalize().unwrap();
+
+    let content = std::fs::read_to_string(&out).unwrap();
+    let data_row = content.lines().nth(1).unwrap();
+    // normalized_sql=None 时列应为空字符串（数据行为空行）
+    assert_eq!(
+        data_row, "",
+        "normalized_sql=None 时数据行应为空，实际: {data_row}"
+    );
+}
