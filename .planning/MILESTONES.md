@@ -1,5 +1,34 @@
 # Milestones: sqllog2db
 
+## v1.16.0 — 工程质量深化
+
+**Shipped:** 2026-06-03  
+**Phases:** 59–63 | **Plans:** 15 | **Commits:** 109  
+**Duration:** 2026-06-02 → 2026-06-03 (~2 days)  
+**Code changes:** 72 files, +10,110 / -533 lines  
+**Tests:** 740 total (320 lib + 351 bench + 68 integration + 1 jemalloc), all passing
+
+### Delivered
+
+全面提升工程基础：代码结构整理（cli/run + exporter/pipeline 函数拆分与重复消除）、全代码库 unwrap/expect 统一注释、Cross.toml SHA256 固定（消除 v1.15 遗留的构建不可复现问题）、README + CHANGELOG（v1.0–v1.15 历史）+ config 模板文档全面补全、行覆盖率从 90.68% 提升至 91.86%（+1.18 pp）。
+
+### Key Accomplishments
+
+1. process_log_file（152行）拆分为 45 行主体 + ExportAction 枚举 + 4 个辅助函数；全部超限函数完成语义拆分（STRUCT-01）
+2. collector.rs 公共模块提取，sqlite_parallel.rs 行数从 225 降至 130，消除重复 collect_log_file/process_record 逻辑（STRUCT-02）
+3. 全代码库 unwrap/expect 审计：生产代码全部标注 `// infallible` 或改为 `?` 传播，production_uncommented = 0（STRUCT-03）
+4. Cross.toml SHA256 digest 固定（`de04c9cd...`），`:edge` 浮动标签移除，3 项自动化断言覆盖（CROSS-01）
+5. README stats 示例 + CHANGELOG v1.0.0–v1.15.0 Keep a Changelog 格式 + config 模板 22 字段注释补全（DOC-01/02/03）
+6. 51 项新测试（filters/csv/sqlite/error/prescan），行覆盖率 91.86% / 函数覆盖率 89.54%（TEST-01/02）
+
+### Archives
+
+- `.planning/milestones/v1.16.0-ROADMAP.md` — 完整 Phase 细节
+- `.planning/milestones/v1.16.0-REQUIREMENTS.md` — 需求归档（9/9 满足）
+- `.planning/v1.16-MILESTONE-AUDIT.md` — 审计报告（gaps_found → 关闭前修复）
+
+---
+
 ## v1.15 — 工程质量全面提升
 
 **Shipped:** 2026-06-02  

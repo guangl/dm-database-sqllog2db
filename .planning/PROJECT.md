@@ -8,15 +8,18 @@
 
 用户能够精确指定"导出哪些记录的哪些字段"——过滤逻辑清晰可配置，输出结果完全可控。
 
-## Current Milestone: v1.16 工程质量深化
+## Previous: v1.16 已交付
 
-**Goal:** 在 v1.15 的基础上，全面提升代码结构、测试覆盖、文档质量和构建可复现性。
+**Shipped:** 2026-06-03
+**Version:** v1.16.0 工程质量深化（Phases 59–63）
 
-**Target features:**
-- 代码结构整理 — cli/run 主逻辑、exporter/pipeline 模块、错误处理流程进一步重构
-- Cross.toml 固定 SHA digest — 替换 edge 浮动标签，提升构建可复现性
-- 文档完善 — README 更新 + CHANGELOG 补全 + config.toml 模板注释完善
-- 测试覆盖提升 — 运行覆盖率分析，按需补全关键路径
+**已交付功能：**
+- cli/run 结构整理：process_log_file / process_csv_parallel / FilterProcessor 全部拆分，ExportAction 枚举引入
+- collector.rs 公共模块提取，sqlite_parallel.rs 与 CSV 并行路径共享 collect_log_file/process_record
+- 全代码库 unwrap/expect 审计，生产代码全部标注 infallible 或改为 ? 传播
+- Cross.toml SHA256 digest 固定（de04c9cd...），消除 :edge 浮动标签
+- README stats 用法示例 + CHANGELOG v1.0.0–v1.15.0 + config 模板 22 字段注释
+- 51 项新测试，行覆盖率 90.68% → 91.86%，740 个测试全部通过
 
 ## Previous: v1.15 已交付
 
@@ -105,16 +108,15 @@
 - ✓ cli/run handle_run 拆分（7 个私有辅助函数，逻辑语句数 ~37）— v1.15
 - ✓ criterion benchmark 稳定化（non-blocking CI，BENCHMARKS.md 指南）— v1.15
 - ✓ 生产代码 unwrap/expect 全部注释说明 infallible 或改为 ? — v1.16（Phase 60）
+- ✓ cli/run 函数拆分（process_log_file/process_csv_parallel/FilterProcessor，ExportAction 枚举）— v1.16（Phase 59）
+- ✓ collector.rs 公共模块，消除 sqlite_parallel.rs 与 CSV 并行路径重复逻辑 — v1.16（Phase 59）
+- ✓ Cross.toml SHA256 digest 固定（de04c9cd...），:edge 浮动标签移除 — v1.16（Phase 61）
+- ✓ README stats 用法示例 + CHANGELOG v1.0–v1.15 + config 模板全字段注释 — v1.16（Phase 62）
+- ✓ 行覆盖率 91.86% / 函数覆盖率 89.54%（51 项新测试，740 全部通过）— v1.16（Phase 63）
 
 ### Active
 
-- [ ] **STRUCT-01**: 代码结构整理 — cli/run 主逻辑进一步拆分
-- [ ] **STRUCT-02**: 代码结构整理 — exporter/pipeline 模块重构
-- [ ] **CROSS-01**: Cross.toml 固定 SHA digest（替换 edge 浮动标签）
-- [ ] **DOC-01**: README.md 更新（示例、安装说明、功能说明）
-- [ ] **DOC-02**: CHANGELOG.md 补全历史版本记录
-- [ ] **DOC-03**: config.toml 模板注释完善
-- [ ] **TEST-01**: 覆盖率分析并补全关键路径测试
+（下一里程碑待规划）
 
 ### Out of Scope
 
@@ -166,6 +168,10 @@
 | release artifact 暂存 + 独立 create-release job | 消除 4 并行 job 竞争写入 release notes | ✓ Good (v1.15) |
 | scanner 公共模块 pub(crate) 可见性 | 与 pub(crate) mod parser 保持一致，stats/run DRY | ✓ Good (v1.15) |
 | handle_run 物理行数 override 接受 | cargo fmt 展开所致，逻辑语句数 ~37 满足设计意图 | ✓ Good (v1.15) |
+| ExportAction 枚举替代 break 'outer | 消除内联控制流，拆分后语义更清晰 | ✓ Good (v1.16) |
+| collector.rs pub(super) 可见性 | 限定在 cli/run 子模块内，不对外暴露 | ✓ Good (v1.16) |
+| parallel_collect 行数口径采用函数体（33 行）| cargo fmt 展开含参数行，函数体逻辑满足设计意图 | ✓ Good (v1.16) |
+| SHA256 digest 使用宿主机（amd64）平台 | cross-rs 在 amd64 主机运行，应取宿主 digest | ✓ Good (v1.16) |
 
 ## Evolution
 
@@ -178,4 +184,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-03 after Phase 63 (test-coverage) complete — v1.16 milestone all 5 phases done (59-63)*
+*Last updated: 2026-06-03 after v1.16.0 milestone complete*

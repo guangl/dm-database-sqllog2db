@@ -7,12 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### CI/CD
+
+- **Cross.toml SHA256 digest 固定**：将 `aarch64-unknown-linux-gnu` 构建镜像从浮动 `:edge` 标签替换为固定 `@sha256:de04c9cd16fb41658de2eb0177481cb2fc717128b784d565bafcb000250508d7`，任意时刻执行 `cross build` 均使用相同镜像层，构建结果可复现（CROSS-01，Phase 61）
+
 ## [1.15.0] - 2026-06-02
 
 ### CI/CD
 
 - **GitHub Actions 版本统一**：修复 `.github/workflows/` 下 `ci.yaml`、`bench.yml`、`lychee.yml`、`pages.yml` 中误升级的 `actions/checkout@v6` 与 `actions/upload-artifact@v7`，全部回退到 `@v4`（CICD-01，Phase 55）
-- **aarch64-linux 跨编译镜像配置**：新建 `Cross.toml` 锁定 `ghcr.io/cross-rs/aarch64-unknown-linux-gnu` 镜像，初期使用浮动 tag，Phase 61 进一步替换为 SHA256 摘要保证可复现构建（CICD-04 + CROSS-01，Phase 55 + Phase 61）
+- **aarch64-linux 跨编译镜像配置**：新建 `Cross.toml` 锁定 `ghcr.io/cross-rs/aarch64-unknown-linux-gnu` 镜像（初期使用浮动 tag，v1.16 进一步替换为 SHA256 摘要）（CICD-04，Phase 55）
 - **release workflow 竞争修复**：重构 `release.yaml`，拆出独立 `create-release` job 先于 4 个 matrix build job 运行，消除并行写入 release body 的竞争条件（CICD-02 + CICD-03，Phase 55）
 
 ### Changed

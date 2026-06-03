@@ -2,7 +2,7 @@
 
 ## Milestones
 
-- **v1.16 工程质量深化** — Phases 59–63 (active)
+- ✅ **v1.16.0 工程质量深化** — Phases 59–63 (shipped 2026-06-03)
 - ✅ **v1.15 工程质量全面提升** — Phases 55–58 (shipped 2026-06-02)
 - ✅ **v1.14 stats 时间段过滤** — Phases 53–54 (shipped 2026-06-02)
 - ✅ **v1.13 SQL 统计分析** — Phases 50–52 (shipped 2026-06-01)
@@ -155,16 +155,22 @@ Full details: `.planning/milestones/v1.12-ROADMAP.md`
 
 </details>
 
-### v1.13 SQL 统计分析 (Phases 50–52)
+<details>
+<summary>✅ v1.13 SQL 统计分析 (Phases 50–52) — SHIPPED 2026-06-01</summary>
 
 - [x] **Phase 50: SQL 标准化引擎** — 将字面量替换为 `?` 占位符的标准化模块 (completed 2026-06-01)
 - [x] **Phase 51: stats 子命令 CLI 脚手架** — 新增 `stats` 子命令及 `--top N` 参数 (completed 2026-06-01)
 - [x] **Phase 52: 统计输出与 Exporter 集成** — 慢 SQL / 高频 SQL TOP-N 通过现有 exporter 输出 (completed 2026-06-01)
 
-### v1.14 stats 时间段过滤 (Phases 53–54)
+</details>
+
+<details>
+<summary>✅ v1.14 stats 时间段过滤 (Phases 53–54) — SHIPPED 2026-06-02</summary>
 
 - [x] **Phase 53: 时间段配置与 CLI 参数** — 扩展 StatsConfig、opts.rs 新增 --from/--to、格式验证与优先级合并 (completed 2026-06-01)
 - [x] **Phase 54: StatsAccumulator 时间过滤** — 在聚合层按 ts 字段跳过时间段外的记录 (completed 2026-06-02)
+
+</details>
 
 <details>
 <summary>✅ v1.15 工程质量全面提升 (Phases 55–58) — SHIPPED 2026-06-02</summary>
@@ -178,13 +184,18 @@ Full details: `.planning/milestones/v1.15-ROADMAP.md`
 
 </details>
 
-### v1.16 工程质量深化 (Phases 59–63)
+<details>
+<summary>✅ v1.16.0 工程质量深化 (Phases 59–63) — SHIPPED 2026-06-03</summary>
 
 - [x] **Phase 59: cli/run 与 exporter/pipeline 结构整理** — 识别剩余超 40 行函数并拆分，消除 exporter/pipeline 模块内重复代码 (completed 2026-06-03)
 - [x] **Phase 60: 错误处理路径统一** — 统一错误转换和传播路径，删除冗余 unwrap/expect (completed 2026-06-03)
 - [x] **Phase 61: Cross.toml SHA 固定** — 将 edge 浮动标签替换为固定 SHA digest，提升构建可复现性 (completed 2026-06-03)
 - [x] **Phase 62: 文档完善** — 更新 README、新建 CHANGELOG、补全 config.toml 模板注释 (completed 2026-06-03)
 - [x] **Phase 63: 测试覆盖提升** — 运行覆盖率分析并按结果补全关键路径测试 (completed 2026-06-03)
+
+Full details: `.planning/milestones/v1.16.0-ROADMAP.md`
+
+</details>
 
 ## Phase Details
 
@@ -653,12 +664,12 @@ Full details: `.planning/milestones/v1.15-ROADMAP.md`
 | 56. stats 模块清理与 benchmark 稳定化 | v1.15 | 2/2 | Complete | 2026-06-02 |
 | 57. e2e 测试扩展 | v1.15 | 2/2 | Complete | 2026-06-02 |
 | 58. cli/run 函数清理 | v1.15 | 1/1 | Complete | 2026-06-02 |
-| 59. cli/run 与 exporter/pipeline 结构整理 | 6/6 | Complete   | 2026-06-03 |
-| 60. 错误处理路径统一 | 1/1 | Complete    | 2026-06-03 |
-| 61. Cross.toml SHA 固定 | v1.16 | 1/1 | Complete | 2026-06-03 |
-| 62. 文档完善 | 3/3 | Complete    | 2026-06-03 |
-| 63. 测试覆盖提升 | 4/4 | Complete    | 2026-06-03 |
+| 59. cli/run 与 exporter/pipeline 结构整理 | v1.16.0 | Complete | 2026-06-03 |
+| 60. 错误处理路径统一 | v1.16.0 | Complete | 2026-06-03 |
+| 61. Cross.toml SHA 固定 | v1.16.0 | Complete | 2026-06-03 |
+| 62. 文档完善 | v1.16.0 | Complete | 2026-06-03 |
+| 63. 测试覆盖提升 | v1.16.0 | Complete | 2026-06-03 |
 
 ---
 *Created: 2026-05-21 for milestone v1.10*
-*Updated: 2026-06-03 — Phase 61 planning complete; Phase 61 plan created (61-01-PLAN.md)*
+*Updated: 2026-06-03 — v1.16.0 milestone archived*

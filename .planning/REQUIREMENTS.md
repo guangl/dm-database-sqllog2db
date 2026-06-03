@@ -10,13 +10,13 @@
 
 ### 代码结构整理（STRUCT）
 
-- [ ] **STRUCT-01**: cli/run 中超过 40 行的函数（除已拆分的 handle_run 外）识别并进行语义拆分
-- [ ] **STRUCT-02**: exporter/pipeline 模块内重复代码消除，模块边界清晰化
+- [x] **STRUCT-01**: cli/run 中超过 40 行的函数（除已拆分的 handle_run 外）识别并进行语义拆分
+- [x] **STRUCT-02**: exporter/pipeline 模块内重复代码消除，模块边界清晰化
 - [x] **STRUCT-03**: 错误转换和传播路径统一，删除冗余 unwrap/expect
 
 ### CI/CD 配置（CROSS）
 
-- [ ] **CROSS-01**: Cross.toml 中 aarch64-linux cross-rs image 的 edge 浮动标签替换为固定 SHA digest，提升构建可复现性
+- [x] **CROSS-01**: Cross.toml 中 aarch64-linux cross-rs image 的 edge 浮动标签替换为固定 SHA digest，提升构建可复现性
 
 ### 文档完善（DOC）
 
@@ -54,12 +54,12 @@
 
 | REQ-ID | Phase | Notes |
 |--------|-------|-------|
-| STRUCT-01 | — | — |
-| STRUCT-02 | — | — |
-| STRUCT-03 | — | — |
-| CROSS-01 | — | — |
-| DOC-01 | — | — |
-| DOC-02 | — | — |
-| DOC-03 | — | — |
-| TEST-01 | — | — |
-| TEST-02 | — | — |
+| STRUCT-01 | 59 | cli/run 结构整理 |
+| STRUCT-02 | 59 | exporter/pipeline 重复消除 |
+| STRUCT-03 | 60 | unwrap/expect 注释统一 |
+| CROSS-01 | 61 | Cross.toml SHA digest 固定 |
+| DOC-01 | 62 | README 更新 |
+| DOC-02 | 62 | CHANGELOG 补全 |
+| DOC-03 | 62 | config 模板注释完善 |
+| TEST-01 | 63 | llvm-cov 覆盖率报告 |
+| TEST-02 | 63 | 关键路径测试补全 |
