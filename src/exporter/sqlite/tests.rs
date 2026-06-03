@@ -543,9 +543,9 @@ fn test_sqlite_export_one_normalized_without_initialize_returns_err() {
 }
 
 #[test]
-fn test_sqlite_initialize_pragmas_applied() {
-    // 覆盖 initialize_pragmas 调用路径 + 验证 initialize() 返回 Ok
-    // initialize() 调用 initialize_pragmas，若 pragmas 执行成功则返回 Ok
+fn test_sqlite_initialize_succeeds_and_creates_db() {
+    // 验证 initialize() 成功执行 initialize_pragmas + CREATE TABLE 并创建 DB 文件。
+    // journal_mode=OFF 是会话级 pragma，不持久化到连接关闭后，所以在连接期间验证。
     let dir = tempfile::TempDir::new().unwrap();
     let dbfile = dir.path().join("pragma.db");
 
@@ -556,7 +556,6 @@ fn test_sqlite_initialize_pragmas_applied() {
             true,
             false,
         );
-        // initialize() 内部调用 initialize_pragmas；返回 Ok 即表示 pragma 未 panic
         let result = exporter.initialize();
         assert!(
             result.is_ok(),
@@ -570,6 +569,20 @@ fn test_sqlite_initialize_pragmas_applied() {
     assert!(
         dbfile.metadata().unwrap().len() > 0,
         "DB 文件不应为空（至少含 SQLite header）"
+    );
+
+    // 验证 tbl 表已创建（CREATE TABLE IF NOT EXISTS 由 initialize 执行）
+    let conn = rusqlite::Connection::open(&dbfile).unwrap();
+    let table_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='tbl'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(
+        table_count, 1,
+        "initialize 应创建目标表 'tbl'，实际: {table_count}"
     );
 }
 
