@@ -282,4 +282,306 @@ mod tests {
             "NoFilesFound should have Warning severity"
         );
     }
+
+    // ===== ConfigError 全 5 个变体 =====
+
+    #[test]
+    fn test_config_not_found_is_fatal_critical_suggestion() {
+        let err = Error::Config(ConfigError::NotFound(PathBuf::from("/no/file")));
+        assert!(err.is_fatal(), "ConfigError::NotFound should be fatal");
+        assert_eq!(
+            err.severity(),
+            ErrorSeverity::Critical,
+            "ConfigError::NotFound should have Critical severity"
+        );
+        assert!(
+            err.suggestion().contains("init"),
+            "ConfigError::NotFound suggestion should contain 'init', got: {}",
+            err.suggestion()
+        );
+    }
+
+    #[test]
+    fn test_config_parse_failed_suggestion_mentions_toml() {
+        let err = Error::Config(ConfigError::ParseFailed {
+            path: PathBuf::from("/cfg.toml"),
+            reason: "unexpected key".into(),
+        });
+        assert!(err.is_fatal(), "ConfigError::ParseFailed should be fatal");
+        assert_eq!(
+            err.severity(),
+            ErrorSeverity::Critical,
+            "ConfigError::ParseFailed should have Critical severity"
+        );
+        assert!(
+            err.suggestion().contains("TOML"),
+            "ConfigError::ParseFailed suggestion should contain 'TOML', got: {}",
+            err.suggestion()
+        );
+    }
+
+    #[test]
+    fn test_config_invalid_log_level_suggestion() {
+        let err = Error::Config(ConfigError::InvalidLogLevel {
+            level: "verbose".into(),
+            valid_levels: vec!["info".into(), "debug".into()],
+        });
+        assert!(
+            err.is_fatal(),
+            "ConfigError::InvalidLogLevel should be fatal"
+        );
+        assert!(
+            err.suggestion().contains("log levels"),
+            "ConfigError::InvalidLogLevel suggestion should contain 'log levels', got: {}",
+            err.suggestion()
+        );
+    }
+
+    #[test]
+    fn test_config_invalid_value_suggestion() {
+        let err = Error::Config(ConfigError::InvalidValue {
+            field: "buffer_size".into(),
+            value: "-1".into(),
+            reason: "must be positive".into(),
+        });
+        assert!(err.is_fatal(), "ConfigError::InvalidValue should be fatal");
+        assert!(
+            err.suggestion().contains("field value"),
+            "ConfigError::InvalidValue suggestion should contain 'field value', got: {}",
+            err.suggestion()
+        );
+    }
+
+    #[test]
+    fn test_config_no_exporters_suggestion() {
+        let err = Error::Config(ConfigError::NoExporters);
+        assert!(err.is_fatal(), "ConfigError::NoExporters should be fatal");
+        assert!(
+            err.suggestion().contains("exporter"),
+            "ConfigError::NoExporters suggestion should contain 'exporter', got: {}",
+            err.suggestion()
+        );
+    }
+
+    // ===== FileError 全 3 个变体 =====
+
+    #[test]
+    fn test_file_already_exists_is_fatal() {
+        let err = Error::File(FileError::AlreadyExists {
+            path: PathBuf::from("/out.csv"),
+        });
+        assert!(err.is_fatal(), "FileError::AlreadyExists should be fatal");
+        assert_eq!(
+            err.severity(),
+            ErrorSeverity::Critical,
+            "FileError::AlreadyExists should have Critical severity"
+        );
+        assert!(
+            err.suggestion().contains("--force"),
+            "FileError::AlreadyExists suggestion should contain '--force', got: {}",
+            err.suggestion()
+        );
+    }
+
+    #[test]
+    fn test_file_write_failed_not_fatal_error_severity() {
+        let err = Error::File(FileError::WriteFailed {
+            path: PathBuf::from("/out.csv"),
+            reason: "permission denied".into(),
+        });
+        assert!(
+            !err.is_fatal(),
+            "FileError::WriteFailed should not be fatal"
+        );
+        assert_eq!(
+            err.severity(),
+            ErrorSeverity::Error,
+            "FileError::WriteFailed should have Error severity"
+        );
+        assert!(
+            err.suggestion().contains("disk space"),
+            "FileError::WriteFailed suggestion should contain 'disk space', got: {}",
+            err.suggestion()
+        );
+    }
+
+    #[test]
+    fn test_file_create_directory_failed_is_fatal() {
+        let err = Error::File(FileError::CreateDirectoryFailed {
+            path: PathBuf::from("/no/dir"),
+            reason: "permission denied".into(),
+        });
+        assert!(
+            err.is_fatal(),
+            "FileError::CreateDirectoryFailed should be fatal"
+        );
+        assert_eq!(
+            err.severity(),
+            ErrorSeverity::Critical,
+            "FileError::CreateDirectoryFailed should have Critical severity"
+        );
+        assert!(
+            err.suggestion().contains("parent directory"),
+            "FileError::CreateDirectoryFailed suggestion should contain 'parent directory', got: {}",
+            err.suggestion()
+        );
+    }
+
+    // ===== ExportError 全 2 个变体 =====
+
+    #[test]
+    fn test_export_write_failed_not_fatal_error_severity() {
+        let err = Error::Export(ExportError::WriteFailed {
+            path: PathBuf::from("/out.db"),
+            reason: "disk full".into(),
+        });
+        assert!(
+            !err.is_fatal(),
+            "ExportError::WriteFailed should not be fatal"
+        );
+        assert_eq!(
+            err.severity(),
+            ErrorSeverity::Error,
+            "ExportError::WriteFailed should have Error severity"
+        );
+        assert!(
+            err.suggestion().contains("disk space"),
+            "ExportError::WriteFailed suggestion should contain 'disk space', got: {}",
+            err.suggestion()
+        );
+    }
+
+    #[test]
+    fn test_export_database_failed_is_fatal_critical() {
+        let err = Error::Export(ExportError::DatabaseFailed {
+            reason: "locked".into(),
+        });
+        assert!(
+            err.is_fatal(),
+            "ExportError::DatabaseFailed should be fatal"
+        );
+        assert_eq!(
+            err.severity(),
+            ErrorSeverity::Critical,
+            "ExportError::DatabaseFailed should have Critical severity"
+        );
+        assert!(
+            err.suggestion().contains("SQLite"),
+            "ExportError::DatabaseFailed suggestion should contain 'SQLite', got: {}",
+            err.suggestion()
+        );
+    }
+
+    // ===== Error::Io 和 Error::Interrupted =====
+
+    #[test]
+    fn test_io_error_is_fatal_critical() {
+        let err = Error::Io(std::io::Error::other("test io error"));
+        assert!(err.is_fatal(), "Error::Io should be fatal");
+        assert_eq!(
+            err.severity(),
+            ErrorSeverity::Critical,
+            "Error::Io should have Critical severity"
+        );
+        assert!(
+            err.suggestion().contains("filesystem"),
+            "Error::Io suggestion should contain 'filesystem', got: {}",
+            err.suggestion()
+        );
+    }
+
+    #[test]
+    fn test_interrupted_is_fatal_critical() {
+        let err = Error::Interrupted;
+        assert!(err.is_fatal(), "Error::Interrupted should be fatal");
+        assert_eq!(
+            err.severity(),
+            ErrorSeverity::Critical,
+            "Error::Interrupted should have Critical severity"
+        );
+        assert!(
+            err.suggestion().contains("interrupted"),
+            "Error::Interrupted suggestion should contain 'interrupted', got: {}",
+            err.suggestion()
+        );
+    }
+
+    // ===== ParserError 3 个变体（不含已覆盖的 NoFilesFound）=====
+
+    #[test]
+    fn test_parser_path_not_found_suggestion() {
+        let err = Error::Parser(ParserError::PathNotFound {
+            path: PathBuf::from("/missing.log"),
+        });
+        assert!(
+            !err.is_fatal(),
+            "ParserError::PathNotFound should not be fatal"
+        );
+        assert_eq!(
+            err.severity(),
+            ErrorSeverity::Warning,
+            "ParserError::PathNotFound should have Warning severity"
+        );
+        assert!(
+            err.suggestion().contains("log file exists"),
+            "ParserError::PathNotFound suggestion should contain 'log file exists', got: {}",
+            err.suggestion()
+        );
+    }
+
+    #[test]
+    fn test_parser_invalid_path_suggestion() {
+        let err = Error::Parser(ParserError::InvalidPath {
+            path: PathBuf::from("/bad\0path"),
+            reason: "null byte in path".into(),
+            line_number: Some(42),
+        });
+        assert!(
+            !err.is_fatal(),
+            "ParserError::InvalidPath should not be fatal"
+        );
+        assert!(
+            err.suggestion().contains("path format"),
+            "ParserError::InvalidPath suggestion should contain 'path format', got: {}",
+            err.suggestion()
+        );
+    }
+
+    #[test]
+    fn test_parser_read_dir_failed_is_fatal() {
+        let err = Error::Parser(ParserError::ReadDirFailed {
+            path: PathBuf::from("/locked/dir"),
+            reason: "permission denied".into(),
+        });
+        assert!(
+            err.is_fatal(),
+            "ParserError::ReadDirFailed should be fatal (only fatal Parser variant)"
+        );
+        assert!(
+            err.suggestion().contains("directory permissions"),
+            "ParserError::ReadDirFailed suggestion should contain 'directory permissions', got: {}",
+            err.suggestion()
+        );
+    }
+
+    // ===== ErrorSeverity Display =====
+
+    #[test]
+    fn test_error_severity_display_strings() {
+        assert_eq!(
+            format!("{}", ErrorSeverity::Warning),
+            "WARNING",
+            "ErrorSeverity::Warning should display as 'WARNING'"
+        );
+        assert_eq!(
+            format!("{}", ErrorSeverity::Error),
+            "ERROR",
+            "ErrorSeverity::Error should display as 'ERROR'"
+        );
+        assert_eq!(
+            format!("{}", ErrorSeverity::Critical),
+            "CRITICAL",
+            "ErrorSeverity::Critical should display as 'CRITICAL'"
+        );
+    }
 }
