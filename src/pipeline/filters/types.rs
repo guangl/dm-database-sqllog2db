@@ -243,3 +243,306 @@ pub struct SqlFilters {
     #[serde(default, alias = "exclude_patterns")]
     pub excludes: Option<Vec<String>>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 用于触发 `FiltersFeature` 自定义 Deserialize 的包装结构，
+    /// 将 `[filter]` 节反序列化为 `FiltersFeature`（绕过顶层 TOML 包装要求）。
+    #[derive(serde::Deserialize)]
+    struct FilterWrapper {
+        filter: FiltersFeature,
+    }
+
+    // ── serde_helpers::vec_to_hashset ──────────────────────────
+
+    #[test]
+    fn test_trxids_deserialized_to_hashset() {
+        let toml = r#"
+            [filter]
+            enable = true
+            trxids = ["TX001", "TX002"]
+        "#;
+        let w: FilterWrapper = toml::from_str(toml).unwrap();
+        let trxids = w.filter.include.trxids.unwrap();
+        assert!(trxids.contains("TX001"), "trxids should contain TX001");
+        assert!(trxids.contains("TX002"), "trxids should contain TX002");
+        assert_eq!(trxids.len(), 2, "trxids len should be 2");
+    }
+
+    #[test]
+    fn test_trxids_absent_returns_none() {
+        let toml = "[filter]\nenable = true\n";
+        let w: FilterWrapper = toml::from_str(toml).unwrap();
+        assert!(
+            w.filter.include.trxids.is_none(),
+            "trxids should be None when absent"
+        );
+    }
+
+    // ── serde_helpers::vec_to_i64_hashset ─────────────────────
+
+    #[test]
+    fn test_exec_ids_deserialized_to_hashset() {
+        let toml = "[filter]\nenable = true\n[filter.indicators]\nexec_ids = [1, 2, 42]\n";
+        let w: FilterWrapper = toml::from_str(toml).unwrap();
+        let ids = w.filter.indicators.exec_ids.unwrap();
+        assert!(ids.contains(&1_i64), "exec_ids should contain 1");
+        assert!(ids.contains(&2_i64), "exec_ids should contain 2");
+        assert!(ids.contains(&42_i64), "exec_ids should contain 42");
+        assert_eq!(ids.len(), 3, "exec_ids len should be 3");
+    }
+
+    #[test]
+    fn test_exec_ids_absent_returns_none() {
+        let toml = "[filter]\nenable = true\n";
+        let w: FilterWrapper = toml::from_str(toml).unwrap();
+        assert!(
+            w.filter.indicators.exec_ids.is_none(),
+            "exec_ids should be None when absent"
+        );
+    }
+
+    // ── FiltersFeature::from — 旧格式扁平字段映射 ───────────────
+
+    #[test]
+    fn test_legacy_flat_usernames_mapped_to_include_users() {
+        let toml = r#"
+            [filter]
+            enable = true
+            usernames = ["ALICE", "BOB"]
+        "#;
+        let w: FilterWrapper = toml::from_str(toml).unwrap();
+        assert_eq!(
+            w.filter.include.users,
+            Some(vec!["ALICE".to_string(), "BOB".to_string()]),
+            "usernames should map to include.users"
+        );
+    }
+
+    #[test]
+    fn test_legacy_flat_exclude_usernames_mapped() {
+        let toml = r#"
+            [filter]
+            enable = true
+            exclude_usernames = ["X"]
+        "#;
+        let w: FilterWrapper = toml::from_str(toml).unwrap();
+        assert_eq!(
+            w.filter.exclude.users,
+            Some(vec!["X".to_string()]),
+            "exclude_usernames should map to exclude.users"
+        );
+    }
+
+    #[test]
+    fn test_legacy_flat_all_include_fields_mapped() {
+        let toml = r#"
+            [filter]
+            enable = true
+            client_ips = ["10.0.0.1"]
+            sess_ids = ["S1"]
+            thrd_ids = ["T1"]
+            statements = ["ST1"]
+            appnames = ["A1"]
+            tags = ["TG1"]
+            start_ts = "2024-01-01"
+            end_ts = "2024-12-31"
+        "#;
+        let w: FilterWrapper = toml::from_str(toml).unwrap();
+        let inc = &w.filter.include;
+        assert_eq!(
+            inc.ips,
+            Some(vec!["10.0.0.1".to_string()]),
+            "client_ips → ips"
+        );
+        assert_eq!(
+            inc.sessions,
+            Some(vec!["S1".to_string()]),
+            "sess_ids → sessions"
+        );
+        assert_eq!(
+            inc.threads,
+            Some(vec!["T1".to_string()]),
+            "thrd_ids → threads"
+        );
+        assert_eq!(
+            inc.statements,
+            Some(vec!["ST1".to_string()]),
+            "statements → statements"
+        );
+        assert_eq!(inc.apps, Some(vec!["A1".to_string()]), "appnames → apps");
+        assert_eq!(inc.tags, Some(vec!["TG1".to_string()]), "tags → tags");
+        assert_eq!(
+            inc.start_ts,
+            Some("2024-01-01".to_string()),
+            "start_ts → start_ts"
+        );
+        assert_eq!(
+            inc.end_ts,
+            Some("2024-12-31".to_string()),
+            "end_ts → end_ts"
+        );
+    }
+
+    // ── FiltersFeature::from — 混合格式优先级 ───────────────────
+
+    #[test]
+    fn test_mixed_format_new_table_takes_priority() {
+        let toml = r#"
+            [filter]
+            enable = true
+            usernames = ["IGNORED"]
+            [filter.include]
+            users = ["WINNER"]
+        "#;
+        let w: FilterWrapper = toml::from_str(toml).unwrap();
+        assert_eq!(
+            w.filter.include.users,
+            Some(vec!["WINNER".to_string()]),
+            "new [filter.include] sub-table should take priority over flat usernames"
+        );
+    }
+
+    #[test]
+    fn test_mixed_format_exclude_new_table_priority() {
+        let toml = r#"
+            [filter]
+            enable = true
+            exclude_usernames = ["IGNORED"]
+            [filter.exclude]
+            users = ["WINNER"]
+        "#;
+        let w: FilterWrapper = toml::from_str(toml).unwrap();
+        assert_eq!(
+            w.filter.exclude.users,
+            Some(vec!["WINNER".to_string()]),
+            "new [filter.exclude] sub-table should take priority over flat exclude_usernames"
+        );
+    }
+
+    // ── IncludeFilters::has_filters — ips/sessions/threads/apps/tags ──
+
+    #[test]
+    fn test_include_filters_has_filters_with_ips() {
+        let filters = IncludeFilters {
+            ips: Some(vec!["10.0.0.1".to_string()]),
+            ..IncludeFilters::default()
+        };
+        assert!(
+            filters.has_filters(),
+            "has_filters should be true when ips is set"
+        );
+    }
+
+    #[test]
+    fn test_include_filters_has_filters_with_sessions() {
+        let filters = IncludeFilters {
+            sessions: Some(vec!["SESS1".to_string()]),
+            ..IncludeFilters::default()
+        };
+        assert!(
+            filters.has_filters(),
+            "has_filters should be true when sessions is set"
+        );
+    }
+
+    #[test]
+    fn test_include_filters_has_filters_with_threads() {
+        let filters = IncludeFilters {
+            threads: Some(vec!["T1".to_string()]),
+            ..IncludeFilters::default()
+        };
+        assert!(
+            filters.has_filters(),
+            "has_filters should be true when threads is set"
+        );
+    }
+
+    #[test]
+    fn test_include_filters_has_filters_with_apps() {
+        let filters = IncludeFilters {
+            apps: Some(vec!["MyApp".to_string()]),
+            ..IncludeFilters::default()
+        };
+        assert!(
+            filters.has_filters(),
+            "has_filters should be true when apps is set"
+        );
+    }
+
+    #[test]
+    fn test_include_filters_has_filters_with_tags() {
+        let filters = IncludeFilters {
+            tags: Some(vec!["tag1".to_string()]),
+            ..IncludeFilters::default()
+        };
+        assert!(
+            filters.has_filters(),
+            "has_filters should be true when tags is set"
+        );
+    }
+
+    // ── ExcludeFilters::has_filters — ips/sessions/threads/apps/tags ──
+
+    #[test]
+    fn test_exclude_filters_has_filters_with_ips() {
+        let filters = ExcludeFilters {
+            ips: Some(vec!["192.168.1.1".to_string()]),
+            ..ExcludeFilters::default()
+        };
+        assert!(
+            filters.has_filters(),
+            "exclude has_filters should be true when ips is set"
+        );
+    }
+
+    #[test]
+    fn test_exclude_filters_has_filters_with_sessions() {
+        let filters = ExcludeFilters {
+            sessions: Some(vec!["SESS2".to_string()]),
+            ..ExcludeFilters::default()
+        };
+        assert!(
+            filters.has_filters(),
+            "exclude has_filters should be true when sessions is set"
+        );
+    }
+
+    #[test]
+    fn test_exclude_filters_has_filters_with_threads() {
+        let filters = ExcludeFilters {
+            threads: Some(vec!["T2".to_string()]),
+            ..ExcludeFilters::default()
+        };
+        assert!(
+            filters.has_filters(),
+            "exclude has_filters should be true when threads is set"
+        );
+    }
+
+    #[test]
+    fn test_exclude_filters_has_filters_with_apps() {
+        let filters = ExcludeFilters {
+            apps: Some(vec!["OtherApp".to_string()]),
+            ..ExcludeFilters::default()
+        };
+        assert!(
+            filters.has_filters(),
+            "exclude has_filters should be true when apps is set"
+        );
+    }
+
+    #[test]
+    fn test_exclude_filters_has_filters_with_tags() {
+        let filters = ExcludeFilters {
+            tags: Some(vec!["exclude_tag".to_string()]),
+            ..ExcludeFilters::default()
+        };
+        assert!(
+            filters.has_filters(),
+            "exclude has_filters should be true when tags is set"
+        );
+    }
+}
