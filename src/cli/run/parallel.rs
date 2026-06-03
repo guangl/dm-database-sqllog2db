@@ -277,6 +277,7 @@ pub(super) fn process_csv_parallel(
         .exporter
         .csv
         .as_ref()
+        // infallible: process_csv_parallel is only called when CSV exporter is present
         .expect("parallel CSV requires CSV exporter");
     let output_path = Path::new(&csv_cfg.file);
     let append_to_existing = csv_cfg.append && output_path.exists();
