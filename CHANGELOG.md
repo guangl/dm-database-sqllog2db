@@ -5,7 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.13] - 2026-06-01
+## [Unreleased]
+
+## [1.13.0] - 2026-06-01
 
 ### Added
 
@@ -18,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.12] - 2026-05-28
+## [1.12.0] - 2026-05-28
 
 ### Added
 
@@ -39,7 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.11] - 2026-05-25
+## [1.11.0] - 2026-05-25
 
 ### Added
 
@@ -69,7 +71,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.10] - 2026-05-21
+## [1.10.0] - 2026-05-21
 
 ### Added
 
@@ -85,23 +87,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.9] - 2026-05-20
-
-### Removed
-
-- **6 non-essential dependencies**: removed `mimalloc` (custom allocator), `ahash` (custom hasher), `compact_str` (compact string), `smallvec` (small vector), `indicatif` (progress bar), and `chrono` (time formatting). These were unnecessary for the core streaming parse-export pipeline and their removal reduces binary size and compile time.
-- **`S: BuildHasher` generic parameter**: removed from `compute_normalized()` to simplify the API surface.
-
-### Changed
-
-- **rusqlite feature trim**: reduced rusqlite features to `bundled` only, removing unnecessary optional features.
-- **BufWriter capacity**: reduced from 16MB to 2MB for lower memory footprint without throughput regression.
-- **Time handling**: replaced `chrono::Local` with `std::time::SystemTime` UTC computation, eliminating the chrono dependency.
-- **Progress reporting**: replaced indicatif spinner with `eprintln!` output for simpler, dependency-free progress reporting.
-
----
-
-## [1.7] - 2026-05-19
+## [1.7.0] - 2026-05-19
 
 ### Removed
 
@@ -119,7 +105,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.6] - 2026-05-19
+## [1.6.0] - 2026-05-19
 
 ### Added
 
@@ -134,7 +120,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.5] - 2026-05-18
+## [1.5.0] - 2026-05-18
 
 ### Added
 
@@ -145,7 +131,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.4] - 2026-05-18
+## [1.4.0] - 2026-05-18
 
 ### Changed
 
@@ -161,7 +147,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.3] - 2026-05-17
+## [1.3.0] - 2026-05-17
 
 ### Added
 
@@ -186,7 +172,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.2] - 2026-05-15
+## [1.2.0] - 2026-05-15
 
 ### Added
 
@@ -239,7 +225,7 @@ The 0.x series (0.1.0 through 0.10.7) covered the initial development of sqllog2
 
 - Streaming SQL log parsing with multi-file, directory, and glob input modes
 - Multi-exporter architecture (CSV, JSONL, SQLite, DuckDB, PostgreSQL, Oracle, DM) -- later simplified to CSV + SQLite
-- Feature flags for conditional compilation (`[csv]`, `[jsonl]`, `[sqlite]`, `[filters]`) -- later removed for unified binary
+- Feature flags for conditional compilation (`[csv]`, `[jsonl]`, `[sqlite]`, `[filters]`, `replace_parameters`, `full`) -- later removed for unified binary
 - CLI commands: `init`, `validate`, `run`, `stats`, `digest`, `show-config`, `completions`, `man`
 - GB18030 encoding support, `replace_parameters` SQL normalization
 - Error logging, progress bar, exit codes, graceful shutdown (SIGINT)
@@ -250,15 +236,16 @@ The 0.x series (0.1.0 through 0.10.7) covered the initial development of sqllog2
 
 See git history for full details.
 
-[1.11]: https://github.com/guangl/sqllog2db/releases/tag/v1.11
-[1.10]: https://github.com/guangl/sqllog2db/releases/tag/v1.10
-[1.9]: https://github.com/guangl/sqllog2db/releases/tag/v1.9
-[1.7]: https://github.com/guangl/sqllog2db/releases/tag/v1.7
-[1.6]: https://github.com/guangl/sqllog2db/releases/tag/v1.6
-[1.5]: https://github.com/guangl/sqllog2db/releases/tag/v1.5
-[1.4]: https://github.com/guangl/sqllog2db/releases/tag/v1.4
-[1.3]: https://github.com/guangl/sqllog2db/releases/tag/v1.3
+[1.13.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.13.0
+[1.12.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.12.0
+[1.11.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.11.0
+[1.10.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.10.0
+[1.7.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.7.0
+[1.6.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.6.0
+[1.5.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.5.0
+[1.4.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.4.0
+[1.3.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.3.0
 [1.2.1]: https://github.com/guangl/sqllog2db/releases/tag/v1.2.1
-[1.2]: https://github.com/guangl/sqllog2db/releases/tag/v1.2
-[1.0.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.0
+[1.2.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.2.0
+[1.0.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.0.0
 [0.x]: https://github.com/guangl/sqllog2db/releases/tag/v0.10.7
