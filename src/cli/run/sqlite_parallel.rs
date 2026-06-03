@@ -96,17 +96,16 @@ fn parallel_collect(
 /// `(path, count)` 列表，`parse_stats` 汇总所有文件的解析错误统计。
 /// 适用条件：SQLite 导出 + 多文件 + jobs > 1 + 非 stdin 管道。
 ///
-/// `_show_progress`, `_field_mask`, `_ordered_indices` 保留参数签名以与
-/// `process_csv_parallel` 的调用方对称，方便日后扩展。
-/// - `_show_progress`：进度显示尚未在 `SQLite` 并行路径中实现。
-/// - `_field_mask` / `_ordered_indices`：已通过 `cfg` 传入 `ExporterManager`，无需重复传递。
+/// `_field_mask`, `_ordered_indices` 保留参数签名以便日后扩展：
+///   - `_field_mask` / `_ordered_indices`：已通过 `cfg` 传入 `ExporterManager`，无需重复传递。
+///
+/// 注意：并行模式暂不支持每文件进度显示；外层 `run_sqlite_parallel` 的 verbose eprintln 已足够。
 #[allow(clippy::too_many_arguments)]
 pub(super) fn process_sqlite_parallel(
     log_files: &[PathBuf],
     cfg: &crate::config::Config,
     pipeline: &Pipeline,
     jobs: usize,
-    _show_progress: bool,
     interrupted: &Arc<AtomicBool>,
     do_normalize: bool,
     placeholder_override: Option<bool>,

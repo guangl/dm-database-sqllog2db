@@ -260,20 +260,19 @@ fn finalize_concat(
 ///
 /// 返回：`(已处理文件列表, 跳过文件数, 解析错误统计)`，已处理列表顺序与 `log_files` 一致。
 /// 适用条件：CSV 导出 + 多文件 + jobs > 1 + 无 limit。
+/// 注意：并行模式暂不支持每文件进度显示；外层 `run_csv_parallel` 的 verbose eprintln 已足够。
 #[allow(clippy::too_many_arguments)]
 pub(super) fn process_csv_parallel(
     log_files: &[PathBuf],
     cfg: &crate::config::Config,
     pipeline: &Pipeline,
     jobs: usize,
-    show_progress: bool,
     interrupted: &Arc<AtomicBool>,
     do_normalize: bool,
     placeholder_override: Option<bool>,
     field_mask: FieldMask,
     ordered_indices: &[usize],
 ) -> Result<(Vec<(PathBuf, usize)>, usize, ErrorStats)> {
-    let _ = show_progress;
     let csv_cfg = cfg
         .exporter
         .csv
