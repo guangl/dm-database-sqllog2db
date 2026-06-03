@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.15.0] - 2026-06-02
+
+### CI/CD
+
+- **GitHub Actions 版本统一**：修复 `.github/workflows/` 下 `ci.yaml`、`bench.yml`、`lychee.yml`、`pages.yml` 中误升级的 `actions/checkout@v6` 与 `actions/upload-artifact@v7`，全部回退到 `@v4`（CICD-01，Phase 55）
+- **aarch64-linux 跨编译镜像配置**：新建 `Cross.toml` 锁定 `ghcr.io/cross-rs/aarch64-unknown-linux-gnu` 镜像，初期使用浮动 tag，Phase 61 进一步替换为 SHA256 摘要保证可复现构建（CICD-04 + CROSS-01，Phase 55 + Phase 61）
+- **release workflow 竞争修复**：重构 `release.yaml`，拆出独立 `create-release` job 先于 4 个 matrix build job 运行，消除并行写入 release body 的竞争条件（CICD-02 + CICD-03，Phase 55）
+
+### Changed
+
+- **`cli/run/mod.rs` 拆分**：`handle_run` 提取为 7 个私有辅助函数（`resolve_input_files` / `merge_trxid_prescan` / `make_progress_bar` / `run_csv_parallel` / `run_sqlite_parallel` / `run_sequential` / `print_run_summary`），所有函数体 ≤40 行（CLEAN-02，Phase 58）
+- **公共扫描模块**：新建 `src/scanner.rs` 抽取共享文件扫描逻辑，`stats` 模块与 `cli/run/processor.rs` 统一调用（Phase 56）
+
+### Added
+
+- **run / init 子命令端到端测试**：`tests/integration.rs` 新增 4 个 e2e 测试覆盖 TEST-01 + TEST-02——run 子命令 CSV 输出（字段名 + 记录数 + 退出码 0）、run 子命令 SQLite `sqllog_records` 表行数、init 子命令成功路径、init 子命令文件已存在时退出非零（Phase 57）
+- **stats 时间范围跨字段校验**：`validate_stats_time_range` 新增 from ≤ to 检查 + 4 个单元测试 + 1 个 e2e 测试（TEST-03，Phase 57）
+
+### Fixed
+
+- **删除 stats 模块占位符**：移除 `src/cli/stats/mod.rs` 中遗留的 "not yet active" `warn!` 占位符调用（CLEAN-01，Phase 56）
+- **benchmark 文档完善**：`benches/BENCHMARKS.md` 追加 CI Artifact 使用说明章节（命名规则、下载方式、JSON 结构、手动对比方法），benchmark workflow 设置 `continue-on-error: true` 不作为 merge 门控（BENCH-01，Phase 56）
+
+---
+
 ## [1.14.0] - 2026-06-02
 
 ### Added
@@ -251,6 +276,8 @@ The 0.x series (0.1.0 through 0.10.7) covered the initial development of sqllog2
 
 See git history for full details.
 
+[Unreleased]: https://github.com/guangl/sqllog2db/compare/v1.15.0...HEAD
+[1.15.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.15.0
 [1.14.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.14.0
 [1.13.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.13.0
 [1.12.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.12.0
