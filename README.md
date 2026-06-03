@@ -119,6 +119,13 @@ sqllog2db stats -c config.toml
 sqllog2db stats -c config.toml --top 10
 ```
 
+指定时间范围统计（v1.14+，仅聚合 `ts` 字段落入 `--from` 与 `--to` 区间的记录）：
+
+```bash
+sqllog2db stats -c config.toml --from 2024-01-01 --to 2024-01-31
+sqllog2db stats -c config.toml --from "2024-01-01 00:00:00" --to "2024-01-31 23:59:59" --top 20
+```
+
 详细用法参见[快速入门指南](./docs/quickstart.md)。
 
 ## 配置
