@@ -1,6 +1,6 @@
 ---
 phase: 59-cli-run-exporter-pipeline
-reviewed: 2026-06-03T00:00:00Z
+reviewed: 2026-06-03T12:00:00Z
 depth: standard
 files_reviewed: 6
 files_reviewed_list:
@@ -11,209 +11,222 @@ files_reviewed_list:
   - src/cli/run/processor.rs
   - src/cli/run/sqlite_parallel.rs
 findings:
-  critical: 2
+  critical: 1
   warning: 3
-  info: 1
+  info: 2
   total: 6
 status: issues_found
 ---
 
 # Phase 59: Code Review Report
 
-**Reviewed:** 2026-06-03T00:00:00Z
+**Reviewed:** 2026-06-03T12:00:00Z
 **Depth:** standard
 **Files Reviewed:** 6
 **Status:** issues_found
 
 ## Summary
 
-This phase refactored `cli/run` by splitting oversized functions and extracting a shared `collector.rs`. The high-level structure is sound, but two correctness defects were introduced or surfaced during the refactor. The first is a semantic divergence between `collector.rs::process_record` and `processor.rs::normalize_and_export` in the filtered-PARAMS path that produces divergent `params_buf` state under certain conditions. The second is a fatal-error re-wrapping in `run_file_loop` that misclassifies a database-fatal error as a non-fatal `WriteFailed` variant, misattributing it to the wrong file path and downgrading the severity label printed to stderr.
+Reviewed six files covering the parallel and sequential CLI run orchestration, filter processing, record collection, and output finalization. The overall decomposition is sound — `collector.rs` correctly mirrors `processor.rs` PARAMS-buffer logic, and the two-phase prescan design is coherent.
 
-Three warnings cover a latent guard omission in `normalize_and_export`, a temp-file partial-write hazard in `concat_csv_parts`, and a dead `verbose` parameter in the parallel wrappers.
+One blocker was found: `concat_csv_parts` deletes a part file while its `BufReader` is still in scope. On Windows this causes `ERROR_SHARING_VIOLATION` (`os error 32`), making the entire parallel CSV export path fail at the cleanup step. Since the codebase already has Windows-specific guards in `mod.rs`, Windows is an intended platform.
+
+Three warnings cover: a missing defensive guard inside `normalize_and_export` (contract mismatch with its doc comment), a fatal-error classification error in `run_file_loop` (wrong error variant, wrong path), and unresponsive interrupt handling for filtered workloads.
+
+Two info items cover a dead-parameter pattern in the parallel function signatures and a merge-before-return ordering oddity in `run_file_loop`.
 
 ---
 
 ## Critical Issues
 
-### CR-01: Fatal database error re-wrapped as non-fatal `ExportError::WriteFailed` in `run_file_loop`
+### CR-01: `concat_csv_parts` deletes a temp file while its reader is still open — fails on Windows
 
-**File:** `src/cli/run/mod.rs:374-378`
+**File:** `src/cli/run/parallel.rs:59`
 
-**Issue:** When a fatal export error occurs (e.g., SQLite `DatabaseFailed`), `normalize_and_export` calls `file_stats.set_fatal(e.to_string())` and breaks the loop. `run_file_loop` then detects `file_stats.has_fatal()` and reconstructs the error as `Error::Export(ExportError::WriteFailed { path: log_file, reason: ... })`.
+**Issue:** Inside the `for` loop, `reader` (`BufReader<File>`) is created at line 47, used by `std::io::copy` at line 58, and is still live (not dropped) when `std::fs::remove_file(part_path)?` executes at line 59. On POSIX systems this is harmless (unlink semantics). On Windows, `remove_file` on an open file handle returns `os error 32` (`ERROR_SHARING_VIOLATION`), which propagates via `?` and aborts the concat.
 
-Two concrete defects result:
+The result: on Windows, the parallel CSV export always fails during the finalization step after all records have been successfully parsed and written to part files. The output CSV is left partially written (only the first part is concatenated before the error occurs on `remove_file`). The subsequent cleanup in `finalize_concat` attempts to delete the partial output file with `let _ = std::fs::remove_file(output_path)`, which may silently leave a truncated CSV behind.
 
-1. **Wrong error variant.** `ExportError::WriteFailed` has `is_fatal() == false` (only `ExportError::DatabaseFailed` is fatal per `error.rs:101`). The reconstructed error's severity is `ErrorSeverity::Error` instead of `Critical`, so stderr prints `[ERROR]` where `[CRITICAL]` is expected.
+This is confirmed as an intended cross-platform scenario: `mod.rs` already contains `#[cfg(target_os = "windows")]` guards for stdin-pipe detection, demonstrating that Windows is a supported target.
 
-2. **Wrong path in the error.** The `path` field is set to `log_file` (the input log file being processed), not the SQLite database path. A database write failure is attributed to the wrong file in the error message.
+**Fix:** Drop the reader explicitly before removing the file, or collect paths for deferred removal after `writer.flush()`:
 
-**Fix:**
+```rust
+// Option A: drop reader before remove_file
+std::io::copy(&mut reader, &mut writer)?;
+drop(reader);                          // close the file handle before unlinking
+std::fs::remove_file(part_path)?;
+
+// Option B: defer all removals until after flush (also fixes the flush-before-remove ordering)
+let mut parts_to_remove: Vec<&Path> = Vec::new();
+for (idx, (part_path, _)) in parts.iter().enumerate() {
+    let part_file = std::fs::File::open(part_path)?;
+    let mut reader = BufReader::new(part_file);
+    let skip_header = idx > 0 || append_to_existing;
+    if skip_header {
+        let mut discard = Vec::with_capacity(256);
+        std::io::BufRead::read_until(&mut reader, b'\n', &mut discard)?;
+    }
+    std::io::copy(&mut reader, &mut writer)?;
+    parts_to_remove.push(part_path);
+}
+writer.flush()?;
+for p in parts_to_remove {
+    if let Err(e) = std::fs::remove_file(p) {
+        log::warn!("failed to remove temp part {}: {e}", p.display());
+    }
+}
+```
+
+Option B is preferred as it also ensures flush completes before any cleanup, preventing a truncated output file from masquerading as complete.
+
+---
+
+## Warnings
+
+### WR-01: `normalize_and_export` unconditionally calls `update_params_buffer_only` when `!passes`, without guarding on `do_normalize`
+
+**File:** `src/cli/run/processor.rs:59-62`
+
+**Issue:** The function's own doc comment states: "仅在 `passes==false && do_normalize && record.tag.is_none()` 时更新 `params_buffer`". The implementation does not enforce the `do_normalize` guard:
+
+```rust
+if !passes {
+    update_params_buffer_only(record, params_buffer, placeholder_override, ns_scratch);
+    //                        ^ no do_normalize check here
+    return ExportAction::Continue;
+}
+```
+
+The caller (`process_log_file`, line 195) prevents reaching this branch when `do_normalize=false` via the `needs_processing` guard, so there is no current runtime bug. However:
+
+- The function is not self-defensive: any future caller that invokes `normalize_and_export` directly with `do_normalize=false` (a plausible pattern if the function gains new call sites) will silently corrupt `params_buffer` by inserting PARAMS into it when normalization is disabled, causing wrong parameter substitutions in later DML records within the same session.
+- `collector.rs::process_record` (the parallel-path equivalent) correctly applies the guard in its else-branch (line 92-99). The two implementations now have divergent contracts, making the codebase harder to reason about.
+
+**Fix:** Add the missing guards inside `normalize_and_export`:
+
+```rust
+if !passes {
+    if do_normalize && record.tag.is_none() {
+        update_params_buffer_only(record, params_buffer, placeholder_override, ns_scratch);
+    }
+    return ExportAction::Continue;
+}
+```
+
+---
+
+### WR-02: Fatal export error in `run_file_loop` is re-wrapped as the wrong variant with the wrong path
+
+**File:** `src/cli/run/mod.rs:374-379`
+
+**Issue:** When a fatal export error occurs (SQLite `DatabaseFailed`), `normalize_and_export` stores the error message via `file_stats.set_fatal(e.to_string())` and returns `BreakFatal`. `run_file_loop` then reconstructs the error as:
+
+```rust
+return Err(Error::Export(crate::error::ExportError::WriteFailed {
+    path: log_file.into(),          // input log file — wrong path
+    reason: file_stats.fatal_error.unwrap_or_default(),
+}));
+```
+
+Two concrete defects:
+
+1. **Wrong variant.** `ExportError::WriteFailed` has `is_fatal() == false` (only `ExportError::DatabaseFailed` is fatal, per `error.rs:101`). The reconstructed error's severity downgrades from `Critical` to `Error`, and `suggestion()` gives generic CSV advice ("Check disk space") instead of the SQLite suggestion ("Verify the SQLite database file is accessible").
+
+2. **Wrong path.** The `path` field is set to the input `.log` file being processed at the time of the fatal error, not the SQLite database path. This misattributes the error in log output and in any upstream error handler that extracts the path.
+
+**Fix:** Preserve the original error type. Since only `DatabaseFailed` is currently fatal for export errors, use that variant directly:
+
 ```rust
 if file_stats.has_fatal() {
-    // Preserve the original fatal classification. Database failures must
-    // propagate as DatabaseFailed so is_fatal() and severity() stay correct.
     return Err(Error::Export(crate::error::ExportError::DatabaseFailed {
         reason: file_stats.fatal_error.unwrap_or_default(),
     }));
 }
 ```
 
-If there are non-database fatal export errors in future, consider storing the original `Error` in `ErrorStats` rather than a bare `String`, so the correct variant survives the round-trip.
+For a more general solution, store the original `Error` in `ErrorStats` rather than a lossy `String`, so the variant and path survive the round-trip.
 
 ---
 
-### CR-02: `normalize_and_export` unconditionally calls `compute_normalized` when `passes == false`, diverging from the documented contract and from `collector.rs`
+### WR-03: Interrupt check in `process_log_file` is gated on `passes`, leaving Ctrl+C unresponsive during heavily-filtered single-file runs
 
-**File:** `src/cli/run/processor.rs:41-50`
-
-**Issue:** When `passes == false`, the function unconditionally calls `compute_normalized` without checking `do_normalize`:
-
-```rust
-if !passes {
-    crate::pipeline::compute_normalized(   // no do_normalize guard
-        record,
-        &record.sql,
-        params_buffer,
-        placeholder_override,
-        ns_scratch,
-    );
-    return ExportAction::Continue;
-}
-```
-
-The function's own doc comment says: "仅在 `passes==false && do_normalize && record.tag.is_none()` 时更新 `params_buffer`". The `do_normalize` guard is missing.
-
-The caller at `process_log_file:184-185` currently prevents a `do_normalize=false` PARAMS record from reaching this function (`needs_processing = passes || (do_normalize && record.tag.is_none())`), so there is no immediate crash. However:
-
-- The function is not self-consistent: the contract it documents does not match the code it runs.
-- `collector.rs::process_record` (the parallel-path equivalent) correctly guards the else-branch — if `process_record` is the reference implementation, `normalize_and_export` has silently diverged.
-- Any future caller that passes `do_normalize=false` directly to `normalize_and_export` (bypassing the `needs_processing` guard) will silently pollute `params_buffer`, causing wrong parameter substitutions in subsequent DML records of the same session.
-
-**Fix:**
-```rust
-if !passes {
-    // Filtered PARAMS record: update params_buffer only when normalization
-    // is active, so downstream DML records can substitute parameters.
-    if do_normalize && record.tag.is_none() {
-        crate::pipeline::compute_normalized(
-            record,
-            &record.sql,
-            params_buffer,
-            placeholder_override,
-            ns_scratch,
-        );
-    }
-    return ExportAction::Continue;
-}
-```
-
----
-
-## Warnings
-
-### WR-01: `remove_file` inside `concat_csv_parts` write loop propagates error mid-concat, leaving output file in a corrupt state
-
-**File:** `src/cli/run/parallel.rs:59`
-
-**Issue:** After copying a part file into the output writer, the code removes the part with `std::fs::remove_file(part_path)?`. If `remove_file` fails (permissions, NFS, antivirus lock), the `?` propagates an error immediately. At that point:
-
-- `writer` has not been flushed (flush is at line 63, after the loop).
-- Subsequent parts have not been written.
-- The output file is partially written and will not be cleaned up (the cleanup at `finalize_concat:236-237` only runs on `concat_result.is_err() && !append_to_existing`, but the file deletion there uses `let _ =` so it is best-effort anyway).
-
-The result is a silently truncated CSV output file that appears valid (has a header) but is missing records.
-
-**Fix:** Collect part paths to remove and delete them in a separate pass after `writer.flush()` succeeds, or downgrade the `?` to a warning log so the concat completes:
-
-```rust
-std::io::copy(&mut reader, &mut writer)?;
-// Defer removal: only delete after flush succeeds to avoid partial output.
-parts_to_remove.push(part_path.clone());
-```
-
-Then after `writer.flush()?`:
-```rust
-for p in parts_to_remove {
-    if let Err(e) = std::fs::remove_file(&p) {
-        log::warn!("failed to remove temp part {}: {e}", p.display());
-    }
-}
-```
-
----
-
-### WR-02: `verbose` parameter accepted but silently discarded in `run_csv_parallel` and `run_sqlite_parallel`; the wrappers are no-ops that duplicate a single `eprintln!`
-
-**File:** `src/cli/run/mod.rs:222-295`
-
-**Issue:** Both `run_csv_parallel` (line 233) and `run_sqlite_parallel` (line 272) accept a `verbose: bool` parameter and use it only to guard an `eprintln!` at the top of each function. They then call `process_csv_parallel` / `process_sqlite_parallel` without forwarding `verbose`. The wrappers add no logic beyond logging a "Processing N files in parallel" line — they do not forward `verbose` into the inner functions.
-
-`process_csv_parallel` (in `parallel.rs`) also accepts `show_progress: bool` but immediately discards it with `let _ = show_progress;` (line 268). `process_sqlite_parallel` uses `_show_progress` (underscore-prefixed, line 88). Neither parallel path does anything with progress output.
-
-This means:
-- When `verbose=true`, users see the "Processing N files in parallel" line but no per-file detail in parallel mode (unlike sequential mode).
-- The `show_progress` parameter passed to both parallel inner functions is silently ignored, so parallel mode never shows progress regardless of `--quiet` / `--verbose` flags.
-
-**Fix:** Either implement per-file verbose output inside the parallel paths, or remove `show_progress` and `verbose` from `process_csv_parallel` / `process_sqlite_parallel` signatures and document that parallel mode does not support progress output. Keeping dead parameters in public-facing function signatures causes confusion for future maintainers.
-
----
-
-### WR-03: `sqlite_parallel.rs::process_sqlite_parallel` hard-codes `include_pm = true` instead of querying the exporter
-
-**File:** `src/cli/run/sqlite_parallel.rs:123`
+**File:** `src/cli/run/processor.rs:204`
 
 **Issue:**
+
 ```rust
-exporter_manager.export_one_preparsed(&record, true, normalized.as_deref())?;
+ExportAction::Continue if passes && tick_progress(pb, records_in_file, interrupted) => break 'outer,
 ```
 
-The `include_pm` argument is hard-coded to `true`. In the sequential path (`processor.rs:172`) and CSV parallel path (`parallel.rs:108`), the value is read from `exporter_manager.csv_include_performance_metrics()`. For the SQLite exporter, `csv_include_performance_metrics()` always returns `true` (see `exporter/mod.rs:64-66`), so there is currently no observable difference. However:
+`tick_progress` — and therefore the `interrupted` flag check — is only evaluated when `passes == true`. For records that are filtered out (`passes == false`), the interrupt path is entirely skipped. In the sequential path, the only other interrupt check in this function is at the start of each file (in `run_file_loop` line 352). If a user is processing a single large file where most or all records are filtered out, `Ctrl+C` will not be honored until the file finishes parsing, which may take minutes on a 1 GB+ log file.
 
-- The hard-coded `true` breaks the established pattern and makes the code fragile: if `ExporterKind::csv_include_performance_metrics` is ever changed for SQLite (e.g., to support field projection at the exporter level), this call site will silently pass stale data.
-- It also diverges from the way the sequential and CSV-parallel paths work, making the code harder to audit.
+The parallel path (`collector.rs:39`) correctly checks the interrupt flag for every record (`if interrupted.load(...) { break; }`), making the parallel path more responsive.
 
-**Fix:**
+**Fix:** Add a separate interrupt check in the filtered path, independent of `tick_progress`:
+
 ```rust
-let include_pm = exporter_manager.csv_include_performance_metrics();
-for (file_path, file_rows) in collected {
-    let count = file_rows.len();
-    for (record, normalized) in file_rows {
-        exporter_manager.export_one_preparsed(&record, include_pm, normalized.as_deref())?;
-    }
-    per_file_counts.push((file_path, count));
+match action {
+    ExportAction::BreakQuota | ExportAction::BreakFatal => break 'outer,
+    ExportAction::Continue if passes && tick_progress(pb, records_in_file, interrupted) => break 'outer,
+    ExportAction::Continue => {}
+}
+// Check interrupt for filtered records (passes=false) on the same schedule
+if !passes && records_in_file.trailing_zeros() >= 10
+    && interrupted.load(Ordering::Relaxed)
+{
+    break 'outer;
 }
 ```
+
+Or, simpler: move the interrupt check out of `tick_progress` and evaluate it unconditionally at some cadence (e.g., every 1024 total records processed, not just exported records).
 
 ---
 
 ## Info
 
-### IN-01: `run_file_loop` calls `run_stats.merge(&file_stats)` before the fatal-error early-return check
+### IN-01: `show_progress` / `_show_progress` parameter is accepted by both parallel inner functions but silently discarded
 
-**File:** `src/cli/run/mod.rs:373-378`
+**File:** `src/cli/run/parallel.rs:268`, `src/cli/run/sqlite_parallel.rs:109`
+
+**Issue:** `process_csv_parallel` receives `show_progress: bool` and immediately discards it with `let _ = show_progress;`. `process_sqlite_parallel` uses `_show_progress: bool` (underscore-prefixed). Neither function implements any progress output. The `verbose` parameter that the outer wrappers (`run_csv_parallel`, `run_sqlite_parallel`) consume is not forwarded to the inner functions either.
+
+This leaves parallel mode with no progress or per-file verbose output, while the sequential path provides both. Dead parameters in function signatures add noise and mislead maintainers into thinking progress output is implemented.
+
+**Fix:** Either implement progress in parallel mode or remove the dead parameters from both inner-function signatures and document that parallel mode does not currently support progress. The outer wrappers can retain verbose logging of the "N files, M jobs" summary line.
+
+---
+
+### IN-02: `run_file_loop` merges `file_stats` into `run_stats` before checking for fatal error, making the merge dead on the error path
+
+**File:** `src/cli/run/mod.rs:373-379`
 
 **Issue:**
+
 ```rust
-run_stats.merge(&file_stats);          // line 373
-if file_stats.has_fatal() {            // line 374
-    return Err(...);                   // line 375-378
+run_stats.merge(&file_stats);      // line 373 — merged unconditionally
+if file_stats.has_fatal() {        // line 374
+    return Err(...);               // run_stats is dropped here; merge was wasted
 }
 ```
 
-When a fatal error occurs, `file_stats` (including the fatal flag) is merged into `run_stats` before the function returns an `Err`. Since the function returns `Err`, the caller never sees `run_stats`, so the merged data is effectively discarded. The merge here is dead code on the fatal path.
+When a fatal error occurs, `run_stats` is discarded because the function returns `Err`. The `merge` on the fatal path is dead code — the statistics it accumulates are never seen by any caller.
 
-This does not cause a bug today but is misleading: a reader of the code may assume `run_stats` is returned somehow. Consider merging only on non-fatal paths, or add a comment clarifying the discard:
+This does not cause incorrect behavior today, but it is misleading to a reader: the merge appears to accumulate data that will be surfaced, when in fact it is silently dropped.
+
+**Fix:** Check for fatal before merging, so the merge only runs on paths where `run_stats` will be returned:
 
 ```rust
 if file_stats.has_fatal() {
-    // run_stats is discarded because we return Err; skip the merge.
-    return Err(...);
+    return Err(Error::Export(crate::error::ExportError::DatabaseFailed {
+        reason: file_stats.fatal_error.unwrap_or_default(),
+    }));
 }
 run_stats.merge(&file_stats);
 ```
 
 ---
 
-_Reviewed: 2026-06-03T00:00:00Z_
+_Reviewed: 2026-06-03T12:00:00Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
