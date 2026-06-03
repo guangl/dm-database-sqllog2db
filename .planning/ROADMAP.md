@@ -183,7 +183,7 @@ Full details: `.planning/milestones/v1.15-ROADMAP.md`
 - [x] **Phase 59: cli/run 与 exporter/pipeline 结构整理** — 识别剩余超 40 行函数并拆分，消除 exporter/pipeline 模块内重复代码 (completed 2026-06-03)
 - [x] **Phase 60: 错误处理路径统一** — 统一错误转换和传播路径，删除冗余 unwrap/expect (completed 2026-06-03)
 - [x] **Phase 61: Cross.toml SHA 固定** — 将 edge 浮动标签替换为固定 SHA digest，提升构建可复现性 (completed 2026-06-03)
-- [ ] **Phase 62: 文档完善** — 更新 README、新建 CHANGELOG、补全 config.toml 模板注释
+- [x] **Phase 62: 文档完善** — 更新 README、新建 CHANGELOG、补全 config.toml 模板注释 (completed 2026-06-03)
 - [ ] **Phase 63: 测试覆盖提升** — 运行覆盖率分析并按结果补全关键路径测试
 
 ## Phase Details
@@ -536,9 +536,9 @@ Full details: `.planning/milestones/v1.15-ROADMAP.md`
   3. `sqllog2db init -o /tmp/test.toml` 生成的文件中，`[stats]` 节的 `from`/`to` 字段和 `[filters]` 各子字段均有行内注释，无任何字段缺少注释
   4. `cargo test` 中关于 `init` 模板注释存在性的断言（Phase 47 新增）仍全部通过
 **Plans**: 3 plans
-- [ ] 62-01-PLAN.md — src/cli/init.rs CONFIG_TEMPLATE_EN 补全 [filter.include]/[filter.exclude]/[filter.indicators]/[filter.sql] 共 22 个示例字段行内注释（DOC-03）
-- [ ] 62-02-PLAN.md — README.md 追加 stats --from/--to 用法示例 + 新增 `## 版本亮点` 节描述 v1.15 CI/CD 修复 + 清理末尾遗留字符（DOC-01）
-- [ ] 62-03-PLAN.md — CHANGELOG.md 顶部新增 `## [Unreleased]` + 补全 `## [1.15.0]`/`## [1.14.0]` 章节 + 现有版本标题升级为 X.Y.Z 三段式 + 同步链接引用列表（DOC-02）
+- [x] 62-01-PLAN.md — src/cli/init.rs CONFIG_TEMPLATE_EN 补全 [filter.include]/[filter.exclude]/[filter.indicators]/[filter.sql] 共 22 个示例字段行内注释（DOC-03）
+- [x] 62-02-PLAN.md — README.md 追加 stats --from/--to 用法示例 + 新增 `## 版本亮点` 节描述 v1.15 CI/CD 修复 + 清理末尾遗留字符（DOC-01）
+- [x] 62-03-PLAN.md — CHANGELOG.md 顶部新增 `## [Unreleased]` + 补全 `## [1.15.0]`/`## [1.14.0]` 章节 + 现有版本标题升级为 X.Y.Z 三段式 + 同步链接引用列表（DOC-02）
 
 ### Phase 63: 测试覆盖提升
 **Goal**: llvm-cov 覆盖率报告生成完毕，关键路径（过滤器 edge case、exporter 单元逻辑、错误路径）的行覆盖率相比分析前有可量化提升
@@ -652,7 +652,7 @@ Full details: `.planning/milestones/v1.15-ROADMAP.md`
 | 59. cli/run 与 exporter/pipeline 结构整理 | 6/6 | Complete   | 2026-06-03 |
 | 60. 错误处理路径统一 | 1/1 | Complete    | 2026-06-03 |
 | 61. Cross.toml SHA 固定 | v1.16 | 1/1 | Complete | 2026-06-03 |
-| 62. 文档完善 | v1.16 | Not started | - |
+| 62. 文档完善 | 3/3 | Complete   | 2026-06-03 |
 | 63. 测试覆盖提升 | v1.16 | Not started | - |
 
 ---
