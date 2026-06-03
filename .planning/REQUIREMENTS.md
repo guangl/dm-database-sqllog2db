@@ -12,7 +12,7 @@
 
 - [ ] **STRUCT-01**: cli/run 中超过 40 行的函数（除已拆分的 handle_run 外）识别并进行语义拆分
 - [ ] **STRUCT-02**: exporter/pipeline 模块内重复代码消除，模块边界清晰化
-- [ ] **STRUCT-03**: 错误转换和传播路径统一，删除冗余 unwrap/expect
+- [x] **STRUCT-03**: 错误转换和传播路径统一，删除冗余 unwrap/expect
 
 ### CI/CD 配置（CROSS）
 
