@@ -535,7 +535,10 @@ Full details: `.planning/milestones/v1.15-ROADMAP.md`
   2. CHANGELOG.md 存在，采用 Keep a Changelog 格式（`## [Unreleased]`、`## [1.15.0]` 等标准节标题），覆盖 v1.0 至 v1.15 全部版本的 Added/Changed/Fixed 条目
   3. `sqllog2db init -o /tmp/test.toml` 生成的文件中，`[stats]` 节的 `from`/`to` 字段和 `[filters]` 各子字段均有行内注释，无任何字段缺少注释
   4. `cargo test` 中关于 `init` 模板注释存在性的断言（Phase 47 新增）仍全部通过
-**Plans**: TBD
+**Plans**: 3 plans
+- [ ] 62-01-PLAN.md — src/cli/init.rs CONFIG_TEMPLATE_EN 补全 [filter.include]/[filter.exclude]/[filter.indicators]/[filter.sql] 共 22 个示例字段行内注释（DOC-03）
+- [ ] 62-02-PLAN.md — README.md 追加 stats --from/--to 用法示例 + 新增 `## 版本亮点` 节描述 v1.15 CI/CD 修复 + 清理末尾遗留字符（DOC-01）
+- [ ] 62-03-PLAN.md — CHANGELOG.md 顶部新增 `## [Unreleased]` + 补全 `## [1.15.0]`/`## [1.14.0]` 章节 + 现有版本标题升级为 X.Y.Z 三段式 + 同步链接引用列表（DOC-02）
 
 ### Phase 63: 测试覆盖提升
 **Goal**: llvm-cov 覆盖率报告生成完毕，关键路径（过滤器 edge case、exporter 单元逻辑、错误路径）的行覆盖率相比分析前有可量化提升
