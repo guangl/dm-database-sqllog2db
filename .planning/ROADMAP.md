@@ -645,7 +645,7 @@ Full details: `.planning/milestones/v1.15-ROADMAP.md`
 | 56. stats 模块清理与 benchmark 稳定化 | v1.15 | 2/2 | Complete | 2026-06-02 |
 | 57. e2e 测试扩展 | v1.15 | 2/2 | Complete | 2026-06-02 |
 | 58. cli/run 函数清理 | v1.15 | 1/1 | Complete | 2026-06-02 |
-| 59. cli/run 与 exporter/pipeline 结构整理 | 5/6 | In Progress|  |
+| 59. cli/run 与 exporter/pipeline 结构整理 | 6/6 | Complete   | 2026-06-03 |
 | 60. 错误处理路径统一 | v1.16 | Not started | - |
 | 61. Cross.toml SHA 固定 | v1.16 | Not started | - |
 | 62. 文档完善 | v1.16 | Not started | - |
