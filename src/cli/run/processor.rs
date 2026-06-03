@@ -57,7 +57,9 @@ pub(super) fn normalize_and_export(
     passes: bool,
 ) -> ExportAction {
     if !passes {
-        update_params_buffer_only(record, params_buffer, placeholder_override, ns_scratch);
+        if do_normalize && record.tag.is_none() {
+            update_params_buffer_only(record, params_buffer, placeholder_override, ns_scratch);
+        }
         return ExportAction::Continue;
     }
     let ns = if do_normalize && (!params_buffer.is_empty() || record.tag.is_none()) {
