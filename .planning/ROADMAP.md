@@ -730,7 +730,7 @@ Full details: `.planning/milestones/v1.16.0-ROADMAP.md`
 | 64. CSV 并行路径基础设施 | 1/1 | Complete    | 2026-06-04 |
 | 65. 行为等价性保障 | 1/1 | Complete    | 2026-06-04 |
 | 66. 兼容性验证与测试 | 1/1 | Complete    | 2026-06-04 |
-| 66.1. 修复并行集成测试覆盖 | v1.17 | 0/1 | Planned |
+| 66.1. 修复并行集成测试覆盖 | 1/1 | Complete    | 2026-06-04 |
 
 ---
 *Created: 2026-05-21 for milestone v1.10*
@@ -748,4 +748,4 @@ Full details: `.planning/milestones/v1.16.0-ROADMAP.md`
   4. 全工作区(35 处)`handle_run` 调用点同步补齐第 5 参数;`cargo test` 740+ 测试全绿
   5. `cargo clippy --all-targets -- -D warnings` 与 `cargo fmt --check` 通过
 **Plans**: 1 plan
-- [ ] 66.1-01-PLAN.md — handle_run 增 jobs_override 参数 + 35 处调用点同步补 None + write_heterogeneous_log helper + test_parallel_csv_jobs_override_forces_parallel + test_parallel_csv_heterogeneous_matches_sequential + 三道质量门禁(PARALLEL-06/07)
+- [x] 66.1-01-PLAN.md — handle_run 增 jobs_override 参数 + 35 处调用点同步补 None + write_heterogeneous_log helper + test_parallel_csv_jobs_override_forces_parallel + test_parallel_csv_heterogeneous_matches_sequential + 三道质量门禁(PARALLEL-06/07)
