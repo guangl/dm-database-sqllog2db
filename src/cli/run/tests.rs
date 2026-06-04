@@ -23,7 +23,7 @@ fn test_include_performance_metrics_false_csv_excludes_pm_columns() {
     );
     let cfg: Config = toml::from_str(&toml).unwrap();
 
-    handle_run(&cfg, true, false, &Arc::new(AtomicBool::new(false))).unwrap();
+    handle_run(&cfg, true, false, &Arc::new(AtomicBool::new(false)), None).unwrap();
 
     let content = std::fs::read_to_string(&csv_path).unwrap();
     let header = content.lines().next().unwrap();
@@ -64,7 +64,7 @@ fn test_handle_run_default_config_succeeds() {
     );
     let cfg: Config = toml::from_str(&toml).unwrap();
 
-    let result = handle_run(&cfg, true, false, &Arc::new(AtomicBool::new(false)));
+    let result = handle_run(&cfg, true, false, &Arc::new(AtomicBool::new(false)), None);
     assert!(result.is_ok(), "handle_run 应在默认配置时成功: {result:?}");
 }
 
@@ -90,7 +90,7 @@ fn test_filter_path() {
     );
     let cfg: Config = toml::from_str(&toml).unwrap();
 
-    handle_run(&cfg, true, false, &Arc::new(AtomicBool::new(false))).unwrap();
+    handle_run(&cfg, true, false, &Arc::new(AtomicBool::new(false)), None).unwrap();
 
     let content = std::fs::read_to_string(&csv_path).unwrap();
     assert!(
@@ -129,7 +129,13 @@ fn test_parallel_merge_consistent() {
         .to_string_lossy()
         .replace('\\', "/");
     let cfg_seq = make_cfg_dir(&seq_dir, &csv_seq);
-    let result_seq = handle_run(&cfg_seq, true, false, &Arc::new(AtomicBool::new(false)));
+    let result_seq = handle_run(
+        &cfg_seq,
+        true,
+        false,
+        &Arc::new(AtomicBool::new(false)),
+        None,
+    );
     assert!(result_seq.is_ok(), "顺序路径应成功: {result_seq:?}");
 
     // Parallel: two files trigger multi-file parallel path on modern multi-core machines
@@ -144,7 +150,13 @@ fn test_parallel_merge_consistent() {
         .to_string_lossy()
         .replace('\\', "/");
     let cfg_par = make_cfg_dir(&par_dir, &csv_par);
-    let result_par = handle_run(&cfg_par, true, false, &Arc::new(AtomicBool::new(false)));
+    let result_par = handle_run(
+        &cfg_par,
+        true,
+        false,
+        &Arc::new(AtomicBool::new(false)),
+        None,
+    );
     assert!(result_par.is_ok(), "并行路径应成功: {result_par:?}");
 
     // Sequential has 1 file (1 data row + 1 header), parallel has 2 files (2 data rows + 1 header)
@@ -215,6 +227,7 @@ fn test_sqlite_parallel_matches_sequential() {
         true,
         false,
         &Arc::new(AtomicBool::new(false)),
+        None,
     )
     .unwrap();
     handle_run(
@@ -222,6 +235,7 @@ fn test_sqlite_parallel_matches_sequential() {
         true,
         false,
         &Arc::new(AtomicBool::new(false)),
+        None,
     )
     .unwrap();
 

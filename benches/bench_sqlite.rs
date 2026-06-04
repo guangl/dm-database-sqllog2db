@@ -61,7 +61,7 @@ fn bench_sqlite_export(c: &mut Criterion) {
         group.throughput(Throughput::Elements(n as u64));
         group.bench_with_input(BenchmarkId::from_parameter(n), &cfg, |b, cfg| {
             b.iter(|| {
-                handle_run(cfg, true, false, &Arc::new(AtomicBool::new(false))).unwrap();
+                handle_run(cfg, true, false, &Arc::new(AtomicBool::new(false)), None).unwrap();
             });
         });
     }
@@ -88,7 +88,7 @@ fn bench_sqlite_real_file(c: &mut Criterion) {
     // 记录数未预扫描，省略 Throughput::Elements，仅记录绝对时间
     group.bench_function("real_file", |b| {
         b.iter(|| {
-            handle_run(&cfg, true, false, &Arc::new(AtomicBool::new(false))).unwrap();
+            handle_run(&cfg, true, false, &Arc::new(AtomicBool::new(false)), None).unwrap();
         });
     });
     group.finish();
@@ -111,7 +111,7 @@ fn bench_sqlite_single_row(c: &mut Criterion) {
         group.throughput(Throughput::Elements(n as u64));
         group.bench_with_input(BenchmarkId::from_parameter(n), &cfg, |b, cfg| {
             b.iter(|| {
-                handle_run(cfg, true, false, &Arc::new(AtomicBool::new(false))).unwrap();
+                handle_run(cfg, true, false, &Arc::new(AtomicBool::new(false)), None).unwrap();
             });
         });
     }

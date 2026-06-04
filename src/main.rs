@@ -164,7 +164,7 @@ fn run() -> Result<Option<(ErrorStats, bool)>> {
             })
             .ok();
 
-            let stats = cli::run::handle_run(&cfg, cli.quiet, cli.verbose, &interrupted)?;
+            let stats = cli::run::handle_run(&cfg, cli.quiet, cli.verbose, &interrupted, None)?;
             Ok(Some((stats, cli.quiet)))
         }
         Some(cli::opts::Commands::Validate { config }) => {

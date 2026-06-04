@@ -25,16 +25,19 @@ use sqlite_parallel::process_sqlite_parallel;
 
 /// 主编排函数：解析日志文件并导出到配置的导出器。
 /// 并行路径：CSV + 多文件 + jobs > 1；顺序路径：其他情况。
+/// `jobs_override` 为测试钩子，生产代码传 None 保持 `available_parallelism` 原行为。
 pub fn handle_run(
     cfg: &Config,
     quiet: bool,
     verbose: bool,
     interrupted: &Arc<AtomicBool>,
+    jobs_override: Option<usize>,
 ) -> Result<ErrorStats> {
     let total_start = Instant::now();
     let mut run_stats = ErrorStats::default();
     let (log_files, is_stdin_pipe) = resolve_input_files(cfg)?;
-    let jobs = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
+    let jobs = jobs_override
+        .unwrap_or_else(|| std::thread::available_parallelism().map_or(1, std::num::NonZero::get));
     let merged = merge_trxid_prescan(cfg, &log_files, jobs, is_stdin_pipe)?;
     let final_cfg: &Config = merged.as_ref().unwrap_or(cfg);
     let pipeline = build_pipeline(final_cfg);

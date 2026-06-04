@@ -4,8 +4,8 @@ milestone: v1.17
 milestone_name: 多文件并行提速
 status: executing
 stopped_at: Phase 66 complete, milestone v1.17 100% done
-last_updated: "2026-06-04T12:21:50.086Z"
-last_activity: 2026-06-04 -- Phase 66.1 planning complete
+last_updated: "2026-06-04T14:43:54.904Z"
+last_activity: 2026-06-04 -- Phase 66.1 execution started
 progress:
   total_phases: 33
   completed_phases: 16
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-04)
 
 **Core value:** 用户能够精确指定"导出哪些记录的哪些字段"——过滤逻辑清晰可配置，输出结果完全可控
-**Current focus:** Milestone v1.17 complete — ready for archive
+**Current focus:** Phase 66.1 — jobs
 
 ## Current Position
 
-Phase: Milestone v1.17 complete
-Plan: —
-Status: Ready to execute
-Last activity: 2026-06-04 -- Phase 66.1 planning complete
+Phase: 66.1 (jobs) — EXECUTING
+Plan: 1 of 1
+Status: Executing Phase 66.1
+Last activity: 2026-06-04 -- Phase 66.1 execution started
 
 ## Accumulated Context
 
