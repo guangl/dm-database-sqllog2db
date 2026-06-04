@@ -1,32 +1,53 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.16.0
-milestone_name: 工程质量深化
-status: archived
-last_updated: 2026-06-03T14:30:00Z
-last_activity: 2026-06-03
-stopped_at: Milestone archived — ready for next milestone
+milestone: v1.17
+milestone_name: 多文件并行提速
+status: Awaiting next milestone
+stopped_at: Phase 66 complete, milestone v1.17 100% done
+last_updated: "2026-06-04T11:25:06.871Z"
+last_activity: 2026-06-04 — Milestone v1.17 completed and archived
+progress:
+  total_phases: 32
+  completed_phases: 16
+  total_plans: 34
+  completed_plans: 41
+  percent: 50
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-03 after v1.16.0 milestone)
+See: .planning/PROJECT.md (updated 2026-06-04)
 
 **Core value:** 用户能够精确指定"导出哪些记录的哪些字段"——过滤逻辑清晰可配置，输出结果完全可控
-**Current focus:** Planning next milestone
+**Current focus:** Milestone v1.17 complete — ready for archive
 
 ## Current Position
 
-Status: v1.16.0 archived — ready for `/gsd:new-milestone`
+Phase: Milestone v1.17 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-04 — Milestone v1.17 completed and archived
 
 ## Accumulated Context
 
-### Key Decisions
+### Key Decisions (Phase 66)
 
-See `.planning/PROJECT.md` Key Decisions table (updated 2026-06-03)
+- 排序后行集合对比（sorted set comparison）而非字节级对比，因为并行路径文件间行顺序不确定
+- 每个文件单独运行 handle_run 收集顺序基线，避免 append 模式的复杂性
+- test_init_no_parallel_fields 以轻量 grep 断言替代全文件 diff，维护成本低
 
 ### Blockers
 
 None
+
+## Session Continuity
+
+Last session: 2026-06-04
+Stopped at: Phase 66 complete, milestone v1.17 100% done
+Resume file: None
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone

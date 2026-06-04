@@ -2154,3 +2154,242 @@ fn test_cli_init_existing_file_without_force_exits_nonzero() {
         .failure()
         .stderr(contains("already exists"));
 }
+
+// ── Phase 66 兼容性验证集成测试 (COMPAT-01/02/03) ───────────────────────────
+
+/// COMPAT-02: 并行路径输出内容与逐文件顺序路径完全一致（集合排序后相等）。
+///
+/// 策略：
+/// 1. 写入 2 个各含 20 条记录的 .log 文件
+/// 2. 顺序基线：对每个文件单独构建 Config（单文件 inputs），逐个运行 `handle_run`，收集数据行
+/// 3. 并行路径：将两个文件配置为 inputs，一次 `handle_run`（触发并行路径），读取数据行
+/// 4. 对两组数据行排序后断言相等；同时验证并行输出存在 header 行
+#[test]
+fn test_parallel_csv_content_matches_sequential() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_dir = dir.path().join("logs");
+    std::fs::create_dir_all(&log_dir).unwrap();
+    let file_a = log_dir.join("a.log");
+    let file_b = log_dir.join("b.log");
+    write_test_log(&file_a, 20);
+    write_test_log(&file_b, 20);
+
+    let interrupted = Arc::new(AtomicBool::new(false));
+
+    // 顺序基线：每个文件单独运行，收集数据行
+    let mut seq_lines: Vec<String> = Vec::new();
+    for log_file in [&file_a, &file_b] {
+        let seq_csv = dir.path().join(format!(
+            "seq_{}.csv",
+            log_file.file_name().unwrap().to_string_lossy()
+        ));
+        let mut seq_cfg = Config {
+            sqllog: SqllogConfig {
+                inputs: vec![log_file.to_str().unwrap().to_string()],
+                path_deprecated: None,
+            },
+            exporter: ExporterConfig {
+                csv: Some(CsvExporterConfig {
+                    file: seq_csv.to_str().unwrap().to_string(),
+                    overwrite: true,
+                    append: false,
+                    ..CsvExporterConfig::default()
+                }),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        // 禁用 csv.append 确保顺序路径（单文件不触发并行）
+        seq_cfg.exporter.csv.as_mut().unwrap().append = false;
+        handle_run(&seq_cfg, true, false, &interrupted).unwrap();
+        let content = std::fs::read_to_string(&seq_csv).unwrap();
+        // 跳过 header 行，收集数据行
+        for line in content.lines().skip(1) {
+            if !line.is_empty() {
+                seq_lines.push(line.to_string());
+            }
+        }
+    }
+
+    // 并行路径：两个文件一次 handle_run
+    let par_csv = dir.path().join("parallel.csv");
+    let par_cfg = Config {
+        sqllog: SqllogConfig {
+            inputs: vec![
+                file_a.to_str().unwrap().to_string(),
+                file_b.to_str().unwrap().to_string(),
+            ],
+            path_deprecated: None,
+        },
+        exporter: ExporterConfig {
+            csv: Some(CsvExporterConfig {
+                file: par_csv.to_str().unwrap().to_string(),
+                overwrite: true,
+                append: false,
+                ..CsvExporterConfig::default()
+            }),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    handle_run(&par_cfg, true, false, &interrupted).unwrap();
+
+    let par_content = std::fs::read_to_string(&par_csv).unwrap();
+    let mut par_lines_iter = par_content.lines();
+    // 验证并行输出存在 header 行
+    let header = par_lines_iter
+        .next()
+        .expect("parallel CSV must have a header");
+    assert!(
+        header.contains("ts") || header.contains("username"),
+        "first line should be a header, got: {header}"
+    );
+    let mut par_lines: Vec<String> = par_lines_iter
+        .filter(|l| !l.is_empty())
+        .map(String::from)
+        .collect();
+
+    // 排序后比较（并行路径文件间行顺序不确定）
+    seq_lines.sort();
+    par_lines.sort();
+    assert_eq!(
+        seq_lines.len(),
+        par_lines.len(),
+        "parallel and sequential should produce the same number of records"
+    );
+    assert_eq!(
+        seq_lines, par_lines,
+        "parallel CSV content must match sequential after sorting"
+    );
+}
+
+/// COMPAT-02: 并行路径在启用 include 过滤器时，与顺序路径输出内容一致（集合排序后相等）。
+///
+/// 使用 `include.users = ["TESTUSER"]` 过滤器；合成记录的 user 字段均为 TESTUSER，
+/// 因此所有记录应通过过滤，并行与顺序结果相同。
+#[test]
+fn test_parallel_csv_filter_matches_sequential() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_dir = dir.path().join("logs");
+    std::fs::create_dir_all(&log_dir).unwrap();
+    let file_a = log_dir.join("filter_a.log");
+    let file_b = log_dir.join("filter_b.log");
+    write_test_log(&file_a, 20);
+    write_test_log(&file_b, 20);
+
+    let interrupted = Arc::new(AtomicBool::new(false));
+
+    let filter_cfg = Some(FiltersFeature {
+        enable: true,
+        include: IncludeFilters {
+            users: Some(vec!["TESTUSER".to_string()]),
+            ..Default::default()
+        },
+        exclude: ExcludeFilters::default(),
+        ..Default::default()
+    });
+
+    // 顺序基线
+    let mut seq_lines: Vec<String> = Vec::new();
+    for log_file in [&file_a, &file_b] {
+        let seq_csv = dir.path().join(format!(
+            "seq_filter_{}.csv",
+            log_file.file_name().unwrap().to_string_lossy()
+        ));
+        let seq_cfg = Config {
+            sqllog: SqllogConfig {
+                inputs: vec![log_file.to_str().unwrap().to_string()],
+                path_deprecated: None,
+            },
+            exporter: ExporterConfig {
+                csv: Some(CsvExporterConfig {
+                    file: seq_csv.to_str().unwrap().to_string(),
+                    overwrite: true,
+                    append: false,
+                    ..CsvExporterConfig::default()
+                }),
+                ..Default::default()
+            },
+            filter: filter_cfg.clone(),
+            ..Default::default()
+        };
+        handle_run(&seq_cfg, true, false, &interrupted).unwrap();
+        let content = std::fs::read_to_string(&seq_csv).unwrap();
+        for line in content.lines().skip(1) {
+            if !line.is_empty() {
+                seq_lines.push(line.to_string());
+            }
+        }
+    }
+
+    // 并行路径（带过滤器）
+    let par_csv = dir.path().join("parallel_filter.csv");
+    let par_cfg = Config {
+        sqllog: SqllogConfig {
+            inputs: vec![
+                file_a.to_str().unwrap().to_string(),
+                file_b.to_str().unwrap().to_string(),
+            ],
+            path_deprecated: None,
+        },
+        exporter: ExporterConfig {
+            csv: Some(CsvExporterConfig {
+                file: par_csv.to_str().unwrap().to_string(),
+                overwrite: true,
+                append: false,
+                ..CsvExporterConfig::default()
+            }),
+            ..Default::default()
+        },
+        filter: filter_cfg,
+        ..Default::default()
+    };
+    handle_run(&par_cfg, true, false, &interrupted).unwrap();
+
+    let par_content = std::fs::read_to_string(&par_csv).unwrap();
+    let mut par_lines: Vec<String> = par_content
+        .lines()
+        .skip(1)
+        .filter(|l| !l.is_empty())
+        .map(String::from)
+        .collect();
+
+    seq_lines.sort();
+    par_lines.sort();
+    assert_eq!(
+        seq_lines.len(),
+        par_lines.len(),
+        "filtered parallel and sequential should produce the same number of records"
+    );
+    assert_eq!(
+        seq_lines, par_lines,
+        "filtered parallel CSV content must match sequential after sorting"
+    );
+}
+
+/// COMPAT-03: `sqllog2db init` 生成的 config.toml 模板不包含并行相关新字段
+/// （如 "parallel" 或 "jobs" 字样），确认 v1.16 config 格式没有被修改。
+#[test]
+fn test_init_no_parallel_fields() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let config_path = dir.path().join("config.toml");
+    handle_init(config_path.to_str().unwrap(), false).unwrap();
+    let content = std::fs::read_to_string(&config_path).unwrap();
+    assert!(
+        !content.contains("parallel"),
+        "init template must not contain 'parallel' field, got:\n{content}"
+    );
+    assert!(
+        !content.contains("jobs"),
+        "init template must not contain 'jobs' field, got:\n{content}"
+    );
+    // 验证核心格式字段仍然存在（格式未被破坏）
+    assert!(
+        content.contains("[sqllog]"),
+        "init template must still contain [sqllog] section"
+    );
+    assert!(
+        content.contains("[exporter.csv]"),
+        "init template must still contain [exporter.csv] section"
+    );
+}

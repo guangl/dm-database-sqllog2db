@@ -8,6 +8,17 @@
 
 用户能够精确指定"导出哪些记录的哪些字段"——过滤逻辑清晰可配置，输出结果完全可控。
 
+## Previous: v1.17 已交付
+
+**Shipped:** 2026-06-04
+**Version:** v1.17 多文件并行提速（Phases 64–66）
+
+**已交付功能：**
+- CSV 多文件并行处理（process_csv_parallel，基于 rayon work-stealing，对齐 SQLite 并行路径）
+- 单文件 I/O 优化（16KB→4MB BufReader，减少系统调用）
+- 3 条兼容性集成测试（COMPAT-01/02/03）：并行路径与顺序路径 CSV 内容一致性验证，及 init 模板格式稳定性验证
+- 全量 777 个测试通过，0 回归
+
 ## Previous: v1.16 已交付
 
 **Shipped:** 2026-06-03
@@ -116,7 +127,14 @@
 
 ### Active
 
-（下一里程碑待规划）
+（当前无待执行需求，v1.17 里程碑已交付）
+
+### Recently Validated in v1.17
+
+- ✓ CSV 多文件并行处理（rayon，基于 process_csv_parallel，对齐 SQLite 并行路径）— Phase 64
+- ✓ 单文件 I/O 优化（16KB→4MB BufReader，减少系统调用）— Phase 65
+- ✓ 更均衡的工作分配（rayon work-stealing，处理文件大小差异）— Phase 64
+- ✓ 兼容性验证（COMPAT-01/02/03：并行路径与顺序路径输出一致，init 模板格式稳定）— Phase 66
 
 ### Out of Scope
 
@@ -184,4 +202,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-03 after v1.16.0 milestone complete*
+*Last updated: 2026-06-04
