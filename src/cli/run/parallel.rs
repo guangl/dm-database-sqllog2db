@@ -130,6 +130,7 @@ fn write_records_to_csv(
 /// 收集到 `Vec<(Sqllog, Option<String>)>`，再写入临时 CSV。单文件内存占用约
 /// `records × (sizeof(Sqllog) + Option<String>)` 字节；超大文件场景可在后续
 /// `ParallelRunConfig` 重构时切换回流式写入。
+// IO-01: 日志文件由 dm-database-parser-sqllog 通过 memmap2::Mmap 读取，无 BufReader，满足 IO-01（D-01）。
 #[allow(clippy::too_many_arguments)]
 fn run_parallel_tasks(
     log_files: &[PathBuf],
@@ -142,6 +143,7 @@ fn run_parallel_tasks(
     field_mask: FieldMask,
     ordered_indices: &[usize],
     parts_dir: &Path,
+    verbose: bool,
 ) -> Result<Vec<Result<TaskResult>>> {
     use rayon::prelude::*;
     let pool = rayon::ThreadPoolBuilder::new()
@@ -156,6 +158,7 @@ fn run_parallel_tasks(
                 if interrupted.load(Ordering::Relaxed) {
                     return Ok(None);
                 }
+                verbose.then(|| eprintln!("Processing: {}", file.display()));
                 let temp_path = parts_dir.join(format!("{idx:08}.csv"));
                 let (rows, parse_errors) = collector::collect_log_file(
                     file,
@@ -261,7 +264,7 @@ fn finalize_concat(
 ///
 /// 返回：`(已处理文件列表, 跳过文件数, 解析错误统计)`，已处理列表顺序与 `log_files` 一致。
 /// 适用条件：CSV 导出 + 多文件 + jobs > 1 + 无 limit。
-/// 注意：并行模式暂不支持每文件进度显示；外层 `run_csv_parallel` 的 verbose eprintln 已足够。
+/// 注意：每个 rayon 任务开始时若 verbose=true 输出 "Processing: {path}"（D-02）。
 #[allow(clippy::too_many_arguments)]
 pub(super) fn process_csv_parallel(
     log_files: &[PathBuf],
@@ -273,6 +276,7 @@ pub(super) fn process_csv_parallel(
     placeholder_override: Option<bool>,
     field_mask: FieldMask,
     ordered_indices: &[usize],
+    verbose: bool,
 ) -> Result<(Vec<(PathBuf, usize)>, usize, ErrorStats)> {
     let csv_cfg = cfg
         .exporter
@@ -294,6 +298,7 @@ pub(super) fn process_csv_parallel(
         field_mask,
         ordered_indices,
         &parts_dir,
+        verbose,
     )?;
     let (parts_info, parallel_stats, skipped) = match collect_parallel_results(results) {
         Ok(v) => v,
