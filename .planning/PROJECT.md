@@ -127,9 +127,14 @@
 
 ### Active
 
-- CSV 多文件并行处理（rayon，对齐 SQLite 并行路径）— v1.17
-- 单文件 I/O 优化（mmap 或更大 BufReader）— v1.17
-- 更均衡的工作分配（rayon work-stealing）— v1.17
+（当前无待执行需求，v1.17 里程碑已交付）
+
+### Recently Validated in v1.17
+
+- ✓ CSV 多文件并行处理（rayon，基于 process_csv_parallel，对齐 SQLite 并行路径）— Phase 64
+- ✓ 单文件 I/O 优化（16KB→4MB BufReader，减少系统调用）— Phase 65
+- ✓ 更均衡的工作分配（rayon work-stealing，处理文件大小差异）— Phase 64
+- ✓ 兼容性验证（COMPAT-01/02/03：并行路径与顺序路径输出一致，init 模板格式稳定）— Phase 66
 
 ### Out of Scope
 
