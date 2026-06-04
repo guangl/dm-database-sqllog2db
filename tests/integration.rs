@@ -1038,6 +1038,47 @@ fn test_cli_verbose_prints_processing_line_per_file() {
     );
 }
 
+/// Verify that `--verbose run` with multiple log files emits `Processing: <path>` to stderr for
+/// each file regardless of whether the parallel or sequential path is taken.
+///
+/// Two files are created so that on multi-core machines the parallel path (PARALLEL-05) is
+/// exercised.  On single-core CI (jobs=1) the sequential path still emits the same line per
+/// file, so the assertion holds in both cases.
+#[test]
+fn test_cli_verbose_parallel_prints_processing_lines() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_dir = dir.path().join("logs");
+    std::fs::create_dir_all(&log_dir).unwrap();
+    // Two files: on multi-core hosts this triggers the parallel path (jobs > 1 && files > 1).
+    write_test_log(&log_dir.join("a.log"), 5);
+    write_test_log(&log_dir.join("b.log"), 5);
+
+    let csv_file = dir.path().join("out.csv");
+    let error_log = dir.path().join("errors.log");
+    let app_log = dir.path().join("app.log");
+    let config_path = dir.path().join("config.toml");
+    std::fs::write(
+        &config_path,
+        make_toml_config(&log_dir, &csv_file, &error_log, &app_log),
+    )
+    .unwrap();
+
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_sqllog2db"))
+        .args(["--verbose", "run", "-c", config_path.to_str().unwrap()])
+        .output()
+        .expect("failed to spawn sqllog2db binary");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "verbose multi-file run should succeed, stderr: {stderr}"
+    );
+    let processing_count = stderr.matches("Processing: ").count();
+    assert!(
+        processing_count >= 2,
+        "expected >=2 'Processing: ' lines (one per file), got {processing_count}: {stderr}"
+    );
+}
+
 /// Verify that `--quiet run` suppresses the completion summary and `ProgressBar` output.
 #[test]
 fn test_cli_quiet_suppresses_summary() {
