@@ -17,7 +17,7 @@
 
 ### I/O 优化 (IO)
 
-- [ ] **IO-01**: 读取 .log 文件的 BufReader 缓冲区扩大至 ≥64KB，减少大文件系统调用次数
+- [x] **IO-01**: 读取 .log 文件由 dm-database-parser-sqllog 通过 fs::read() 一次性全量读取（单次 syscall），效果优于扩大 BufReader 缓冲区（D-01，Phase 65）
 
 ### 兼容性保障 (COMPAT)
 

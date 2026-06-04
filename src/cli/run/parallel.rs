@@ -130,7 +130,7 @@ fn write_records_to_csv(
 /// 收集到 `Vec<(Sqllog, Option<String>)>`，再写入临时 CSV。单文件内存占用约
 /// `records × (sizeof(Sqllog) + Option<String>)` 字节；超大文件场景可在后续
 /// `ParallelRunConfig` 重构时切换回流式写入。
-// IO-01: 日志文件由 dm-database-parser-sqllog 通过 memmap2::Mmap 读取，无 BufReader，满足 IO-01（D-01）。
+// IO-01: 日志文件由 dm-database-parser-sqllog 通过 fs::read() 一次性全量读取（单次 syscall），无 BufReader，满足 IO-01（D-01）。
 #[allow(clippy::too_many_arguments)]
 fn run_parallel_tasks(
     log_files: &[PathBuf],
