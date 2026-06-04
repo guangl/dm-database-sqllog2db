@@ -202,7 +202,7 @@ Full details: `.planning/milestones/v1.16.0-ROADMAP.md`
 
 ### v1.17 多文件并行提速 (Phases 64–66) — ACTIVE
 
-- [ ] **Phase 64: CSV 并行路径基础设施** — 建立多文件 rayon 并行解析 + channel 写入线程架构
+- [x] **Phase 64: CSV 并行路径基础设施** — 建立多文件 rayon 并行解析 + channel 写入线程架构 (completed 2026-06-04)
 - [ ] **Phase 65: 行为等价性保障** — 字段格式/过滤管道/输出控制与单线程路径完全对齐，I/O 缓冲区扩容
 - [ ] **Phase 66: 兼容性验证与测试** — 全量测试通过，新增多文件 CSV 集成测试，config 格式不变
 
@@ -588,7 +588,7 @@ Full details: `.planning/milestones/v1.16.0-ROADMAP.md`
   3. 处理 3 个 300MB 文件时，进程峰值内存使用不超过单线程路径的 2 倍（channel back-pressure 生效）
   4. 输入仅 1 个文件时回退到单线程路径，行为与现有实现完全一致
 **Plans**: 1 plan
-- [ ] 64-01-PLAN.md — 运行质量门禁（cargo test + clippy）核查 SC1–SC4 + 更新 REQUIREMENTS.md PARALLEL-02 描述与 temp-file 实现对齐（D-01）
+- [x] 64-01-PLAN.md — 运行质量门禁（cargo test + clippy）核查 SC1–SC4 + 更新 REQUIREMENTS.md PARALLEL-02 描述与 temp-file 实现对齐（D-01）
 
 ### Phase 65: 行为等价性保障
 **Goal**: 并行路径产生的 CSV 内容、过滤结果、输出控制与单线程路径在语义上完全等价，同时 BufReader 缓冲区扩容以减少大文件系统调用
@@ -599,7 +599,8 @@ Full details: `.planning/milestones/v1.16.0-ROADMAP.md`
   2. 启用 include/exclude/sql/indicators 任意组合过滤器时，并行路径过滤后的记录数与单线程路径完全一致
   3. `--verbose` 在并行路径下输出每个文件的处理进度，`--quiet` 完全抑制所有非错误输出，处理摘要（总行数/错误数）正确累加
   4. 读取 .log 文件的 BufReader 缓冲区大小 ≥ 64KB（代码可审查，或通过 strace 系统调用次数对比验证）
-**Plans**: TBD
+**Plans**: 1 plan
+- [ ] 65-01-PLAN.md — process_csv_parallel/run_parallel_tasks 新增 verbose: bool + 逐文件 eprintln + mod.rs 透传 + IO-01 mmap 注释 + 三道质量门禁（PARALLEL-03/04/05, IO-01）
 
 ### Phase 66: 兼容性验证与测试
 **Goal**: 现有全量测试在并行路径引入后继续通过，新增集成测试验证多文件 CSV 内容一致性，config.toml 格式和 init 模板不受影响
@@ -610,7 +611,8 @@ Full details: `.planning/milestones/v1.16.0-ROADMAP.md`
   2. `tests/integration.rs` 包含至少 2 条新集成测试：多文件并行 CSV 输出与逐文件单线程合并结果的内容对比断言（行集合相等）
   3. `sqllog2db init -o /tmp/test.toml` 生成的 config.toml 与 v1.16 基线内容一致，不含并行相关新字段
   4. `cargo clippy --all-targets -- -D warnings` + `cargo fmt --check` 通过，无新增警告
-**Plans**: TBD
+**Plans**: 1 plan
+- [ ] 66-01-PLAN.md — tests/integration.rs 新增 test_parallel_csv_content_matches_sequential + test_parallel_csv_filter_matches_sequential + test_init_no_parallel_fields + 全量 cargo test（COMPAT-01/02/03）
 
 ## Coverage Validation
 
@@ -723,7 +725,7 @@ Full details: `.planning/milestones/v1.16.0-ROADMAP.md`
 | 61. Cross.toml SHA 固定 | v1.16.0 | Complete | 2026-06-03 |
 | 62. 文档完善 | v1.16.0 | Complete | 2026-06-03 |
 | 63. 测试覆盖提升 | v1.16.0 | Complete | 2026-06-03 |
-| 64. CSV 并行路径基础设施 | v1.17 | Not started | - |
+| 64. CSV 并行路径基础设施 | 1/1 | Complete   | 2026-06-04 |
 | 65. 行为等价性保障 | v1.17 | Not started | - |
 | 66. 兼容性验证与测试 | v1.17 | Not started | - |
 
