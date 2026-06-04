@@ -28,6 +28,29 @@ fn write_test_log(path: &std::path::Path, count: usize) {
     std::fs::write(path, buf).unwrap();
 }
 
+fn write_heterogeneous_log(
+    path: &std::path::Path,
+    count: usize,
+    trxid_offset: usize,
+    username: &str,
+) {
+    use std::fmt::Write as _;
+    let mut buf = String::with_capacity(count * 200);
+    for i in 0..count {
+        let trxid = trxid_offset + i;
+        writeln!(
+            buf,
+            "2025-01-15 10:30:28.001 (EP[0] sess:0x{trxid:04x} user:{username} trxid:{trxid} \
+             stmt:0x1 appname:App ip:10.0.0.1) [SEL] SELECT * FROM t WHERE id={trxid}. \
+             EXECTIME: {}(ms) ROWCOUNT: {}(rows) EXEC_ID: {trxid}.",
+            (trxid * 13) % 1000,
+            trxid % 100,
+        )
+        .unwrap();
+    }
+    std::fs::write(path, buf).unwrap();
+}
+
 fn make_run_config(log_dir: &std::path::Path, csv_file: &std::path::Path) -> Config {
     Config {
         sqllog: SqllogConfig {
@@ -2432,5 +2455,147 @@ fn test_init_no_parallel_fields() {
     assert!(
         content.contains("[exporter.csv]"),
         "init template must still contain [exporter.csv] section"
+    );
+}
+
+/// PARALLEL-06: `jobs_override=Some(2)` 强制并行路径在所有环境下被执行。
+///
+/// 使用两个异构文件（trxid 空间不重叠、不同 user），强制 jobs=2 触发并行路径，
+/// 断言输出总行数 == 35（20+15），且两个 user 均出现在输出中。
+#[test]
+fn test_parallel_csv_jobs_override_forces_parallel() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_dir = dir.path().join("logs");
+    std::fs::create_dir_all(&log_dir).unwrap();
+    let file_a = log_dir.join("a.log");
+    let file_b = log_dir.join("b.log");
+    write_heterogeneous_log(&file_a, 20, 0, "USERA");
+    write_heterogeneous_log(&file_b, 15, 1000, "USERB");
+
+    let par_csv = dir.path().join("parallel_jobs.csv");
+    let interrupted = Arc::new(AtomicBool::new(false));
+    let par_cfg = Config {
+        sqllog: SqllogConfig {
+            inputs: vec![
+                file_a.to_str().unwrap().to_string(),
+                file_b.to_str().unwrap().to_string(),
+            ],
+            path_deprecated: None,
+        },
+        exporter: ExporterConfig {
+            csv: Some(CsvExporterConfig {
+                file: par_csv.to_str().unwrap().to_string(),
+                overwrite: true,
+                append: false,
+                ..CsvExporterConfig::default()
+            }),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    handle_run(&par_cfg, true, false, &interrupted, Some(2)).unwrap();
+
+    let par_content = std::fs::read_to_string(&par_csv).unwrap();
+    let data_lines: Vec<&str> = par_content
+        .lines()
+        .skip(1)
+        .filter(|l| !l.is_empty())
+        .collect();
+    assert_eq!(
+        data_lines.len(),
+        35,
+        "jobs_override=Some(2) 并行路径应输出 35 条记录 (20+15)，实际 {}",
+        data_lines.len()
+    );
+    assert!(par_content.contains("USERA"), "并行输出应包含 USERA 的记录");
+    assert!(par_content.contains("USERB"), "并行输出应包含 USERB 的记录");
+}
+
+/// PARALLEL-07: 异构数据(不重叠 trxid + 不同 user)下并行 == 顺序；任何聚合 bug 立即可见。
+///
+/// 顺序基线逐文件运行，并行路径强制 jobs=2，排序后逐字节比对。
+/// 若并行路径漏记录（任何聚合 bug），`len()` 断言立即失败。
+#[test]
+fn test_parallel_csv_heterogeneous_matches_sequential() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_dir = dir.path().join("logs");
+    std::fs::create_dir_all(&log_dir).unwrap();
+    let file_a = log_dir.join("hetero_a.log");
+    let file_b = log_dir.join("hetero_b.log");
+    write_heterogeneous_log(&file_a, 20, 0, "USERA");
+    write_heterogeneous_log(&file_b, 15, 1000, "USERB");
+
+    let interrupted = Arc::new(AtomicBool::new(false));
+
+    // 顺序基线：每个文件单独运行收集数据行
+    let mut seq_lines: Vec<String> = Vec::new();
+    for (log_file, suffix) in [(&file_a, "a"), (&file_b, "b")] {
+        let seq_csv = dir.path().join(format!("seq_hetero_{suffix}.csv"));
+        let seq_cfg = Config {
+            sqllog: SqllogConfig {
+                inputs: vec![log_file.to_str().unwrap().to_string()],
+                path_deprecated: None,
+            },
+            exporter: ExporterConfig {
+                csv: Some(CsvExporterConfig {
+                    file: seq_csv.to_str().unwrap().to_string(),
+                    overwrite: true,
+                    append: false,
+                    ..CsvExporterConfig::default()
+                }),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        handle_run(&seq_cfg, true, false, &interrupted, None).unwrap();
+        let content = std::fs::read_to_string(&seq_csv).unwrap();
+        for line in content.lines().skip(1).filter(|l| !l.is_empty()) {
+            seq_lines.push(line.to_string());
+        }
+    }
+
+    // 并行路径：强制 jobs=2
+    let par_csv = dir.path().join("par_hetero.csv");
+    let par_cfg = Config {
+        sqllog: SqllogConfig {
+            inputs: vec![
+                file_a.to_str().unwrap().to_string(),
+                file_b.to_str().unwrap().to_string(),
+            ],
+            path_deprecated: None,
+        },
+        exporter: ExporterConfig {
+            csv: Some(CsvExporterConfig {
+                file: par_csv.to_str().unwrap().to_string(),
+                overwrite: true,
+                append: false,
+                ..CsvExporterConfig::default()
+            }),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    handle_run(&par_cfg, true, false, &interrupted, Some(2)).unwrap();
+
+    let par_content = std::fs::read_to_string(&par_csv).unwrap();
+    let mut par_lines: Vec<String> = par_content
+        .lines()
+        .skip(1)
+        .filter(|l| !l.is_empty())
+        .map(String::from)
+        .collect();
+
+    seq_lines.sort();
+    par_lines.sort();
+    assert_eq!(
+        seq_lines.len(),
+        par_lines.len(),
+        "异构数据下并行 ({}) 与顺序 ({}) 行数应相同",
+        par_lines.len(),
+        seq_lines.len()
+    );
+    assert_eq!(
+        seq_lines, par_lines,
+        "异构数据下并行 CSV 内容排序后应与顺序基线完全一致"
     );
 }
