@@ -725,7 +725,7 @@ Full details: `.planning/milestones/v1.16.0-ROADMAP.md`
 | 61. Cross.toml SHA 固定 | v1.16.0 | Complete | 2026-06-03 |
 | 62. 文档完善 | v1.16.0 | Complete | 2026-06-03 |
 | 63. 测试覆盖提升 | v1.16.0 | Complete | 2026-06-03 |
-| 64. CSV 并行路径基础设施 | 1/1 | Complete   | 2026-06-04 |
+| 64. CSV 并行路径基础设施 | 1/1 | Complete    | 2026-06-04 |
 | 65. 行为等价性保障 | v1.17 | Not started | - |
 | 66. 兼容性验证与测试 | v1.17 | Not started | - |
 
