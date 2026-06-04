@@ -1,11 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.16.0
-milestone_name: 工程质量深化
-status: archived
-last_updated: 2026-06-03T14:30:00Z
-last_activity: 2026-06-03
-stopped_at: Milestone archived — ready for next milestone
+milestone: v1.17
+milestone_name: 多文件并行提速
+status: planning
+last_updated: "2026-06-04T00:02:13.081Z"
+last_activity: 2026-06-04
+progress:
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -19,7 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-03 after v1.16.0 milestone)
 
 ## Current Position
 
-Status: v1.16.0 archived — ready for `/gsd:new-milestone`
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-06-04 — Milestone v1.17 started
 
 ## Accumulated Context
 

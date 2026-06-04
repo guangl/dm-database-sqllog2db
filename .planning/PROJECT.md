@@ -8,6 +8,15 @@
 
 用户能够精确指定"导出哪些记录的哪些字段"——过滤逻辑清晰可配置，输出结果完全可控。
 
+## Current Milestone: v1.17 多文件并行提速
+
+**Goal:** 对 CSV 导出引入多文件并行处理路径，充分利用多核，大幅提升处理多个 258MB–512MB 文件时的吞吐量。
+
+**Target features:**
+- CSV 多文件并行处理（对齐现有 SQLite 并行路径，基于 rayon）
+- 单文件 I/O 优化（mmap 或更大 BufReader 减少系统调用）
+- 更均衡的工作分配（rayon work-stealing，处理文件大小差异）
+
 ## Previous: v1.16 已交付
 
 **Shipped:** 2026-06-03
@@ -116,7 +125,9 @@
 
 ### Active
 
-（下一里程碑待规划）
+- CSV 多文件并行处理（rayon，对齐 SQLite 并行路径）— v1.17
+- 单文件 I/O 优化（mmap 或更大 BufReader）— v1.17
+- 更均衡的工作分配（rayon work-stealing）— v1.17
 
 ### Out of Scope
 
@@ -184,4 +195,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-03 after v1.16.0 milestone complete*
+*Last updated: 2026-06-04 — milestone v1.17 started*
