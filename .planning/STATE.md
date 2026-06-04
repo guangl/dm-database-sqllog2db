@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.17
 milestone_name: 多文件并行提速
-status: milestone_complete
-last_updated: 2026-06-04T11:22:07.744Z
-last_activity: 2026-06-04 -- Phase 66 complete, milestone v1.17 finished
+status: Awaiting next milestone
+stopped_at: Phase 66 complete, milestone v1.17 100% done
+last_updated: "2026-06-04T11:25:06.871Z"
+last_activity: 2026-06-04 — Milestone v1.17 completed and archived
 progress:
   total_phases: 32
-  completed_phases: 15
+  completed_phases: 16
   total_plans: 34
   completed_plans: 41
-  percent: 47
-stopped_at: Milestone v1.17 complete — ready for /gsd:complete-milestone
+  percent: 50
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-06-04)
 
 ## Current Position
 
-Phase: 66
-Plan: Complete
-Status: Milestone complete
-Last activity: 2026-06-04
+Phase: Milestone v1.17 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-04 — Milestone v1.17 completed and archived
 
 ## Accumulated Context
 
@@ -47,3 +47,7 @@ None
 Last session: 2026-06-04
 Stopped at: Phase 66 complete, milestone v1.17 100% done
 Resume file: None
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone
