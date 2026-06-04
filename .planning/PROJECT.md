@@ -8,6 +8,16 @@
 
 用户能够精确指定"导出哪些记录的哪些字段"——过滤逻辑清晰可配置，输出结果完全可控。
 
+## Current Milestone: v1.18 用户体验全面升级
+
+**Goal:** 全面改善 sqllog2db 的用户交互体验——watch 实时监控、交互式配置向导、更智能的错误诊断、以及更丰富的进度与摘要。
+
+**Target features:**
+- watch 模式：监听日志目录，文件变化时自动增量插入 SQLite（notify crate，新子命令）
+- 交互式配置向导：`init` 时对话式引导填写 config.toml，降低首次使用门槛
+- 运行时异常诊断：parse error 自动分析原因，给出具体可操作的修复建议
+- 进度/摘要增强：实时 ETA + 分文件进度条 + 更丰富的导出后摘要（过滤率/错误分布）
+
 ## Previous: v1.17 已交付
 
 **Shipped:** 2026-06-04
@@ -127,7 +137,10 @@
 
 ### Active
 
-（当前无待执行需求，v1.17 里程碑已交付）
+- watch 模式（新子命令，增量 SQLite 插入）— v1.18
+- 交互式配置向导（init 对话式引导）— v1.18
+- 运行时异常诊断（parse error 自动分析）— v1.18
+- 进度/摘要增强（ETA + 分文件进度 + 丰富摘要）— v1.18
 
 ### Recently Validated in v1.17
 
@@ -204,4 +217,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-05 after v1.17 milestone*
+*Last updated: 2026-06-05 — v1.18 milestone started*
