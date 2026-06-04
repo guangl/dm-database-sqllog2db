@@ -2,6 +2,7 @@
 
 ## Milestones
 
+- 🚧 **v1.17 多文件并行提速** — Phases 64–66 (active)
 - ✅ **v1.16.0 工程质量深化** — Phases 59–63 (shipped 2026-06-03)
 - ✅ **v1.15 工程质量全面提升** — Phases 55–58 (shipped 2026-06-02)
 - ✅ **v1.14 stats 时间段过滤** — Phases 53–54 (shipped 2026-06-02)
@@ -196,6 +197,14 @@ Full details: `.planning/milestones/v1.15-ROADMAP.md`
 Full details: `.planning/milestones/v1.16.0-ROADMAP.md`
 
 </details>
+
+---
+
+### v1.17 多文件并行提速 (Phases 64–66) — ACTIVE
+
+- [ ] **Phase 64: CSV 并行路径基础设施** — 建立多文件 rayon 并行解析 + channel 写入线程架构
+- [ ] **Phase 65: 行为等价性保障** — 字段格式/过滤管道/输出控制与单线程路径完全对齐，I/O 缓冲区扩容
+- [ ] **Phase 66: 兼容性验证与测试** — 全量测试通过，新增多文件 CSV 集成测试，config 格式不变
 
 ## Phase Details
 
@@ -567,6 +576,42 @@ Full details: `.planning/milestones/v1.16.0-ROADMAP.md`
 - [x] 63-03-PLAN.md — error.rs mod tests 末尾追加 12+ 个错误变体方法测试 + cli/run/prescan.rs 新建 mod tests 覆盖 build_indicator_filters/build_sql_exclude_filters 边界
 - [x] 63-04-PLAN.md — 重新运行 cargo llvm-cov 采集 after 数字 + 生成 63-COVERAGE-REPORT.md 对比报告（baseline → after + 难以测试路径 D-04 文档化）+ 三道质量门禁验证
 
+---
+
+### Phase 64: CSV 并行路径基础设施
+**Goal**: 用户输入多个文件且目标为 CSV 时，工具自动切换到多文件并行解析路径，各解析线程通过 channel 将记录传递给单一写入线程，内存占用不随文件数量线性增长
+**Depends on**: Phase 63
+**Requirements**: PARALLEL-01, PARALLEL-02
+**Success Criteria** (what must be TRUE):
+  1. 输入 2 个以上 .log 文件 + CSV 输出时，工具自动使用并行路径，无需修改 config.toml 任何字段
+  2. 并行路径中每个 rayon 解析线程通过 channel 将记录发送给写入线程，写入线程持有唯一的 BufWriter，无全量内存缓冲
+  3. 处理 3 个 300MB 文件时，进程峰值内存使用不超过单线程路径的 2 倍（channel back-pressure 生效）
+  4. 输入仅 1 个文件时回退到单线程路径，行为与现有实现完全一致
+**Plans**: 1 plan
+- [ ] 64-01-PLAN.md — 运行质量门禁（cargo test + clippy）核查 SC1–SC4 + 更新 REQUIREMENTS.md PARALLEL-02 描述与 temp-file 实现对齐（D-01）
+
+### Phase 65: 行为等价性保障
+**Goal**: 并行路径产生的 CSV 内容、过滤结果、输出控制与单线程路径在语义上完全等价，同时 BufReader 缓冲区扩容以减少大文件系统调用
+**Depends on**: Phase 64
+**Requirements**: PARALLEL-03, PARALLEL-04, PARALLEL-05, IO-01
+**Success Criteria** (what must be TRUE):
+  1. 对同一组输入文件，并行路径与单线程路径输出的 CSV 行集合完全相同（忽略文件间行顺序），字段值、转义、has_metrics 条件逐字节一致
+  2. 启用 include/exclude/sql/indicators 任意组合过滤器时，并行路径过滤后的记录数与单线程路径完全一致
+  3. `--verbose` 在并行路径下输出每个文件的处理进度，`--quiet` 完全抑制所有非错误输出，处理摘要（总行数/错误数）正确累加
+  4. 读取 .log 文件的 BufReader 缓冲区大小 ≥ 64KB（代码可审查，或通过 strace 系统调用次数对比验证）
+**Plans**: TBD
+
+### Phase 66: 兼容性验证与测试
+**Goal**: 现有全量测试在并行路径引入后继续通过，新增集成测试验证多文件 CSV 内容一致性，config.toml 格式和 init 模板不受影响
+**Depends on**: Phase 65
+**Requirements**: COMPAT-01, COMPAT-02, COMPAT-03
+**Success Criteria** (what must be TRUE):
+  1. `cargo test` 运行全部 740+ 测试（lib/integration/benchmark）全部通过，无任何回归
+  2. `tests/integration.rs` 包含至少 2 条新集成测试：多文件并行 CSV 输出与逐文件单线程合并结果的内容对比断言（行集合相等）
+  3. `sqllog2db init -o /tmp/test.toml` 生成的 config.toml 与 v1.16 基线内容一致，不含并行相关新字段
+  4. `cargo clippy --all-targets -- -D warnings` + `cargo fmt --check` 通过，无新增警告
+**Plans**: TBD
+
 ## Coverage Validation
 
 | Requirement | Phase |
@@ -633,8 +678,17 @@ Full details: `.planning/milestones/v1.16.0-ROADMAP.md`
 | DOC-03      | 62    |
 | TEST-01     | 63    |
 | TEST-02     | 63    |
+| PARALLEL-01 | 64    |
+| PARALLEL-02 | 64    |
+| PARALLEL-03 | 65    |
+| PARALLEL-04 | 65    |
+| PARALLEL-05 | 65    |
+| IO-01       | 65    |
+| COMPAT-01   | 66    |
+| COMPAT-02   | 66    |
+| COMPAT-03   | 66    |
 
-**63/63 requirements mapped — coverage: 100%**
+**66/66 requirements mapped — coverage: 100%**
 
 ## Progress
 
@@ -669,7 +723,10 @@ Full details: `.planning/milestones/v1.16.0-ROADMAP.md`
 | 61. Cross.toml SHA 固定 | v1.16.0 | Complete | 2026-06-03 |
 | 62. 文档完善 | v1.16.0 | Complete | 2026-06-03 |
 | 63. 测试覆盖提升 | v1.16.0 | Complete | 2026-06-03 |
+| 64. CSV 并行路径基础设施 | v1.17 | Not started | - |
+| 65. 行为等价性保障 | v1.17 | Not started | - |
+| 66. 兼容性验证与测试 | v1.17 | Not started | - |
 
 ---
 *Created: 2026-05-21 for milestone v1.10*
-*Updated: 2026-06-03 — v1.16.0 milestone archived*
+*Updated: 2026-06-04 — v1.17 milestone phases 64–66 added*
