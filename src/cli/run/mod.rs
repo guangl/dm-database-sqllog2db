@@ -247,6 +247,7 @@ fn run_csv_parallel(
         placeholder_override,
         field_mask,
         ordered_indices,
+        verbose,
     )?;
     Ok((processed_files, skipped, stats))
 }
