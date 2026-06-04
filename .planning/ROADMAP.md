@@ -203,7 +203,7 @@ Full details: `.planning/milestones/v1.16.0-ROADMAP.md`
 ### v1.17 多文件并行提速 (Phases 64–66) — ACTIVE
 
 - [x] **Phase 64: CSV 并行路径基础设施** — 建立多文件 rayon 并行解析 + channel 写入线程架构 (completed 2026-06-04)
-- [ ] **Phase 65: 行为等价性保障** — 字段格式/过滤管道/输出控制与单线程路径完全对齐，I/O 缓冲区扩容
+- [x] **Phase 65: 行为等价性保障** — 字段格式/过滤管道/输出控制与单线程路径完全对齐，I/O 缓冲区扩容 (completed 2026-06-04)
 - [ ] **Phase 66: 兼容性验证与测试** — 全量测试通过，新增多文件 CSV 集成测试，config 格式不变
 
 ## Phase Details
@@ -600,7 +600,7 @@ Full details: `.planning/milestones/v1.16.0-ROADMAP.md`
   3. `--verbose` 在并行路径下输出每个文件的处理进度，`--quiet` 完全抑制所有非错误输出，处理摘要（总行数/错误数）正确累加
   4. 读取 .log 文件的 BufReader 缓冲区大小 ≥ 64KB（代码可审查，或通过 strace 系统调用次数对比验证）
 **Plans**: 1 plan
-- [ ] 65-01-PLAN.md — process_csv_parallel/run_parallel_tasks 新增 verbose: bool + 逐文件 eprintln + mod.rs 透传 + IO-01 mmap 注释 + 三道质量门禁（PARALLEL-03/04/05, IO-01）
+- [x] 65-01-PLAN.md — process_csv_parallel/run_parallel_tasks 新增 verbose: bool + 逐文件 eprintln + mod.rs 透传 + IO-01 mmap 注释 + 三道质量门禁（PARALLEL-03/04/05, IO-01）
 
 ### Phase 66: 兼容性验证与测试
 **Goal**: 现有全量测试在并行路径引入后继续通过，新增集成测试验证多文件 CSV 内容一致性，config.toml 格式和 init 模板不受影响
@@ -726,7 +726,7 @@ Full details: `.planning/milestones/v1.16.0-ROADMAP.md`
 | 62. 文档完善 | v1.16.0 | Complete | 2026-06-03 |
 | 63. 测试覆盖提升 | v1.16.0 | Complete | 2026-06-03 |
 | 64. CSV 并行路径基础设施 | 1/1 | Complete    | 2026-06-04 |
-| 65. 行为等价性保障 | v1.17 | Not started | - |
+| 65. 行为等价性保障 | 1/1 | Complete   | 2026-06-04 |
 | 66. 兼容性验证与测试 | v1.17 | Not started | - |
 
 ---
