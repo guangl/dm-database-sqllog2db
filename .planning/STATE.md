@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.17
 milestone_name: 多文件并行提速
-status: Awaiting next milestone
+status: executing
 stopped_at: Phase 66 complete, milestone v1.17 100% done
-last_updated: "2026-06-04T11:25:06.871Z"
-last_activity: 2026-06-04 — Milestone v1.17 completed and archived
+last_updated: "2026-06-04T12:21:50.086Z"
+last_activity: 2026-06-04 -- Phase 66.1 planning complete
 progress:
-  total_phases: 32
+  total_phases: 33
   completed_phases: 16
-  total_plans: 34
+  total_plans: 35
   completed_plans: 41
-  percent: 50
+  percent: 48
 ---
 
 # Project State
@@ -27,10 +27,14 @@ See: .planning/PROJECT.md (updated 2026-06-04)
 
 Phase: Milestone v1.17 complete
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-04 — Milestone v1.17 completed and archived
+Status: Ready to execute
+Last activity: 2026-06-04 -- Phase 66.1 planning complete
 
 ## Accumulated Context
+
+### Roadmap Evolution
+
+- Phase 66.1 inserted after Phase 66: 修复并行集成测试覆盖：强制 jobs 参数 + 异构测试数据 (URGENT)
 
 ### Key Decisions (Phase 66)
 

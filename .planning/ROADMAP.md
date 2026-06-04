@@ -597,7 +597,7 @@ Full details: `.planning/milestones/v1.16.0-ROADMAP.md`
 **Success Criteria** (what must be TRUE):
   1. 对同一组输入文件，并行路径与单线程路径输出的 CSV 行集合完全相同（忽略文件间行顺序），字段值、转义、has_metrics 条件逐字节一致
   2. 启用 include/exclude/sql/indicators 任意组合过滤器时，并行路径过滤后的记录数与单线程路径完全一致
-  3. `--verbose` 在并行路径下输出每个文件的处理进度，`--quiet` 完全抑制所有非错误输出，处理摘要（总行数/错误数）正确累加
+  3. `--verbose` 在并行路径下输出每个文件的处理进度，`--quiet` 完全抑制所有非错误输出,处理摘要（总行数/错误数）正确累加
   4. 读取 .log 文件的 BufReader 缓冲区大小 ≥ 64KB（代码可审查，或通过 strace 系统调用次数对比验证）
 **Plans**: 1 plan
 - [x] 65-01-PLAN.md — process_csv_parallel/run_parallel_tasks 新增 verbose: bool + 逐文件 eprintln + mod.rs 透传 + IO-01 mmap 注释 + 三道质量门禁（PARALLEL-03/04/05, IO-01）
@@ -689,8 +689,10 @@ Full details: `.planning/milestones/v1.16.0-ROADMAP.md`
 | COMPAT-01   | 66    |
 | COMPAT-02   | 66    |
 | COMPAT-03   | 66    |
+| PARALLEL-06 | 66.1  |
+| PARALLEL-07 | 66.1  |
 
-**66/66 requirements mapped — coverage: 100%**
+**68/68 requirements mapped — coverage: 100%**
 
 ## Progress
 
@@ -728,7 +730,22 @@ Full details: `.planning/milestones/v1.16.0-ROADMAP.md`
 | 64. CSV 并行路径基础设施 | 1/1 | Complete    | 2026-06-04 |
 | 65. 行为等价性保障 | 1/1 | Complete    | 2026-06-04 |
 | 66. 兼容性验证与测试 | 1/1 | Complete    | 2026-06-04 |
+| 66.1. 修复并行集成测试覆盖 | v1.17 | 0/1 | Planned |
 
 ---
 *Created: 2026-05-21 for milestone v1.10*
-*Updated: 2026-06-04 — v1.17 milestone phases 64–66 added*
+*Updated: 2026-06-04 — v1.17 milestone phases 64–66 added; Phase 66.1 planned (PARALLEL-06/07)*
+
+### Phase 66.1: 修复并行集成测试覆盖：强制 jobs 参数 + 异构测试数据 (INSERTED)
+
+**Goal:** handle_run 增加 jobs_override: Option<usize> 参数让测试强制并行路径,新增 write_heterogeneous_log helper 与 2 条强制并行集成测试,堵住"单核 CI 上并行测试退化为顺序路径"与"同构数据无法暴露跨文件聚合 bug"两个盲点
+**Requirements**: PARALLEL-06, PARALLEL-07
+**Depends on:** Phase 66
+**Success Criteria** (what must be TRUE):
+  1. `handle_run` 接受第 5 个参数 `jobs_override: Option<usize>`;生产调用点(src/main.rs)传 `None` 保持原行为(`available_parallelism` 回退);测试可传 `Some(2)` 强制并行
+  2. `tests/integration.rs::write_heterogeneous_log(path, count, trxid_offset, username)` 让各文件 trxid 空间不重叠且 user 不同,任何漏文件/重复聚合 bug 必然在 `assert_eq!(seq_lines, par_lines)` 上失败
+  3. 新增测试 `test_parallel_csv_jobs_override_forces_parallel`(PARALLEL-06)与 `test_parallel_csv_heterogeneous_matches_sequential`(PARALLEL-07)通过
+  4. 全工作区(35 处)`handle_run` 调用点同步补齐第 5 参数;`cargo test` 740+ 测试全绿
+  5. `cargo clippy --all-targets -- -D warnings` 与 `cargo fmt --check` 通过
+**Plans**: 1 plan
+- [ ] 66.1-01-PLAN.md — handle_run 增 jobs_override 参数 + 35 处调用点同步补 None + write_heterogeneous_log helper + test_parallel_csv_jobs_override_forces_parallel + test_parallel_csv_heterogeneous_matches_sequential + 三道质量门禁(PARALLEL-06/07)
