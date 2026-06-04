@@ -11,9 +11,9 @@
 - [x] **PARALLEL-01**: 当输入包含多个文件且输出为 CSV 时，自动使用多文件并行解析路径（无需修改 config.toml）
 <!-- 原始设计意图为 channel 写入线程；D-01 决策改为 temp-file 方案，channel 留后续里程碑 -->
 - [x] **PARALLEL-02**: 并行路径写入不全量缓冲内存：每个 rayon 线程将单文件记录收集到 Vec 后写入临时 CSV，写入完成后 Vec 立即释放；最终按原始顺序拼接为单一输出文件（temp-file 方案，per D-01）
-- [ ] **PARALLEL-03**: 并行路径的 CSV 字段格式与单线程路径完全一致（字段类型、转义规则、has_metrics 条件）
-- [ ] **PARALLEL-04**: 过滤管道（include/exclude/sql/indicators filters）在并行路径下产生与单线程路径等价的过滤结果
-- [ ] **PARALLEL-05**: `--verbose` 逐文件输出、`--quiet` 完全抑制、处理摘要（行数/错误数）在并行路径下正常显示
+- [x] **PARALLEL-03**: 并行路径的 CSV 字段格式与单线程路径完全一致（字段类型、转义规则、has_metrics 条件）
+- [x] **PARALLEL-04**: 过滤管道（include/exclude/sql/indicators filters）在并行路径下产生与单线程路径等价的过滤结果
+- [x] **PARALLEL-05**: `--verbose` 逐文件输出、`--quiet` 完全抑制、处理摘要（行数/错误数）在并行路径下正常显示
 
 ### I/O 优化 (IO)
 
