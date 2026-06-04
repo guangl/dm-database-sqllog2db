@@ -21,9 +21,9 @@
 
 ### 兼容性保障 (COMPAT)
 
-- [ ] **COMPAT-01**: 现有 740+ 测试（lib/integration/benchmark）全部通过，无行为回归
-- [ ] **COMPAT-02**: 并行路径新增至少 2 条集成测试：多文件 CSV 内容一致性断言（对比单线程路径结果）
-- [ ] **COMPAT-03**: 不修改现有 config.toml 格式或 init 模板
+- [x] **COMPAT-01**: 现有 740+ 测试（lib/integration/benchmark）全部通过，无行为回归
+- [x] **COMPAT-02**: 并行路径新增至少 2 条集成测试：多文件 CSV 内容一致性断言（对比单线程路径结果）
+- [x] **COMPAT-03**: 不修改现有 config.toml 格式或 init 模板
 
 ## Future Requirements
 
