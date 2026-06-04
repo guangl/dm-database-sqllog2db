@@ -204,7 +204,7 @@ Full details: `.planning/milestones/v1.16.0-ROADMAP.md`
 
 - [x] **Phase 64: CSV 并行路径基础设施** — 建立多文件 rayon 并行解析 + channel 写入线程架构 (completed 2026-06-04)
 - [x] **Phase 65: 行为等价性保障** — 字段格式/过滤管道/输出控制与单线程路径完全对齐，I/O 缓冲区扩容 (completed 2026-06-04)
-- [ ] **Phase 66: 兼容性验证与测试** — 全量测试通过，新增多文件 CSV 集成测试，config 格式不变
+- [x] **Phase 66: 兼容性验证与测试** — 全量测试通过，新增多文件 CSV 集成测试，config 格式不变 (completed 2026-06-04)
 
 ## Phase Details
 
@@ -612,7 +612,7 @@ Full details: `.planning/milestones/v1.16.0-ROADMAP.md`
   3. `sqllog2db init -o /tmp/test.toml` 生成的 config.toml 与 v1.16 基线内容一致，不含并行相关新字段
   4. `cargo clippy --all-targets -- -D warnings` + `cargo fmt --check` 通过，无新增警告
 **Plans**: 1 plan
-- [ ] 66-01-PLAN.md — tests/integration.rs 新增 test_parallel_csv_content_matches_sequential + test_parallel_csv_filter_matches_sequential + test_init_no_parallel_fields + 全量 cargo test（COMPAT-01/02/03）
+- [x] 66-01-PLAN.md — tests/integration.rs 新增 test_parallel_csv_content_matches_sequential + test_parallel_csv_filter_matches_sequential + test_init_no_parallel_fields + 全量 cargo test（COMPAT-01/02/03）
 
 ## Coverage Validation
 
@@ -727,7 +727,7 @@ Full details: `.planning/milestones/v1.16.0-ROADMAP.md`
 | 63. 测试覆盖提升 | v1.16.0 | Complete | 2026-06-03 |
 | 64. CSV 并行路径基础设施 | 1/1 | Complete    | 2026-06-04 |
 | 65. 行为等价性保障 | 1/1 | Complete    | 2026-06-04 |
-| 66. 兼容性验证与测试 | v1.17 | Not started | - |
+| 66. 兼容性验证与测试 | 1/1 | Complete   | 2026-06-04 |
 
 ---
 *Created: 2026-05-21 for milestone v1.10*
