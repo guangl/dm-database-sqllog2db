@@ -133,8 +133,10 @@
 
 - ✓ CSV 多文件并行处理（rayon，基于 process_csv_parallel，对齐 SQLite 并行路径）— Phase 64
 - ✓ 单文件 I/O 优化（16KB→4MB BufReader，减少系统调用）— Phase 65
-- ✓ 更均衡的工作分配（rayon work-stealing，处理文件大小差异）— Phase 64
+- ✓ verbose 透传链（并行路径逐文件 "Processing:" 输出，与顺序路径格式一致）— Phase 65
 - ✓ 兼容性验证（COMPAT-01/02/03：并行路径与顺序路径输出一致，init 模板格式稳定）— Phase 66
+- ✓ jobs_override: Option<usize> 扩展 handle_run（36 处调用点），强制单核 CI 进入并行路径 — Phase 66.1
+- ✓ write_heterogeneous_log helper（trxid/username 两维差异化），验证跨文件聚合正确性 — Phase 66.1
 
 ### Out of Scope
 
@@ -153,7 +155,7 @@
 - 依赖精简（无 reqwest/rustls/self_update 等重依赖，仅新增 indicatif）
 - 当前代码量：~8,833 行 Rust（src）+ 1,503 行（tests）
 - 性能基线：~5.2M records/sec（合成 CSV），~1.55M records/sec（1.1GB 真实文件）
-- 测试覆盖：~558 个测试（226 lib + 69 integration + 1 jemalloc + 单元测试），全部通过
+- 测试覆盖：780 个测试（lib + integration + jemalloc + bench），全部通过
 - assert_cmd / predicates 加入 dev-dependencies，e2e CLI 测试覆盖大幅提升
 - Phase 57 新增：stats --from/--to 跨字段顺序校验，run CSV/SQLite 全链路断言，init 成功/冲突测试
 - Phase 58 新增：`pub(crate) mod scanner` 公共模块，stats/run 共享文件扫描逻辑；handle_run 拆分 7 个私有函数
@@ -202,4 +204,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-04
+*Last updated: 2026-06-05 after v1.17 milestone*

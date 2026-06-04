@@ -2,7 +2,7 @@
 
 ## Milestones
 
-- ✅ **v1.17 多文件并行提速** — Phases 64–66 (shipped 2026-06-04)
+- ✅ **v1.17 多文件并行提速** — Phases 64–66.1 (shipped 2026-06-04)
 - ✅ **v1.16.0 工程质量深化** — Phases 59–63 (shipped 2026-06-03)
 - ✅ **v1.15 工程质量全面提升** — Phases 55–58 (shipped 2026-06-02)
 - ✅ **v1.14 stats 时间段过滤** — Phases 53–54 (shipped 2026-06-02)
@@ -200,11 +200,17 @@ Full details: `.planning/milestones/v1.16.0-ROADMAP.md`
 
 ---
 
-### v1.17 多文件并行提速 (Phases 64–66) — ACTIVE
+<details>
+<summary>✅ v1.17 多文件并行提速 (Phases 64–66.1) — SHIPPED 2026-06-04</summary>
 
-- [x] **Phase 64: CSV 并行路径基础设施** — 建立多文件 rayon 并行解析 + channel 写入线程架构 (completed 2026-06-04)
-- [x] **Phase 65: 行为等价性保障** — 字段格式/过滤管道/输出控制与单线程路径完全对齐，I/O 缓冲区扩容 (completed 2026-06-04)
+- [x] **Phase 64: CSV 并行路径基础设施** — 建立多文件 rayon 并行解析 + temp-file 拼接架构 (completed 2026-06-04)
+- [x] **Phase 65: 行为等价性保障** — 字段格式/过滤管道/输出控制与单线程路径完全对齐，verbose 透传 (completed 2026-06-04)
 - [x] **Phase 66: 兼容性验证与测试** — 全量测试通过，新增多文件 CSV 集成测试，config 格式不变 (completed 2026-06-04)
+- [x] **Phase 66.1: 修复并行集成测试覆盖** (INSERTED) — jobs_override 强制并行路径 + write_heterogeneous_log + 2 条强制并行测试 (completed 2026-06-04)
+
+Full details: `.planning/milestones/v1.17-ROADMAP.md`
+
+</details>
 
 ## Phase Details
 
@@ -727,25 +733,11 @@ Full details: `.planning/milestones/v1.16.0-ROADMAP.md`
 | 61. Cross.toml SHA 固定 | v1.16.0 | Complete | 2026-06-03 |
 | 62. 文档完善 | v1.16.0 | Complete | 2026-06-03 |
 | 63. 测试覆盖提升 | v1.16.0 | Complete | 2026-06-03 |
-| 64. CSV 并行路径基础设施 | 1/1 | Complete    | 2026-06-04 |
-| 65. 行为等价性保障 | 1/1 | Complete    | 2026-06-04 |
-| 66. 兼容性验证与测试 | 1/1 | Complete    | 2026-06-04 |
-| 66.1. 修复并行集成测试覆盖 | 1/1 | Complete    | 2026-06-04 |
+| 64. CSV 并行路径基础设施 | v1.17 | Complete | 2026-06-04 |
+| 65. 行为等价性保障 | v1.17 | Complete | 2026-06-04 |
+| 66. 兼容性验证与测试 | v1.17 | Complete | 2026-06-04 |
+| 66.1. 修复并行集成测试覆盖 (INSERTED) | v1.17 | Complete | 2026-06-04 |
 
 ---
 *Created: 2026-05-21 for milestone v1.10*
-*Updated: 2026-06-04 — v1.17 milestone phases 64–66 added; Phase 66.1 planned (PARALLEL-06/07)*
-
-### Phase 66.1: 修复并行集成测试覆盖：强制 jobs 参数 + 异构测试数据 (INSERTED)
-
-**Goal:** handle_run 增加 jobs_override: Option<usize> 参数让测试强制并行路径,新增 write_heterogeneous_log helper 与 2 条强制并行集成测试,堵住"单核 CI 上并行测试退化为顺序路径"与"同构数据无法暴露跨文件聚合 bug"两个盲点
-**Requirements**: PARALLEL-06, PARALLEL-07
-**Depends on:** Phase 66
-**Success Criteria** (what must be TRUE):
-  1. `handle_run` 接受第 5 个参数 `jobs_override: Option<usize>`;生产调用点(src/main.rs)传 `None` 保持原行为(`available_parallelism` 回退);测试可传 `Some(2)` 强制并行
-  2. `tests/integration.rs::write_heterogeneous_log(path, count, trxid_offset, username)` 让各文件 trxid 空间不重叠且 user 不同,任何漏文件/重复聚合 bug 必然在 `assert_eq!(seq_lines, par_lines)` 上失败
-  3. 新增测试 `test_parallel_csv_jobs_override_forces_parallel`(PARALLEL-06)与 `test_parallel_csv_heterogeneous_matches_sequential`(PARALLEL-07)通过
-  4. 全工作区(35 处)`handle_run` 调用点同步补齐第 5 参数;`cargo test` 740+ 测试全绿
-  5. `cargo clippy --all-targets -- -D warnings` 与 `cargo fmt --check` 通过
-**Plans**: 1 plan
-- [x] 66.1-01-PLAN.md — handle_run 增 jobs_override 参数 + 35 处调用点同步补 None + write_heterogeneous_log helper + test_parallel_csv_jobs_override_forces_parallel + test_parallel_csv_heterogeneous_matches_sequential + 三道质量门禁(PARALLEL-06/07)
+*Updated: 2026-06-04 — v1.17 milestone (Phases 64–66.1) shipped*

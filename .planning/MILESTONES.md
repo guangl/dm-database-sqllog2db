@@ -1,48 +1,29 @@
 # Milestones: sqllog2db
 
-## v1.17 多文件并行提速 (Shipped: 2026-06-04)
+## v1.17 — 多文件并行提速
 
-**Phases completed:** 24 phases, 34 plans, 62 tasks
+**Shipped:** 2026-06-04  
+**Phases:** 64–66.1 | **Plans:** 4 | **Commits:** 40  
+**Duration:** 2026-06-04 → 2026-06-04 (~1 day)  
+**Tests:** 780 total (all passing, 0 failed)
 
-**Key accomplishments:**
+### Delivered
 
-- Status:
-- Status:
-- Status:
-- Status:
-- Status:
-- Status:
-- Status:
-- Status:
-- 改动内容：
-- 新增 bench_parser.rs 实现 parser_throughput benchmark group，覆盖 BENCH-01 第四场景，parser 原始解析速度基线约 ~1.97-1.99 M records/s
-- One-liner:
-- jemalloc dev-deps 集成 + PERF-02 resident heap 基线 2.78 MB (10k records) + PERF-01 csv_export criterion baseline 5.58ms@10k
-- Arc-based ParamBuffer 消除 H-3 Vec 深拷贝热点 + BufWriter 16MB 减少 write syscall（H-4）
-- phase44-after criterion baseline 保存完成 + jemalloc resident_delta 降幅 91.2% + BENCHMARKS.md Phase 44 段落追加
-- 新建 `sqlite_parallel.rs` 实现 rayon 多文件并行解析 + WAL 模式，扩展 `mod.rs` 路由，追加 `test_sqlite_parallel_matches_sequential` 正确性验证。实现 PERF-03。
-- GitHub Actions benchmark workflow + criterion estimates.json 收集脚本，PR 和 push to main 自动触发 cargo bench 并上传含 mean_ns/stddev_ns 的 JSON artifact（retention 60 天，continue-on-error 不阻塞 merge）
-- 字节级状态机 normalize_sql 函数：将 SQL 字符串/数字字面量替换为 `?` 占位符，支持 `''` 转义和浮点，标识符中的数字保持原样
-- One-liner:
-- 一行概述：
-- 1. [Rule 2 - Missing Validation] 提前实现 validate_stats_time_fields
-- validate.rs 新增 4 个单元测试：
-- process_log_file（原 152 行）拆分为主循环骨架（45 行）+ 4 个单职责辅助函数，引入 ExportAction 枚举替代 break 'outer 内联控制流
-- 从 sqlite_parallel.rs 提取 collect_log_file + process_record 到新的 collector.rs 共享模块，sqlite_parallel.rs 行数从 225 降至 130，满足 STRUCT-02 重复代码消除第一步
-- 将 run_sequential（52 行）与 FilterProcessor::from_feature（43 行）分别提取为 run_file_loop、build_include_groups、build_exclude_groups 三个辅助函数，满足 STRUCT-01 ≤40 行约束
-- process_csv_parallel 从 156 行拆分为 38 行骨架 + 五个 <=40 行辅助函数，CSV 并行路径通过 collector::collect_log_file 与 SQLite 路径对称（STRUCT-01/STRUCT-02 全满足）
-- 一句话总结
-- 提取 update_params_buffer_only 与 run_parallel_parse 辅助函数，关闭 normalize_and_export（47→39 行）与 parallel_collect（50→33 行）两个 STRUCT-01 缺口
-- 1. [Rule 1 - Bug] Adjusted indicators field alignment for grep compatibility
-- One-liner:
-- 一句话摘要：
-- Baseline coverage report generated (90.68% line / 85.81% function) and 19 new tests added to pipeline/filters/types.rs covering serde_helpers vec_to_hashset/vec_to_i64_hashset, FiltersFeature::from legacy/mixed-format paths, and IncludeFilters/ExcludeFilters has_filters branches
-- 在 CSV exporter 追加 6 个测试覆盖 has_metrics=false 全量/投影路径与 idx=0-14 各分支，在 SQLite exporter 追加 4 个测试覆盖未初始化 Err 路径、pragma 间接验证与字段投影非全量路径。
-- 为 error.rs 全 5 类错误变体追加 16 个 is_fatal/severity/suggestion 单元测试，并在 prescan.rs 新建 mod tests 块覆盖 build_indicator_filters 的 min_row_count=0/正值/空三分支及 build_sql_exclude_filters 双分支
-- 重新运行 cargo llvm-cov 得出 after 数字（TOTAL 行 91.86% / 函数 89.54%），生成 63-COVERAGE-REPORT.md 覆盖率对比报告，三道质量门禁（740 测试 / clippy 0 警告 / fmt 0 偏差）全绿，Phase 63 交付完成
-- 验证 CSV 多文件并行路径（temp-file 方案）满足 SC1-SC4，774 个测试全绿，REQUIREMENTS.md PARALLEL-02 与 D-01 决策对齐
-- 一句话摘要：
-- 3 个 COMPAT 集成测试验证并行 CSV 路径输出与顺序路径一致，config.toml 格式保持 v1.16 基线
+为 CSV 导出路径新增多文件 rayon 并行处理（temp-file 方案），对齐已有的 SQLite 并行路径；verbose 透传链保证并行路径与顺序路径输出行为完全一致；追加 Phase 66.1 修复单核 CI 上并行路径无法激活的测试盲点，引入 write_heterogeneous_log 异构测试数据 helper。
+
+### Key Accomplishments
+
+1. CSV 多文件并行处理（process_csv_parallel，rayon work-stealing + temp-file 拼接），2 个以上文件自动激活，1 个文件回退顺序路径（PARALLEL-01/02）
+2. verbose 透传链：run_parallel_tasks → process_csv_parallel → run_csv_parallel → handle_run，逐文件 "Processing: {path}" 输出与顺序路径格式一致（PARALLEL-05）
+3. 3 条兼容性集成测试（COMPAT-01/02/03）：并行与顺序路径 CSV 行集合相等（排序对比），过滤器等价性，init 模板格式无变化
+4. jobs_override: Option<usize> 扩展 handle_run（36 处调用点同步），强制单核 CI 进入并行路径（PARALLEL-06）
+5. write_heterogeneous_log helper（trxid_offset + username 两维度差异化），验证跨文件聚合正确性（PARALLEL-07）
+
+### Archives
+
+- `.planning/milestones/v1.17-ROADMAP.md` — 完整 Phase 细节
+- `.planning/milestones/v1.17-REQUIREMENTS.md` — 需求归档（11/11 满足，含 PARALLEL-06/07）
+- `.planning/v1.17-MILESTONE-AUDIT.md` — 审计报告（tech_debt，3 项轻微，Phase 66.1 关闭 WARNING-01/02）
 
 ---
 

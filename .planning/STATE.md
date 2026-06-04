@@ -4,8 +4,8 @@ milestone: v1.17
 milestone_name: 多文件并行提速
 status: milestone_complete
 stopped_at: Milestone complete (Phase 66.1 was final phase)
-last_updated: 2026-06-04T15:04:56.542Z
-last_activity: 2026-06-04 -- Phase 66.1 execution started
+last_updated: 2026-06-05T00:00:00.000Z
+last_activity: 2026-06-05 -- v1.17 milestone archived (complete with Phase 66.1)
 progress:
   total_phases: 33
   completed_phases: 16
