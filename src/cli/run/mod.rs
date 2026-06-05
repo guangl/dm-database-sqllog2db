@@ -115,6 +115,9 @@ pub fn handle_run(
         files
     };
     let total_records: usize = processed_files.iter().map(|(_, c)| *c).sum();
+    if let Some(pb) = &pb {
+        pb.finish_and_clear();
+    }
     print_run_summary(
         quiet,
         verbose,
@@ -126,9 +129,6 @@ pub fn handle_run(
         &run_stats,
     );
     write_error_log(final_cfg, &run_stats);
-    if let Some(pb) = &pb {
-        pb.finish_and_clear();
-    }
     if interrupted.load(Ordering::Relaxed) {
         return Err(Error::Interrupted);
     }
