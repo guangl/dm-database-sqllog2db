@@ -28,6 +28,23 @@ fn write_test_log(path: &std::path::Path, count: usize) {
     std::fs::write(path, buf).unwrap();
 }
 
+/// Like `write_test_log` but records start at `start_offset` so files have non-overlapping IDs.
+fn write_test_log_offset(path: &std::path::Path, count: usize, start_offset: usize) {
+    use std::fmt::Write as _;
+    let mut buf = String::with_capacity(count * 180);
+    for n in 0..count {
+        let i = start_offset + n;
+        writeln!(
+            buf,
+            "2025-01-15 10:30:28.001 (EP[0] sess:0x{i:04x} user:TESTUSER trxid:{i} stmt:0x1 appname:App ip:10.0.0.1) [SEL] SELECT * FROM t WHERE id={i}. EXECTIME: {exec}(ms) ROWCOUNT: {rows}(rows) EXEC_ID: {i}.",
+            exec = (i * 13) % 1000,
+            rows = i % 100,
+        )
+        .unwrap();
+    }
+    std::fs::write(path, buf).unwrap();
+}
+
 fn write_heterogeneous_log(
     path: &std::path::Path,
     count: usize,
@@ -2248,8 +2265,9 @@ fn test_parallel_csv_content_matches_sequential() {
     std::fs::create_dir_all(&log_dir).unwrap();
     let file_a = log_dir.join("a.log");
     let file_b = log_dir.join("b.log");
-    write_test_log(&file_a, 20);
-    write_test_log(&file_b, 20);
+    // 使用非重叠 ID 范围，使意外去重问题可检测
+    write_test_log_offset(&file_a, 20, 0);
+    write_test_log_offset(&file_b, 20, 20);
 
     let interrupted = Arc::new(AtomicBool::new(false));
 
@@ -2351,8 +2369,9 @@ fn test_parallel_csv_filter_matches_sequential() {
     std::fs::create_dir_all(&log_dir).unwrap();
     let file_a = log_dir.join("filter_a.log");
     let file_b = log_dir.join("filter_b.log");
-    write_test_log(&file_a, 20);
-    write_test_log(&file_b, 20);
+    // 使用非重叠 ID 范围，使意外去重问题可检测
+    write_test_log_offset(&file_a, 20, 0);
+    write_test_log_offset(&file_b, 20, 20);
 
     let interrupted = Arc::new(AtomicBool::new(false));
 
