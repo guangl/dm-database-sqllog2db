@@ -22,8 +22,8 @@
 
 ### 运行时异常诊断
 
-- [ ] **DIAG-01**: 错误日志每条 parse error 包含行号和原始内容前 120 字符
-- [ ] **DIAG-02**: 导出摘要按错误类型分组统计（field_missing / parse_failed / encoding_error）
+- [x] **DIAG-01**: 错误日志每条 parse error 包含行号和原始内容前 120 字符
+- [x] **DIAG-02**: 导出摘要按错误类型分组统计（field_missing / parse_failed / encoding_error）
 - [ ] **DIAG-03**: 常见错误模式触发具体 hint（如"多行编码错误：建议检查文件编码"）
 
 ### 进度/摘要增强
@@ -67,8 +67,8 @@
 | INIT-01 | Phase 68 | Pending |
 | INIT-02 | Phase 68 | Pending |
 | INIT-03 | Phase 68 | Pending |
-| DIAG-01 | Phase 67 | Pending |
-| DIAG-02 | Phase 67 | Pending |
+| DIAG-01 | Phase 67 | Complete |
+| DIAG-02 | Phase 67 | Complete |
 | DIAG-03 | Phase 67 | Pending |
 | PROG-01 | Phase 67 | Pending |
 | PROG-02 | Phase 67 | Pending |
