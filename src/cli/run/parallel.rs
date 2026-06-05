@@ -85,7 +85,6 @@ fn setup_parts_dir(output_path: &Path) -> Result<PathBuf> {
         .parent()
         .filter(|p| !p.as_os_str().is_empty())
         .unwrap_or(Path::new("."));
-    std::fs::create_dir_all(preferred)?;
     let candidate = preferred.join(&dir_name);
     if std::fs::create_dir_all(&candidate).is_ok() {
         Ok(candidate)
