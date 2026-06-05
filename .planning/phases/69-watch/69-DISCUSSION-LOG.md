@@ -3,8 +3,9 @@
 > **Audit trail only.** Do not use as input to planning, research, or execution agents.
 > Decisions are captured in CONTEXT.md — this log preserves the alternatives considered.
 
-**Date:** 2026-06-05
+**Date:** 2026-06-06 (updated; original: 2026-06-05)
 **Phase:** 69-Watch 模式核心框架
+**Mode:** --auto (updated pass; Phase 68 completion confirmed, code line refs updated)
 **Areas discussed:** notify crate 选型, 状态行显示, 触发策略, Ctrl+C 退出, 模块结构, 导出格式约束, 测试策略
 
 ---
@@ -52,7 +53,7 @@
 | 复用 Arc<AtomicBool> + ctrlc::set_handler | 与现有 Run 命令完全一致 | ✓ |
 | tokio signal 或 signal-hook | 额外依赖，不一致 | |
 
-**User's choice:** [auto] 复用现有 ctrlc 模式（src/main.rs:160-168）(recommended default)
+**User's choice:** [auto] 复用现有 ctrlc 模式（src/main.rs:166-169）(recommended default)
 **Notes:** 退出码 0，`pb.finish_and_clear()` 后打印最终摘要。
 
 ---

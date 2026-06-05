@@ -1,6 +1,6 @@
 ---
 phase: 67-prog-diag
-reviewed: 2026-06-05T00:00:00Z
+reviewed: 2026-06-06T00:00:00Z
 depth: standard
 files_reviewed: 5
 files_reviewed_list:
@@ -10,174 +10,202 @@ files_reviewed_list:
   - src/config/mod.rs
   - src/error.rs
 findings:
-  critical: 1
+  critical: 0
   warning: 4
-  info: 2
+  info: 3
   total: 7
-status: fixed
+status: issues_found
 ---
 
 # Phase 67: Code Review Report
 
-**Reviewed:** 2026-06-05T00:00:00Z
+**Reviewed:** 2026-06-06T00:00:00Z
 **Depth:** standard
 **Files Reviewed:** 5
 **Status:** issues_found
 
 ## Summary
 
-Phase 67 adds a progress bar upgrade (file counter, ETA, records/sec), an `ErrorStats` extension with `ErrorKind` classification and `ParseErrorRecord` collection, and a summary/error-log-writing facility. The overall structure is sound, but five correctness issues were found: one is a reliable logic bug in the progress bar counter (BLOCKER), and the others are a DoS risk from unbounded merge growth, a spurious speed computation on zero records, a missing zero-length validation on the new config field, and a dead-code annotation that hides a public API surface decision.
+Reviewed the phase 67 (prog-diag) implementation covering progress tracking, diagnostics, error statistics, and the run orchestration pipeline. The core correctness logic is sound: the two-pass prescan design, normalize-and-export hot path, interrupt handling, and `ErrorStats` merge semantics all appear correct.
 
----
+Four warnings were identified. The most significant is a functional regression in the parallel execution paths: both the CSV-parallel and SQLite-parallel paths fail to populate `parse_error_records` and `by_type`, causing the error log file to never be written and hint messages to never appear for parallel runs, even when parse errors occur. This silently degrades a diagnostic feature for the most common production configuration (multi-file with multiple CPUs).
 
-## Critical Issues
-
-### CR-01: `pb.set_position(0)` in `setup_progress_bar` resets the file-count progress on each new file
-
-**File:** `src/cli/run/processor.rs:120`
-
-**Issue:** The progress bar tracks overall file count (`[pos/len]`). `pb.inc(1)` is called in `log_file_result` (line 153) once per completed file to advance the counter. However, `setup_progress_bar` calls `pb.set_position(0)` unconditionally at the start of every new file. This resets the counter back to 0 before the new file begins, so the `[pos/len]` display always shows `[0/N]` at the start of each file and jumps back to 0 right after showing the completed-file message. For a run with 5 files, the user will see the sequence `[0/5] … [0/5] … [0/5]` instead of `[1/5] … [2/5] … [3/5]`. The ETA calculation in indicatif is also based on position advancement, so this makes ETA incorrect.
-
-The progress bar `len` is set to `total_files` in `make_progress_bar` (mod.rs:209), and `pb.inc(1)` is the correct way to advance it. `set_position(0)` was presumably intended to reset an inner per-file byte or record counter, but the bar is a file-count bar, not a byte/record bar. There is no per-file inner bar.
-
-**Fix:** Remove `pb.set_position(0)` from `setup_progress_bar`. The per-file label already comes from `pb.set_message`, which does not affect the position.
-
-```rust
-fn setup_progress_bar(
-    pb: Option<&ProgressBar>,
-    reset_pb: bool,
-    show_progress: bool,
-    file_index: usize,
-    total_files: usize,
-    file_name: &str,
-) {
-    if reset_pb && show_progress {
-        if let Some(pb) = pb {
-            pb.set_message(format!("[{file_index}/{total_files}] {file_name}"));
-            // Remove: pb.set_position(0);
-        }
-    }
-}
-```
+Three info-level findings cover a `progress bar` display ordering issue, an infallible `expect()` in parallel code, and a test that doesn't actually verify parallel-path execution.
 
 ---
 
 ## Warnings
 
-### WR-01: `ErrorStats::merge` does not enforce the 10,000-record cap on `parse_error_records`
+### WR-01: Error log file never written on parallel runs — parse_error_records not populated
 
-**File:** `src/error.rs:132-133`
+**File:** `src/cli/run/collector.rs:38–59` (used by `src/cli/run/parallel.rs:163` and `src/cli/run/sqlite_parallel.rs:34`)
 
-**Issue:** `processor.rs` caps each per-file `file_stats.parse_error_records` at 10,000 entries (line 239). However, `ErrorStats::merge` calls `extend` unconditionally, without checking the accumulated length. When merging from multiple files (parallel path or sequential with many files), the `run_stats.parse_error_records` can grow to `N_files × 10_000` entries. On a run with 1,000 files each containing exactly 10,000 parse errors, this accumulates 10 million `ParseErrorRecord` structs in memory (each holding two `String` fields), which is a reliable out-of-memory / DoS vector for adversarial or malformed input files.
+**Issue:** `collector::collect_log_file` only increments a `parse_errors: usize` counter for each parse failure; it never creates `ParseErrorRecord` objects and never calls `classify_error_kind`. As a result, when the parallel CSV or SQLite paths are active (`jobs > 1 && log_files.len() > 1`), `run_stats.parse_error_records` remains empty after the full run. `write_error_log` in `mod.rs:477` guards on `stats.parse_error_records.is_empty()` and returns immediately — the error log file is never created. Simultaneously, `by_type` in `ErrorStats` is also never populated, so the two hint messages in `print_run_summary` (encoding hint and field-missing hint) are never shown for parallel runs regardless of how many parse errors occurred.
 
-**Fix:** Apply the cap during merge:
+The sequential path in `processor.rs:241–247` does populate `parse_error_records` and `classify_error_kind` correctly. This is a behavioral difference between the two execution paths with no user-visible indication.
+
+**Fix:** In `collector.rs`, change the parse error branch to capture `ParseErrorRecord` with kind classification the same way `processor.rs` does:
 
 ```rust
-pub fn merge(&mut self, other: &ErrorStats) {
-    // ... existing field merges ...
-    const MAX_RECORDS: usize = 10_000;
-    let remaining_cap = MAX_RECORDS.saturating_sub(self.parse_error_records.len());
-    if remaining_cap > 0 {
-        self.parse_error_records.extend(
-            other.parse_error_records.iter().cloned().take(remaining_cap),
-        );
-    }
+Err(e) => {
+    parse_errors += 1;
+    let (line_number, raw_ref) = match &e {
+        ParseError::InvalidFormat { raw, line_number } => (*line_number, raw.as_str()),
+        _ => (0u64, ""),
+    };
+    let kind = crate::error::classify_error_kind(raw_ref);
+    // Accumulate into a local Vec<ParseErrorRecord> (capped at 10_000),
+    // return alongside parse_errors count for merging into ErrorStats.
+    log::warn!("{} | parse error: {e:?}", file.display());
+    continue;
 }
 ```
 
-### WR-02: `tick_progress` triggers on `records_in_file == 0` due to `trailing_zeros` returning 64
+The function signature should return `(Vec<(Sqllog, Option<String>)>, usize, Vec<ParseErrorRecord>)` or accept a mutable `ErrorStats` to accumulate directly, mirroring the sequential path.
 
-**File:** `src/cli/run/processor.rs:167`
+---
 
-**Issue:** `usize::trailing_zeros()` returns `64` when the value is `0` (all bits are zero). The guard `if records_in_file.trailing_zeros() >= 10` is therefore `true` on the very first invocation where `records_in_file` could be `0`.
+### WR-02: `finalize` error silently dropped when the file-processing loop also fails
 
-This can happen when: `passes=true`, the record reaches the export path, `export_one_preparsed` returns a non-fatal `Err`, so `records_in_file` remains `0`, and `ExportAction::Continue` is returned. The subsequent arm at line 223 calls `tick_progress(pb, 0, file_start, …)`. Inside `tick_progress`, `elapsed.max(1e-9)` prevents a divide-by-zero, but `0 as f64 / 1e-9 = 0.0`, so the speed label correctly shows `0 rec/s`. The immediate symptom is benign (shows `0 rec/s`), but the interrupt check runs on the very first record instead of every 1024th, slightly changing behavior.
+**File:** `src/cli/run/mod.rs:327–332`
 
-More critically, after `total_processed.wrapping_add(1)` (line 220) this also affects the `!passes` arm at line 225-227: `total_processed` starts at 0 before the increment, so the very first filtered record has `total_processed = 1` after the increment. `1.trailing_zeros() == 0`, so the filtered-record arm fires at every record until `total_processed` reaches 1024. Wait — `total_processed` is incremented AFTER `normalize_and_export` returns, so on the first iteration `total_processed` goes from 0 to 1. `1.trailing_zeros() = 0 < 10`. The `!passes` interrupt check won't misfire. But the `tick_progress` call with `records_in_file = 0` on the first failed export remains an off-by-one in the "every 1024 records" intention.
-
-**Fix:** Add a `records_in_file == 0` early-return guard:
+**Issue:** `run_sequential` calls `exporter_manager.finalize()` unconditionally (correct — ensures the `BufWriter` flush attempt is made even on loop failure). However, the result is bound and checked *after* `loop_result?`:
 
 ```rust
-fn tick_progress(
-    pb: Option<&ProgressBar>,
-    records_in_file: usize,
-    file_start: std::time::Instant,
-    file_name: &str,
-    interrupted: &Arc<AtomicBool>,
-) -> bool {
-    if records_in_file == 0 {
-        return false;
-    }
-    if records_in_file.trailing_zeros() >= 10 {
-        // ... existing logic
-    }
-    false
-}
+let finalize_result = exporter_manager.finalize();
+(!quiet).then(|| exporter_manager.log_stats());
+let (per_file_counts, run_stats) = loop_result?;   // early-returns on loop error
+finalize_result?;                                   // never reached if loop failed
 ```
 
-### WR-03: `write_error_log` uses `stats.parse_error_records` but `write_error_log` is called with `cfg` not `final_cfg`
+If `loop_result` is `Err`, the `finalize_result?` line is unreachable. A `BufWriter` flush failure (e.g., disk full after processing 10 GB of records) is silently lost — the caller receives only the loop error and has no indication the output file is truncated or corrupt.
 
-**File:** `src/cli/run/mod.rs:128`
-
-**Issue:** `handle_run` calls `write_error_log(cfg, &run_stats)` (line 128), passing the original `cfg`, not `final_cfg`. The `final_cfg` is obtained after the prescan merge (`merge_trxid_prescan`) at line 42, and both `final_cfg` and `cfg` share the same `error` field (prescan does not modify it). So in practice, `cfg.error` and `final_cfg.error` are always identical. However, the inconsistency is a maintenance trap: if future code adds logic that modifies `final_cfg.error`, this call will silently use the stale value. All other uses of the config in this function correctly use `final_cfg`.
-
-**Fix:** Use `final_cfg` for consistency:
+**Fix:** When `loop_result` is `Err`, log `finalize_result` as a warning before returning:
 
 ```rust
+let (per_file_counts, run_stats) = match loop_result {
+    Ok(v) => v,
+    Err(loop_err) => {
+        if let Err(fin_err) = finalize_result {
+            log::warn!("finalize failed during loop error cleanup: {fin_err}");
+        }
+        return Err(loop_err);
+    }
+};
+finalize_result?;
+Ok((per_file_counts, run_stats))
+```
+
+---
+
+### WR-03: `eprintln!` in `merge_trxid_prescan` ignores `--quiet` flag
+
+**File:** `src/cli/run/mod.rs:188–191`
+
+**Issue:** When stdin-pipe mode is combined with transaction-level filters, the degradation warning is emitted via a bare `eprintln!`:
+
+```rust
+eprintln!(
+    "[WARN] Transaction-level filters with stdin: pre-scan disabled, \
+     degrading to per-record matching."
+);
+```
+
+This call is not guarded by `!quiet`, so it writes to stderr even when the user runs with `--quiet`. The `quiet` flag is not in scope inside `merge_trxid_prescan`, but it is available at the call site in `handle_run`. Breaking the quiet contract makes piping workflows that parse stderr unreliable.
+
+**Fix:** Pass `quiet` into `merge_trxid_prescan` (or return a diagnostic string and let `handle_run` decide whether to print it):
+
+```rust
+fn merge_trxid_prescan(
+    cfg: &Config,
+    log_files: &[PathBuf],
+    jobs: usize,
+    is_stdin_pipe: bool,
+    quiet: bool,        // added
+) -> Result<Option<Config>> {
+    ...
+    if is_stdin_pipe {
+        warn!("...");
+        if !quiet {
+            eprintln!("[WARN] Transaction-level filters with stdin: ...");
+        }
+        return Ok(None);
+    }
+```
+
+---
+
+### WR-04: Progress bar printed over by summary — `finish_and_clear` called after `print_run_summary`
+
+**File:** `src/cli/run/mod.rs:118–130`
+
+**Issue:** `print_run_summary` is called at line 118 while the progress bar's steady-tick thread is still writing to stderr. `pb.finish_and_clear()` is called only at line 130, *after* the summary output. Because both `eprintln!` and `indicatif`'s tick thread write to the same stderr file descriptor, the multi-line summary (records, errors, hints) can be interleaved with or obscured by the spinner. The canonical fix in `indicatif` is to call `finish_and_clear()` first, or to use `pb.println()` for summary lines while the bar is active.
+
+**Fix:** Reorder to clear the progress bar before printing the summary:
+
+```rust
+// In handle_run, after collecting total_records:
+if let Some(pb) = &pb {
+    pb.finish_and_clear();   // moved up
+}
+print_run_summary(...);
 write_error_log(final_cfg, &run_stats);
-```
-
-### WR-04: `ErrorLogConfig.file` is not validated; an empty or whitespace path causes a misleading panic-free but silently-no-op error log path
-
-**File:** `src/config/mod.rs:19-21`, `src/config/validate.rs`
-
-**Issue:** `Config::validate()` validates `logging.file`, `exporter.csv.file`, and `exporter.sqlite.database_url` against empty/whitespace strings. However, the newly added `error.file` field in `ErrorLogConfig` has no corresponding validation. A config containing `[error]\nfile = "  "` (whitespace) will pass validation, and `std::fs::File::create("  ")` will either create a file named literally `"  "` in the current directory (succeeding silently with a file the user cannot find) or fail with a permissions error on some filesystems. In both cases the user gets no actionable message about the misconfiguration.
-
-**Fix:** Add validation in `Config::validate` (or in a new `ErrorLogConfig::validate` method called from `validate.rs`):
-
-```rust
-// In validate.rs or config/mod.rs
-if let Some(err_cfg) = &self.error {
-    if err_cfg.file.trim().is_empty() {
-        return Err(Error::Config(ConfigError::InvalidValue {
-            field: "error.file".to_string(),
-            value: err_cfg.file.clone(),
-            reason: "error log file path must not be empty or whitespace".to_string(),
-        }));
-    }
-}
+// pb already cleared above — remove the second finish_and_clear
 ```
 
 ---
 
 ## Info
 
-### IN-01: `ParseErrorRecord.file_path` is annotated `#[allow(dead_code)]` but is a structurally meaningful field
+### IN-01: `expect()` in parallel CSV path — logically infallible but not idiomatic
 
-**File:** `src/error.rs:49-51`
+**File:** `src/cli/run/parallel.rs:286`
 
-**Issue:** `file_path` carries per-record provenance (which input file caused the parse error) and is populated in `processor.rs:241`. The `#[allow(dead_code)]` suppresses the compiler warning because the field is never read after construction. This means the collected data is silently discarded — it is never included in the error log output (which only uses `line_number`, `raw_truncated`, and `kind`). The comment "保留字段供未来格式扩展使用" acknowledges this, but the field takes memory (a `String` per record, cloned on every `merge`) for zero current benefit. This is either dead weight or an omission from the error log format.
+**Issue:** `process_csv_parallel` uses `.expect("parallel CSV requires CSV exporter")` to unwrap the CSV config. The call site in `mod.rs` guarantees `exporter.csv.is_some()` before calling this function, so it cannot panic in practice. However, `expect()` in non-test production code is a code smell per Rust convention and the project's error-handling style (all other callers use `?` propagation). If the invariant is ever violated through a future refactor, the process panics rather than returning a typed error.
 
-**Suggestion:** Either (a) include `file_path` in the error log line format in `write_error_log` (mod.rs:491-497) so the field earns its place, or (b) remove it and the `#[allow(dead_code)]` annotation until it is needed.
-
-### IN-02: `truncated` flag in `write_error_log` is computed but only used if the collection is exactly at the cap boundary
-
-**File:** `src/cli/run/mod.rs:489-501`
-
-**Issue:** `let truncated = stats.parse_error_records.len() >= 10_000;` is used to decide whether to write a `[truncated at 10000 records]` footer. However, with WR-01's merge bug still present, the collection could hold more than 10,000 records and `truncated` would still be `true` (which is correct), but the footer wording `"[truncated at 10000 records]"` would be misleading when the actual count is, say, 250,000. After fixing WR-01, this becomes accurate. The issue is minor but the footer message should reflect the actual record count:
+**Fix:** Convert to a typed error:
 
 ```rust
-if truncated {
-    let _ = writeln!(
-        writer,
-        "[truncated; showing first 10000 of {} total parse errors]",
-        stats.parse_errors
-    );
-}
+let csv_cfg = cfg.exporter.csv.as_ref().ok_or_else(|| {
+    Error::Config(crate::error::ConfigError::NoExporters)
+})?;
 ```
 
 ---
 
-_Reviewed: 2026-06-05T00:00:00Z_
+### IN-02: Progress bar created but never incremented for parallel paths
+
+**File:** `src/cli/run/mod.rs:62–68`
+
+**Issue:** `make_progress_bar(show_progress, log_files.len())` is called unconditionally before the parallel/sequential branch. When `use_parallel` is true, the progress bar is passed only to `run_sequential`. The parallel functions (`run_csv_parallel`, `run_sqlite_parallel`) do not receive the progress bar, so `{pos}/{len}` remains `0/N` for the entire run. Users see a spinning cursor but no count advancement. The bar is also created with `enable_steady_tick(80ms)`, keeping a background thread running unnecessarily throughout the parallel run.
+
+**Fix:** Either pass the progress bar into the parallel helpers and call `pb.inc(1)` per completed file (must be done with `Arc<ProgressBar>` in rayon tasks), or suppress the progress bar entirely for parallel runs:
+
+```rust
+let show_progress = !quiet && !verbose && !use_parallel;
+let pb = make_progress_bar(show_progress, log_files.len());
+```
+
+Note: `use_parallel` is not yet computed at that point in `handle_run`; the check would need to be restructured or deferred.
+
+---
+
+### IN-03: `test_parallel_merge_consistent` does not guarantee parallel path execution
+
+**File:** `src/cli/run/tests.rs:103–170`
+
+**Issue:** The test calls `handle_run` with `jobs_override: None`, so `jobs = available_parallelism()`. On a single-core machine (or CI runner with 1 vCPU), `jobs = 1`, `use_csv_parallel = false`, and both the "sequential" and "parallel" configurations run through the sequential path. The assertion `par_lines == seq_lines + 1` would still pass because it only validates record counts, not which execution path was taken. The test name implies parallel behavior but cannot enforce it.
+
+**Fix:** Use `jobs_override: Some(2)` to force the parallel path regardless of host CPU count:
+
+```rust
+handle_run(&cfg_par, true, false, &Arc::new(AtomicBool::new(false)), Some(2)).unwrap();
+```
+
+This ensures the test always exercises `process_csv_parallel` on all machines.
+
+---
+
+_Reviewed: 2026-06-06T00:00:00Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_

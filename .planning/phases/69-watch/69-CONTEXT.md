@@ -1,12 +1,14 @@
 # Phase 69: Watch 模式核心框架 - Context
 
-**Gathered:** 2026-06-05
+**Gathered:** 2026-06-06
 **Status:** Ready for planning
 
 <domain>
 ## Phase Boundary
 
 建立 `sqllog2db watch -c config.toml` 子命令骨架：监听 inputs 目录新增 `.log` 文件，触发完整处理并累计统计，实时刷新状态行（路径、上次触发时间、累计行数），Ctrl+C 优雅退出打印最终摘要。不包含增量处理（Phase 70）。
+
+**前置条件：** Phase 68（init-wizard）已完成 ✓（2026-06-06 确认）
 
 </domain>
 
@@ -41,7 +43,7 @@
 
 [auto] Q: "如何实现优雅退出？" → Selected: "复用 Arc<AtomicBool> + ctrlc::set_handler 模式（ctrlc dep 已在 Cargo.toml）" (recommended default)
 
-- **D-10:** `let interrupted = Arc::new(AtomicBool::new(false));` + `ctrlc::set_handler(move || interrupted_flag.store(true, Relaxed))` — 与 `src/main.rs` Run 命令中完全相同的模式。
+- **D-10:** `let interrupted = Arc::new(AtomicBool::new(false));` + `ctrlc::set_handler(move || interrupted_flag.store(true, Relaxed))` — 与 `src/main.rs:166-169` Run 命令中完全相同的模式。
 - **D-11:** main watch loop：`loop { match receiver.recv_timeout(Duration::from_millis(100)) { ... } if interrupted.load(Relaxed) { break; } }`。
 - **D-12:** 退出时清除 ProgressBar（`pb.finish_and_clear()`），然后打印最终摘要（stderr）：`"watch stopped after {duration}. triggers: {n}, total processed: {rows} rows."`，退出码 0（`return Ok(None)`）。
 
@@ -51,8 +53,8 @@
 
 - **D-13:** 新建 `src/cli/watch.rs`，pub fn `handle_watch(cfg: &Config, quiet: bool, verbose: bool) -> Result<()>`。
 - **D-14:** `src/cli/opts.rs` 新增 `Commands::Watch { config: String }` variant（与 `Commands::Run` 结构类似，仅 config 字段，无 --input override）。
-- **D-15:** `src/cli/mod.rs` 新增 `pub mod watch;`。`src/main.rs` 新增 Watch arm：加载 config、validate、init logging、设置 ctrlc handler、调用 `handle_watch`。
-- **D-16:** `src/main.rs` 中 `needs_simple_logging` 逻辑需排除 Watch（与 Run/Stats 一样使用完整 logging stack）。
+- **D-15:** `src/cli/mod.rs` 新增 `pub mod watch;`（当前有：init, opts, run, stats, validate）。`src/main.rs` 新增 Watch arm：加载 config、validate、init logging、设置 ctrlc handler、调用 `handle_watch`。
+- **D-16:** `src/main.rs:130-133` 的 `needs_simple_logging` 逻辑需排除 Watch（与 Run/Stats 一样使用完整 logging stack）。即加入 `cli::opts::Commands::Watch { .. }` 到 `!matches!` 宏内。
 
 ### watch 导出格式约束
 
@@ -72,7 +74,8 @@
 
 - `recv_timeout(100ms)` poll 间隔：既能及时响应中断，又不忙等消耗 CPU。
 - ProgressBar tick：watch loop 每次 iteration 调用 `pb.tick()`（spinner 动画）。
-- 状态行时间格式：`chrono` 已不在依赖中，使用 `std::time::SystemTime::now()` 转 local time 字符串（`format!("{:.19}", ...)`）或使用 `indicatif` 内置 `{elapsed}`。优先用 elapsed 避免引入 chrono。
+- 状态行时间格式：优先用 `indicatif` 内置 `{elapsed}` 避免引入 chrono；若需要时间戳，用 `std::time::SystemTime::now()` 转 local time 字符串。
+- elapsed 用 `std::time::Instant::now()` 在 `handle_watch` 开始时记录，退出时 `start.elapsed()`。
 
 </decisions>
 
@@ -88,21 +91,22 @@
 ### 核心实现文件（新建/修改）
 - `src/cli/watch.rs` — 新建，`handle_watch()` 主逻辑
 - `src/cli/opts.rs` — 新增 `Commands::Watch { config }` variant
-- `src/cli/mod.rs` — 新增 `pub mod watch;`
+- `src/cli/mod.rs` — 新增 `pub mod watch;`（当前模块：init, opts, run, stats, validate）
 - `src/main.rs` — 新增 Watch arm，复用 ctrlc + logging 初始化模式
-- `Cargo.toml` — 新增 `notify = "6"`
+- `Cargo.toml` — 新增 `notify = "6"`（ctrlc/indicatif 已存在）
 
 ### 参考实现模式
-- `src/main.rs:160-168` — `Arc<AtomicBool>` + `ctrlc::set_handler` 模式（直接复用）
+- `src/main.rs:130-133` — `needs_simple_logging` 排除模式（Watch 需加入）
+- `src/main.rs:151-175` — Run 命令完整 arm（Watch 复用相同 config 加载 + ctrlc 序列）
+- `src/main.rs:166-169` — `Arc<AtomicBool>` + `ctrlc::set_handler` 模式（直接复用）
 - `src/cli/run/mod.rs` — `handle_run()` 签名（`cfg, quiet, verbose, &interrupted, None`）
-- `src/cli/run/processor.rs` — `make_progress_bar()` 模式（indicatif ProgressBar）
-- `.planning/phases/68-init-wizard/68-CONTEXT.md` — Phase 68 决策（参考模式）
+- `src/cli/init.rs` — Phase 68 完成模式：`handle_init_interactive` 在单文件中实现（watch.rs 对应模式）
 - `.planning/STATE.md` §"Architecture Notes for Phases 69–70"
 
 ### 外部依赖
 - `notify = "6"` — 新增，`RecommendedWatcher` + `mpsc::channel`
-- `ctrlc = "3"` — 已存在，无需新增
-- `indicatif = "0.18"` — 已存在，`ProgressBar::new_spinner()`
+- `ctrlc = "3"` — 已存在（`Cargo.toml:43`），无需新增
+- `indicatif = "0.18"` — 已存在（`Cargo.toml:46`），`ProgressBar::new_spinner()`
 
 </canonical_refs>
 
@@ -110,19 +114,20 @@
 ## Existing Code Insights
 
 ### Reusable Assets
-- `src/main.rs:160-168` — `Arc<AtomicBool>` + `ctrlc::set_handler` + `handle_run()` 调用序列，watch 直接复制该模式
+- `src/main.rs:166-169` — `Arc<AtomicBool>` + `ctrlc::set_handler` + `handle_run()` 调用序列，watch 直接复制该模式
 - `src/cli/run/mod.rs` — `handle_run(cfg, quiet, verbose, &interrupted, None)` 签名，watch 触发时复用
 - `indicatif::ProgressBar::new_spinner()` — 已在 `src/cli/run/mod.rs` 使用，spinner 模式直接适用
 - `ErrorStats::merge()` — 累计跨触发统计（`total_stats.merge(file_stats)`）
 
 ### Established Patterns
-- 新子命令添加：`Commands::Init` 的 clap 注解格式 → Watch 复用相同模式
-- `needs_simple_logging` 排除模式：`src/main.rs:133-135` — Watch 需要加入排除列表（与 Run/Stats 一样使用完整 logging）
+- 新子命令添加：`Commands::Init` / `Commands::Stats` 的 clap 注解格式 → Watch 复用相同模式
+- `needs_simple_logging` 排除模式：`src/main.rs:130-133` — Watch 需要加入排除列表（与 Run/Stats 一样使用完整 logging）
 - `pb.finish_and_clear()` 退出时清除状态行 — indicatif 标准用法
+- Phase 68 模式：`handle_init_interactive` 位于 `src/cli/init.rs` 单文件 → `handle_watch` 在 `src/cli/watch.rs` 单文件
 
 ### Integration Points
-- `src/cli/mod.rs` — 需新增 `pub mod watch;`
-- `src/main.rs:140-195` — match arm 新增 `Commands::Watch { config }` 分支
+- `src/cli/mod.rs` — 需新增 `pub mod watch;`（当前共 5 个 mod）
+- `src/main.rs:138` — match arm 新增 `Commands::Watch { config }` 分支（在 Init arm 后）
 - `Cargo.toml [dependencies]` — 新增 `notify = "6"`
 
 </code_context>
@@ -134,6 +139,7 @@
 - 最终摘要格式（stderr）：`"Watch stopped. Triggers: {n}, total processed: {rows} rows, elapsed: {hh:mm:ss}"`
 - elapsed 用 `std::time::Instant::now()` 在 `handle_watch` 开始时记录，退出时 `start.elapsed()`
 - notify `EventKind::Create(_)` 过滤：`path.extension().map_or(false, |e| e == "log")`
+- 状态行 wide_msg 格式：`"watching {dir} | triggers: {n} | processed: {rows} rows | last: {elapsed_since_last}"`
 
 </specifics>
 
@@ -144,10 +150,11 @@
 - SQLite 字节偏移去重 → Phase 70
 - watch 路径 glob 展开 → Phase 70（Phase 69 直接用路径作目录）
 - watch 支持 --input CLI override → 超出 Phase 69 范围
+- watch + CSV 增量插入 → Out of Scope（CSV 不支持原位增量写）
 
 </deferred>
 
 ---
 
 *Phase: 69-Watch 模式核心框架*
-*Context gathered: 2026-06-05*
+*Context gathered: 2026-06-06*
