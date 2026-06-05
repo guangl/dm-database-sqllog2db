@@ -2783,7 +2783,7 @@ fn test_cli_init_interactive_existing_without_force_fails() {
         .unwrap()
         .args(["init", "-i", "-o"])
         .arg(&out_file)
-        .write_stdin("\n\n\n")
+        .write_stdin("")
         .assert()
         .failure()
         .stderr(contains("already exists"));

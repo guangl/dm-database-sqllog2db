@@ -240,13 +240,21 @@ fn apply_wizard_answers_to_template(answers: &WizardAnswers) -> String {
 
 /// 交互式配置向导入口
 pub fn handle_init_interactive(output_path: &str, force: bool) -> Result<()> {
+    // Early-exit check: do not run the wizard if the file already exists and --force is not set.
+    let path = std::path::Path::new(output_path);
+    if path.exists() && !force {
+        error!("Configuration file already exists: {output_path}");
+        info!("Tip: use --force to overwrite");
+        return Err(Error::File(FileError::AlreadyExists {
+            path: path.to_path_buf(),
+        }));
+    }
     let stdin = std::io::stdin();
     let stdout = std::io::stdout();
     let mut reader = stdin.lock();
     let mut writer = stdout.lock();
     let answers = run_wizard(&mut reader, &mut writer)?;
     let content = apply_wizard_answers_to_template(&answers);
-    let path = std::path::Path::new(output_path);
     write_config_file(path, &content, force)?;
     info!("Next steps:");
     info!("  1. Edit configuration file: {output_path}");
