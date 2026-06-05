@@ -176,7 +176,7 @@ fn run() -> Result<Option<(ErrorStats, bool)>> {
             Ok(Some((stats, cli.quiet)))
         }
         Some(cli::opts::Commands::Validate { config }) => {
-            let cfg = load_config(config)?;
+            let cfg = Config::from_file(Path::new(config))?;
             if let Err(e) = cfg.validate() {
                 eprintln!("{}", format_validate_error(&e));
                 std::process::exit(EXIT_FATAL);
