@@ -657,7 +657,9 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
   2. 用户直接按 Enter 可接受默认值，所有字段均可跳过（使用默认），向导不因空输入崩溃
   3. 向导完成后生成的 config.toml 与 `sqllog2db init -o config.toml` 格式完全一致，包含相同的行内注释
   4. `sqllog2db validate -c <向导生成的文件>` 通过验证，退出码为 0
-**Plans**: TBD
+**Plans**: 2 plans
+- [ ] 68-01-PLAN.md — init.rs 新增 WizardAnswers/ExporterChoice/run_wizard + apply_wizard_answers_to_template + write_config_file 提取 + 12+ 单元测试覆盖 INIT-02/INIT-03 核心
+- [ ] 68-02-PLAN.md — opts.rs interactive bool flag + main.rs 分发分支 + handle_init_interactive + 6 个 e2e CLI 测试覆盖 INIT-01/INIT-02/INIT-03（SC4 validate 通过）
 **UI hint**: yes
 
 ### Phase 69: Watch 模式核心框架
