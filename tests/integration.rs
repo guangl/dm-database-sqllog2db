@@ -2788,3 +2788,31 @@ fn test_cli_init_interactive_existing_without_force_fails() {
         .failure()
         .stderr(contains("already exists"));
 }
+
+/// IN-03: `init -i --force` overwrites an existing file with the wizard output
+#[test]
+fn test_cli_init_interactive_force_overwrites_existing() {
+    use assert_cmd::Command;
+    let dir = tempfile::TempDir::new().unwrap();
+    let out_file = dir.path().join("cfg.toml");
+    std::fs::write(&out_file, "old content").unwrap();
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["init", "-i", "-o"])
+        .arg(&out_file)
+        .arg("--force")
+        .write_stdin("\n\n\n")
+        .assert()
+        .success();
+
+    let content = std::fs::read_to_string(&out_file).unwrap();
+    assert!(
+        content.contains("[sqllog]"),
+        "force should overwrite with template config"
+    );
+    assert!(
+        !content.contains("old content"),
+        "old content must be replaced"
+    );
+}
