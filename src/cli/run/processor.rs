@@ -163,6 +163,9 @@ fn tick_progress(
     file_name: &str,
     interrupted: &Arc<AtomicBool>,
 ) -> bool {
+    if records_in_file == 0 {
+        return false;
+    }
     if records_in_file.trailing_zeros() >= 10 {
         if let Some(pb) = pb {
             let elapsed = file_start.elapsed().as_secs_f64();
