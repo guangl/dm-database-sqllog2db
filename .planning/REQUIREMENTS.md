@@ -58,27 +58,27 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| WATCH-01 | — | Pending |
-| WATCH-02 | — | Pending |
-| WATCH-03 | — | Pending |
-| WATCH-04 | — | Pending |
-| WATCH-05 | — | Pending |
-| WATCH-06 | — | Pending |
-| INIT-01 | — | Pending |
-| INIT-02 | — | Pending |
-| INIT-03 | — | Pending |
-| DIAG-01 | — | Pending |
-| DIAG-02 | — | Pending |
-| DIAG-03 | — | Pending |
-| PROG-01 | — | Pending |
-| PROG-02 | — | Pending |
-| PROG-03 | — | Pending |
+| WATCH-01 | Phase 69 | Pending |
+| WATCH-02 | Phase 69 | Pending |
+| WATCH-03 | Phase 70 | Pending |
+| WATCH-04 | Phase 70 | Pending |
+| WATCH-05 | Phase 69 | Pending |
+| WATCH-06 | Phase 69 | Pending |
+| INIT-01 | Phase 68 | Pending |
+| INIT-02 | Phase 68 | Pending |
+| INIT-03 | Phase 68 | Pending |
+| DIAG-01 | Phase 67 | Pending |
+| DIAG-02 | Phase 67 | Pending |
+| DIAG-03 | Phase 67 | Pending |
+| PROG-01 | Phase 67 | Pending |
+| PROG-02 | Phase 67 | Pending |
+| PROG-03 | Phase 67 | Pending |
 
 **Coverage:**
 - v1.18 requirements: 15 total
-- Mapped to phases: 0 (roadmap pending)
-- Unmapped: 15 ⚠
+- Mapped to phases: 15 (Phases 67–70)
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-06-05*
-*Last updated: 2026-06-05 after initial v1.18 definition*
+*Last updated: 2026-06-05 — traceability mapped to Phases 67–70*

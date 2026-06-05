@@ -2,6 +2,7 @@
 
 ## Milestones
 
+- 🚧 **v1.18 用户体验全面升级** — Phases 67–70 (in progress)
 - ✅ **v1.17 多文件并行提速** — Phases 64–66.1 (shipped 2026-06-04)
 - ✅ **v1.16.0 工程质量深化** — Phases 59–63 (shipped 2026-06-03)
 - ✅ **v1.15 工程质量全面提升** — Phases 55–58 (shipped 2026-06-02)
@@ -209,6 +210,17 @@ Full details: `.planning/milestones/v1.16.0-ROADMAP.md`
 - [x] **Phase 66.1: 修复并行集成测试覆盖** (INSERTED) — jobs_override 强制并行路径 + write_heterogeneous_log + 2 条强制并行测试 (completed 2026-06-04)
 
 Full details: `.planning/milestones/v1.17-ROADMAP.md`
+
+</details>
+
+
+<details>
+<summary>🚧 v1.18 用户体验全面升级 (Phases 67–70) — IN PROGRESS</summary>
+
+- [ ] **Phase 67: 进度/摘要与诊断增强** — 多文件进度计数器、realtime records/sec+ETA、错误分组统计与 hint (PROG-01/02/03, DIAG-01/02/03)
+- [ ] **Phase 68: 交互式配置向导** — `init --interactive` 对话式向导，每步提示示例+默认值，生成格式与非交互式 init 完全一致 (INIT-01/02/03)
+- [ ] **Phase 69: Watch 模式核心框架** — `watch` 子命令 + notify crate 监听、新增文件触发处理、实时状态显示、Ctrl+C 优雅退出 (WATCH-01/02/05/06)
+- [ ] **Phase 70: Watch 增量处理与集成测试** — 文件追加增量处理、SQLite 字节偏移去重、watch 路径全套集成测试 (WATCH-03/04)
 
 </details>
 
@@ -620,6 +632,54 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 **Plans**: 1 plan
 - [x] 66-01-PLAN.md — tests/integration.rs 新增 test_parallel_csv_content_matches_sequential + test_parallel_csv_filter_matches_sequential + test_init_no_parallel_fields + 全量 cargo test（COMPAT-01/02/03）
 
+### Phase 67: 进度/摘要与诊断增强
+**Goal**: 用户运行时得到更丰富的实时反馈与错误诊断——进度条显示文件计数器和 ETA，摘要包含过滤率与错误分布，error log 携带行号和原文
+**Depends on**: Phase 66.1
+**Requirements**: PROG-01, PROG-02, PROG-03, DIAG-01, DIAG-02, DIAG-03
+**Success Criteria** (what must be TRUE):
+  1. 多文件运行时进度条显示 `[2/5]` 格式文件计数器，用户无需猜测当前处理到第几个文件
+  2. 进度条实时显示 records/sec 吞吐量和预计剩余时间（ETA），非终端自动退化不输出 ANSI 控制码
+  3. error log 每条 parse error 包含行号（如 `line 42:`）和原始内容前 120 字符，用户可定位问题行
+  4. 导出摘要按错误类型分组统计（field_missing/parse_failed/encoding_error），显示各类型出现次数
+  5. 当某类错误超过阈值时触发具体 hint（如"多行 encoding_error：建议检查文件编码是否为 GBK"）
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 68: 交互式配置向导
+**Goal**: 首次使用者可通过 `sqllog2db init --interactive` 以对话方式完成配置，无需阅读文档即可生成可用的 config.toml
+**Depends on**: Phase 67
+**Requirements**: INIT-01, INIT-02, INIT-03
+**Success Criteria** (what must be TRUE):
+  1. `sqllog2db init --interactive` 启动向导，逐字段提示（输入目录、导出格式、输出路径等），每步显示示例值和默认值
+  2. 用户直接按 Enter 可接受默认值，所有字段均可跳过（使用默认），向导不因空输入崩溃
+  3. 向导完成后生成的 config.toml 与 `sqllog2db init -o config.toml` 格式完全一致，包含相同的行内注释
+  4. `sqllog2db validate -c <向导生成的文件>` 通过验证，退出码为 0
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 69: Watch 模式核心框架
+**Goal**: 用户可通过 `sqllog2db watch -c config.toml` 启动持续监听，目录内新增 .log 文件时自动触发处理，实时显示监听状态，Ctrl+C 优雅退出
+**Depends on**: Phase 68
+**Requirements**: WATCH-01, WATCH-02, WATCH-05, WATCH-06
+**Success Criteria** (what must be TRUE):
+  1. `sqllog2db watch -c config.toml` 启动后持续运行，终端显示正在监听的路径和上次触发时间
+  2. 向监听目录新增 `.log` 文件后，工具在 2 秒内自动触发处理并更新累计已处理行数
+  3. 状态行实时刷新：监听路径、上次触发时间戳、累计已处理行数，不干扰错误输出
+  4. 按下 Ctrl+C 后程序优雅退出，打印最终摘要（总触发次数、累计处理行数、运行时长），退出码 0
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 70: Watch 增量处理与集成测试
+**Goal**: watch 模式对已有文件的追加内容实现增量处理，SQLite 导出通过字节偏移去重避免重复插入，并通过集成测试验证 watch 路径的正确性
+**Depends on**: Phase 69
+**Requirements**: WATCH-03, WATCH-04
+**Success Criteria** (what must be TRUE):
+  1. 向已有 .log 文件追加内容时，watch 仅处理新增字节（从上次读取的偏移量继续），不重复处理已有内容
+  2. SQLite 导出模式下，同一文件多次触发不产生重复行——通过持久化字节偏移记录确保幂等性
+  3. 重启 watch 进程后，从上次记录的字节偏移恢复，不丢失也不重复已有记录
+  4. 集成测试覆盖：新文件触发、追加触发、SQLite 去重三个场景，`cargo test` 全部通过
+**Plans**: TBD
+
 ## Coverage Validation
 
 | Requirement | Phase |
@@ -698,7 +758,23 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 | PARALLEL-06 | 66.1  |
 | PARALLEL-07 | 66.1  |
 
-**68/68 requirements mapped — coverage: 100%**
+| PROG-01     | 67    |
+| PROG-02     | 67    |
+| PROG-03     | 67    |
+| DIAG-01     | 67    |
+| DIAG-02     | 67    |
+| DIAG-03     | 67    |
+| INIT-01     | 68    |
+| INIT-02     | 68    |
+| INIT-03     | 68    |
+| WATCH-01    | 69    |
+| WATCH-02    | 69    |
+| WATCH-05    | 69    |
+| WATCH-06    | 69    |
+| WATCH-03    | 70    |
+| WATCH-04    | 70    |
+
+**83/83 requirements mapped — coverage: 100%**
 
 ## Progress
 
@@ -738,6 +814,11 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 | 66. 兼容性验证与测试 | v1.17 | Complete | 2026-06-04 |
 | 66.1. 修复并行集成测试覆盖 (INSERTED) | v1.17 | Complete | 2026-06-04 |
 
+| 67. 进度/摘要与诊断增强 | v1.18 | Not started | - |
+| 68. 交互式配置向导 | v1.18 | Not started | - |
+| 69. Watch 模式核心框架 | v1.18 | Not started | - |
+| 70. Watch 增量处理与集成测试 | v1.18 | Not started | - |
+
 ---
 *Created: 2026-05-21 for milestone v1.10*
-*Updated: 2026-06-04 — v1.17 milestone (Phases 64–66.1) shipped*
+*Updated: 2026-06-05 — v1.18 milestone (Phases 67–70) roadmap created*
