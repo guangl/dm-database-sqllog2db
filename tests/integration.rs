@@ -833,7 +833,7 @@ fn test_boundary_all_filtered() {
 
 #[test]
 fn test_boundary_malformed_line() {
-    // Arrange: 2 条正常行 + 1 条无效行 + 2 条正常行 = 4 条正常记录
+    // Arrange: 1 条无效行（文件开头）+ 4 条正常行 = 4 条正常记录
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
     std::fs::create_dir_all(&log_dir).unwrap();
