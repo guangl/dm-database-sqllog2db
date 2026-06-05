@@ -24,13 +24,13 @@
 
 - [x] **DIAG-01**: 错误日志每条 parse error 包含行号和原始内容前 120 字符
 - [x] **DIAG-02**: 导出摘要按错误类型分组统计（field_missing / parse_failed / encoding_error）
-- [ ] **DIAG-03**: 常见错误模式触发具体 hint（如"多行编码错误：建议检查文件编码"）
+- [x] **DIAG-03**: 常见错误模式触发具体 hint（如"多行编码错误：建议检查文件编码"）
 
 ### 进度/摘要增强
 
 - [ ] **PROG-01**: 多文件运行时进度条显示 `[当前/总数]` 文件计数器
 - [ ] **PROG-02**: 进度条显示实时 records/sec 和预计剩余时间（ETA）
-- [ ] **PROG-03**: 导出摘要新增过滤率（filtered_out/total_read）和错误类型分布
+- [x] **PROG-03**: 导出摘要新增过滤率（filtered_out/total_read）和错误类型分布
 
 ## Future Requirements
 
@@ -69,10 +69,10 @@
 | INIT-03 | Phase 68 | Pending |
 | DIAG-01 | Phase 67 | Complete |
 | DIAG-02 | Phase 67 | Complete |
-| DIAG-03 | Phase 67 | Pending |
+| DIAG-03 | Phase 67 | Complete |
 | PROG-01 | Phase 67 | Pending |
 | PROG-02 | Phase 67 | Pending |
-| PROG-03 | Phase 67 | Pending |
+| PROG-03 | Phase 67 | Complete |
 
 **Coverage:**
 - v1.18 requirements: 15 total

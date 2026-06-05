@@ -217,7 +217,7 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 <details>
 <summary>🚧 v1.18 用户体验全面升级 (Phases 67–70) — IN PROGRESS</summary>
 
-- [ ] **Phase 67: 进度/摘要与诊断增强** — 多文件进度计数器、realtime records/sec+ETA、错误分组统计与 hint (PROG-01/02/03, DIAG-01/02/03)
+- [x] **Phase 67: 进度/摘要与诊断增强** — 多文件进度计数器、realtime records/sec+ETA、错误分组统计与 hint (PROG-01/02/03, DIAG-01/02/03) (completed 2026-06-05)
 - [ ] **Phase 68: 交互式配置向导** — `init --interactive` 对话式向导，每步提示示例+默认值，生成格式与非交互式 init 完全一致 (INIT-01/02/03)
 - [ ] **Phase 69: Watch 模式核心框架** — `watch` 子命令 + notify crate 监听、新增文件触发处理、实时状态显示、Ctrl+C 优雅退出 (WATCH-01/02/05/06)
 - [ ] **Phase 70: Watch 增量处理与集成测试** — 文件追加增量处理、SQLite 字节偏移去重、watch 路径全套集成测试 (WATCH-03/04)
@@ -645,7 +645,7 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 **Plans**: 3 plans
 - [x] 67-01-PLAN.md — make_progress_bar/tick_progress 升级为 [N/M] + records/sec + ETA + 顺序路径 pb.inc(1) 文件计数器（PROG-01/PROG-02）
 - [x] 67-02-PLAN.md — ErrorKind 枚举 + ParseErrorRecord + ErrorStats 新增 by_type/filtered_out/parse_error_records + Config.error 字段 + process_log_file Err 路径收集（DIAG-01/DIAG-02）
-- [ ] 67-03-PLAN.md — print_run_summary 扩展 errors-by-type/filtered/hint + write_error_log 文件批量写出 + normalize_and_export filtered_out 递增（PROG-03/DIAG-03）
+- [x] 67-03-PLAN.md — print_run_summary 扩展 errors-by-type/filtered/hint + write_error_log 文件批量写出 + normalize_and_export filtered_out 递增（PROG-03/DIAG-03）
 **UI hint**: yes
 
 ### Phase 68: 交互式配置向导
@@ -817,7 +817,7 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 | 66. 兼容性验证与测试 | v1.17 | Complete | 2026-06-04 |
 | 66.1. 修复并行集成测试覆盖 (INSERTED) | v1.17 | Complete | 2026-06-04 |
 
-| 67. 进度/摘要与诊断增强 | 2/3 | In Progress|  |
+| 67. 进度/摘要与诊断增强 | 3/3 | Complete   | 2026-06-05 |
 | 68. 交互式配置向导 | v1.18 | Not started | - |
 | 69. Watch 模式核心框架 | v1.18 | Not started | - |
 | 70. Watch 增量处理与集成测试 | v1.18 | Not started | - |
