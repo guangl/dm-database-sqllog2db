@@ -59,7 +59,7 @@ pub fn handle_run(
         .as_ref()
         .and_then(crate::pipeline::NormalizeConfig::placeholder_override);
     let show_progress = !quiet && !verbose;
-    let pb = make_progress_bar(show_progress);
+    let pb = make_progress_bar(show_progress, log_files.len());
     let mut skipped_files = 0usize;
     let use_csv_parallel =
         jobs > 1 && log_files.len() > 1 && !is_stdin_pipe && final_cfg.exporter.csv.is_some();
@@ -201,13 +201,14 @@ fn merge_trxid_prescan(
     }
 }
 
-/// 创建进度条（spinner 样式），`show_progress` 为 false 时返回 `None`。
-fn make_progress_bar(show_progress: bool) -> Option<ProgressBar> {
+/// 创建文件计数进度条，`show_progress` 为 false 时返回 `None`。
+/// `total_files` 决定 `{pos}/{len}` 计数器的上限，ETA 由 indicatif 自动计算。
+fn make_progress_bar(show_progress: bool, total_files: usize) -> Option<ProgressBar> {
     if show_progress {
-        let bar = ProgressBar::new_spinner();
+        let bar = ProgressBar::new(total_files as u64);
         bar.set_style(
-            ProgressStyle::with_template("{msg}")
-                .unwrap_or_else(|_| ProgressStyle::default_spinner())
+            ProgressStyle::with_template("{spinner:.cyan} [{pos}/{len}] {wide_msg} | eta {eta}")
+                .unwrap_or_else(|_| ProgressStyle::default_bar())
                 .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏ "),
         );
         bar.enable_steady_tick(std::time::Duration::from_millis(80));

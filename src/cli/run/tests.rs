@@ -416,3 +416,39 @@ fn test_normalize_and_export_quota_hit_returns_break_quota() {
         "BreakQuota 路径下 records_in_file 应保持为 0，实际为 {records_in_file}"
     );
 }
+
+// ── PROG-01/02: 进度条模板单元测试 ────────────────────────────────────────────
+
+/// 验证 `make_progress_bar(true, 3)` 返回 `Some(pb)`，
+/// `pb.length() == Some(3)`，`pb.position() == 0`，模板设置不 panic。
+#[test]
+fn test_progress_bar_template() {
+    let pb = super::make_progress_bar(true, 3);
+    assert!(pb.is_some(), "show_progress=true 应返回 Some(ProgressBar)");
+    let pb = pb.unwrap();
+    assert_eq!(
+        pb.length(),
+        Some(3),
+        "length() 应为 Some(3)，实际为 {:?}",
+        pb.length()
+    );
+    assert_eq!(
+        pb.position(),
+        0,
+        "初始 position() 应为 0，实际为 {}",
+        pb.position()
+    );
+    // 确认模板已设置（调用 set_message 不应 panic）
+    pb.set_message("test message");
+    pb.finish_and_clear();
+}
+
+/// 验证 `make_progress_bar(false, 3)` 返回 `None`。
+#[test]
+fn test_progress_bar_disabled() {
+    let pb = super::make_progress_bar(false, 3);
+    assert!(
+        pb.is_none(),
+        "show_progress=false 应返回 None，实际返回了 Some"
+    );
+}
