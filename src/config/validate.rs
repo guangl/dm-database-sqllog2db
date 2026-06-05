@@ -8,6 +8,20 @@ impl Config {
         self.sqllog.validate()?;
         self.validate_output_fields()?;
         self.validate_stats_time_fields()?;
+        self.validate_error_log()?;
+        Ok(())
+    }
+
+    fn validate_error_log(&self) -> Result<()> {
+        if let Some(err_cfg) = &self.error {
+            if err_cfg.file.trim().is_empty() {
+                return Err(Error::Config(ConfigError::InvalidValue {
+                    field: "error.file".to_string(),
+                    value: err_cfg.file.clone(),
+                    reason: "error log file path must not be empty or whitespace".to_string(),
+                }));
+            }
+        }
         Ok(())
     }
 
