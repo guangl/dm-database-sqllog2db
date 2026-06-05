@@ -1,14 +1,23 @@
 use crate::error::{Error, FileError, Result};
-use log::{debug, error, info, warn};
+use log::{error, info, warn};
 use std::fs;
 use std::path::Path;
 
 /// 生成默认配置文件
 pub fn handle_init(output_path: &str, force: bool) -> Result<()> {
     let path = Path::new(output_path);
+    let content = CONFIG_TEMPLATE_EN;
+    write_config_file(path, content, force)?;
+    info!("Next steps:");
+    info!("  1. Edit configuration file: {output_path}");
+    info!("  2. Validate configuration: sqllog2db validate -c {output_path}");
+    info!("  3. Run export: sqllog2db run -c {output_path}");
+    Ok(())
+}
 
+fn write_config_file(path: &Path, content: &str, force: bool) -> Result<()> {
+    let output_path = path.to_string_lossy();
     info!("Preparing to generate configuration file: {output_path}");
-
     let file_existed = path.exists();
 
     if file_existed && !force {
@@ -18,14 +27,9 @@ pub fn handle_init(output_path: &str, force: bool) -> Result<()> {
             path: path.to_path_buf(),
         }));
     }
-
     if file_existed && force {
         warn!("Will overwrite existing configuration file");
     }
-
-    debug!("Generating default configuration content...");
-    let content = CONFIG_TEMPLATE_EN;
-
     if let Some(parent) = path.parent().filter(|p| !p.exists()) {
         info!("Creating directory: {}", parent.display());
         fs::create_dir_all(parent).map_err(|e| {
@@ -35,26 +39,17 @@ pub fn handle_init(output_path: &str, force: bool) -> Result<()> {
             })
         })?;
     }
-
-    debug!("Writing configuration file...");
     fs::write(path, content).map_err(|e| {
         Error::File(FileError::WriteFailed {
             path: path.to_path_buf(),
             reason: e.to_string(),
         })
     })?;
-
     if file_existed {
         info!("Configuration file overwritten: {output_path}");
     } else {
         info!("Configuration file generated: {output_path}");
     }
-
-    info!("Next steps:");
-    info!("  1. Edit configuration file: {output_path}");
-    info!("  2. Validate configuration: sqllog2db validate -c {output_path}");
-    info!("  3. Run export: sqllog2db run -c {output_path}");
-
     Ok(())
 }
 
