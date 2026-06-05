@@ -38,7 +38,7 @@ pub fn handle_run(
     let (log_files, is_stdin_pipe) = resolve_input_files(cfg)?;
     let jobs = jobs_override
         .unwrap_or_else(|| std::thread::available_parallelism().map_or(1, std::num::NonZero::get));
-    let merged = merge_trxid_prescan(cfg, &log_files, jobs, is_stdin_pipe)?;
+    let merged = merge_trxid_prescan(cfg, &log_files, jobs, is_stdin_pipe, quiet)?;
     let final_cfg: &Config = merged.as_ref().unwrap_or(cfg);
     let pipeline = build_pipeline(final_cfg);
     let field_mask = final_cfg.output.as_ref().map_or(
@@ -173,6 +173,7 @@ fn merge_trxid_prescan(
     log_files: &[PathBuf],
     jobs: usize,
     is_stdin_pipe: bool,
+    quiet: bool,
 ) -> Result<Option<Config>> {
     if cfg
         .filter
@@ -185,10 +186,12 @@ fn merge_trxid_prescan(
                  cannot pre-scan for transaction IDs. Degrading to per-record matching \
                  (transaction integrity not guaranteed)."
             );
-            eprintln!(
-                "[WARN] Transaction-level filters with stdin: pre-scan disabled, \
-                 degrading to per-record matching."
-            );
+            if !quiet {
+                eprintln!(
+                    "[WARN] Transaction-level filters with stdin: pre-scan disabled, \
+                     degrading to per-record matching."
+                );
+            }
             return Ok(None);
         }
         let extra_trxids = scan_for_trxids_by_transaction_filters(log_files, cfg, jobs)?;
