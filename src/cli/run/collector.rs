@@ -70,6 +70,7 @@ pub(super) fn collect_log_file(
             &mut params_buf,
             &mut ns_scratch,
             &mut rows,
+            &mut file_stats,
         );
     }
     Ok((rows, file_stats))
@@ -83,10 +84,12 @@ fn process_record(
     params_buf: &mut ParamBuffer,
     ns_scratch: &mut Vec<u8>,
     rows: &mut Vec<(Sqllog, Option<String>)>,
+    file_stats: &mut ErrorStats,
 ) {
     let passes = pipeline.is_empty() || pipeline.run_with_meta(&record);
     let needs_processing = passes || (do_normalize && record.tag.is_none());
     if !needs_processing {
+        file_stats.filtered_out += 1;
         return;
     }
     if passes {
@@ -105,6 +108,7 @@ fn process_record(
         rows.push((record, normalized));
     } else {
         // 被过滤掉的 PARAMS 记录仍需更新 params_buf（do_normalize && record.tag.is_none()）
+        file_stats.filtered_out += 1;
         crate::pipeline::compute_normalized(
             &record,
             &record.sql,
