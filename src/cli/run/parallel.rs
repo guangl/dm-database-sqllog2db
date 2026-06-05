@@ -160,7 +160,7 @@ fn run_parallel_tasks(
                 }
                 verbose.then(|| eprintln!("Processing: {}", file.display()));
                 let temp_path = parts_dir.join(format!("{idx:08}.csv"));
-                let (rows, parse_errors) = collector::collect_log_file(
+                let (rows, file_stats) = collector::collect_log_file(
                     file,
                     pipeline,
                     do_normalize,
@@ -175,10 +175,6 @@ fn run_parallel_tasks(
                     field_mask,
                     ordered_indices,
                 )?;
-                let mut file_stats = ErrorStats::default();
-                for _ in 0..parse_errors {
-                    file_stats.add_parse_error();
-                }
                 Ok(Some((file.clone(), temp_path, count, file_stats)))
             })
             .collect()

@@ -1,7 +1,10 @@
-use crate::error::{Error, ParserError, Result};
+use crate::error::{
+    Error, ErrorStats, ParseErrorRecord, ParserError, Result, classify_error_kind,
+    truncate_to_120_chars,
+};
 use crate::pipeline::Pipeline;
 use crate::pipeline::normalizer::ParamBuffer;
-use dm_database_parser_sqllog::{LogParserBuilder, Sqllog};
+use dm_database_parser_sqllog::{LogParserBuilder, ParseError, Sqllog};
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -11,14 +14,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 /// PARAMS 记录（`record.tag.is_none()`）在 `do_normalize` 时无论是否通过过滤都必须
 /// 更新 `params_buf`，以便后续 DML 记录能正确替换参数（mirror processor.rs 第 75-143 行）。
 ///
-/// 返回 `(rows, parse_error_count)`，与顺序路径的错误统计对齐。
+/// 返回 `(rows, file_stats)`，与顺序路径的错误统计对齐（含 `parse_error_records`）。
 pub(super) fn collect_log_file(
     file: &Path,
     pipeline: &Pipeline,
     do_normalize: bool,
     placeholder_override: Option<bool>,
     interrupted: &Arc<AtomicBool>,
-) -> Result<(Vec<(Sqllog, Option<String>)>, usize)> {
+) -> Result<(Vec<(Sqllog, Option<String>)>, ErrorStats)> {
     let file_str = file.to_string_lossy();
     let parser = LogParserBuilder::new(file_str.as_ref())
         .build()
@@ -33,7 +36,7 @@ pub(super) fn collect_log_file(
     let mut params_buf = ParamBuffer::default();
     let mut ns_scratch = Vec::with_capacity(4096);
     let mut rows: Vec<(Sqllog, Option<String>)> = Vec::new();
-    let mut parse_errors: usize = 0;
+    let mut file_stats = ErrorStats::default();
 
     for result in parser.iter() {
         if interrupted.load(Ordering::Relaxed) {
@@ -42,8 +45,20 @@ pub(super) fn collect_log_file(
         let record = match result {
             Ok(r) => r,
             Err(e) => {
-                parse_errors += 1;
-                log::warn!("{} | parse error: {e:?}", file.display());
+                let (line_number, raw_ref) = match &e {
+                    ParseError::InvalidFormat { raw, line_number } => (*line_number, raw.as_str()),
+                    _ => (0u64, ""),
+                };
+                let kind = classify_error_kind(raw_ref);
+                file_stats.add_parse_error_with_kind(kind);
+                if file_stats.parse_error_records.len() < 10_000 {
+                    file_stats.parse_error_records.push(ParseErrorRecord {
+                        line_number,
+                        raw_truncated: truncate_to_120_chars(raw_ref),
+                        kind,
+                    });
+                }
+                log::warn!("{} | {e:?}", file.display());
                 continue;
             }
         };
@@ -57,7 +72,7 @@ pub(super) fn collect_log_file(
             &mut rows,
         );
     }
-    Ok((rows, parse_errors))
+    Ok((rows, file_stats))
 }
 
 fn process_record(
