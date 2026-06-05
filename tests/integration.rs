@@ -2623,3 +2623,168 @@ fn test_wizard_integration_sqlite() {
     assert_eq!(answers.sqlite_db.as_deref(), Some("db/out.db"));
     assert_eq!(answers.sqlite_table.as_deref(), Some("my_records"));
 }
+
+// ── e2e CLI 测试: init --interactive (INIT-01/02/03 + SC4 + D-02) ─────────────
+
+/// INIT-01/02: `init -i` 全默认 Enter×3，退出 0，生成含默认路径的 config.toml
+#[test]
+fn test_cli_init_interactive_all_defaults() {
+    use assert_cmd::Command;
+    let dir = tempfile::TempDir::new().unwrap();
+    let out_file = dir.path().join("cfg.toml");
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["init", "-i", "-o"])
+        .arg(&out_file)
+        .write_stdin("\n\n\n")
+        .assert()
+        .success();
+
+    assert!(out_file.exists(), "init -i must create the config file");
+    let content = std::fs::read_to_string(&out_file).unwrap();
+    assert!(
+        content.contains(r#"inputs = ["sqllogs"]"#),
+        "default inputs must be sqllogs"
+    );
+    assert!(
+        content.contains(r#"file = "outputs/sqllog.csv""#),
+        "default csv file path must be outputs/sqllog.csv"
+    );
+}
+
+/// INIT-02: `init -i` 自定义 inputs 路径，生成的 config.toml 包含自定义值
+#[test]
+fn test_cli_init_interactive_custom_inputs() {
+    use assert_cmd::Command;
+    let dir = tempfile::TempDir::new().unwrap();
+    let out_file = dir.path().join("cfg.toml");
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["init", "-i", "-o"])
+        .arg(&out_file)
+        .write_stdin("my/dir\n\n\n")
+        .assert()
+        .success();
+
+    let content = std::fs::read_to_string(&out_file).unwrap();
+    assert!(
+        content.contains(r#"inputs = ["my/dir"]"#),
+        "custom inputs path must appear in generated config"
+    );
+}
+
+/// INIT-02: `init -i` sqlite 模式，生成 config.toml 含正确的 `SQLite` 配置段
+#[test]
+fn test_cli_init_interactive_sqlite() {
+    use assert_cmd::Command;
+    let dir = tempfile::TempDir::new().unwrap();
+    let out_file = dir.path().join("cfg.toml");
+
+    // stdin: inputs=默认\n, format=sqlite\n, sqlite_db=默认\n, sqlite_table=默认\n
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["init", "-i", "-o"])
+        .arg(&out_file)
+        .write_stdin("\nsqlite\n\n\n")
+        .assert()
+        .success();
+
+    let content = std::fs::read_to_string(&out_file).unwrap();
+    assert!(
+        content.contains("[exporter.sqlite]"),
+        "[exporter.sqlite] must be activated (uncommented)"
+    );
+    assert!(
+        !content.contains("# [exporter.sqlite]"),
+        "[exporter.sqlite] must not remain commented"
+    );
+    assert!(
+        content.contains(r#"database_url = "export/sqllog2db.db""#),
+        "database_url must use default value"
+    );
+    assert!(
+        content.contains(r#"table_name = "sqllog_records""#),
+        "table_name must use default value"
+    );
+    assert!(
+        content.contains("# [exporter.csv]"),
+        "[exporter.csv] must be commented out in sqlite mode"
+    );
+}
+
+/// SC4: 向导生成的 config.toml 能被 `validate` 子命令通过
+#[test]
+fn test_cli_init_interactive_generates_validatable_config() {
+    use assert_cmd::Command;
+    let dir = tempfile::TempDir::new().unwrap();
+    let out_file = dir.path().join("cfg.toml");
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["init", "-i", "-o"])
+        .arg(&out_file)
+        .write_stdin("\n\n\n")
+        .assert()
+        .success();
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["validate", "-c"])
+        .arg(&out_file)
+        .assert()
+        .success();
+}
+
+/// INIT-03: 交互式全默认与非交互式生成的 config.toml 字节级相同
+#[test]
+fn test_cli_init_interactive_format_matches_non_interactive() {
+    use assert_cmd::Command;
+    let dir = tempfile::TempDir::new().unwrap();
+    let interactive_file = dir.path().join("a.toml");
+    let non_interactive_file = dir.path().join("b.toml");
+
+    // 交互式（全默认）
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["init", "-i", "-o"])
+        .arg(&interactive_file)
+        .write_stdin("\n\n\n")
+        .assert()
+        .success();
+
+    // 非交互式
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["init", "-o"])
+        .arg(&non_interactive_file)
+        .assert()
+        .success();
+
+    let interactive_content = std::fs::read_to_string(&interactive_file).unwrap();
+    let non_interactive_content = std::fs::read_to_string(&non_interactive_file).unwrap();
+    assert_eq!(
+        interactive_content, non_interactive_content,
+        "interactive and non-interactive must produce identical default config"
+    );
+}
+
+/// D-02: interactive 模式下文件已存在且未传 --force 时退出非零，stderr 含 "already exists"
+#[test]
+fn test_cli_init_interactive_existing_without_force_fails() {
+    use assert_cmd::Command;
+    use predicates::str::contains;
+    let dir = tempfile::TempDir::new().unwrap();
+    let out_file = dir.path().join("cfg.toml");
+    std::fs::write(&out_file, "existing content").unwrap();
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["init", "-i", "-o"])
+        .arg(&out_file)
+        .write_stdin("\n\n\n")
+        .assert()
+        .failure()
+        .stderr(contains("already exists"));
+}
