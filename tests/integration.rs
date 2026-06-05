@@ -451,6 +451,13 @@ fn test_handle_run_with_filters_builds_pipeline() {
     });
     let interrupted = Arc::new(AtomicBool::new(false));
     handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    // include.users = ["TESTUSER"]，全部 20 条匹配 → header + 20 = 21 行
+    let content = std::fs::read_to_string(&csv_file).unwrap();
+    assert_eq!(
+        content.lines().count(),
+        21,
+        "expected header + 20 matching records"
+    );
 }
 
 #[test]
@@ -476,6 +483,13 @@ fn test_handle_run_with_transaction_filters_prescans() {
     });
     let interrupted = Arc::new(AtomicBool::new(false));
     handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    // exec_ids = [0, 1, 2]，30 条记录中匹配 3 条 → header + 3 = 4 行
+    let content = std::fs::read_to_string(&csv_file).unwrap();
+    assert_eq!(
+        content.lines().count(),
+        4,
+        "expected header + 3 records matching exec_ids [0,1,2]"
+    );
 }
 
 #[test]
@@ -501,6 +515,14 @@ fn test_handle_run_with_min_runtime_filter() {
     });
     let interrupted = Arc::new(AtomicBool::new(false));
     handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    // EXECTIME = (i*13)%1000：i=0 时为 0ms（被过滤），其余 19 条 ≥ 13ms
+    // → header + 19 = 20 行
+    let content = std::fs::read_to_string(&csv_file).unwrap();
+    assert_eq!(
+        content.lines().count(),
+        20,
+        "expected header + 19 records with EXECTIME >= 1ms"
+    );
 }
 
 // ── parallel CSV tests ──────────────────────────────────────────────────────
