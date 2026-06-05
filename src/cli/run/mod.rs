@@ -125,6 +125,7 @@ pub fn handle_run(
         skipped_files,
         &run_stats,
     );
+    write_error_log(cfg, &run_stats);
     if let Some(pb) = &pb {
         pb.finish_and_clear();
     }
@@ -414,7 +415,92 @@ fn print_run_summary(
                 "  Errors: {} total ({} parse, {} export)",
                 run_stats.total_errors, run_stats.parse_errors, run_stats.export_errors
             );
+            eprintln!(
+                "  errors by type: encoding={}, field_missing={}, parse_failed={}",
+                run_stats
+                    .by_type
+                    .get(&crate::error::ErrorKind::EncodingError)
+                    .copied()
+                    .unwrap_or(0),
+                run_stats
+                    .by_type
+                    .get(&crate::error::ErrorKind::FieldMissing)
+                    .copied()
+                    .unwrap_or(0),
+                run_stats
+                    .by_type
+                    .get(&crate::error::ErrorKind::ParseFailed)
+                    .copied()
+                    .unwrap_or(0),
+            );
         }
+        if run_stats.filtered_out > 0 {
+            let total_read = total_records as u64 + run_stats.filtered_out;
+            #[allow(clippy::cast_precision_loss)]
+            let pct = if total_read > 0 {
+                run_stats.filtered_out as f64 / total_read as f64 * 100.0
+            } else {
+                0.0
+            };
+            eprintln!(
+                "  filtered: {} records ({pct:.1}% of {} total)",
+                run_stats.filtered_out, total_read
+            );
+        }
+        if run_stats
+            .by_type
+            .get(&crate::error::ErrorKind::EncodingError)
+            .copied()
+            .unwrap_or(0)
+            > 0
+        {
+            eprintln!("  hint: 多行 encoding_error — 建议检查文件编码是否为 GBK/GB18030");
+        }
+        if run_stats
+            .by_type
+            .get(&crate::error::ErrorKind::FieldMissing)
+            .copied()
+            .unwrap_or(0)
+            > 0
+        {
+            eprintln!("  hint: 多行 field_missing — 建议确认日志格式与 DM SQL log 格式一致");
+        }
+    }
+}
+
+/// 将解析错误记录批量写出到配置的 error log 文件（覆盖模式）。
+/// 无配置或无错误时为空操作；写出失败仅 warn 不终止。
+fn write_error_log(cfg: &crate::config::Config, stats: &ErrorStats) {
+    let Some(error_cfg) = cfg.error.as_ref() else {
+        return;
+    };
+    if stats.parse_error_records.is_empty() {
+        return;
+    }
+    use std::io::Write;
+    let file = match std::fs::File::create(&error_cfg.file) {
+        Ok(f) => f,
+        Err(e) => {
+            log::warn!("Failed to create error log {}: {e}", error_cfg.file);
+            return;
+        }
+    };
+    let mut writer = std::io::BufWriter::new(file);
+    let truncated = stats.parse_error_records.len() >= 10_000;
+    for rec in &stats.parse_error_records {
+        let _ = writeln!(
+            writer,
+            "[ERROR] line {}: {}  reason: {}",
+            rec.line_number,
+            rec.raw_truncated,
+            rec.kind.kind_display()
+        );
+    }
+    if truncated {
+        let _ = writeln!(writer, "[truncated at 10000 records]");
+    }
+    if let Err(e) = writer.flush() {
+        log::warn!("Failed to flush error log: {e}");
     }
 }
 

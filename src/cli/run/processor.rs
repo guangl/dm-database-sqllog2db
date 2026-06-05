@@ -63,6 +63,7 @@ pub(super) fn normalize_and_export(
         if do_normalize && record.tag.is_none() {
             update_params_buffer_only(record, params_buffer, placeholder_override, ns_scratch);
         }
+        file_stats.filtered_out += 1;
         return ExportAction::Continue;
     }
     let ns = if do_normalize && (!params_buffer.is_empty() || record.tag.is_none()) {

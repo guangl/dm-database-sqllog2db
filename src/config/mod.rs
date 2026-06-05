@@ -15,8 +15,6 @@ use std::io;
 use std::path::Path;
 
 /// error log 输出配置。
-// Plan 03 中写出 error log 时使用 file 字段。
-#[allow(dead_code)]
 #[derive(Debug, Deserialize, Clone)]
 pub struct ErrorLogConfig {
     pub file: String,
@@ -38,9 +36,7 @@ pub struct Config {
     pub output: Option<OutputConfig>,
     #[serde(default)]
     pub stats: StatsConfig,
-    // Plan 03 中写出 error log 时使用。
     #[serde(default)]
-    #[allow(dead_code)]
     pub error: Option<ErrorLogConfig>,
 }
 

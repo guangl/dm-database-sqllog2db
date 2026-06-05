@@ -452,3 +452,99 @@ fn test_progress_bar_disabled() {
         "show_progress=false 应返回 None，实际返回了 Some"
     );
 }
+
+// ── PROG-03/DIAG-03: error log 写出 + hint + 摘要扩展 ───────────────────────
+
+/// 验证 `handle_run` 在有解析错误时写出 error log 文件。
+/// 无效行放文件前面（独立记录），解析器以 `\n20` 时间戳为记录边界，
+/// 前置无效行无时间戳前缀会独立返回 `InvalidFormat`，从而触发 `parse_error_records`。
+#[test]
+fn test_error_log_written() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_path = dir.path().join("t.log");
+    // 无效行放前面（独立记录）+ 合法 SEL 放后面
+    std::fs::write(
+        &log_path,
+        "garbage line that cannot be parsed\n2025-01-15 10:30:28.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT 1. EXECTIME: 1(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.\n",
+    )
+    .unwrap();
+    let csv_path = dir.path().join("out.csv");
+    let error_log = dir.path().join("errors.log");
+    let app_log = dir.path().join("app.log");
+
+    let toml = format!(
+        "[sqllog]\ninputs = [\"{logdir}\"]\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n",
+        logdir = dir.path().to_string_lossy().replace('\\', "/"),
+        errlog = error_log.to_string_lossy().replace('\\', "/"),
+        applog = app_log.to_string_lossy().replace('\\', "/"),
+        csv = csv_path.to_string_lossy().replace('\\', "/"),
+    );
+    let cfg: Config = toml::from_str(&toml).unwrap();
+
+    handle_run(&cfg, true, false, &Arc::new(AtomicBool::new(false)), None).unwrap();
+
+    assert!(
+        error_log.exists(),
+        "error log 文件应在有解析错误时被写出，但未找到: {}",
+        error_log.display()
+    );
+    let content = std::fs::read_to_string(&error_log).unwrap();
+    assert!(
+        content.contains("[ERROR] line "),
+        "error log 应含有 '[ERROR] line '，实际内容: {content}"
+    );
+    assert!(
+        content.contains("reason:"),
+        "error log 应含有 'reason:'，实际内容: {content}"
+    );
+}
+
+/// 验证 `print_run_summary` 接受含 `EncodingError` 的 `ErrorStats` 时不 panic。
+/// hint 输出走 stderr，集成层手动验证；本测试只保证编译 + 不 panic（防回归）。
+#[test]
+fn test_hint_output() {
+    use crate::error::{ErrorKind, ErrorStats};
+
+    let stats = ErrorStats {
+        total_errors: 3,
+        parse_errors: 3,
+        by_type: {
+            let mut m = std::collections::HashMap::new();
+            m.insert(ErrorKind::EncodingError, 3u64);
+            m
+        },
+        ..Default::default()
+    };
+    // 验证 ErrorStats 字段正确构造（hint 行为由手动验证支撑）
+    assert_eq!(
+        stats
+            .by_type
+            .get(&ErrorKind::EncodingError)
+            .copied()
+            .unwrap_or(0),
+        3,
+        "by_type[EncodingError] 应为 3"
+    );
+    // 调用 print_run_summary 确认不 panic
+    super::print_run_summary(false, false, false, 0.1, &[], 0, 0, &stats);
+}
+
+/// 验证含 `filtered_out` 的 `ErrorStats` 传入 `print_run_summary` 时不 panic（防回归）。
+#[test]
+fn test_run_summary() {
+    use crate::error::{ErrorKind, ErrorStats};
+
+    let stats = ErrorStats {
+        total_errors: 2,
+        parse_errors: 2,
+        filtered_out: 5,
+        by_type: {
+            let mut m = std::collections::HashMap::new();
+            m.insert(ErrorKind::EncodingError, 2u64);
+            m
+        },
+        ..Default::default()
+    };
+    // 调用 print_run_summary 确认不 panic
+    super::print_run_summary(false, false, false, 1.5, &[], 10, 0, &stats);
+}

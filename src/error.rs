@@ -33,9 +33,7 @@ pub enum ErrorKind {
 }
 
 impl ErrorKind {
-    // Plan 03 中写出 error log 时使用（write_error_log 函数）。
     #[must_use]
-    #[allow(dead_code)]
     pub fn kind_display(self) -> &'static str {
         match self {
             Self::EncodingError => "encoding_error",
@@ -46,10 +44,10 @@ impl ErrorKind {
 }
 
 /// 单条解析错误的详细记录。
-// Plan 03 中写出 error log 时读取这些字段。
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct ParseErrorRecord {
+    // 保留字段供未来格式扩展使用
+    #[allow(dead_code)]
     pub file_path: String,
     pub line_number: u64,
     pub raw_truncated: String,
