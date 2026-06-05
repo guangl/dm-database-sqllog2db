@@ -117,7 +117,6 @@ fn setup_progress_bar(
     if reset_pb && show_progress {
         if let Some(pb) = pb {
             pb.set_message(format!("[{file_index}/{total_files}] {file_name}"));
-            pb.set_position(0);
         }
     }
 }
