@@ -138,8 +138,16 @@ fn run() -> Result<Option<(ErrorStats, bool)>> {
     }
 
     match &cli.command {
-        Some(cli::opts::Commands::Init { output, force }) => {
-            cli::init::handle_init(output, *force)?;
+        Some(cli::opts::Commands::Init {
+            output,
+            force,
+            interactive,
+        }) => {
+            if *interactive {
+                cli::init::handle_init_interactive(output, *force)?;
+            } else {
+                cli::init::handle_init(output, *force)?;
+            }
             Ok(None)
         }
         Some(cli::opts::Commands::Run { config, input }) => {
