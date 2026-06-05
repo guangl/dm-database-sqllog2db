@@ -30,13 +30,11 @@ const EXIT_INTERRUPTED: i32 = 130;
 /// only support quiet suppression; debug verbosity requires the full logging
 /// stack initialized in the Run path.
 fn init_simple_logging(quiet: bool) {
-    let level = if quiet { "error" } else { "info" };
-
-    let filter = match level {
-        "error" => log::LevelFilter::Error,
-        _ => log::LevelFilter::Info,
+    let filter = if quiet {
+        log::LevelFilter::Error
+    } else {
+        log::LevelFilter::Info
     };
-
     let _ = env_logger::Builder::from_default_env()
         .filter_level(filter)
         .try_init();
