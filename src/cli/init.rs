@@ -184,11 +184,19 @@ pub fn run_wizard(reader: &mut impl BufRead, writer: &mut impl Write) -> Result<
     }
 }
 
+/// Escape a user string for embedding inside a TOML basic string (double-quoted).
+/// In TOML basic strings, backslash and double-quote must be escaped.
+/// Forward-slash normalization also handles Windows paths.
+fn toml_escape(s: &str) -> String {
+    s.replace('\\', "/").replace('"', "\\\"")
+}
+
 fn apply_csv_substitutions(content: &str, answers: &WizardAnswers) -> String {
     let csv_file = answers.csv_file.as_deref().unwrap_or("outputs/sqllog.csv");
+    let escaped = toml_escape(csv_file);
     content.replace(
         r#"file = "outputs/sqllog.csv""#,
-        &format!(r#"file = "{csv_file}""#),
+        &format!(r#"file = "{escaped}""#),
     )
 }
 
@@ -198,6 +206,8 @@ fn apply_sqlite_substitutions(content: &str, answers: &WizardAnswers) -> String 
         .as_deref()
         .unwrap_or("export/sqllog2db.db");
     let sqlite_table = answers.sqlite_table.as_deref().unwrap_or("sqllog_records");
+    let escaped_db = toml_escape(sqlite_db);
+    let escaped_table = toml_escape(sqlite_table);
     // 注释掉 CSV 段的 4 行
     let content = content
         .replace("[exporter.csv]", "# [exporter.csv]")
@@ -215,11 +225,11 @@ fn apply_sqlite_substitutions(content: &str, answers: &WizardAnswers) -> String 
         .replace("# [exporter.sqlite]", "[exporter.sqlite]")
         .replace(
             r#"# database_url = "export/sqllog2db.db""#,
-            &format!(r#"database_url = "{sqlite_db}""#),
+            &format!(r#"database_url = "{escaped_db}""#),
         )
         .replace(
             r#"# table_name = "sqllog_records""#,
-            &format!(r#"table_name = "{sqlite_table}""#),
+            &format!(r#"table_name = "{escaped_table}""#),
         )
         .replace(
             "# overwrite = true\n# append = false",
@@ -228,9 +238,10 @@ fn apply_sqlite_substitutions(content: &str, answers: &WizardAnswers) -> String 
 }
 
 fn apply_wizard_answers_to_template(answers: &WizardAnswers) -> String {
+    let escaped_inputs = toml_escape(&answers.inputs);
     let content = CONFIG_TEMPLATE_EN.to_string().replace(
         r#"inputs = ["sqllogs"]"#,
-        &format!(r#"inputs = ["{}"]"#, answers.inputs),
+        &format!(r#"inputs = ["{escaped_inputs}"]"#),
     );
     match answers.exporter {
         ExporterChoice::Csv => apply_csv_substitutions(&content, answers),
