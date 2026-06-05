@@ -67,7 +67,15 @@ pub fn handle_run(
     let pb = make_progress_bar(show_progress, log_files.len());
     let mut skipped_files = 0usize;
     let processed_files: Vec<(PathBuf, usize)> = if use_csv_parallel {
-        let (files, skipped, stats) = run_csv_parallel(
+        if verbose {
+            eprintln!(
+                "Processing {} files in parallel ({} jobs)",
+                log_files.len(),
+                jobs
+            );
+        }
+        info!("Parsing and exporting SQL logs (parallel, {jobs} jobs)...");
+        let (files, skipped, stats) = process_csv_parallel(
             &log_files,
             final_cfg,
             &pipeline,
@@ -83,7 +91,15 @@ pub fn handle_run(
         skipped_files = skipped;
         files
     } else if use_sqlite_parallel {
-        let (files, skipped, stats) = run_sqlite_parallel(
+        if verbose {
+            eprintln!(
+                "Processing {} files in parallel ({} jobs)",
+                log_files.len(),
+                jobs
+            );
+        }
+        info!("Parsing and exporting SQL logs (SQLite parallel, {jobs} jobs)...");
+        let (files, skipped, stats) = process_sqlite_parallel(
             &log_files,
             final_cfg,
             &pipeline,
@@ -93,7 +109,6 @@ pub fn handle_run(
             placeholder_override,
             field_mask,
             &ordered_indices,
-            verbose,
         )?;
         run_stats.merge(&stats);
         skipped_files = skipped;
@@ -220,81 +235,6 @@ fn make_progress_bar(show_progress: bool, total_files: usize) -> Option<Progress
     } else {
         None
     }
-}
-
-/// CSV 并行导出路径：以 `jobs` 个线程并行处理所有日志文件。
-/// 返回 `(processed_files, skipped_files, stats)`。
-#[allow(clippy::too_many_arguments)]
-fn run_csv_parallel(
-    log_files: &[PathBuf],
-    final_cfg: &Config,
-    pipeline: &crate::pipeline::Pipeline,
-    jobs: usize,
-    interrupted: &Arc<AtomicBool>,
-    do_normalize: bool,
-    placeholder_override: Option<bool>,
-    field_mask: crate::pipeline::FieldMask,
-    ordered_indices: &[usize],
-    verbose: bool,
-) -> Result<(Vec<(PathBuf, usize)>, usize, ErrorStats)> {
-    if verbose {
-        eprintln!(
-            "Processing {} files in parallel ({} jobs)",
-            log_files.len(),
-            jobs
-        );
-    }
-    info!("Parsing and exporting SQL logs (parallel, {jobs} jobs)...");
-    let (processed_files, skipped, stats) = process_csv_parallel(
-        log_files,
-        final_cfg,
-        pipeline,
-        jobs,
-        interrupted,
-        do_normalize,
-        placeholder_override,
-        field_mask,
-        ordered_indices,
-        verbose,
-    )?;
-    Ok((processed_files, skipped, stats))
-}
-
-/// `SQLite` 并行导出路径：以 `jobs` 个线程并行处理所有日志文件。
-/// 返回 `(processed_files, skipped_files, stats)`。
-#[allow(clippy::too_many_arguments)]
-fn run_sqlite_parallel(
-    log_files: &[PathBuf],
-    final_cfg: &Config,
-    pipeline: &crate::pipeline::Pipeline,
-    jobs: usize,
-    interrupted: &Arc<AtomicBool>,
-    do_normalize: bool,
-    placeholder_override: Option<bool>,
-    field_mask: crate::pipeline::FieldMask,
-    ordered_indices: &[usize],
-    verbose: bool,
-) -> Result<(Vec<(PathBuf, usize)>, usize, ErrorStats)> {
-    if verbose {
-        eprintln!(
-            "Processing {} files in parallel ({} jobs)",
-            log_files.len(),
-            jobs
-        );
-    }
-    info!("Parsing and exporting SQL logs (SQLite parallel, {jobs} jobs)...");
-    let (processed_files, skipped, stats) = process_sqlite_parallel(
-        log_files,
-        final_cfg,
-        pipeline,
-        jobs,
-        interrupted,
-        do_normalize,
-        placeholder_override,
-        field_mask,
-        ordered_indices,
-    )?;
-    Ok((processed_files, skipped, stats))
 }
 
 /// 顺序导出路径：逐文件处理，维护 `ExporterManager` 生命周期。
