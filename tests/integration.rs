@@ -1,6 +1,6 @@
 //! Integration tests for CLI handlers and the run pipeline.
 
-use dm_database_sqllog2db::cli::init::handle_init;
+use dm_database_sqllog2db::cli::init::{ExporterChoice, handle_init, run_wizard};
 use dm_database_sqllog2db::cli::run::handle_run;
 use dm_database_sqllog2db::cli::validate::handle_validate;
 use dm_database_sqllog2db::config::{
@@ -2598,4 +2598,28 @@ fn test_parallel_csv_heterogeneous_matches_sequential() {
         seq_lines, par_lines,
         "异构数据下并行 CSV 内容排序后应与顺序基线完全一致"
     );
+}
+
+// ── run_wizard integration tests ─────────────────────────────────────────────
+
+#[test]
+fn test_wizard_integration_all_defaults() {
+    let input = b"\n\n\n";
+    let mut reader = std::io::Cursor::new(input.as_ref());
+    let mut writer = Vec::<u8>::new();
+    let answers = run_wizard(&mut reader, &mut writer).unwrap();
+    assert_eq!(answers.inputs, "sqllogs");
+    assert!(matches!(answers.exporter, ExporterChoice::Csv));
+    assert_eq!(answers.csv_file.as_deref(), Some("outputs/sqllog.csv"));
+}
+
+#[test]
+fn test_wizard_integration_sqlite() {
+    let input = b"\nsqlite\ndb/out.db\nmy_records\n";
+    let mut reader = std::io::Cursor::new(input.as_ref());
+    let mut writer = Vec::<u8>::new();
+    let answers = run_wizard(&mut reader, &mut writer).unwrap();
+    assert!(matches!(answers.exporter, ExporterChoice::Sqlite));
+    assert_eq!(answers.sqlite_db.as_deref(), Some("db/out.db"));
+    assert_eq!(answers.sqlite_table.as_deref(), Some("my_records"));
 }

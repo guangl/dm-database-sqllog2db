@@ -97,6 +97,9 @@ EXAMPLES:
         /// Force overwrite if file exists
         #[arg(short = 'f', long = "force")]
         force: bool,
+        /// Start interactive configuration wizard
+        #[arg(short = 'i', long = "interactive")]
+        interactive: bool,
     },
     /// Validate a configuration file
     #[command(

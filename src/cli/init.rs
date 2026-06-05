@@ -1,6 +1,7 @@
-use crate::error::{Error, FileError, Result};
+use crate::error::{ConfigError, Error, FileError, Result};
 use log::{error, info, warn};
 use std::fs;
+use std::io::{BufRead, Write};
 use std::path::Path;
 
 /// 生成默认配置文件
@@ -50,6 +51,158 @@ fn write_config_file(path: &Path, content: &str, force: bool) -> Result<()> {
     } else {
         info!("Configuration file generated: {output_path}");
     }
+    Ok(())
+}
+
+// ── Wizard types ─────────────────────────────────────────────────────────────
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum ExporterChoice {
+    Csv,
+    Sqlite,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct WizardAnswers {
+    pub inputs: String,
+    pub exporter: ExporterChoice,
+    pub csv_file: Option<String>,
+    pub sqlite_db: Option<String>,
+    pub sqlite_table: Option<String>,
+}
+
+fn prompt_line(
+    reader: &mut impl BufRead,
+    writer: &mut impl Write,
+    prompt: &str,
+    default: &str,
+    buf: &mut String,
+) -> Result<String> {
+    write!(writer, "{prompt}")?;
+    writer.flush()?;
+    buf.clear();
+    reader.read_line(buf)?;
+    Ok(if buf.trim().is_empty() {
+        default.to_owned()
+    } else {
+        buf.trim().to_owned()
+    })
+}
+
+fn ask_exporter(
+    reader: &mut impl BufRead,
+    writer: &mut impl Write,
+    buf: &mut String,
+) -> Result<ExporterChoice> {
+    write!(writer, "导出格式 (csv/sqlite) [default: csv]: ")?;
+    writer.flush()?;
+    let mut last_input = String::new();
+    for _ in 0..3 {
+        buf.clear();
+        reader.read_line(buf)?;
+        buf.trim().clone_into(&mut last_input);
+        match last_input.as_str() {
+            "" | "csv" => return Ok(ExporterChoice::Csv),
+            "sqlite" => return Ok(ExporterChoice::Sqlite),
+            _ => {
+                write!(writer, "无效格式\"{last_input}\"，请输入 csv 或 sqlite: ")?;
+                writer.flush()?;
+            }
+        }
+    }
+    Err(Error::Config(ConfigError::InvalidValue {
+        field: "exporter".to_owned(),
+        value: last_input,
+        reason: "must be 'csv' or 'sqlite'".to_owned(),
+    }))
+}
+
+fn build_csv_answers(
+    reader: &mut impl BufRead,
+    writer: &mut impl Write,
+    inputs: String,
+    buf: &mut String,
+) -> Result<WizardAnswers> {
+    let csv_file = prompt_line(
+        reader,
+        writer,
+        "CSV 输出文件路径 [default: outputs/sqllog.csv]: ",
+        "outputs/sqllog.csv",
+        buf,
+    )?;
+    Ok(WizardAnswers {
+        inputs,
+        exporter: ExporterChoice::Csv,
+        csv_file: Some(csv_file),
+        sqlite_db: None,
+        sqlite_table: None,
+    })
+}
+
+fn build_sqlite_answers(
+    reader: &mut impl BufRead,
+    writer: &mut impl Write,
+    inputs: String,
+    buf: &mut String,
+) -> Result<WizardAnswers> {
+    let sqlite_db = prompt_line(
+        reader,
+        writer,
+        "SQLite 数据库路径 [default: export/sqllog2db.db]: ",
+        "export/sqllog2db.db",
+        buf,
+    )?;
+    let sqlite_table = prompt_line(
+        reader,
+        writer,
+        "表名（仅含字母/数字/下划线）[default: sqllog_records]: ",
+        "sqllog_records",
+        buf,
+    )?;
+    Ok(WizardAnswers {
+        inputs,
+        exporter: ExporterChoice::Sqlite,
+        csv_file: None,
+        sqlite_db: Some(sqlite_db),
+        sqlite_table: Some(sqlite_table),
+    })
+}
+
+pub fn run_wizard(reader: &mut impl BufRead, writer: &mut impl Write) -> Result<WizardAnswers> {
+    let mut buf = String::new();
+    let inputs = prompt_line(
+        reader,
+        writer,
+        "SQL log 输入目录（可以是目录、文件或 glob 模式）[default: sqllogs]: ",
+        "sqllogs",
+        &mut buf,
+    )?;
+    let exporter = ask_exporter(reader, writer, &mut buf)?;
+    match exporter {
+        ExporterChoice::Csv => build_csv_answers(reader, writer, inputs, &mut buf),
+        ExporterChoice::Sqlite => build_sqlite_answers(reader, writer, inputs, &mut buf),
+    }
+}
+
+fn apply_wizard_answers_to_template(answers: &WizardAnswers) -> String {
+    let _ = answers;
+    CONFIG_TEMPLATE_EN.to_string()
+}
+
+/// 交互式配置向导入口
+pub fn handle_init_interactive(output_path: &str, force: bool) -> Result<()> {
+    let stdin = std::io::stdin();
+    let stdout = std::io::stdout();
+    let mut reader = stdin.lock();
+    let mut writer = stdout.lock();
+    let answers = run_wizard(&mut reader, &mut writer)?;
+    let content = apply_wizard_answers_to_template(&answers);
+    let path = std::path::Path::new(output_path);
+    write_config_file(path, &content, force)?;
+    info!("Next steps:");
+    info!("  1. Edit configuration file: {output_path}");
+    info!("  2. Validate configuration: sqllog2db validate -c {output_path}");
+    info!("  3. Run export: sqllog2db run -c {output_path}");
     Ok(())
 }
 
@@ -145,3 +298,90 @@ append = false
 # Append rows to existing table instead of overwriting (true/false)
 # append = false
 "#;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_wizard_all_defaults() {
+        let input = b"\n\n\n";
+        let mut reader = std::io::Cursor::new(input.as_ref());
+        let mut writer = Vec::<u8>::new();
+        let answers = run_wizard(&mut reader, &mut writer).unwrap();
+        assert_eq!(answers.inputs, "sqllogs");
+        assert!(matches!(answers.exporter, ExporterChoice::Csv));
+        assert_eq!(answers.csv_file.as_deref(), Some("outputs/sqllog.csv"));
+        assert!(answers.sqlite_db.is_none());
+        assert!(answers.sqlite_table.is_none());
+    }
+
+    #[test]
+    fn test_wizard_custom_csv_path() {
+        let input = b"my/logs\ncsv\nmy_out/result.csv\n";
+        let mut reader = std::io::Cursor::new(input.as_ref());
+        let mut writer = Vec::<u8>::new();
+        let answers = run_wizard(&mut reader, &mut writer).unwrap();
+        assert_eq!(answers.inputs, "my/logs");
+        assert!(matches!(answers.exporter, ExporterChoice::Csv));
+        assert_eq!(answers.csv_file.as_deref(), Some("my_out/result.csv"));
+    }
+
+    #[test]
+    fn test_wizard_sqlite_path() {
+        let input = b"\nsqlite\nmy.db\nmy_table\n";
+        let mut reader = std::io::Cursor::new(input.as_ref());
+        let mut writer = Vec::<u8>::new();
+        let answers = run_wizard(&mut reader, &mut writer).unwrap();
+        assert!(matches!(answers.exporter, ExporterChoice::Sqlite));
+        assert_eq!(answers.sqlite_db.as_deref(), Some("my.db"));
+        assert_eq!(answers.sqlite_table.as_deref(), Some("my_table"));
+        assert!(answers.csv_file.is_none());
+    }
+
+    #[test]
+    fn test_wizard_sqlite_defaults() {
+        let input = b"\nsqlite\n\n\n";
+        let mut reader = std::io::Cursor::new(input.as_ref());
+        let mut writer = Vec::<u8>::new();
+        let answers = run_wizard(&mut reader, &mut writer).unwrap();
+        assert!(matches!(answers.exporter, ExporterChoice::Sqlite));
+        assert_eq!(answers.sqlite_db.as_deref(), Some("export/sqllog2db.db"));
+        assert_eq!(answers.sqlite_table.as_deref(), Some("sqllog_records"));
+    }
+
+    #[test]
+    fn test_wizard_invalid_format_three_times_returns_err() {
+        let input = b"\nbad\nbad\nbad\n";
+        let mut reader = std::io::Cursor::new(input.as_ref());
+        let mut writer = Vec::<u8>::new();
+        let result = run_wizard(&mut reader, &mut writer);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            matches!(&err, Error::Config(ConfigError::InvalidValue { field, .. }) if field == "exporter"),
+            "expected ConfigError::InvalidValue with field='exporter', got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn test_wizard_writer_receives_prompts() {
+        let input = b"\n\n\n";
+        let mut reader = std::io::Cursor::new(input.as_ref());
+        let mut writer = Vec::<u8>::new();
+        run_wizard(&mut reader, &mut writer).unwrap();
+        let output = String::from_utf8(writer).unwrap();
+        assert!(
+            output.contains("SQL log 输入目录"),
+            "prompt should contain 'SQL log 输入目录'"
+        );
+        assert!(
+            output.contains("导出格式 (csv/sqlite)"),
+            "prompt should contain '导出格式 (csv/sqlite)'"
+        );
+        assert!(
+            output.contains("CSV 输出文件路径"),
+            "prompt should contain 'CSV 输出文件路径'"
+        );
+    }
+}
