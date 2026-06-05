@@ -497,7 +497,11 @@ fn write_error_log(cfg: &crate::config::Config, stats: &ErrorStats) {
         );
     }
     if truncated {
-        let _ = writeln!(writer, "[truncated at 10000 records]");
+        let _ = writeln!(
+            writer,
+            "[truncated; showing first 10000 of {} total parse errors]",
+            stats.parse_errors
+        );
     }
     if let Err(e) = writer.flush() {
         log::warn!("Failed to flush error log: {e}");
