@@ -642,7 +642,10 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
   3. error log 每条 parse error 包含行号（如 `line 42:`）和原始内容前 120 字符，用户可定位问题行
   4. 导出摘要按错误类型分组统计（field_missing/parse_failed/encoding_error），显示各类型出现次数
   5. 当某类错误超过阈值时触发具体 hint（如"多行 encoding_error：建议检查文件编码是否为 GBK"）
-**Plans**: TBD
+**Plans**: 3 plans
+- [ ] 67-01-PLAN.md — make_progress_bar/tick_progress 升级为 [N/M] + records/sec + ETA + 顺序路径 pb.inc(1) 文件计数器（PROG-01/PROG-02）
+- [ ] 67-02-PLAN.md — ErrorKind 枚举 + ParseErrorRecord + ErrorStats 新增 by_type/filtered_out/parse_error_records + Config.error 字段 + process_log_file Err 路径收集（DIAG-01/DIAG-02）
+- [ ] 67-03-PLAN.md — print_run_summary 扩展 errors-by-type/filtered/hint + write_error_log 文件批量写出 + normalize_and_export filtered_out 递增（PROG-03/DIAG-03）
 **UI hint**: yes
 
 ### Phase 68: 交互式配置向导
