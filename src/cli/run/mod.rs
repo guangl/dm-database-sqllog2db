@@ -327,7 +327,15 @@ fn run_sequential(
     // 无论 loop_result 成功与否都调用 finalize，确保 BufWriter 数据落盘
     let finalize_result = exporter_manager.finalize();
     (!quiet).then(|| exporter_manager.log_stats());
-    let (per_file_counts, run_stats) = loop_result?;
+    let (per_file_counts, run_stats) = match loop_result {
+        Ok(v) => v,
+        Err(loop_err) => {
+            if let Err(fin_err) = finalize_result {
+                log::warn!("finalize failed during loop error cleanup: {fin_err}");
+            }
+            return Err(loop_err);
+        }
+    };
     finalize_result?;
     Ok((per_file_counts, run_stats))
 }
