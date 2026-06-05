@@ -58,14 +58,14 @@ pub fn handle_run(
         .replace_parameters
         .as_ref()
         .and_then(crate::pipeline::NormalizeConfig::placeholder_override);
-    let show_progress = !quiet && !verbose;
-    let pb = make_progress_bar(show_progress, log_files.len());
-    let mut skipped_files = 0usize;
     let use_csv_parallel =
         jobs > 1 && log_files.len() > 1 && !is_stdin_pipe && final_cfg.exporter.csv.is_some();
     let use_sqlite_parallel =
         jobs > 1 && log_files.len() > 1 && !is_stdin_pipe && final_cfg.exporter.sqlite.is_some();
     let use_parallel = use_csv_parallel || use_sqlite_parallel;
+    let show_progress = !quiet && !verbose && !use_parallel;
+    let pb = make_progress_bar(show_progress, log_files.len());
+    let mut skipped_files = 0usize;
     let processed_files: Vec<(PathBuf, usize)> = if use_csv_parallel {
         let (files, skipped, stats) = run_csv_parallel(
             &log_files,
