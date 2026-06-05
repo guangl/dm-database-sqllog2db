@@ -5,7 +5,7 @@
 
 **Date:** 2026-06-05
 **Phase:** 67-进度/摘要与诊断增强
-**Mode:** --auto (fully autonomous, no user interaction)
+**Mode:** --auto (fully autonomous, no user interaction); updated post-implementation 2026-06-05
 **Areas discussed:** 进度条升级, Error Log 写入, ErrorKind 分类, Hint 触发与摘要
 
 ---
@@ -67,6 +67,17 @@
 - records/sec 显示格式：整数千位简写（1234 → "1234 rec/s"，12000 → "12k rec/s"）
 - 并行路径不显示进度条（沿用现有行为）
 - `parse_error_records` Vec 上限 10000 条（防 OOM 极端情况）
+
+## Post-Implementation Corrections (2026-06-05)
+
+| 偏差 | 原始决策 | 实际实现 | 更新 |
+|------|----------|----------|------|
+| ParseErrorRecord.file_path | D-08 包含 file_path 字段 | 已移除（IN-01 审查建议） | D-08 更新：字段删除 |
+| 截断页脚 | 未明确 | `showing first 10000 of N total` | D-10 更新：含总数 |
+| write_error_log cfg 参数 | 未明确 | 使用 final_cfg | D-10 更新：WR-03 修复 |
+| merge() 上限 | 只在 push 时守上限 | merge 时也守上限 | D-08 更新：WR-01 修复 |
+| tick_progress records==0 | 未明确 | 0 时 early return | D-04 更新：WR-02 修复 |
+| error.file 校验 | 未明确 | Config::validate 校验非空白 | D-07 更新：WR-04 修复 |
 
 ## Deferred Ideas
 
