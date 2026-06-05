@@ -12,8 +12,8 @@ EXAMPLES:
     Export all records from SQL log files:
         sqllog2db run -c config.toml
 
-    Export with SQL indicators filter configured:
-        sqllog2db run -c config.toml
+    Override input paths from the command line:
+        sqllog2db run -c config.toml --input 'sqllogs/2025-*.log'
 
     Generate a default configuration file:
         sqllog2db init -o config.toml
