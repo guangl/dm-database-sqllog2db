@@ -1688,15 +1688,15 @@ fn test_stats_csv_top_5_limits_rows() {
     // 数据行 = total lines - 1 (header)
     let slow_data = slow.lines().count() - 1;
     assert!(
-        slow_data <= 5,
-        "slow_sql.csv data rows should be ≤ 5, got {slow_data}"
+        (1..=5).contains(&slow_data),
+        "slow_sql.csv data rows should be 1..=5, got {slow_data}"
     );
 
     let freq = std::fs::read_to_string(out_dir.join("frequent_sql.csv")).unwrap();
     let freq_data = freq.lines().count() - 1;
     assert!(
-        freq_data <= 5,
-        "frequent_sql.csv data rows should be ≤ 5, got {freq_data}"
+        (1..=5).contains(&freq_data),
+        "frequent_sql.csv data rows should be 1..=5, got {freq_data}"
     );
 }
 
