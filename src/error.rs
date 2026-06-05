@@ -129,8 +129,17 @@ impl ErrorStats {
             *self.by_type.entry(*kind).or_insert(0) += count;
         }
         self.filtered_out += other.filtered_out;
-        self.parse_error_records
-            .extend(other.parse_error_records.iter().cloned());
+        const MAX_RECORDS: usize = 10_000;
+        let remaining_cap = MAX_RECORDS.saturating_sub(self.parse_error_records.len());
+        if remaining_cap > 0 {
+            self.parse_error_records.extend(
+                other
+                    .parse_error_records
+                    .iter()
+                    .take(remaining_cap)
+                    .cloned(),
+            );
+        }
     }
 }
 
