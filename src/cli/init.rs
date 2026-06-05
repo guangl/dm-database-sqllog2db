@@ -184,9 +184,58 @@ pub fn run_wizard(reader: &mut impl BufRead, writer: &mut impl Write) -> Result<
     }
 }
 
+fn apply_csv_substitutions(content: &str, answers: &WizardAnswers) -> String {
+    let csv_file = answers.csv_file.as_deref().unwrap_or("outputs/sqllog.csv");
+    content.replace(
+        r#"file = "outputs/sqllog.csv""#,
+        &format!(r#"file = "{csv_file}""#),
+    )
+}
+
+fn apply_sqlite_substitutions(content: &str, answers: &WizardAnswers) -> String {
+    let sqlite_db = answers
+        .sqlite_db
+        .as_deref()
+        .unwrap_or("export/sqllog2db.db");
+    let sqlite_table = answers.sqlite_table.as_deref().unwrap_or("sqllog_records");
+    // 注释掉 CSV 段的 4 行
+    let content = content
+        .replace("[exporter.csv]", "# [exporter.csv]")
+        .replace(
+            r#"file = "outputs/sqllog.csv""#,
+            r#"# file = "outputs/sqllog.csv""#,
+        )
+        .replace("overwrite = true\n# Append", "# overwrite = true\n# Append")
+        .replace(
+            "# Append to existing CSV file instead of overwriting (true/false)\nappend = false\n\n# Option 2:",
+            "# Append to existing CSV file instead of overwriting (true/false)\n# append = false\n\n# Option 2:",
+        );
+    // 激活 SQLite 段
+    content
+        .replace("# [exporter.sqlite]", "[exporter.sqlite]")
+        .replace(
+            r#"# database_url = "export/sqllog2db.db""#,
+            &format!(r#"database_url = "{sqlite_db}""#),
+        )
+        .replace(
+            r#"# table_name = "sqllog_records""#,
+            &format!(r#"table_name = "{sqlite_table}""#),
+        )
+        .replace(
+            "# overwrite = true\n# append = false",
+            "overwrite = true\nappend = false",
+        )
+}
+
 fn apply_wizard_answers_to_template(answers: &WizardAnswers) -> String {
-    let _ = answers;
-    CONFIG_TEMPLATE_EN.to_string()
+    let content = CONFIG_TEMPLATE_EN.to_string().replace(
+        r#"inputs = ["sqllogs"]"#,
+        &format!(r#"inputs = ["{}"]"#, answers.inputs),
+    );
+    match answers.exporter {
+        ExporterChoice::Csv => apply_csv_substitutions(&content, answers),
+        ExporterChoice::Sqlite => apply_sqlite_substitutions(&content, answers),
+    }
 }
 
 /// 交互式配置向导入口
@@ -383,5 +432,146 @@ mod tests {
             output.contains("CSV 输出文件路径"),
             "prompt should contain 'CSV 输出文件路径'"
         );
+    }
+
+    #[test]
+    fn test_apply_csv_default() {
+        let answers = WizardAnswers {
+            inputs: "sqllogs".to_owned(),
+            exporter: ExporterChoice::Csv,
+            csv_file: Some("outputs/sqllog.csv".to_owned()),
+            sqlite_db: None,
+            sqlite_table: None,
+        };
+        let output = apply_wizard_answers_to_template(&answers);
+        assert_eq!(
+            output, CONFIG_TEMPLATE_EN,
+            "default CSV path should produce identical output to template"
+        );
+    }
+
+    #[test]
+    fn test_apply_csv_custom() {
+        let answers = WizardAnswers {
+            inputs: "my/dir".to_owned(),
+            exporter: ExporterChoice::Csv,
+            csv_file: Some("out/r.csv".to_owned()),
+            sqlite_db: None,
+            sqlite_table: None,
+        };
+        let output = apply_wizard_answers_to_template(&answers);
+        assert!(
+            output.contains(r#"inputs = ["my/dir"]"#),
+            "custom inputs should appear in output"
+        );
+        assert!(
+            output.contains(r#"file = "out/r.csv""#),
+            "custom csv path should appear in output"
+        );
+        assert!(
+            output.contains("[exporter.csv]"),
+            "[exporter.csv] section should be active (not commented)"
+        );
+        assert!(
+            output.contains("# [exporter.sqlite]"),
+            "[exporter.sqlite] section should remain commented"
+        );
+    }
+
+    #[test]
+    fn test_apply_sqlite() {
+        let answers = WizardAnswers {
+            inputs: "x".to_owned(),
+            exporter: ExporterChoice::Sqlite,
+            sqlite_db: Some("d.db".to_owned()),
+            sqlite_table: Some("t".to_owned()),
+            csv_file: None,
+        };
+        let output = apply_wizard_answers_to_template(&answers);
+        assert!(
+            output.contains("[exporter.sqlite]"),
+            "[exporter.sqlite] should be activated"
+        );
+        assert!(
+            !output.contains("# [exporter.sqlite]"),
+            "[exporter.sqlite] should not be commented"
+        );
+        assert!(
+            output.contains(r#"database_url = "d.db""#),
+            "database_url should use user value"
+        );
+        assert!(
+            output.contains(r#"table_name = "t""#),
+            "table_name should use user value"
+        );
+        assert!(
+            output.contains("# [exporter.csv]"),
+            "[exporter.csv] should be commented out"
+        );
+        assert!(
+            output.contains(r#"# file = "outputs/sqllog.csv""#),
+            "csv file line should be commented out"
+        );
+    }
+
+    #[test]
+    fn test_apply_does_not_corrupt_logging_file() {
+        let answers_csv = WizardAnswers {
+            inputs: "sqllogs".to_owned(),
+            exporter: ExporterChoice::Csv,
+            csv_file: Some("outputs/sqllog.csv".to_owned()),
+            sqlite_db: None,
+            sqlite_table: None,
+        };
+        let output_csv = apply_wizard_answers_to_template(&answers_csv);
+        assert!(
+            output_csv.contains(r#"file = "logs/sqllog2db.log""#),
+            "logging.file must not be corrupted in CSV mode"
+        );
+
+        let answers_sqlite = WizardAnswers {
+            inputs: "sqllogs".to_owned(),
+            exporter: ExporterChoice::Sqlite,
+            sqlite_db: Some("export/sqllog2db.db".to_owned()),
+            sqlite_table: Some("sqllog_records".to_owned()),
+            csv_file: None,
+        };
+        let output_sqlite = apply_wizard_answers_to_template(&answers_sqlite);
+        assert!(
+            output_sqlite.contains(r#"file = "logs/sqllog2db.log""#),
+            "logging.file must not be corrupted in SQLite mode"
+        );
+    }
+
+    #[test]
+    fn test_apply_output_parses_as_config_csv() {
+        let answers = WizardAnswers {
+            inputs: "sqllogs".to_owned(),
+            exporter: ExporterChoice::Csv,
+            csv_file: Some("outputs/sqllog.csv".to_owned()),
+            sqlite_db: None,
+            sqlite_table: None,
+        };
+        let content = apply_wizard_answers_to_template(&answers);
+        let cfg: crate::config::Config =
+            toml::from_str(&content).expect("CSV output should parse as valid TOML Config");
+        cfg.validate()
+            .expect("CSV output should pass Config::validate()");
+    }
+
+    #[test]
+    fn test_apply_output_parses_as_config_sqlite() {
+        let answers = WizardAnswers {
+            inputs: "sqllogs".to_owned(),
+            exporter: ExporterChoice::Sqlite,
+            sqlite_db: Some("export/sqllog2db.db".to_owned()),
+            sqlite_table: Some("sqllog_records".to_owned()),
+            csv_file: None,
+        };
+        let content = apply_wizard_answers_to_template(&answers);
+        let cfg: crate::config::Config =
+            toml::from_str(&content).expect("SQLite output should parse as valid TOML Config");
+        cfg.validate()
+            .expect("SQLite output should pass Config::validate()");
     }
 }
