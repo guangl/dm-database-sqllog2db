@@ -274,12 +274,12 @@ pub(super) fn process_csv_parallel(
     ordered_indices: &[usize],
     verbose: bool,
 ) -> Result<(Vec<(PathBuf, usize)>, usize, ErrorStats)> {
-    let csv_cfg = cfg
-        .exporter
-        .csv
-        .as_ref()
-        // infallible: process_csv_parallel is only called when CSV exporter is present
-        .expect("parallel CSV requires CSV exporter");
+    let csv_cfg = cfg.exporter.csv.as_ref().ok_or_else(|| {
+        Error::Export(crate::error::ExportError::WriteFailed {
+            path: std::path::PathBuf::from("<csv>"),
+            reason: "parallel CSV path requires CSV exporter to be configured".into(),
+        })
+    })?;
     let output_path = Path::new(&csv_cfg.file);
     let append_to_existing = csv_cfg.append && output_path.exists();
     let parts_dir = setup_parts_dir(output_path)?;
