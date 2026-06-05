@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt;
 use std::io;
 use std::path::PathBuf;
@@ -23,6 +24,60 @@ impl fmt::Display for ErrorSeverity {
     }
 }
 
+/// 解析错误的分类枚举。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ErrorKind {
+    EncodingError,
+    FieldMissing,
+    ParseFailed,
+}
+
+impl ErrorKind {
+    // Plan 03 中写出 error log 时使用（write_error_log 函数）。
+    #[must_use]
+    #[allow(dead_code)]
+    pub fn kind_display(self) -> &'static str {
+        match self {
+            Self::EncodingError => "encoding_error",
+            Self::FieldMissing => "field_missing",
+            Self::ParseFailed => "parse_failed",
+        }
+    }
+}
+
+/// 单条解析错误的详细记录。
+// Plan 03 中写出 error log 时读取这些字段。
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub struct ParseErrorRecord {
+    pub file_path: String,
+    pub line_number: u64,
+    pub raw_truncated: String,
+    pub kind: ErrorKind,
+}
+
+/// 将原始字符串安全截断到前 120 个字符（UTF-8 字符边界安全）。
+#[must_use]
+pub fn truncate_to_120_chars(raw: &str) -> String {
+    let end = raw
+        .char_indices()
+        .nth(120)
+        .map_or(raw.len(), |(index, _)| index);
+    raw[..end].to_string()
+}
+
+/// 根据原始内容启发式分类解析错误类型。
+#[must_use]
+pub fn classify_error_kind(raw: &str) -> ErrorKind {
+    if raw.contains('\u{FFFD}') {
+        ErrorKind::EncodingError
+    } else if raw.starts_with("(EP[") {
+        ErrorKind::FieldMissing
+    } else {
+        ErrorKind::ParseFailed
+    }
+}
+
 /// Accumulated error statistics for a processing run.
 #[derive(Debug, Default, Clone)]
 pub struct ErrorStats {
@@ -30,6 +85,9 @@ pub struct ErrorStats {
     pub parse_errors: usize,
     pub export_errors: usize,
     pub fatal_error: Option<String>,
+    pub by_type: HashMap<ErrorKind, u64>,
+    pub filtered_out: u64,
+    pub parse_error_records: Vec<ParseErrorRecord>,
 }
 
 impl ErrorStats {
@@ -48,6 +106,11 @@ impl ErrorStats {
         self.parse_errors += 1;
     }
 
+    pub fn add_parse_error_with_kind(&mut self, kind: ErrorKind) {
+        self.add_parse_error();
+        *self.by_type.entry(kind).or_insert(0) += 1;
+    }
+
     pub fn add_export_error(&mut self) {
         self.total_errors += 1;
         self.export_errors += 1;
@@ -64,6 +127,12 @@ impl ErrorStats {
         if self.fatal_error.is_none() && other.fatal_error.is_some() {
             self.fatal_error.clone_from(&other.fatal_error);
         }
+        for (kind, count) in &other.by_type {
+            *self.by_type.entry(*kind).or_insert(0) += count;
+        }
+        self.filtered_out += other.filtered_out;
+        self.parse_error_records
+            .extend(other.parse_error_records.iter().cloned());
     }
 }
 
@@ -661,6 +730,129 @@ mod tests {
             format!("{}", ErrorSeverity::Critical),
             "CRITICAL",
             "ErrorSeverity::Critical should display as 'CRITICAL'"
+        );
+    }
+
+    // ===== ErrorKind 分类 =====
+
+    #[test]
+    fn test_classify_error_kind() {
+        assert_eq!(
+            classify_error_kind("含\u{FFFD}字符"),
+            ErrorKind::EncodingError,
+            "含 replacement char 应分类为 EncodingError"
+        );
+        assert_eq!(
+            classify_error_kind("(EP[ 不完整"),
+            ErrorKind::FieldMissing,
+            "以 (EP[ 开头应分类为 FieldMissing"
+        );
+        assert_eq!(
+            classify_error_kind("普通乱码"),
+            ErrorKind::ParseFailed,
+            "其他情况应分类为 ParseFailed"
+        );
+    }
+
+    // ===== truncate_to_120_chars =====
+
+    #[test]
+    fn test_truncate_to_120_chars() {
+        // ASCII 长度 200 → 输出长度 120
+        let long_ascii = "a".repeat(200);
+        let truncated = truncate_to_120_chars(&long_ascii);
+        assert_eq!(truncated.len(), 120, "ASCII 200 字符应截断为 120 字节");
+
+        // "中" 重复 150 次（每字符 3 字节）→ 输出 char_count == 120 且 UTF-8 有效
+        let long_chinese = "中".repeat(150);
+        let truncated_chinese = truncate_to_120_chars(&long_chinese);
+        let char_count = truncated_chinese.chars().count();
+        assert_eq!(char_count, 120, "中文应截断为 120 字符");
+        assert!(
+            std::str::from_utf8(truncated_chinese.as_bytes()).is_ok(),
+            "截断后应为合法 UTF-8"
+        );
+
+        // 空串 → 空串
+        let empty = truncate_to_120_chars("");
+        assert!(empty.is_empty(), "空串截断后应为空串");
+
+        // 100 字符 → 原样返回
+        let short = "b".repeat(100);
+        let result = truncate_to_120_chars(&short);
+        assert_eq!(result, short, "100 字符不超过上限，应原样返回");
+    }
+
+    // ===== ErrorStats by_type merge =====
+
+    #[test]
+    fn test_error_stats_by_type_merge() {
+        let mut a = ErrorStats::default();
+        *a.by_type.entry(ErrorKind::EncodingError).or_insert(0) += 2;
+
+        let mut b = ErrorStats::default();
+        *b.by_type.entry(ErrorKind::EncodingError).or_insert(0) += 3;
+        *b.by_type.entry(ErrorKind::FieldMissing).or_insert(0) += 1;
+
+        a.merge(&b);
+
+        assert_eq!(
+            a.by_type
+                .get(&ErrorKind::EncodingError)
+                .copied()
+                .unwrap_or(0),
+            5,
+            "merge 后 EncodingError 计数应为 5"
+        );
+        assert_eq!(
+            a.by_type
+                .get(&ErrorKind::FieldMissing)
+                .copied()
+                .unwrap_or(0),
+            1,
+            "merge 后 FieldMissing 计数应为 1"
+        );
+    }
+
+    #[test]
+    fn test_error_stats_merge_propagates_filtered_and_records() {
+        let mut a = ErrorStats {
+            filtered_out: 2,
+            parse_error_records: vec![ParseErrorRecord {
+                file_path: "a.log".into(),
+                line_number: 1,
+                raw_truncated: "raw_a".into(),
+                kind: ErrorKind::ParseFailed,
+            }],
+            ..Default::default()
+        };
+
+        let b = ErrorStats {
+            filtered_out: 5,
+            parse_error_records: vec![
+                ParseErrorRecord {
+                    file_path: "b.log".into(),
+                    line_number: 2,
+                    raw_truncated: "raw_b1".into(),
+                    kind: ErrorKind::EncodingError,
+                },
+                ParseErrorRecord {
+                    file_path: "b.log".into(),
+                    line_number: 3,
+                    raw_truncated: "raw_b2".into(),
+                    kind: ErrorKind::FieldMissing,
+                },
+            ],
+            ..Default::default()
+        };
+
+        a.merge(&b);
+
+        assert_eq!(a.filtered_out, 7, "merge 后 filtered_out 应为 7");
+        assert_eq!(
+            a.parse_error_records.len(),
+            3,
+            "merge 后 parse_error_records 应有 3 条"
         );
     }
 }

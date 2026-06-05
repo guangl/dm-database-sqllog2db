@@ -1,7 +1,10 @@
-use crate::error::{ErrorStats, Result};
+use crate::error::{
+    ErrorStats, ParseErrorRecord, Result, classify_error_kind, truncate_to_120_chars,
+};
 use crate::exporter::ExporterManager;
 use crate::pipeline::Pipeline;
 use crate::pipeline::normalizer::ParamBuffer;
+use dm_database_parser_sqllog::ParseError;
 use dm_database_parser_sqllog::Sqllog;
 use indicatif::ProgressBar;
 use log::info;
@@ -226,7 +229,20 @@ pub(super) fn process_log_file(
             }
             Err(e) => {
                 errors_in_file += 1;
-                file_stats.add_parse_error();
+                let (line_number, raw_ref) = match &e {
+                    ParseError::InvalidFormat { raw, line_number } => (*line_number, raw.as_str()),
+                    _ => (0u64, ""),
+                };
+                let kind = classify_error_kind(raw_ref);
+                file_stats.add_parse_error_with_kind(kind);
+                if file_stats.parse_error_records.len() < 10_000 {
+                    file_stats.parse_error_records.push(ParseErrorRecord {
+                        file_path: file_path.to_string(),
+                        line_number,
+                        raw_truncated: truncate_to_120_chars(raw_ref),
+                        kind,
+                    });
+                }
                 log::warn!("{file_path} | {e:?}");
             }
         }
