@@ -125,7 +125,7 @@ pub fn handle_run(
         skipped_files,
         &run_stats,
     );
-    write_error_log(cfg, &run_stats);
+    write_error_log(final_cfg, &run_stats);
     if let Some(pb) = &pb {
         pb.finish_and_clear();
     }
