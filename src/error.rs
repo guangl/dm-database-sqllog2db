@@ -46,9 +46,6 @@ impl ErrorKind {
 /// 单条解析错误的详细记录。
 #[derive(Debug, Clone)]
 pub struct ParseErrorRecord {
-    // 保留字段供未来格式扩展使用
-    #[allow(dead_code)]
-    pub file_path: String,
     pub line_number: u64,
     pub raw_truncated: String,
     pub kind: ErrorKind,
@@ -826,7 +823,6 @@ mod tests {
         let mut a = ErrorStats {
             filtered_out: 2,
             parse_error_records: vec![ParseErrorRecord {
-                file_path: "a.log".into(),
                 line_number: 1,
                 raw_truncated: "raw_a".into(),
                 kind: ErrorKind::ParseFailed,
@@ -838,13 +834,11 @@ mod tests {
             filtered_out: 5,
             parse_error_records: vec![
                 ParseErrorRecord {
-                    file_path: "b.log".into(),
                     line_number: 2,
                     raw_truncated: "raw_b1".into(),
                     kind: ErrorKind::EncodingError,
                 },
                 ParseErrorRecord {
-                    file_path: "b.log".into(),
                     line_number: 3,
                     raw_truncated: "raw_b2".into(),
                     kind: ErrorKind::FieldMissing,

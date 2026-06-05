@@ -240,7 +240,6 @@ pub(super) fn process_log_file(
                 file_stats.add_parse_error_with_kind(kind);
                 if file_stats.parse_error_records.len() < 10_000 {
                     file_stats.parse_error_records.push(ParseErrorRecord {
-                        file_path: file_path.to_string(),
                         line_number,
                         raw_truncated: truncate_to_120_chars(raw_ref),
                         kind,
