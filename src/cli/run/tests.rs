@@ -155,7 +155,7 @@ fn test_parallel_merge_consistent() {
         true,
         false,
         &Arc::new(AtomicBool::new(false)),
-        None,
+        Some(2),
     );
     assert!(result_par.is_ok(), "并行路径应成功: {result_par:?}");
 
