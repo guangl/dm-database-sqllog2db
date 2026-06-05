@@ -126,8 +126,7 @@ fn test_handle_run_real_csv_export() {
     assert_eq!(
         content.lines().count(),
         11,
-        "expected header + 10 data rows, got {}",
-        content.lines().count()
+        "expected header + 10 data rows"
     );
 }
 
@@ -686,8 +685,7 @@ fn test_e2e_filter_pipeline() {
     assert_eq!(
         content.lines().count(),
         11,
-        "expected header + 10 data rows, got {}",
-        content.lines().count()
+        "expected header + 10 data rows"
     );
 
     // 追加一个包含 user=OTHER 的第二个日志文件
@@ -722,8 +720,7 @@ fn test_e2e_filter_pipeline() {
     assert_eq!(
         content2.lines().count(),
         1,
-        "expected only header row when all records filtered out, got {}",
-        content2.lines().count()
+        "expected only header row when all records filtered out"
     );
 }
 
@@ -792,8 +789,7 @@ fn test_boundary_empty_log_file() {
     assert_eq!(
         content.lines().count(),
         1,
-        "expected only header row for empty log, got {} lines",
-        content.lines().count()
+        "expected only header row for empty log"
     );
 }
 
@@ -826,8 +822,7 @@ fn test_boundary_all_filtered() {
     assert_eq!(
         content.lines().count(),
         1,
-        "expected only header row when all records filtered, got {} lines",
-        content.lines().count()
+        "expected only header row when all records filtered"
     );
 }
 
@@ -864,8 +859,7 @@ fn test_boundary_malformed_line() {
     assert_eq!(
         csv_content.lines().count(),
         5,
-        "expected header + 4 data rows (malformed line skipped), got {} lines",
-        csv_content.lines().count()
+        "expected header + 4 data rows (malformed line skipped)"
     );
 }
 
@@ -894,8 +888,7 @@ fn test_boundary_long_sql() {
     assert_eq!(
         csv_content.lines().count(),
         2,
-        "expected header + 1 data row for long SQL, got {} lines",
-        csv_content.lines().count()
+        "expected header + 1 data row for long SQL"
     );
 }
 
@@ -1328,8 +1321,7 @@ fn test_cli_input_flag_overrides_config_inputs() {
     assert_eq!(
         content.lines().count(),
         9,
-        "expected header + 8 data rows (5+3), got {}",
-        content.lines().count()
+        "expected header + 8 data rows (5+3)"
     );
 }
 
@@ -1363,8 +1355,7 @@ fn test_cli_input_flag_with_glob() {
     assert_eq!(
         content.lines().count(),
         11,
-        "expected header + 10 data rows (4+6 from *.log), got {}",
-        content.lines().count()
+        "expected header + 10 data rows (4+6 from *.log)"
     );
 }
 
