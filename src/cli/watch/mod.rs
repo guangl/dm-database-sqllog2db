@@ -42,7 +42,17 @@ pub fn handle_watch(
     }
     let pb = build_progress_bar(&watch_dirs);
     let (rx, _watcher) = create_watcher(&watch_dirs)?;
-    let mut state = WatchLoopState::new();
+    let sqlite_db_url: Option<String> =
+        cfg.exporter.sqlite.as_ref().map(|s| s.database_url.clone());
+    let init_offsets = if let Some(ref database_url) = sqlite_db_url {
+        if let Err(e) = offsets::ensure_offset_table(database_url) {
+            warn!("watch: ensure_offset_table failed: {e}");
+        }
+        offsets::load_offsets(database_url)
+    } else {
+        HashMap::new()
+    };
+    let mut state = WatchLoopState::new(init_offsets, sqlite_db_url);
     run_watch_loop(
         &rx,
         cfg,
@@ -86,22 +96,28 @@ fn create_watcher(
 }
 
 /// Watch 主循环运行时状态（合并多个可变字段，减少参数列表长度）。
-struct WatchLoopState {
+pub(crate) struct WatchLoopState {
     last_trigger_at: Option<Instant>,
     last_status_refresh: Instant,
     debounce_map: HashMap<PathBuf, Instant>,
     total_stats: ErrorStats,
     trigger_count: u64,
+    /// Phase 70 新增（per D-12）：路径→字节偏移映射，用于增量处理。
+    file_offsets: HashMap<PathBuf, u64>,
+    /// Phase 70 新增（per D-12）：SQLite 数据库 URL，`None` 表示未使用 `SqliteExporter`。
+    sqlite_db_url: Option<String>,
 }
 
 impl WatchLoopState {
-    fn new() -> Self {
+    fn new(init_offsets: HashMap<PathBuf, u64>, sqlite_db_url: Option<String>) -> Self {
         Self {
             last_trigger_at: None,
             last_status_refresh: Instant::now(),
             debounce_map: HashMap::new(),
             total_stats: ErrorStats::default(),
             trigger_count: 0u64,
+            file_offsets: init_offsets,
+            sqlite_db_url,
         }
     }
 }
@@ -119,18 +135,7 @@ fn run_watch_loop(
 ) {
     loop {
         match rx.recv_timeout(Duration::from_millis(100)) {
-            Ok(Ok(event)) => handle_event(
-                &event,
-                cfg,
-                quiet,
-                verbose,
-                interrupted,
-                &mut state.total_stats,
-                &mut state.trigger_count,
-                &mut state.last_trigger_at,
-                &mut state.debounce_map,
-                pb,
-            ),
+            Ok(Ok(event)) => handle_event(&event, cfg, quiet, verbose, interrupted, state, pb),
             Ok(Err(e)) => warn!("notify error: {e}"),
             Err(RecvTimeoutError::Timeout) => maybe_refresh_status(
                 pb,
@@ -230,26 +235,22 @@ fn format_paths_display(dirs: &[PathBuf]) -> String {
     }
 }
 
-/// 处理单个 notify 事件：仅对 Create + .log 文件触发 `handle_run`，含路径维度防抖。
+/// 处理单个 notify 事件：按 `EventKind` 路由到 `trigger_full_file` 或 `trigger_incremental`。
 fn handle_event(
     event: &notify::Event,
     cfg: &Config,
     quiet: bool,
     verbose: bool,
     interrupted: &Arc<std::sync::atomic::AtomicBool>,
-    total_stats: &mut ErrorStats,
-    trigger_count: &mut u64,
-    last_trigger_at: &mut Option<Instant>,
-    debounce_map: &mut HashMap<PathBuf, Instant>,
+    state: &mut WatchLoopState,
     pb: &ProgressBar,
 ) {
-    // TODO: track processed paths to prevent duplicate processing on log rotation (WR-03)
-    let is_relevant = matches!(event.kind, EventKind::Create(_))
-        || matches!(
-            event.kind,
-            EventKind::Modify(ModifyKind::Data(DataChange::Content))
-        );
-    if !is_relevant {
+    let is_create = matches!(event.kind, EventKind::Create(_));
+    let is_content_modify = matches!(
+        event.kind,
+        EventKind::Modify(ModifyKind::Data(DataChange::Content))
+    );
+    if !is_create && !is_content_modify {
         return;
     }
     let now = Instant::now();
@@ -257,33 +258,25 @@ fn handle_event(
         if path.extension().is_none_or(|ext| ext != "log") {
             continue;
         }
-        if !should_trigger(path, debounce_map, now, DEBOUNCE_WINDOW) {
+        if !should_trigger(path, &mut state.debounce_map, now, DEBOUNCE_WINDOW) {
             continue;
         }
-        process_log_path(
-            path,
-            cfg,
-            quiet,
-            verbose,
-            interrupted,
-            total_stats,
-            trigger_count,
-            last_trigger_at,
-            pb,
-        );
+        if is_create {
+            trigger_full_file(path, cfg, quiet, verbose, interrupted, state, pb);
+        } else {
+            trigger_incremental(path, cfg, quiet, verbose, interrupted, state, pb);
+        }
     }
 }
 
-/// 对单个通过防抖检查的 .log 路径执行 `handle_run` 并更新统计与状态行。
-fn process_log_path(
+/// 对新创建的 .log 文件执行全量处理，并持久化文件大小为初始 offset（per D-03/D-10）。
+pub(crate) fn trigger_full_file(
     path: &Path,
     cfg: &Config,
     quiet: bool,
     verbose: bool,
     interrupted: &Arc<std::sync::atomic::AtomicBool>,
-    total_stats: &mut ErrorStats,
-    trigger_count: &mut u64,
-    last_trigger_at: &mut Option<Instant>,
+    state: &mut WatchLoopState,
     pb: &ProgressBar,
 ) {
     if !path.exists() {
@@ -297,26 +290,156 @@ fn process_log_path(
     tmp_cfg.sqllog.inputs = vec![path.to_string_lossy().into_owned()];
     match crate::cli::run::handle_run(&tmp_cfg, quiet, verbose, interrupted, None) {
         Ok(file_stats) => {
-            total_stats.merge(&file_stats);
-            *trigger_count += 1;
-            *last_trigger_at = Some(Instant::now());
+            state.total_stats.merge(&file_stats);
+            state.trigger_count += 1;
+            state.last_trigger_at = Some(Instant::now());
+            // handle_run 返回后 SqliteExporter 已 drop，锁已释放（per Pitfall 4）
+            let new_size = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+            let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+            state.file_offsets.insert(canonical_path.clone(), new_size);
+            if let Some(ref database_url) = state.sqlite_db_url {
+                offsets::save_offset(database_url, &canonical_path, new_size);
+            }
             let dir = path
                 .parent()
                 .map(|p| p.display().to_string())
                 .unwrap_or_default();
             pb.set_message(render_active_status(
                 &dir,
-                *trigger_count,
-                total_stats.records_exported,
+                state.trigger_count,
+                state.total_stats.records_exported,
                 Duration::from_secs(0),
             ));
         }
         Err(crate::error::Error::Interrupted) => {
-            // 正常的优雅退出——重新设置 flag 确保外层循环在下次检查时退出。
-            interrupted.store(true, std::sync::atomic::Ordering::Release);
+            interrupted.store(true, Ordering::Release);
         }
-        Err(e) => warn!("watch trigger error: {e}"),
+        Err(e) => warn!("watch trigger error (full): {e}"),
     }
+}
+
+/// 对内容追加的 `.log` 文件执行增量处理，仅读取 `[start_offset, new_size)` 字节（per D-01/D-02）。
+pub(crate) fn trigger_incremental(
+    path: &Path,
+    cfg: &Config,
+    quiet: bool,
+    verbose: bool,
+    interrupted: &Arc<std::sync::atomic::AtomicBool>,
+    state: &mut WatchLoopState,
+    pb: &ProgressBar,
+) {
+    if !path.exists() {
+        warn!(
+            "watch: triggered path no longer exists, skipping: {}",
+            path.display()
+        );
+        return;
+    }
+    let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    let Ok(metadata) = std::fs::metadata(path) else {
+        warn!("watch: metadata error for {}", path.display());
+        return;
+    };
+    let new_size = metadata.len();
+    // D-04: 首次 Modify 无记录 → 记录基线 = 当前大小，跳过处理
+    let Some(&start_offset) = state.file_offsets.get(&canonical_path) else {
+        state.file_offsets.insert(canonical_path.clone(), new_size);
+        if let Some(ref database_url) = state.sqlite_db_url {
+            offsets::save_offset(database_url, &canonical_path, new_size);
+        }
+        return;
+    };
+    // D-02: 无新字节快速跳过
+    if new_size <= start_offset {
+        return;
+    }
+    let Ok(tmp_file) = read_bytes_to_tempfile(path, start_offset) else {
+        warn!("watch: read_bytes_to_tempfile error for {}", path.display());
+        return;
+    };
+    run_incremental_handle_run(
+        path,
+        &canonical_path,
+        tmp_file,
+        new_size,
+        cfg,
+        quiet,
+        verbose,
+        interrupted,
+        state,
+        pb,
+    );
+}
+
+/// 从文件 `start_offset` 处读取剩余字节，写入 `NamedTempFile` 并返回（per D-01）。
+pub(super) fn read_bytes_to_tempfile(
+    path: &Path,
+    start_offset: u64,
+) -> std::io::Result<tempfile::NamedTempFile> {
+    use std::io::{Read, Seek, SeekFrom, Write};
+    let mut source_file = std::fs::File::open(path)?;
+    source_file.seek(SeekFrom::Start(start_offset))?;
+    let mut buffer = Vec::new();
+    source_file.read_to_end(&mut buffer)?;
+    let mut tmp_file = tempfile::Builder::new()
+        .prefix("sqllog2db-watch-")
+        .suffix(".log")
+        .tempfile()?;
+    tmp_file.write_all(&buffer)?;
+    tmp_file.flush()?;
+    Ok(tmp_file)
+}
+
+/// 使用临时文件路径调用 `handle_run`，更新 state，并持久化新 offset（per D-07/D-09）。
+fn run_incremental_handle_run(
+    original_path: &Path,
+    canonical_path: &std::path::Path,
+    tmp_file: tempfile::NamedTempFile,
+    new_size: u64,
+    cfg: &Config,
+    quiet: bool,
+    verbose: bool,
+    interrupted: &Arc<std::sync::atomic::AtomicBool>,
+    state: &mut WatchLoopState,
+    pb: &ProgressBar,
+) {
+    let mut tmp_cfg = cfg.clone();
+    tmp_cfg.sqllog.inputs = vec![tmp_file.path().to_string_lossy().into_owned()];
+    // D-09: 增量路径强制 append=true、overwrite=false，避免清空表
+    if let Some(ref mut sqlite_cfg) = tmp_cfg.exporter.sqlite {
+        sqlite_cfg.append = true;
+        sqlite_cfg.overwrite = false;
+    }
+    match crate::cli::run::handle_run(&tmp_cfg, quiet, verbose, interrupted, None) {
+        Ok(file_stats) => {
+            state.total_stats.merge(&file_stats);
+            state.trigger_count += 1;
+            state.last_trigger_at = Some(Instant::now());
+            // handle_run 返回后 SqliteExporter 已 drop（per Pitfall 4），安全写 offset
+            state
+                .file_offsets
+                .insert(canonical_path.to_path_buf(), new_size);
+            if let Some(ref database_url) = state.sqlite_db_url {
+                offsets::save_offset(database_url, canonical_path, new_size);
+            }
+            let dir = original_path
+                .parent()
+                .map(|p| p.display().to_string())
+                .unwrap_or_default();
+            pb.set_message(render_active_status(
+                &dir,
+                state.trigger_count,
+                state.total_stats.records_exported,
+                Duration::from_secs(0),
+            ));
+        }
+        Err(crate::error::Error::Interrupted) => {
+            interrupted.store(true, Ordering::Release);
+        }
+        Err(e) => warn!("watch trigger error (incremental): {e}"),
+    }
+    // tmp_file 在此处 drop，临时文件自动删除（per Pitfall 3：不要 let _ = ...）
+    drop(tmp_file);
 }
 
 /// 判断路径是否应触发处理（防抖逻辑）。
@@ -408,6 +531,26 @@ mod tests {
         // 但 interrupted=true 时如果目录存在则立即跳出 loop 返回 Ok
         // 我们只验证函数能正常返回（不 panic）
         let _ = result;
+    }
+
+    #[test]
+    fn test_watch_loop_state_new_with_offsets() {
+        let mut initial_offsets = HashMap::new();
+        initial_offsets.insert(PathBuf::from("/tmp/test.log"), 1024u64);
+        let state = WatchLoopState::new(initial_offsets.clone(), Some("test.db".to_string()));
+        assert_eq!(
+            state.file_offsets.get(&PathBuf::from("/tmp/test.log")),
+            Some(&1024u64)
+        );
+        assert_eq!(state.sqlite_db_url, Some("test.db".to_string()));
+        assert_eq!(state.trigger_count, 0);
+    }
+
+    #[test]
+    fn test_watch_loop_state_new_without_sqlite() {
+        let state = WatchLoopState::new(HashMap::new(), None);
+        assert!(state.file_offsets.is_empty());
+        assert!(state.sqlite_db_url.is_none());
     }
 
     #[test]
