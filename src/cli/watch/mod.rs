@@ -293,29 +293,37 @@ pub(crate) fn trigger_full_file(
             state.total_stats.merge(&file_stats);
             state.trigger_count += 1;
             state.last_trigger_at = Some(Instant::now());
-            // handle_run 返回后 SqliteExporter 已 drop，锁已释放（per Pitfall 4）
-            let new_size = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
-            let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-            state.file_offsets.insert(canonical_path.clone(), new_size);
-            if let Some(ref database_url) = state.sqlite_db_url {
-                offsets::save_offset(database_url, &canonical_path, new_size);
-            }
-            let dir = path
-                .parent()
-                .map(|p| p.display().to_string())
-                .unwrap_or_default();
-            pb.set_message(render_active_status(
-                &dir,
-                state.trigger_count,
-                state.total_stats.records_exported,
-                Duration::from_secs(0),
-            ));
+            // handle_run 返回后 SqliteExporter 已 drop（per Pitfall 4），安全写 offset
+            record_offset_after_trigger(path, state);
+            update_status_bar(path, state, pb);
         }
-        Err(crate::error::Error::Interrupted) => {
-            interrupted.store(true, Ordering::Release);
-        }
+        Err(crate::error::Error::Interrupted) => interrupted.store(true, Ordering::Release),
         Err(e) => warn!("watch trigger error (full): {e}"),
     }
+}
+
+/// `handle_run` 成功后，持久化文件当前大小为新 offset（per D-08）。
+fn record_offset_after_trigger(path: &Path, state: &mut WatchLoopState) {
+    let new_size = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+    let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    state.file_offsets.insert(canonical_path.clone(), new_size);
+    if let Some(ref database_url) = state.sqlite_db_url {
+        offsets::save_offset(database_url, &canonical_path, new_size);
+    }
+}
+
+/// 用当前 `trigger_count` 和 `records_exported` 更新 progress bar 消息。
+fn update_status_bar(path: &Path, state: &WatchLoopState, pb: &ProgressBar) {
+    let dir = path
+        .parent()
+        .map(|p| p.display().to_string())
+        .unwrap_or_default();
+    pb.set_message(render_active_status(
+        &dir,
+        state.trigger_count,
+        state.total_stats.records_exported,
+        Duration::from_secs(0),
+    ));
 }
 
 /// 对内容追加的 `.log` 文件执行增量处理，仅读取 `[start_offset, new_size)` 字节（per D-01/D-02）。
@@ -341,18 +349,9 @@ pub(crate) fn trigger_incremental(
         return;
     };
     let new_size = metadata.len();
-    // D-04: 首次 Modify 无记录 → 记录基线 = 当前大小，跳过处理
-    let Some(&start_offset) = state.file_offsets.get(&canonical_path) else {
-        state.file_offsets.insert(canonical_path.clone(), new_size);
-        if let Some(ref database_url) = state.sqlite_db_url {
-            offsets::save_offset(database_url, &canonical_path, new_size);
-        }
-        return;
+    let Some(start_offset) = resolve_incremental_offset(&canonical_path, new_size, state) else {
+        return; // 首次见到或无新字节——已处理基线，直接跳过
     };
-    // D-02: 无新字节快速跳过
-    if new_size <= start_offset {
-        return;
-    }
     let Ok(tmp_file) = read_bytes_to_tempfile(path, start_offset) else {
         warn!("watch: read_bytes_to_tempfile error for {}", path.display());
         return;
@@ -369,6 +368,31 @@ pub(crate) fn trigger_incremental(
         state,
         pb,
     );
+}
+
+/// 返回增量处理的 `start_offset`；`None` 表示应跳过（首次见到或无新字节）。
+/// 首次见到时会将当前文件大小写入 `state.file_offsets` 作为基线（per D-04）。
+fn resolve_incremental_offset(
+    canonical_path: &Path,
+    new_size: u64,
+    state: &mut WatchLoopState,
+) -> Option<u64> {
+    let Some(&start_offset) = state.file_offsets.get(canonical_path) else {
+        // D-04: 首次 Modify 无记录 → 记录基线 = 当前大小，跳过处理
+        state
+            .file_offsets
+            .insert(canonical_path.to_path_buf(), new_size);
+        if let Some(ref database_url) = state.sqlite_db_url {
+            offsets::save_offset(database_url, canonical_path, new_size);
+        }
+        return None;
+    };
+    // D-02: 无新字节快速跳过
+    if new_size <= start_offset {
+        None
+    } else {
+        Some(start_offset)
+    }
 }
 
 /// 从文件 `start_offset` 处读取剩余字节，写入 `NamedTempFile` 并返回（per D-01）。
@@ -393,7 +417,7 @@ pub(super) fn read_bytes_to_tempfile(
 /// 使用临时文件路径调用 `handle_run`，更新 state，并持久化新 offset（per D-07/D-09）。
 fn run_incremental_handle_run(
     original_path: &Path,
-    canonical_path: &std::path::Path,
+    canonical_path: &Path,
     tmp_file: tempfile::NamedTempFile,
     new_size: u64,
     cfg: &Config,
@@ -403,13 +427,7 @@ fn run_incremental_handle_run(
     state: &mut WatchLoopState,
     pb: &ProgressBar,
 ) {
-    let mut tmp_cfg = cfg.clone();
-    tmp_cfg.sqllog.inputs = vec![tmp_file.path().to_string_lossy().into_owned()];
-    // D-09: 增量路径强制 append=true、overwrite=false，避免清空表
-    if let Some(ref mut sqlite_cfg) = tmp_cfg.exporter.sqlite {
-        sqlite_cfg.append = true;
-        sqlite_cfg.overwrite = false;
-    }
+    let tmp_cfg = build_incremental_cfg(cfg, &tmp_file);
     match crate::cli::run::handle_run(&tmp_cfg, quiet, verbose, interrupted, None) {
         Ok(file_stats) => {
             state.total_stats.merge(&file_stats);
@@ -422,24 +440,25 @@ fn run_incremental_handle_run(
             if let Some(ref database_url) = state.sqlite_db_url {
                 offsets::save_offset(database_url, canonical_path, new_size);
             }
-            let dir = original_path
-                .parent()
-                .map(|p| p.display().to_string())
-                .unwrap_or_default();
-            pb.set_message(render_active_status(
-                &dir,
-                state.trigger_count,
-                state.total_stats.records_exported,
-                Duration::from_secs(0),
-            ));
+            update_status_bar(original_path, state, pb);
         }
-        Err(crate::error::Error::Interrupted) => {
-            interrupted.store(true, Ordering::Release);
-        }
+        Err(crate::error::Error::Interrupted) => interrupted.store(true, Ordering::Release),
         Err(e) => warn!("watch trigger error (incremental): {e}"),
     }
     // tmp_file 在此处 drop，临时文件自动删除（per Pitfall 3：不要 let _ = ...）
     drop(tmp_file);
+}
+
+/// 构造增量处理用的临时 `Config`：指向 `tmp_file` 路径，强制 append=true（per D-09）。
+fn build_incremental_cfg(cfg: &Config, tmp_file: &tempfile::NamedTempFile) -> Config {
+    let mut tmp_cfg = cfg.clone();
+    tmp_cfg.sqllog.inputs = vec![tmp_file.path().to_string_lossy().into_owned()];
+    // D-09: 增量路径强制 append=true、overwrite=false，避免清空表
+    if let Some(ref mut sqlite_cfg) = tmp_cfg.exporter.sqlite {
+        sqlite_cfg.append = true;
+        sqlite_cfg.overwrite = false;
+    }
+    tmp_cfg
 }
 
 /// 判断路径是否应触发处理（防抖逻辑）。
