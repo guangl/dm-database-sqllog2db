@@ -70,6 +70,10 @@ pub fn handle_watch(
         state.total_stats().records_exported,
         quiet,
     );
+    // WATCH-09 (D-07/D-08): 摘要打印后再检查中断标志，main.rs Err(Interrupted) 分支处理 exit(130)
+    if interrupted.load(Ordering::Acquire) {
+        return Err(Error::Interrupted);
+    }
     Ok(())
 }
 
@@ -310,6 +314,9 @@ pub fn trigger_full_file(
     }
     let mut tmp_cfg = cfg.clone();
     tmp_cfg.sqllog.inputs = vec![path.to_string_lossy().into_owned()];
+    // WATCH-07 (D-01): 全量触发也强制 CSV 追加，避免每次触发覆盖既有数据
+    // WATCH-08 (D-05): error log 追加模式，保留 watch 进程历史错误
+    force_append_for_watch_trigger(&mut tmp_cfg);
     match crate::cli::run::handle_run(&tmp_cfg, quiet, verbose, interrupted, None) {
         Ok(file_stats) => {
             state.total_stats.merge(&file_stats);
@@ -510,15 +517,29 @@ fn run_incremental_handle_run(
     }
 }
 
+/// watch 触发前强制 `tmp_cfg` 进入追加模式（per D-01/D-05），适用全量与增量路径。
+fn force_append_for_watch_trigger(cfg: &mut Config) {
+    // WATCH-07 (D-01): CSV exporter 强制 append=true、overwrite=false
+    if let Some(ref mut csv_cfg) = cfg.exporter.csv {
+        csv_cfg.append = true;
+        csv_cfg.overwrite = false;
+    }
+    // WATCH-08 (D-05): error log 追加模式，保留历史错误
+    cfg.append_error_log = true;
+}
+
 /// 构造增量处理用的临时 `Config`：指向 `tmp_file` 路径，强制 append=true（per D-09）。
 fn build_incremental_cfg(cfg: &Config, tmp_file: &tempfile::NamedTempFile) -> Config {
     let mut tmp_cfg = cfg.clone();
     tmp_cfg.sqllog.inputs = vec![tmp_file.path().to_string_lossy().into_owned()];
-    // D-09: 增量路径强制 append=true、overwrite=false，避免清空表
+    // D-09: 增量路径强制 SQLite append=true、overwrite=false，避免清空表（仅增量路径需要）
     if let Some(ref mut sqlite_cfg) = tmp_cfg.exporter.sqlite {
         sqlite_cfg.append = true;
         sqlite_cfg.overwrite = false;
     }
+    // WATCH-07 (D-01): 增量路径同样强制 CSV 追加
+    // WATCH-08 (D-05): error log 追加模式
+    force_append_for_watch_trigger(&mut tmp_cfg);
     tmp_cfg
 }
 

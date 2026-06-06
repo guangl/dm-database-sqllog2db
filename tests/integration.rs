@@ -2899,9 +2899,14 @@ mod watch_tests {
         let cfg = super::make_run_config(&log_dir, &csv_file);
         let interrupted = Arc::new(AtomicBool::new(true));
         let result = handle_watch(&cfg, true, false, &interrupted);
+        // WATCH-09: interrupted=true 时 handle_watch 应返回 Err(Error::Interrupted)，
+        // main.rs 处理该错误并 exit(130)
         assert!(
-            result.is_ok(),
-            "handle_watch with interrupted=true should return Ok(()), got: {result:?}"
+            matches!(
+                result,
+                Err(dm_database_sqllog2db::error::Error::Interrupted)
+            ),
+            "handle_watch with interrupted=true should return Err(Interrupted), got: {result:?}"
         );
     }
 
@@ -2967,7 +2972,15 @@ mod watch_tests {
             std::thread::sleep(Duration::from_millis(700));
             interrupted_clone.store(true, Ordering::Relaxed);
         });
-        handle_watch(&cfg, true, false, &interrupted).unwrap();
+        let result = handle_watch(&cfg, true, false, &interrupted);
+        // WATCH-09: interrupted=true 时 handle_watch 返回 Err(Interrupted)，验证非 .log 文件不触发
+        assert!(
+            matches!(
+                result,
+                Err(dm_database_sqllog2db::error::Error::Interrupted)
+            ),
+            "handle_watch should return Err(Interrupted) after interrupt, got: {result:?}"
+        );
         assert!(
             !csv_file.exists(),
             "CSV output should NOT exist when only non-.log files are written"
