@@ -166,4 +166,23 @@ EXAMPLES:
         )]
         to: Option<String>,
     },
+    /// Watch directory for new .log files and process them automatically
+    #[command(
+        long_about = "Watch configured input directories for new .log files. Automatically triggers processing when new files appear. Press Ctrl+C to stop.",
+        after_help = "\
+EXAMPLES:
+    Watch and process new log files automatically:
+        sqllog2db watch -c config.toml"
+    )]
+    Watch {
+        /// TOML configuration file path
+        #[arg(
+            short = 'c',
+            long = "config",
+            default_value = "config.toml",
+            env = "SQLLOG2DB_CONFIG",
+            help = "TOML configuration file path."
+        )]
+        config: String,
+    },
 }
