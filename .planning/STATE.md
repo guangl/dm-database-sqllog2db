@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
 milestone: watch完善与文档对齐
-milestone_name: watch完善与文档对齐
-status: active
-last_updated: "2026-06-06T00:00:00.000Z"
-last_activity: 2026-06-06
+milestone_name: 全部版本的 Added/Changed/Fixed 条目
+status: executing
+last_updated: "2026-06-06T13:47:14.081Z"
+last_activity: 2026-06-06 -- Phase 01 execution started
 progress:
-  total_phases: 3
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_phases: 39
+  completed_phases: 16
+  total_plans: 35
+  completed_plans: 41
+  percent: 41
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-06 after v1.18)
 
 **Core value:** 用户能够精确指定"导出哪些记录的哪些字段"——过滤逻辑清晰可配置，输出结果完全可控
-**Current focus:** watch完善与文档对齐 — watch 功能完善 + 测试覆盖率 + 文档对齐
+**Current focus:** Phase 01 — watch
 
 ## Current Position
 
-Phase: 1 (watch 功能完善)
-Plan: —
-Status: Ready to plan
-Last activity: 2026-06-06 — Roadmap created for watch完善与文档对齐
+Phase: 01 (watch) — EXECUTING
+Plan: 1 of 1
+Status: Executing Phase 01
+Last activity: 2026-06-06 -- Phase 01 execution started
 
 ```
 watch完善与文档对齐 Progress: [░░░░░░░░░░░░░░░░░░░░] 0% (0/3 phases)
@@ -41,6 +41,7 @@ Phase 3: 文档与验证对齐   [ ] Not started
 **Goal:** 补完 watch 功能短板（CSV 支持、error log 追加写入、退出码修正），提升文档与测试质量，同步 VALIDATION.md 到 v1.18 实际状态。
 
 **Phases:**
+
 - Phase 1: watch 功能完善 (WATCH-07/08/09)
 - Phase 2: 测试覆盖率与 FSEvents (QUAL-02/03)
 - Phase 3: 文档与验证对齐 (QUAL-01, DOC-04, DOC-05)

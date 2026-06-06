@@ -524,6 +524,11 @@ fn force_append_for_watch_trigger(cfg: &mut Config) {
         csv_cfg.append = true;
         csv_cfg.overwrite = false;
     }
+    // WATCH-07 (D-01): SQLite exporter 同样强制 append=true、overwrite=false，避免每次触发清空表
+    if let Some(ref mut sqlite_cfg) = cfg.exporter.sqlite {
+        sqlite_cfg.append = true;
+        sqlite_cfg.overwrite = false;
+    }
     // WATCH-08 (D-05): error log 追加模式，保留历史错误
     cfg.append_error_log = true;
 }
@@ -532,13 +537,7 @@ fn force_append_for_watch_trigger(cfg: &mut Config) {
 fn build_incremental_cfg(cfg: &Config, tmp_file: &tempfile::NamedTempFile) -> Config {
     let mut tmp_cfg = cfg.clone();
     tmp_cfg.sqllog.inputs = vec![tmp_file.path().to_string_lossy().into_owned()];
-    // D-09: 增量路径强制 SQLite append=true、overwrite=false，避免清空表（仅增量路径需要）
-    if let Some(ref mut sqlite_cfg) = tmp_cfg.exporter.sqlite {
-        sqlite_cfg.append = true;
-        sqlite_cfg.overwrite = false;
-    }
-    // WATCH-07 (D-01): 增量路径同样强制 CSV 追加
-    // WATCH-08 (D-05): error log 追加模式
+    // WATCH-07 (D-01): 增量路径强制 CSV + SQLite 追加；WATCH-08 (D-05): error log 追加模式
     force_append_for_watch_trigger(&mut tmp_cfg);
     tmp_cfg
 }

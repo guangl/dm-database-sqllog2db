@@ -231,7 +231,7 @@ Full details: `.planning/milestones/v1.18-ROADMAP.md`
 
 **watch完善与文档对齐 (Phases 1–3) — IN PROGRESS**
 
-- [ ] **Phase 1: watch 功能完善** — CSV watch 支持、error log 追加模式、Ctrl+C 退出码 130 (WATCH-07/08/09)
+- [x] **Phase 1: watch 功能完善** — CSV watch 支持、error log 追加模式、Ctrl+C 退出码 130 (WATCH-07/08/09) (completed 2026-06-06)
 - [ ] **Phase 2: 测试覆盖率与 FSEvents** — watch 测试补充、92%+ 行覆盖率、FSEvents #[ignore] 落地方案 (QUAL-02/03)
 - [ ] **Phase 3: 文档与验证对齐** — VALIDATION.md 补全、README watch/init/进度选项更新、--help 完善 (QUAL-01, DOC-04, DOC-05)
 
@@ -713,7 +713,8 @@ Full details: `.planning/milestones/v1.18-ROADMAP.md`
   2. watch 长时间运行过程中产生的 parse error 均追加写入 error log，重新触发不覆盖前次错误，error log 包含所有历史触发的错误记录
   3. 向 watch 进程发送 SIGINT（Ctrl+C）后，进程退出码为 130（与 `run` 子命令 Ctrl+C 行为一致）
   4. `cargo clippy --all-targets -- -D warnings` + `cargo test` 全部通过，无性能退化
-**Plans**: TBD
+**Plans**: 1 plan
+- [x] 01-01-PLAN.md — Config.append_error_log 字段 + write_error_log 双分支 + watch 触发函数注入 CSV append + handle_watch 退出码检查 + 4 个 Wave 0 测试（WATCH-07/08/09）
 
 ### Phase 2: 测试覆盖率与 FSEvents
 **Goal**: watch 功能测试补全，整体行覆盖率达到 92%+，macOS FSEvents #[ignore] 测试有明确的落地方案（跨平台条件编译或 mock 解决）
@@ -886,7 +887,7 @@ Full details: `.planning/milestones/v1.18-ROADMAP.md`
 | 69. Watch 模式核心框架 | 4/4 | Complete    | 2026-06-06 |
 | 70. Watch 增量处理与集成测试 | v1.18 | Complete | 2026-06-06 |
 
-| 1. watch 功能完善 | watch完善与文档对齐 | Not started | - |
+| 1. watch 功能完善 | 1/1 | Complete   | 2026-06-06 |
 | 2. 测试覆盖率与 FSEvents | watch完善与文档对齐 | Not started | - |
 | 3. 文档与验证对齐 | watch完善与文档对齐 | Not started | - |
 
