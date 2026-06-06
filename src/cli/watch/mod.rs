@@ -885,4 +885,115 @@ mod tests {
             "首次 Modify 应将当前文件大小作为基线写入 file_offsets"
         );
     }
+
+    // ── WATCH-07/08/09 Wave 0 Tests ─────────────────────────────────────────
+
+    /// 一条合法的达梦 SQL 日志行（含 header + footer），用于 WATCH-07/08 测试。
+    const DM_LOG_LINE_SEL: &str = "2024-01-15 10:00:00.123 (EP[0] sess:0x0001 thrd:456 user:SYSDBA trxid:1001 stmt:select_001 appname:test ip:127.0.0.1) [SEL] select * from t1. EXECTIME: 5(ms) ROWCOUNT: 10(rows) EXEC_ID: 1.\n";
+    const DM_LOG_LINE_SEL2: &str = "2024-01-15 10:00:01.456 (EP[0] sess:0x0002 thrd:457 user:SYSDBA trxid:1002 stmt:select_002 appname:test ip:127.0.0.1) [SEL] select * from t2. EXECTIME: 3(ms) ROWCOUNT: 5(rows) EXEC_ID: 2.\n";
+    const DM_LOG_LINE_GARBAGE: &str = "this is not a valid dm sql log line at all\n";
+
+    // WATCH-07: CSV watch 追加，多次 trigger_full_file 后 CSV 行数累计，header 仅一行
+    #[test]
+    fn test_watch_csv_append() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let log_a = dir.path().join("a.log");
+        let log_b = dir.path().join("b.log");
+        let csv_path = dir.path().join("out.csv");
+
+        std::fs::write(&log_a, DM_LOG_LINE_SEL).unwrap();
+        std::fs::write(&log_b, DM_LOG_LINE_SEL2).unwrap();
+
+        // Config: CSV exporter，初始 append=false、overwrite=true（trigger_full_file 内部会注入 append=true）
+        let toml = format!(
+            "[sqllog]\ninputs = [\"{logdir}\"]\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n",
+            logdir = dir.path().to_string_lossy().replace('\\', "/"),
+            csv = csv_path.to_string_lossy().replace('\\', "/"),
+        );
+        let cfg: crate::config::Config = toml::from_str(&toml).unwrap();
+        let interrupted = Arc::new(AtomicBool::new(false));
+        let pb = indicatif::ProgressBar::hidden();
+        let mut state = WatchLoopState::new(HashMap::new(), None);
+
+        trigger_full_file(&log_a, &cfg, true, false, &interrupted, &mut state, &pb);
+        trigger_full_file(&log_b, &cfg, true, false, &interrupted, &mut state, &pb);
+
+        assert!(csv_path.exists(), "CSV 文件应在触发后存在");
+        let content = std::fs::read_to_string(&csv_path).unwrap();
+        let lines: Vec<&str> = content.lines().collect();
+        // 应有 1 header + 2 data rows（来自 A 和 B 各 1 条）
+        assert!(
+            lines.len() >= 3,
+            "CSV 应有 header + 2 data rows，实际: {} 行，内容:\n{content}",
+            lines.len()
+        );
+        // header 只出现一次（append 模式不重复写 header）
+        let header = lines[0];
+        let header_count = lines.iter().filter(|&&l| l == header).count();
+        assert_eq!(
+            header_count, 1,
+            "header 行应只出现一次，实际出现 {header_count} 次"
+        );
+    }
+
+    // WATCH-08: error log 追加，两次 trigger_full_file 后 error log 含所有历史错误
+    #[test]
+    fn test_watch_error_log_append() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let log_a = dir.path().join("a.log");
+        let log_b = dir.path().join("b.log");
+        let csv_path = dir.path().join("out.csv");
+        let error_log_path = dir.path().join("errors.log");
+
+        // 每个日志文件都有一条解析失败行（触发 write_error_log）+ 一条合法行（保证 handle_run 不提前失败）
+        let content_a = format!("{DM_LOG_LINE_GARBAGE}{DM_LOG_LINE_SEL}");
+        let content_b = format!("{DM_LOG_LINE_GARBAGE}{DM_LOG_LINE_SEL2}");
+        std::fs::write(&log_a, &content_a).unwrap();
+        std::fs::write(&log_b, &content_b).unwrap();
+
+        let toml = format!(
+            "[sqllog]\ninputs = [\"{logdir}\"]\n[error]\nfile = \"{errlog}\"\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n",
+            logdir = dir.path().to_string_lossy().replace('\\', "/"),
+            errlog = error_log_path.to_string_lossy().replace('\\', "/"),
+            csv = csv_path.to_string_lossy().replace('\\', "/"),
+        );
+        let cfg: crate::config::Config = toml::from_str(&toml).unwrap();
+        let interrupted = Arc::new(AtomicBool::new(false));
+        let pb = indicatif::ProgressBar::hidden();
+        let mut state = WatchLoopState::new(HashMap::new(), None);
+
+        trigger_full_file(&log_a, &cfg, true, false, &interrupted, &mut state, &pb);
+        trigger_full_file(&log_b, &cfg, true, false, &interrupted, &mut state, &pb);
+
+        assert!(error_log_path.exists(), "error log 应在有解析错误时创建");
+        let error_content = std::fs::read_to_string(&error_log_path).unwrap();
+        // 两次触发各有一条解析失败行，error log 应包含两条 [ERROR] 记录
+        let error_line_count = error_content
+            .lines()
+            .filter(|l| l.starts_with("[ERROR]"))
+            .count();
+        assert!(
+            error_line_count >= 2,
+            "error log 应包含 2 条 [ERROR] 行（来自 A 和 B 各 1 次触发），实际: {error_line_count} 条\n内容:\n{error_content}"
+        );
+    }
+
+    // WATCH-09: interrupted=true 时 handle_watch 返回 Err(Error::Interrupted)
+    #[test]
+    fn test_handle_watch_returns_interrupted() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let csv_path = dir.path().join("out.csv");
+        let toml = format!(
+            "[sqllog]\ninputs = [\"{logdir}\"]\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n",
+            logdir = dir.path().to_string_lossy().replace('\\', "/"),
+            csv = csv_path.to_string_lossy().replace('\\', "/"),
+        );
+        let cfg: crate::config::Config = toml::from_str(&toml).unwrap();
+        let interrupted = Arc::new(AtomicBool::new(true));
+        let result = handle_watch(&cfg, true, false, &interrupted);
+        assert!(
+            matches!(result, Err(Error::Interrupted)),
+            "interrupted=true 时 handle_watch 应返回 Err(Error::Interrupted)，实际: {result:?}"
+        );
+    }
 }

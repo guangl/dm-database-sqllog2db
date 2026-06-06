@@ -529,6 +529,51 @@ fn test_hint_output() {
     super::print_run_summary(false, false, false, 0.1, &[], 0, 0, &stats);
 }
 
+// WATCH-08: run 路径仍为覆盖写（append_error_log=false 默认值防回归）
+/// 验证 `append_error_log=false` 时 `write_error_log` 以截断模式打开文件，旧内容被覆盖。
+#[test]
+fn test_write_error_log_run_still_truncates() {
+    use crate::config::ErrorLogConfig;
+    use crate::error::{ErrorKind, ErrorStats, ParseErrorRecord};
+
+    let tmp_file = tempfile::NamedTempFile::new().expect("failed to create tempfile");
+    let tmp_path = tmp_file.path().to_string_lossy().into_owned();
+
+    // 预置旧内容
+    std::fs::write(&tmp_path, b"OLD CONTENT\n").expect("failed to write old content");
+
+    let cfg = Config {
+        error: Some(ErrorLogConfig {
+            file: tmp_path.clone(),
+        }),
+        append_error_log: false, // run 路径：覆盖写
+        ..Config::default()
+    };
+
+    let stats = ErrorStats {
+        parse_errors: 1,
+        total_errors: 1,
+        parse_error_records: vec![ParseErrorRecord {
+            line_number: 1,
+            raw_truncated: "bad line".to_string(),
+            kind: ErrorKind::ParseFailed,
+        }],
+        ..ErrorStats::default()
+    };
+
+    write_error_log(&cfg, &stats);
+
+    let content = std::fs::read_to_string(&tmp_path).expect("failed to read error log");
+    assert!(
+        !content.contains("OLD CONTENT"),
+        "append_error_log=false 时旧内容应被截断，实际内容: {content}"
+    );
+    assert!(
+        content.contains("[ERROR] line "),
+        "error log 应含有新写入的 [ERROR] 行，实际内容: {content}"
+    );
+}
+
 /// 验证含 `filtered_out` 的 `ErrorStats` 传入 `print_run_summary` 时不 panic（防回归）。
 #[test]
 fn test_run_summary() {
