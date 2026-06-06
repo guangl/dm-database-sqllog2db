@@ -686,7 +686,11 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
   2. SQLite 导出模式下，同一文件多次触发不产生重复行——通过持久化字节偏移记录确保幂等性
   3. 重启 watch 进程后，从上次记录的字节偏移恢复，不丢失也不重复已有记录
   4. 集成测试覆盖：新文件触发、追加触发、SQLite 去重三个场景，`cargo test` 全部通过
-**Plans**: TBD
+**Plans**: 3 plans
+- [ ] 70-01-PLAN.md — Wave 0：Cargo.toml 提升 tempfile 为生产依赖 + git mv src/cli/watch.rs → src/cli/watch/mod.rs + 新建 src/cli/watch/offsets.rs（ensure_offset_table / load_offsets / save_offset 三函数 + 5 个单元测试，WATCH-04 基础设施）
+- [ ] 70-02-PLAN.md — Wave 1：WatchLoopState 扩展 file_offsets/sqlite_db_url + handle_watch 启动加载 offsets + handle_event 按 EventKind 路由 + trigger_full_file/trigger_incremental（Seek+NamedTempFile，强制 sqlite.append=true）+ 3 个新单元测试（WATCH-03/04）
+- [ ] 70-03-PLAN.md — Wave 1：新建 tests/watch_incremental.rs 集成测试（WATCH-03 追加 5 行后 SQLite count=N+M / WATCH-04 重启 offset 恢复后 count=N+M / D-02 无新字节跳过）+ 提升 trigger_* 与 WatchLoopState 可见性为 pub
+
 
 ## Coverage Validation
 
