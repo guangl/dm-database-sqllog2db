@@ -66,8 +66,8 @@ pub fn handle_watch(
     pb.finish_and_clear();
     print_final_summary(
         &start,
-        state.trigger_count,
-        state.total_stats.records_exported,
+        state.trigger_count(),
+        state.total_stats().records_exported,
         quiet,
     );
     Ok(())
@@ -96,7 +96,8 @@ fn create_watcher(
 }
 
 /// Watch 主循环运行时状态（合并多个可变字段，减少参数列表长度）。
-pub(crate) struct WatchLoopState {
+#[derive(Debug)]
+pub struct WatchLoopState {
     last_trigger_at: Option<Instant>,
     last_status_refresh: Instant,
     debounce_map: HashMap<PathBuf, Instant>,
@@ -109,7 +110,9 @@ pub(crate) struct WatchLoopState {
 }
 
 impl WatchLoopState {
-    fn new(init_offsets: HashMap<PathBuf, u64>, sqlite_db_url: Option<String>) -> Self {
+    /// 构造 `WatchLoopState`，接受初始偏移映射与可选 `SQLite` 数据库 URL。
+    #[must_use]
+    pub fn new(init_offsets: HashMap<PathBuf, u64>, sqlite_db_url: Option<String>) -> Self {
         Self {
             last_trigger_at: None,
             last_status_refresh: Instant::now(),
@@ -119,6 +122,25 @@ impl WatchLoopState {
             file_offsets: init_offsets,
             sqlite_db_url,
         }
+    }
+
+    /// 返回当前 `trigger_count`（全量 + 增量触发次数之和）。
+    #[must_use]
+    pub fn trigger_count(&self) -> u64 {
+        self.trigger_count
+    }
+
+    /// 返回总错误统计。
+    #[must_use]
+    pub fn total_stats(&self) -> &ErrorStats {
+        &self.total_stats
+    }
+
+    /// 返回路径→字节偏移映射（用于集成测试验证 offset 持久化）。
+    #[must_use]
+    #[allow(dead_code)]
+    pub fn file_offsets(&self) -> &HashMap<PathBuf, u64> {
+        &self.file_offsets
     }
 }
 
@@ -270,7 +292,7 @@ fn handle_event(
 }
 
 /// 对新创建的 .log 文件执行全量处理，并持久化文件大小为初始 offset（per D-03/D-10）。
-pub(crate) fn trigger_full_file(
+pub fn trigger_full_file(
     path: &Path,
     cfg: &Config,
     quiet: bool,
@@ -303,11 +325,16 @@ pub(crate) fn trigger_full_file(
 }
 
 /// `handle_run` 成功后，持久化文件当前大小为新 offset（per D-08）。
+/// 调用 `ensure_offset_table` 确保辅助表存在（幂等，per D-05），防止直接调用
+/// `trigger_full_file` / `trigger_incremental`（绕过 `handle_watch` 启动逻辑）时表缺失。
 fn record_offset_after_trigger(path: &Path, state: &mut WatchLoopState) {
     let new_size = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
     let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
     state.file_offsets.insert(canonical_path.clone(), new_size);
     if let Some(ref database_url) = state.sqlite_db_url {
+        if let Err(e) = offsets::ensure_offset_table(database_url) {
+            warn!("watch: ensure_offset_table in record_offset_after_trigger: {e}");
+        }
         offsets::save_offset(database_url, &canonical_path, new_size);
     }
 }
@@ -327,7 +354,7 @@ fn update_status_bar(path: &Path, state: &WatchLoopState, pb: &ProgressBar) {
 }
 
 /// 对内容追加的 `.log` 文件执行增量处理，仅读取 `[start_offset, new_size)` 字节（per D-01/D-02）。
-pub(crate) fn trigger_incremental(
+pub fn trigger_incremental(
     path: &Path,
     cfg: &Config,
     quiet: bool,
