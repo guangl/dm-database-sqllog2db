@@ -6,8 +6,6 @@ use std::path::{Path, PathBuf};
 
 /// 确保 `_watch_offsets` 辅助表存在（幂等）。
 /// 每次调用打开独立连接，与 `SqliteExporter` 的 EXCLUSIVE 模式互不干扰（per D-05）。
-// Wave 1 将调用此函数，此阶段暂时 dead_code
-#[allow(dead_code)]
 pub(super) fn ensure_offset_table(database_url: &str) -> rusqlite::Result<()> {
     let connection = Connection::open(database_url)?;
     connection.execute_batch(
@@ -19,8 +17,6 @@ pub(super) fn ensure_offset_table(database_url: &str) -> rusqlite::Result<()> {
 
 /// 从 `_watch_offsets` 表加载所有路径→字节偏移映射。
 /// 表不存在（首次运行）或打开失败时返回空 `HashMap`，不 panic。
-// Wave 1 将调用此函数，此阶段暂时 dead_code
-#[allow(dead_code)]
 pub(super) fn load_offsets(database_url: &str) -> HashMap<PathBuf, u64> {
     let connection = match Connection::open(database_url) {
         Ok(conn) => conn,
@@ -58,8 +54,6 @@ pub(super) fn load_offsets(database_url: &str) -> HashMap<PathBuf, u64> {
 
 /// 持久化单条路径→字节偏移记录（INSERT OR REPLACE 语义）。
 /// 失败时 `log::warn!` 但不中断 watch（per D-07：持久化失败不致命）。
-// Wave 1 将调用此函数，此阶段暂时 dead_code
-#[allow(dead_code)]
 pub(super) fn save_offset(database_url: &str, path: &Path, offset: u64) {
     let connection = match Connection::open(database_url) {
         Ok(conn) => conn,
