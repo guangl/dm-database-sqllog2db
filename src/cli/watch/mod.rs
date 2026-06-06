@@ -475,6 +475,8 @@ pub(super) fn read_bytes_to_tempfile(
 }
 
 /// 使用临时文件路径调用 `handle_run`，更新 state，并持久化新 offset（per D-07/D-09）。
+// tmp_file 按值传入确保函数返回时 NamedTempFile 自动删除临时文件
+#[allow(clippy::needless_pass_by_value)]
 fn run_incremental_handle_run(
     original_path: &Path,
     canonical_path: &Path,
@@ -506,8 +508,6 @@ fn run_incremental_handle_run(
         Err(crate::error::Error::Interrupted) => interrupted.store(true, Ordering::Release),
         Err(e) => warn!("watch trigger error (incremental): {e}"),
     }
-    // tmp_file 在此处 drop，临时文件自动删除（per Pitfall 3：不要 let _ = ...）
-    drop(tmp_file);
 }
 
 /// 构造增量处理用的临时 `Config`：指向 `tmp_file` 路径，强制 append=true（per D-09）。
