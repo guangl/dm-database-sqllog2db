@@ -4,7 +4,10 @@ use crate::config::Config;
 use crate::error::{Error, ErrorStats, Result};
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use log::warn;
-use notify::{Config as NotifyConfig, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{
+    Config as NotifyConfig, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
+    event::{DataChange, ModifyKind},
+};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -96,6 +99,7 @@ fn build_progress_bar(watch_dirs: &[PathBuf]) -> ProgressBar {
 }
 
 /// 从 cfg.sqllog.inputs 收集实际存在的监听目录，去重后返回。
+/// 路径经 canonicalize 处理以解决 macOS /var → /private/var 等符号链接问题。
 #[must_use]
 pub fn collect_watch_dirs(inputs: &[String]) -> Vec<PathBuf> {
     let mut dirs: Vec<PathBuf> = Vec::new();
@@ -103,7 +107,9 @@ pub fn collect_watch_dirs(inputs: &[String]) -> Vec<PathBuf> {
         let is_glob = input_str.contains('*') || input_str.contains('?') || input_str.contains('[');
         if is_glob {
             if let Some(ancestor) = Path::new(input_str).ancestors().find(|p| p.exists()) {
-                let dir = ancestor.to_path_buf();
+                let dir = ancestor
+                    .canonicalize()
+                    .unwrap_or_else(|_| ancestor.to_path_buf());
                 if !dirs.contains(&dir) {
                     dirs.push(dir);
                 }
@@ -112,13 +118,15 @@ pub fn collect_watch_dirs(inputs: &[String]) -> Vec<PathBuf> {
             let path = Path::new(input_str);
             if path.is_file() {
                 if let Some(parent) = path.parent() {
-                    let dir = parent.to_path_buf();
+                    let dir = parent
+                        .canonicalize()
+                        .unwrap_or_else(|_| parent.to_path_buf());
                     if !dirs.contains(&dir) {
                         dirs.push(dir);
                     }
                 }
             } else if path.is_dir() {
-                let dir = path.to_path_buf();
+                let dir = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
                 if !dirs.contains(&dir) {
                     dirs.push(dir);
                 }
@@ -151,7 +159,14 @@ fn handle_event(
     trigger_count: &mut u64,
     pb: &ProgressBar,
 ) {
-    if !matches!(event.kind, EventKind::Create(_)) {
+    // 接受 Create(File) 和 Modify(Data(Content))：
+    // macOS FSEvents 有时先发 Create(File)（文件可能为空），再发 Modify(Data(Content))（数据写入完成）。
+    let is_relevant = matches!(event.kind, EventKind::Create(_))
+        || matches!(
+            event.kind,
+            EventKind::Modify(ModifyKind::Data(DataChange::Content))
+        );
+    if !is_relevant {
         return;
     }
     for path in &event.paths {
