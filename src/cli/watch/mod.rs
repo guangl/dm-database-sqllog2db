@@ -328,14 +328,25 @@ pub fn trigger_full_file(
 /// 调用 `ensure_offset_table` 确保辅助表存在（幂等，per D-05），防止直接调用
 /// `trigger_full_file` / `trigger_incremental`（绕过 `handle_watch` 启动逻辑）时表缺失。
 fn record_offset_after_trigger(path: &Path, state: &mut WatchLoopState) {
-    let new_size = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
-    let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-    state.file_offsets.insert(canonical_path.clone(), new_size);
-    if let Some(ref database_url) = state.sqlite_db_url {
-        if let Err(e) = offsets::ensure_offset_table(database_url) {
-            warn!("watch: ensure_offset_table in record_offset_after_trigger: {e}");
+    match std::fs::metadata(path) {
+        Ok(meta) => {
+            let new_size = meta.len();
+            let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+            state.file_offsets.insert(canonical_path.clone(), new_size);
+            if let Some(ref database_url) = state.sqlite_db_url {
+                if let Err(e) = offsets::ensure_offset_table(database_url) {
+                    warn!("watch: ensure_offset_table in record_offset_after_trigger: {e}");
+                }
+                offsets::save_offset(database_url, &canonical_path, new_size);
+            }
         }
-        offsets::save_offset(database_url, &canonical_path, new_size);
+        Err(e) => {
+            // metadata 失败时保留旧 offset，避免重置为 0 导致下次全量重复导入
+            warn!(
+                "watch: metadata failed after trigger, offset not updated for {}: {e}",
+                path.display()
+            );
+        }
     }
 }
 
