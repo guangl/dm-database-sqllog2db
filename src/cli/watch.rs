@@ -241,6 +241,7 @@ fn handle_event(
     debounce_map: &mut HashMap<PathBuf, Instant>,
     pb: &ProgressBar,
 ) {
+    // TODO: track processed paths to prevent duplicate processing on log rotation (WR-03)
     let is_relevant = matches!(event.kind, EventKind::Create(_))
         || matches!(
             event.kind,
