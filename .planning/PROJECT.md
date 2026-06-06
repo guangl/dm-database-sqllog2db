@@ -2,21 +2,37 @@
 
 ## What This Is
 
-解析达梦（DaMeng）数据库 SQL 日志文件，流式导出到 CSV 或 SQLite 的命令行工具。支持可配置的过滤管道和字段投影，让用户精确控制"导出哪些记录的哪些字段"。支持 stdin 管道输入、实时进度显示、错误类型细分（fatal/non-fatal），以及 3 级退出码。
+解析达梦（DaMeng）数据库 SQL 日志文件，流式导出到 CSV 或 SQLite 的命令行工具。支持可配置的过滤管道和字段投影，让用户精确控制"导出哪些记录的哪些字段"。支持 stdin 管道输入、实时进度显示与错误诊断、交互式配置向导（`init --interactive`）、以及 `watch` 子命令持续监听目录并增量插入新记录。
 
 ## Core Value
 
 用户能够精确指定"导出哪些记录的哪些字段"——过滤逻辑清晰可配置，输出结果完全可控。
 
-## Current Milestone: v1.18 用户体验全面升级
+## Current Milestone: v1.19 watch完善与文档对齐
 
-**Goal:** 全面改善 sqllog2db 的用户交互体验——watch 实时监控、交互式配置向导、更智能的错误诊断、以及更丰富的进度与摘要。
+**Goal:** 补完 watch 功能短板（CSV 支持、error log 追加写入、退出码修正），提升文档与测试质量，同步 VALIDATION.md 到 v1.18 实际状态。
 
 **Target features:**
-- watch 模式：监听日志目录，文件变化时自动增量插入 SQLite（notify crate，新子命令）
-- 交互式配置向导：`init` 时对话式引导填写 config.toml，降低首次使用门槛
-- 运行时异常诊断：parse error 自动分析原因，给出具体可操作的修复建议
-- 进度/摘要增强：实时 ETA + 分文件进度条 + 更丰富的导出后摘要（过滤率/错误分布）
+- CSV watch 支持（目前仅限 SQLite）
+- watch error log 追加写入模式（长时间运行不覆盖历史错误）
+- watch Ctrl+C 退出码修正（返回 130，与 run 保持一致）
+- VALIDATION.md 草稿清理（Phase 67/68/69 补全，70 补充）
+- 测试覆盖率提升（目标 92%+，补充 watch 相关测试）
+- macOS FSEvents ignore 测试评估与处理
+- README 补充 watch / init --interactive / 进度选项说明
+- 各子命令 --help 信息完善
+
+## Previous: v1.18 已交付
+
+**Shipped:** 2026-06-06  
+**Version:** v1.18 用户体验全面升级（Phases 67–70）
+
+**已交付功能：**
+- 进度条升级：`[N/M]` 文件计数器 + ETA + records/sec 实时显示（PROG-01/02）
+- 错误诊断：ErrorKind 分类 + error log 含行号与原文前 120 字符 + 摘要 hint（DIAG-01/02/03）
+- `init --interactive` 对话式配置向导（INIT-01/02/03）
+- `watch` 子命令：notify 监听 + 500ms 防抖 + HumanDuration 状态行 + Ctrl+C 摘要（WATCH-01/02/05/06）
+- watch 增量处理：`_watch_offsets` SQLite 辅助表 + Seek 增量读 + 跨重启恢复（WATCH-03/04）
 
 ## Previous: v1.17 已交付
 
@@ -135,12 +151,24 @@
 - ✓ README stats 用法示例 + CHANGELOG v1.0–v1.15 + config 模板全字段注释 — v1.16（Phase 62）
 - ✓ 行覆盖率 91.86% / 函数覆盖率 89.54%（51 项新测试，740 全部通过）— v1.16（Phase 63）
 
-### Active
+### Active (v1.19)
 
-- watch 模式（新子命令，增量 SQLite 插入）— v1.18
-- 交互式配置向导（init 对话式引导）— v1.18
-- 运行时异常诊断（parse error 自动分析）— v1.18
-- 进度/摘要增强（ETA + 分文件进度 + 丰富摘要）— v1.18
+- [ ] CSV watch 支持（目前仅限 SQLite）
+- [ ] watch error log 追加写入模式
+- [ ] watch Ctrl+C 退出码修正（130）
+- [ ] VALIDATION.md 草稿清理（Phase 67/68/69 补全，70 补充）
+- [ ] 测试覆盖率提升（目标 92%+，watch 相关测试）
+- [ ] macOS FSEvents ignore 测试评估与处理
+- [ ] README 更新（watch / init --interactive / 进度选项）
+- [ ] 各子命令 --help 信息完善
+
+### Recently Validated in v1.18
+
+- ✓ `[N/M]` 文件计数器进度条 + ETA + records/sec — v1.18（Phase 67）
+- ✓ ErrorKind 分类 + error log 行号/原文 + 摘要 hint — v1.18（Phase 67）
+- ✓ `init --interactive` 对话式配置向导 — v1.18（Phase 68）
+- ✓ `watch` 子命令（notify 监听 + 500ms 防抖 + Ctrl+C 摘要）— v1.18（Phase 69）
+- ✓ watch 增量处理（_watch_offsets 辅助表 + Seek + 跨重启恢复）— v1.18（Phase 70）
 
 ### Recently Validated in v1.17
 
@@ -166,7 +194,7 @@
 
 - Rust 项目，单线程流式处理，16MB BufWriter 写入
 - 依赖精简（无 reqwest/rustls/self_update 等重依赖，仅新增 indicatif）
-- 当前代码量：~8,833 行 Rust（src）+ 1,503 行（tests）
+- 当前代码量：~13,819 行 Rust（src + tests）
 - 性能基线：~5.2M records/sec（合成 CSV），~1.55M records/sec（1.1GB 真实文件）
 - 测试覆盖：780 个测试（lib + integration + jemalloc + bench），全部通过
 - assert_cmd / predicates 加入 dev-dependencies，e2e CLI 测试覆盖大幅提升
@@ -205,6 +233,10 @@
 | collector.rs pub(super) 可见性 | 限定在 cli/run 子模块内，不对外暴露 | ✓ Good (v1.16) |
 | parallel_collect 行数口径采用函数体（33 行）| cargo fmt 展开含参数行，函数体逻辑满足设计意图 | ✓ Good (v1.16) |
 | SHA256 digest 使用宿主机（amd64）平台 | cross-rs 在 amd64 主机运行，应取宿主 digest | ✓ Good (v1.16) |
+| watch 仅支持 SQLite 导出 | CSV 增量写入语义复杂（追加 vs 全量重写），延后 | ✓ Good (v1.18) |
+| _watch_offsets 用独立 rusqlite::Connection | 避免 SqliteExporter EXCLUSIVE 锁冲突 | ✓ Good (v1.18) |
+| handle_run 返回后才 save_offset | 避免 offset 在 exporter 持锁时写入 | ✓ Good (v1.18) |
+| watch Ctrl+C 退出码 0（vs run 的 130） | watch 内部处理 interrupted，与 run 不一致；已知 tech debt | ⚠ Revisit (v1.18) |
 
 ## Evolution
 
@@ -217,4 +249,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-06 — Phase 69 complete: watch 子命令已落地（notify 监听、HumanDuration 状态行、500ms 路径防抖、Ctrl+C 摘要）*
+*Last updated: 2026-06-06 — Milestone v1.19 started: watch 完善（CSV 支持、error log 追加写入、退出码修正）+ 文档对齐 + 测试覆盖率提升*

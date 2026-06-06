@@ -2,7 +2,7 @@
 
 ## Milestones
 
-- 🚧 **v1.18 用户体验全面升级** — Phases 67–70 (in progress)
+- ✅ **v1.18 用户体验全面升级** — Phases 67–70 (shipped 2026-06-06)
 - ✅ **v1.17 多文件并行提速** — Phases 64–66.1 (shipped 2026-06-04)
 - ✅ **v1.16.0 工程质量深化** — Phases 59–63 (shipped 2026-06-03)
 - ✅ **v1.15 工程质量全面提升** — Phases 55–58 (shipped 2026-06-02)
@@ -215,12 +215,14 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 
 
 <details>
-<summary>🚧 v1.18 用户体验全面升级 (Phases 67–70) — IN PROGRESS</summary>
+<summary>✅ v1.18 用户体验全面升级 (Phases 67–70) — SHIPPED 2026-06-06</summary>
 
 - [x] **Phase 67: 进度/摘要与诊断增强** — 多文件进度计数器、realtime records/sec+ETA、错误分组统计与 hint (PROG-01/02/03, DIAG-01/02/03) (completed 2026-06-05)
 - [x] **Phase 68: 交互式配置向导** — `init --interactive` 对话式向导，每步提示示例+默认值，生成格式与非交互式 init 完全一致 (INIT-01/02/03) (completed 2026-06-05)
 - [x] **Phase 69: Watch 模式核心框架** — `watch` 子命令 + notify crate 监听、新增文件触发处理、实时状态显示、Ctrl+C 优雅退出 (WATCH-01/02/05/06) (completed 2026-06-06)
-- [ ] **Phase 70: Watch 增量处理与集成测试** — 文件追加增量处理、SQLite 字节偏移去重、watch 路径全套集成测试 (WATCH-03/04)
+- [x] **Phase 70: Watch 增量处理与集成测试** — 文件追加增量处理、SQLite 字节偏移去重、watch 路径全套集成测试 (WATCH-03/04) (completed 2026-06-06)
+
+Full details: `.planning/milestones/v1.18-ROADMAP.md`
 
 </details>
 
@@ -829,8 +831,8 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 | 67. 进度/摘要与诊断增强 | 3/3 | Complete   | 2026-06-05 |
 | 68. 交互式配置向导 | 2/2 | Complete   | 2026-06-05 |
 | 69. Watch 模式核心框架 | 4/4 | Complete    | 2026-06-06 |
-| 70. Watch 增量处理与集成测试 | v1.18 | Not started | - |
+| 70. Watch 增量处理与集成测试 | v1.18 | Complete | 2026-06-06 |
 
 ---
 *Created: 2026-05-21 for milestone v1.10*
-*Updated: 2026-06-05 — v1.18 milestone (Phases 67–70) roadmap created*
+*Updated: 2026-06-06 — v1.18 milestone shipped (Phases 67–70)*

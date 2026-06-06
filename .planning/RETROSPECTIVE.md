@@ -4,6 +4,46 @@
 
 ---
 
+## Milestone: v1.18 — 用户体验全面升级
+
+**Shipped:** 2026-06-06
+**Phases:** 4 (67–70) | **Plans:** 12 | **Duration:** ~2 days
+
+### What Was Built
+
+- 进度条升级为 [N/M] 文件计数器 + ETA + records/sec（Phase 67，indicatif 模板扩展）
+- ErrorStats by_type HashMap + ParseErrorRecord（10k 上限）+ write_error_log + 摘要 hint（Phase 67）
+- `init --interactive` 对话式向导（prompt_line 泛型 IO，str::replace 模板替换，6 个 e2e 测试）（Phase 68）
+- `watch` 子命令：notify RecommendedWatcher + 500ms 路径防抖 + HumanDuration 状态行 + Ctrl+C 摘要（Phase 69，4 个 plans）
+- watch 增量处理：`_watch_offsets` SQLite 辅助表（独立 Connection），trigger_incremental Seek + NamedTempFile，4 个集成测试（Phase 70）
+
+### What Worked
+
+- **阶段拆分有效**：PROG/DIAG 合并为 Phase 67（同一输出管道层），INIT 独立（stdin 测试策略不同），watch 按框架/增量两阶段拆分——各阶段的测试边界和实现风险均互相独立
+- **独立 Connection 设计**：_watch_offsets 辅助表使用独立 rusqlite::Connection，彻底绕开 SqliteExporter EXCLUSIVE 锁冲突，无需修改 Exporter trait
+- **save_offset 时序决策**：handle_run 返回后才写 offset（per Pitfall 4），避免在 exporter 持锁期间写 offset 造成死锁
+- **4 个集成测试全通过（Phase 70）**：trigger_full_file + trigger_incremental + 重启恢复 + 无新字节跳过，覆盖 WATCH-03/04 完整场景
+
+### What Was Inefficient
+
+- **macOS FSEvents 限制导致 test_watch_triggers_on_new_log_file #[ignore]**：notify crate 在 cargo test piped stdin 环境下触发阻塞，e2e 级别只能用 #[ignore] 规避，需要 subprocess 方案才能真正覆盖
+- **REQUIREMENTS.md checkbox 延迟更新**：12 个需求实现后未及时勾选，需在里程碑关闭时统一修复
+- **watch Ctrl+C 退出码 0**：handle_watch 内部处理 interrupted=true 返回 Ok(()) 导致退出码 0，与 run 命令的 130 不一致，是设计时忽略的边界情况
+
+### Patterns Established
+
+- **watch 委托模式**：trigger_full_file / trigger_incremental 均委托 handle_run，用 tmp_cfg.sqllog.inputs 覆盖输入路径，无需重写处理逻辑
+- **record_offset_after_trigger 防御调用**：绕过 handle_watch 启动路径时，调用 ensure_offset_table 保证辅助表存在，不假设外部已初始化
+- **泛型 IO 注入（BufRead + Write）**：init 向导的 prompt_line 函数接受泛型 IO，在测试中注入 &[u8] stdin 和 Vec<u8> stdout，无需 PTY
+
+### Key Lessons
+
+- watch 类功能的集成测试用 trigger_* pub(crate) 函数直接调用，比 spawn_process + 等待文件系统事件更稳定、快速
+- 独立数据库连接（per-operation）优于共享连接池，当主流程持有 EXCLUSIVE 锁时不会造成死锁
+- macOS 下 notify 测试需要特殊处理（canonicalize 路径 + Modify(Data(Content)) 事件），不能假设 Create 事件一定优先触发
+
+---
+
 ## Milestone: v1.15 — 工程质量全面提升
 
 **Shipped:** 2026-06-02

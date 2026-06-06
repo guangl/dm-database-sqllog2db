@@ -1,5 +1,39 @@
 # Milestones: sqllog2db
 
+## v1.18 — 用户体验全面升级
+
+**Shipped:** 2026-06-06  
+**Phases:** 67–70 | **Plans:** 12 | **Commits:** 130  
+**Duration:** 2026-06-04 → 2026-06-06 (~2 days)  
+**Code:** ~13,819 lines Rust  
+**Tests:** ~880 total (376 lib + ~500 integration, 0 failed, 2 ignored)
+
+### Delivered
+
+全面改善用户交互体验：watch 实时监控目录（增量 SQLite 插入，字节偏移持久化跨重启恢复）、交互式配置向导（`init --interactive` 对话式引导，支持 CSV/SQLite 导出格式选择）、运行时错误诊断（parse error 按 ErrorKind 分类，error log 含行号与前 120 字符原文，摘要触发 encoding/field hint）、进度显示升级（[N/M] 文件计数器 + ETA + records/sec + 过滤率统计）。
+
+### Key Accomplishments
+
+1. 进度条升级为 `[N/M]` 文件计数器 + records/sec 吞吐显示 + indicatif 自动渲染 ETA（PROG-01/02）
+2. ErrorStats 扩展：by_type HashMap + ParseErrorRecord 结构体 + 10k 上限收集；摘要按类型分组输出 + encoding/field hint（PROG-03/DIAG-01/02/03）
+3. `init --interactive` 对话式配置向导：prompt_line 泛型 IO、str::replace 模板替换、6 个 e2e CLI 测试覆盖 INIT-01/02/03（含 SC4 validate 通过）
+4. `watch` 子命令：notify RecommendedWatcher + mpsc channel + 500ms 路径防抖 + HumanDuration 动态状态行 + Ctrl+C 最终摘要（WATCH-01/02/05/06）
+5. watch 增量处理：`_watch_offsets` SQLite 辅助表（独立 Connection），trigger_incremental Seek + NamedTempFile，跨重启 load_offsets 恢复，4 个集成测试全通过（WATCH-03/04）
+
+### Known Deferred Items
+
+- watch Ctrl+C 退出码 0 vs run 命令 130（非阻塞行为不一致）
+- write_error_log 覆盖写（watch 长时间运行只保留最近一次触发的错误）
+- VALIDATION.md 文件为草稿状态（Phases 67/68/69）；70-VALIDATION.md 缺失
+
+### Archives
+
+- `.planning/milestones/v1.18-ROADMAP.md` — 完整 Phase 细节
+- `.planning/milestones/v1.18-REQUIREMENTS.md` — 需求归档（15/15 complete）
+- `.planning/v1.18-MILESTONE-AUDIT.md` — 审计报告（tech_debt，无阻塞缺口）
+
+---
+
 ## v1.17 — 多文件并行提速
 
 **Shipped:** 2026-06-04  
