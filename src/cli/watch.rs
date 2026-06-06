@@ -308,6 +308,10 @@ fn process_log_path(
                 Duration::from_secs(0),
             ));
         }
+        Err(crate::error::Error::Interrupted) => {
+            // 正常的优雅退出——重新设置 flag 确保外层循环在下次检查时退出。
+            interrupted.store(true, std::sync::atomic::Ordering::Release);
+        }
         Err(e) => warn!("watch trigger error: {e}"),
     }
 }
