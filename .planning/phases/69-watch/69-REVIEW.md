@@ -2,141 +2,135 @@
 phase: 69-watch
 reviewed: 2026-06-06T00:00:00Z
 depth: standard
-files_reviewed: 8
+files_reviewed: 7
 files_reviewed_list:
-  - Cargo.toml
-  - src/cli/run/mod.rs
-  - src/error.rs
-  - src/cli/mod.rs
-  - src/cli/opts.rs
   - src/cli/watch.rs
+  - src/error.rs
+  - src/cli/run/mod.rs
+  - src/cli/opts.rs
+  - src/cli/mod.rs
   - src/main.rs
   - tests/integration.rs
 findings:
-  critical: 1
+  critical: 0
   warning: 3
   info: 2
-  total: 6
+  total: 5
 status: issues_found
 ---
 
 # Phase 69: Code Review Report
 
-**Reviewed:** 2026-06-06
+**Reviewed:** 2026-06-06T00:00:00Z
 **Depth:** standard
-**Files Reviewed:** 8
+**Files Reviewed:** 7
 **Status:** issues_found
 
 ## Summary
 
-This phase added the `watch` subcommand, wiring a `notify`-based directory watcher through the existing `handle_run` pipeline. The overall structure is sound — the event loop is clean, canonicalization for macOS is correct, and the `ErrorStats.records_exported` field is properly accumulated in `ErrorStats::merge`. However one correctness bug was found in the core event handling path (duplicate processing on macOS), two warning-level design issues exist in error handling and testing, and two minor code quality items round out the findings.
+Phase 69 adds the `watch` subcommand: a `notify`-based directory watcher that triggers `handle_run` on new or modified `.log` files. The core architecture is sound. Debounce is correctly implemented via `should_trigger` with a 500ms `HashMap<PathBuf, Instant>` per-path window, preventing duplicate processing when macOS FSEvents fires both `Create` and `Modify` for the same file. The `interrupted` `AtomicBool` is properly shared and checked. `ErrorStats::merge` accumulates `records_exported` correctly across watch triggers. No security vulnerabilities or data-loss bugs found.
 
-## Critical Issues
+Three issues degrade operator experience or code quality: a false-positive truncation footer in the error log writer, a misleading log warn on normal user interruption, and a multi-directory display regression in the active status line. Two informational items are noted around dead code and test coverage gaps.
 
-### CR-01: macOS FSEvents double-processing — same file processed twice, duplicating CSV/SQLite rows
+## Warnings
 
-**File:** `src/cli/watch.rs:164-168`
+### WR-01: Error-log truncation footer fires for exactly 10,000 parse errors — false positive
 
-**Issue:** `handle_event` accepts both `EventKind::Create(_)` and `EventKind::Modify(ModifyKind::Data(DataChange::Content))` as relevant events. On macOS with FSEvents, when a new `.log` file is written, the OS commonly fires **both** events in rapid succession for the same file — first `Create(File)` (file may be empty at this point) and shortly after `Modify(Data(Content))` (data is flushed). Because neither event handler deduplicates on path, both will independently call `handle_run` with the same file, exporting its records twice. This produces duplicate rows in the CSV/SQLite output and double-counts `total_stats.records_exported`.
+**File:** `src/cli/run/mod.rs:441`
 
-The comment on line 162 acknowledges this sequence ("macOS FSEvents 有时先发 Create(File)… 再发 Modify(Data(Content))") but does not guard against double-processing — it reads as intent to handle both as a fallback, yet there is no mechanism to prevent both from firing on a single file creation.
-
-**Fix:** Track recently-processed paths in a `HashMap<PathBuf, Instant>` or `HashSet<PathBuf>` with a short debounce window (e.g., 500 ms). Skip any path that was processed within the window. Alternatively, emit only on `Modify(Data(Content))` and drop the `Create` branch (if testing shows macOS always fires Modify after Create), or gate the Create path on file size > 0.
-
+**Issue:** The truncation check is:
 ```rust
-// In handle_event, add a recent-seen deduplication set:
-fn handle_event(
-    event: &notify::Event,
-    ...
-    seen: &mut HashMap<PathBuf, Instant>,   // new parameter
-) {
-    // ...
-    for path in &event.paths {
-        if path.extension().is_none_or(|ext| ext != "log") {
-            continue;
-        }
-        let now = Instant::now();
-        if let Some(&last) = seen.get(path) {
-            if now.duration_since(last) < Duration::from_millis(500) {
-                continue; // debounce: skip duplicate event within window
-            }
-        }
-        seen.insert(path.clone(), now);
-        // ... rest of processing
-    }
-}
+let truncated = stats.parse_error_records.len() == 10_000;
+```
+This assumes the vector length is 10,000 **only** when truncation occurred. But if a file produces **exactly** 10,000 parse errors (total matches the cap), the vector fills to exactly 10,000 entries with no truncation, and this condition is still `true`. The error log will incorrectly append:
+```
+[truncated; showing first 10000 of 10000 total parse errors]
+```
+This misleads operators into thinking records were silently dropped when they were not.
+
+**Fix:**
+```rust
+// src/cli/run/mod.rs:441 — compare counts instead of checking exact equality
+let truncated = stats.parse_errors > stats.parse_error_records.len();
 ```
 
 ---
 
-## Warnings
+### WR-02: `Error::Interrupted` from `handle_run` logged as "watch trigger error" — misleading
 
-### WR-01: `Err(Error::Interrupted)` from `handle_run` silently swallowed as a warning
+**File:** `src/cli/watch.rs:304`
 
-**File:** `src/cli/watch.rs:191-193`
+**Issue:** When the user presses Ctrl+C during an active `handle_run` invocation, `handle_run` returns `Err(Error::Interrupted)`. The catch-all arm in `process_log_path` logs it as:
+```
+WARN watch trigger error: Interrupted by user
+```
+This looks like a runtime failure in the application logs. The watch session terminates correctly (the AtomicBool is checked at the top of the event loop after `handle_event` returns), but operators reviewing log files will see a misleading "error" for normal graceful shutdown.
 
-**Issue:** When Ctrl+C is pressed while a `handle_run` is in progress, `handle_run` returns `Err(Error::Interrupted)`. The `Err(e)` arm in `handle_event` treats this identically to any parse/export error: it logs `warn!("watch trigger error: Interrupted by user")`. This emits a misleading warning message into the log — "watch trigger error" — making normal graceful shutdown look like an error condition to operators reading log files. The interrupt path ultimately works correctly because the outer loop checks `interrupted.load()` after `handle_event` returns, but the spurious warning will confuse users.
-
-**Fix:** Distinguish `Error::Interrupted` in the error arm and log nothing (or log at debug level):
-
+**Fix:**
 ```rust
+// src/cli/watch.rs:303-305
 Err(crate::error::Error::Interrupted) => {
     // Normal shutdown; outer loop will break on interrupted.load()
 }
-Err(e) => {
-    warn!("watch trigger error: {e}");
-}
+Err(e) => warn!("watch trigger error: {e}"),
 ```
 
-### WR-02: `let _ = verbose` is dead code / misleading suppressor
+---
 
-**File:** `src/cli/watch.rs:81`
+### WR-03: Active watch status line shows only the first watched directory after the first trigger
 
-**Issue:** `verbose` is already used at line 59 (passed to `handle_event`, which passes it to `handle_run`). The `let _ = verbose` at line 81 is therefore redundant — it suppresses a compiler warning that should no longer exist. Dead suppressors signal stale cleanup and will cause clippy to emit `unused_variables` or related lint noise, potentially masking a real regression where `verbose` is removed from a call site and the suppressor masks that omission.
+**File:** `src/cli/watch.rs:349-357`
 
-**Fix:** Remove line 81 entirely:
-
+**Issue:** `refresh_active_status` builds the display string with only `watch_dirs.first()`:
 ```rust
-// Delete: let _ = verbose;
+let dir_str = watch_dirs
+    .first()
+    .map(|p| p.display().to_string())
+    .unwrap_or_default();
 ```
+The initial spinner (set in `build_progress_bar`) correctly uses `format_paths_display(watch_dirs)` which shows all directories (or "N directories" for > 3). After the first successful trigger the status bar silently degrades to showing only one path, even when multiple directories are being watched. Users who configure multiple `inputs` entries will be confused.
 
-### WR-03: W4 integration test relies on timing without a hard bound — flaky on slow CI
-
-**File:** `tests/integration.rs:2942-2966`
-
-**Issue:** `test_watch_ignores_non_log_files` spawns a thread that writes a `.txt` file after 300 ms and then sets `interrupted` after 700 ms. The assertion is that the CSV file must not exist. This test depends on two timing assumptions: (a) the watcher starts and stabilizes within 300 ms, and (b) the event loop processes the file write, determines it is not a `.log` file, and completes before 700 ms. On slow CI agents (Windows runners, resource-constrained containers) the 700 ms window can be insufficient. A false negative is possible but not a false positive — if the test fails intermittently, it passes with `#[ignore]`. However the lack of a hard timeout means the test can also hang if the `handle_watch` call blocks for any reason.
-
-**Fix:** Add `#[ignore = "timing-sensitive; use --include-ignored for smoke run"]` to document the known limitation, or restructure by injecting a ready-channel from the watcher so the test only waits as long as needed. If keeping timing-based: lower the first sleep and increase the interrupt sleep to give more headroom, and document the CI assumption explicitly.
+**Fix:**
+```rust
+// src/cli/watch.rs:351-352 — reuse format_paths_display instead of first()
+let dir_str = format_paths_display(watch_dirs);
+pb.set_message(render_active_status(
+    &dir_str,
+    trigger_count,
+    rows,
+    triggered_at.elapsed(),
+));
+```
+`format_paths_display` is already defined in the same module at line 220.
 
 ---
 
 ## Info
 
-### IN-01: `trigger_count` increments even when `handle_run` processes an empty file (zero records)
+### IN-01: Dead `let _ = verbose;` statement at end of `handle_watch`
 
-**File:** `src/cli/watch.rs:181`
+**File:** `src/cli/watch.rs:61`
 
-**Issue:** `trigger_count` is incremented unconditionally on any `Ok(file_stats)` result, including the case where the file is valid but contains zero exportable records. On macOS, `Create(File)` is fired when the file descriptor is created, before any data is written. At that moment the file may be empty; `handle_run` succeeds with zero records, and `trigger_count` is bumped. This makes the status line show inflated trigger counts ("triggers: 2" when only one meaningful file was written). This is also evidence of the CR-01 issue — if both events fire, the count double-increments.
+**Issue:** `verbose` is consumed by `run_watch_loop` at line 46 (passed through the call chain down to `handle_run`). The `let _ = verbose;` on line 61 is therefore dead code — `verbose` has already been used before this point. This pattern typically appears to suppress an "unused variable" compiler warning, but since the variable is actually used, the statement is redundant and confuses readers into thinking `verbose` might not be threaded through.
 
-**Fix:** Conditionally increment only when `file_stats.records_exported > 0`:
-
-```rust
-if file_stats.records_exported > 0 {
-    *trigger_count += 1;
-}
-total_stats.merge(&file_stats);
-```
-
-### IN-02: W3 (`test_watch_triggers_on_new_log_file`) permanently `#[ignore]`-ed without a tracking issue
-
-**File:** `tests/integration.rs:2911`
-
-**Issue:** The test is marked `#[ignore = "macOS FSEvents + test stdin-pipe block; fix in Phase 70 smoke test"]`. This is the most important watch behavior test (WATCH-02/05 — verifying that a new `.log` file actually triggers processing), and it is completely skipped in `cargo test`. The comment references "Phase 70" as the fix location, but without a linked issue or tracking mechanism, this test can remain permanently ignored. The consequence is that the core watch-to-process flow has no automated coverage in the standard test suite.
-
-**Fix:** At minimum, add a TODO comment with an issue number. Preferably, redesign the test to avoid the stdin-pipe interaction problem by constructing the config with `overwrite: true` and using a dedicated temp dir that is cleanly separate from the test harness's stdin context. If the root cause is specifically cargo test's stdin pipe mode triggering `NoFilesFound` instead of the watch loop, the fix is to ensure the CSV exporter config is set with `append: true` or the file is pre-created to avoid the preflight stdin check.
+**Fix:** Remove line 61. If the compiler emits a warning after removal, that would signal a real regression where `verbose` is no longer being passed to the run path.
 
 ---
 
-_Reviewed: 2026-06-06_
+### IN-02: `test_watch_triggers_on_new_log_file` permanently `#[ignore]`'d — no tracking mechanism
+
+**File:** `tests/integration.rs:2911`
+
+**Issue:**
+```rust
+#[ignore = "macOS FSEvents + test stdin-pipe block; fix in Phase 70 smoke test"]
+```
+This is the most important watch behavioral test (WATCH-02/05: verifying that a new `.log` file triggers processing and produces output). It is completely skipped in `cargo test`. The "Phase 70" reference has no linked issue number, meaning it can remain permanently ignored. The existing active watch tests (W2: pre-interrupted exit, W4: non-.log file ignored) only cover degenerate paths and do not prove the happy path works end-to-end.
+
+**Fix:** File a tracking issue with an issue number and update the ignore message. Consider an alternative test design: construct the config with a pre-existing CSV exporter output path that has `append: true`, and use `handle_watch` directly (not via subprocess) to avoid the stdin-pipe interaction. If the root cause is cargo test injecting a non-tty stdin that triggers the stdin-pipe fallback in `handle_run`, a minimal fix is to set `log_files` from a non-empty list (guaranteed by a pre-written `.log` file) so `resolve_input_files` never reaches the stdin path.
+
+---
+
+_Reviewed: 2026-06-06T00:00:00Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
