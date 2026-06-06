@@ -130,6 +130,7 @@ pub fn handle_run(
         files
     };
     let total_records: usize = processed_files.iter().map(|(_, c)| *c).sum();
+    run_stats.records_exported = total_records;
     if let Some(pb) = &pb {
         pb.finish_and_clear();
     }
