@@ -218,7 +218,7 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 <summary>🚧 v1.18 用户体验全面升级 (Phases 67–70) — IN PROGRESS</summary>
 
 - [x] **Phase 67: 进度/摘要与诊断增强** — 多文件进度计数器、realtime records/sec+ETA、错误分组统计与 hint (PROG-01/02/03, DIAG-01/02/03) (completed 2026-06-05)
-- [ ] **Phase 68: 交互式配置向导** — `init --interactive` 对话式向导，每步提示示例+默认值，生成格式与非交互式 init 完全一致 (INIT-01/02/03)
+- [x] **Phase 68: 交互式配置向导** — `init --interactive` 对话式向导，每步提示示例+默认值，生成格式与非交互式 init 完全一致 (INIT-01/02/03) (completed 2026-06-05)
 - [ ] **Phase 69: Watch 模式核心框架** — `watch` 子命令 + notify crate 监听、新增文件触发处理、实时状态显示、Ctrl+C 优雅退出 (WATCH-01/02/05/06)
 - [ ] **Phase 70: Watch 增量处理与集成测试** — 文件追加增量处理、SQLite 字节偏移去重、watch 路径全套集成测试 (WATCH-03/04)
 
@@ -658,8 +658,8 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
   3. 向导完成后生成的 config.toml 与 `sqllog2db init -o config.toml` 格式完全一致，包含相同的行内注释
   4. `sqllog2db validate -c <向导生成的文件>` 通过验证，退出码为 0
 **Plans**: 2 plans
-- [ ] 68-01-PLAN.md — init.rs 新增 WizardAnswers/ExporterChoice/run_wizard + apply_wizard_answers_to_template + write_config_file 提取 + 12+ 单元测试覆盖 INIT-02/INIT-03 核心
-- [ ] 68-02-PLAN.md — opts.rs interactive bool flag + main.rs 分发分支 + handle_init_interactive + 6 个 e2e CLI 测试覆盖 INIT-01/INIT-02/INIT-03（SC4 validate 通过）
+- [x] 68-01-PLAN.md — init.rs 新增 WizardAnswers/ExporterChoice/run_wizard + apply_wizard_answers_to_template + write_config_file 提取 + 12+ 单元测试覆盖 INIT-02/INIT-03 核心
+- [x] 68-02-PLAN.md — opts.rs interactive bool flag + main.rs 分发分支 + handle_init_interactive + 6 个 e2e CLI 测试覆盖 INIT-01/INIT-02/INIT-03（SC4 validate 通过）
 **UI hint**: yes
 
 ### Phase 69: Watch 模式核心框架
@@ -671,7 +671,10 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
   2. 向监听目录新增 `.log` 文件后，工具在 2 秒内自动触发处理并更新累计已处理行数
   3. 状态行实时刷新：监听路径、上次触发时间戳、累计已处理行数，不干扰错误输出
   4. 按下 Ctrl+C 后程序优雅退出，打印最终摘要（总触发次数、累计处理行数、运行时长），退出码 0
-**Plans**: TBD
+**Plans**: 3 plans
+- [ ] 69-01-PLAN.md — Cargo.toml 新增 notify = "6" + ErrorStats 新增 records_exported 字段与 merge 累计 + handle_run 赋值 + Commands::Watch variant + cli/mod.rs pub mod watch + src/cli/watch.rs 签名骨架（含 notify 包合法性 human-verify checkpoint，WATCH-01）
+- [ ] 69-02-PLAN.md — handle_watch 函数体完整实现（notify RecommendedWatcher + mpsc channel + ProgressBar spinner + watch loop 100ms 轮询 + EventKind::Create(_) + .log 过滤 + tmp_cfg 委托 handle_run + ErrorStats 累计 + Ctrl+C 摘要）+ main.rs Watch arm 接入 + needs_simple_logging 排除（WATCH-01/02/05/06）
+- [ ] 69-03-PLAN.md — tests/integration.rs 新增 4 个 watch e2e 测试（help/interrupted/触发/非log忽略）+ 全套 cargo test/clippy/fmt 质量门禁（WATCH-02/05/06）
 **UI hint**: yes
 
 ### Phase 70: Watch 增量处理与集成测试
@@ -820,7 +823,7 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 | 66.1. 修复并行集成测试覆盖 (INSERTED) | v1.17 | Complete | 2026-06-04 |
 
 | 67. 进度/摘要与诊断增强 | 3/3 | Complete   | 2026-06-05 |
-| 68. 交互式配置向导 | v1.18 | Not started | - |
+| 68. 交互式配置向导 | 2/2 | Complete   | 2026-06-05 |
 | 69. Watch 模式核心框架 | v1.18 | Not started | - |
 | 70. Watch 增量处理与集成测试 | v1.18 | Not started | - |
 
