@@ -425,12 +425,27 @@ fn resolve_incremental_offset(
         }
         return None;
     };
-    // D-02: 无新字节快速跳过
-    if new_size <= start_offset {
-        None
-    } else {
-        Some(start_offset)
+    if new_size < start_offset {
+        // 文件缩小——日志轮转（copytruncate）。重置 offset 从头处理，避免读取错误偏移内容。
+        warn!(
+            "watch: file shrank ({} → {} bytes), resetting offset for {}",
+            start_offset,
+            new_size,
+            canonical_path.display()
+        );
+        state.file_offsets.insert(canonical_path.to_path_buf(), 0);
+        if let Some(ref database_url) = state.sqlite_db_url {
+            offsets::save_offset(database_url, canonical_path, 0);
+        }
+        return Some(0);
     }
+
+    // D-02: 无新字节快速跳过
+    if new_size == start_offset {
+        return None;
+    }
+
+    Some(start_offset)
 }
 
 /// 从文件 `start_offset` 处读取剩余字节，写入 `NamedTempFile` 并返回（per D-01）。
