@@ -154,7 +154,7 @@ fn run_parallel_tasks(
             .par_iter()
             .enumerate()
             .map(|(idx, file)| {
-                if interrupted.load(Ordering::Relaxed) {
+                if interrupted.load(Ordering::Acquire) {
                     return Ok(None);
                 }
                 verbose.then(|| eprintln!("Processing: {}", file.display()));

@@ -170,7 +170,7 @@ fn run() -> Result<Option<(ErrorStats, bool)>> {
             let interrupted = Arc::new(AtomicBool::new(false));
             let interrupted_flag = Arc::clone(&interrupted);
             ctrlc::set_handler(move || {
-                interrupted_flag.store(true, Ordering::Relaxed);
+                interrupted_flag.store(true, Ordering::Release);
             })
             .ok();
 
@@ -215,7 +215,7 @@ fn run() -> Result<Option<(ErrorStats, bool)>> {
             let interrupted = Arc::new(AtomicBool::new(false));
             let interrupted_flag = Arc::clone(&interrupted);
             ctrlc::set_handler(move || {
-                interrupted_flag.store(true, Ordering::Relaxed);
+                interrupted_flag.store(true, Ordering::Release);
             })
             .ok();
 

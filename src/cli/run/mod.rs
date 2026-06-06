@@ -145,7 +145,7 @@ pub fn handle_run(
         &run_stats,
     );
     write_error_log(final_cfg, &run_stats);
-    if interrupted.load(Ordering::Relaxed) {
+    if interrupted.load(Ordering::Acquire) {
         return Err(Error::Interrupted);
     }
     Ok(run_stats)
@@ -304,7 +304,7 @@ fn run_file_loop(
     let mut per_file_counts: Vec<(PathBuf, usize)> = Vec::with_capacity(log_files.len());
     let mut run_stats = ErrorStats::default();
     for (idx, log_file) in log_files.iter().enumerate() {
-        if interrupted.load(Ordering::Relaxed) {
+        if interrupted.load(Ordering::Acquire) {
             break;
         }
         verbose.then(|| eprintln!("Processing: {}", log_file.display()));

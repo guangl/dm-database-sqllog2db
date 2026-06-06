@@ -141,7 +141,7 @@ fn run_watch_loop(
             ),
             Err(RecvTimeoutError::Disconnected) => break,
         }
-        if interrupted.load(Ordering::Relaxed) {
+        if interrupted.load(Ordering::Acquire) {
             break;
         }
     }

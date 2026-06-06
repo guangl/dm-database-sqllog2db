@@ -178,7 +178,7 @@ fn tick_progress(
             };
             pb.set_message(format!("{file_name} | {speed_label}"));
         }
-        if interrupted.load(Ordering::Relaxed) {
+        if interrupted.load(Ordering::Acquire) {
             return true;
         }
     }
@@ -226,7 +226,7 @@ pub(super) fn process_log_file(
                     // 过滤掉的记录也以相同节奏（每 1024 条）检查中断，与并行路径保持一致
                     ExportAction::Continue if !passes
                         && total_processed.trailing_zeros() >= 10
-                        && interrupted.load(Ordering::Relaxed) => break 'outer,
+                        && interrupted.load(Ordering::Acquire) => break 'outer,
                     ExportAction::Continue => {}
                 }
             }

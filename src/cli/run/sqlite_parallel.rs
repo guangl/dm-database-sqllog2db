@@ -28,7 +28,7 @@ fn run_parallel_parse(
         log_files
             .par_iter()
             .map(|file| {
-                if interrupted.load(Ordering::Relaxed) {
+                if interrupted.load(Ordering::Acquire) {
                     return Ok(None);
                 }
                 let (rows, file_stats) = super::collector::collect_log_file(

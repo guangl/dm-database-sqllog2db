@@ -39,7 +39,7 @@ pub(super) fn collect_log_file(
     let mut file_stats = ErrorStats::default();
 
     for result in parser.iter() {
-        if interrupted.load(Ordering::Relaxed) {
+        if interrupted.load(Ordering::Acquire) {
             break;
         }
         let record = match result {
