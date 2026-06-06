@@ -672,7 +672,7 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
   3. 状态行实时刷新：监听路径、上次触发时间戳、累计已处理行数，不干扰错误输出
   4. 按下 Ctrl+C 后程序优雅退出，打印最终摘要（总触发次数、累计处理行数、运行时长），退出码 0
 **Plans**: 3 plans
-- [ ] 69-01-PLAN.md — Cargo.toml 新增 notify = "6" + ErrorStats 新增 records_exported 字段与 merge 累计 + handle_run 赋值 + Commands::Watch variant + cli/mod.rs pub mod watch + src/cli/watch.rs 签名骨架（含 notify 包合法性 human-verify checkpoint，WATCH-01）
+- [x] 69-01-PLAN.md — Cargo.toml 新增 notify = "6" + ErrorStats 新增 records_exported 字段与 merge 累计 + handle_run 赋值 + Commands::Watch variant + cli/mod.rs pub mod watch + src/cli/watch.rs 签名骨架（含 notify 包合法性 human-verify checkpoint，WATCH-01）
 - [ ] 69-02-PLAN.md — handle_watch 函数体完整实现（notify RecommendedWatcher + mpsc channel + ProgressBar spinner + watch loop 100ms 轮询 + EventKind::Create(_) + .log 过滤 + tmp_cfg 委托 handle_run + ErrorStats 累计 + Ctrl+C 摘要）+ main.rs Watch arm 接入 + needs_simple_logging 排除（WATCH-01/02/05/06）
 - [ ] 69-03-PLAN.md — tests/integration.rs 新增 4 个 watch e2e 测试（help/interrupted/触发/非log忽略）+ 全套 cargo test/clippy/fmt 质量门禁（WATCH-02/05/06）
 **UI hint**: yes
@@ -824,7 +824,7 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 
 | 67. 进度/摘要与诊断增强 | 3/3 | Complete   | 2026-06-05 |
 | 68. 交互式配置向导 | 2/2 | Complete   | 2026-06-05 |
-| 69. Watch 模式核心框架 | v1.18 | Not started | - |
+| 69. Watch 模式核心框架 | 1/3 | In Progress|  |
 | 70. Watch 增量处理与集成测试 | v1.18 | Not started | - |
 
 ---
