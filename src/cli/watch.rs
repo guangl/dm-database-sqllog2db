@@ -182,6 +182,7 @@ fn build_progress_bar(watch_dirs: &[PathBuf]) -> ProgressBar {
 #[must_use]
 pub fn collect_watch_dirs(inputs: &[String]) -> Vec<PathBuf> {
     let mut dirs: Vec<PathBuf> = Vec::new();
+    let mut seen: std::collections::HashSet<PathBuf> = std::collections::HashSet::new();
     for input_str in inputs {
         let is_glob = input_str.contains('*') || input_str.contains('?') || input_str.contains('[');
         if is_glob {
@@ -189,7 +190,7 @@ pub fn collect_watch_dirs(inputs: &[String]) -> Vec<PathBuf> {
                 let dir = ancestor
                     .canonicalize()
                     .unwrap_or_else(|_| ancestor.to_path_buf());
-                if !dirs.contains(&dir) {
+                if seen.insert(dir.clone()) {
                     dirs.push(dir);
                 }
             }
@@ -200,13 +201,13 @@ pub fn collect_watch_dirs(inputs: &[String]) -> Vec<PathBuf> {
                     let dir = parent
                         .canonicalize()
                         .unwrap_or_else(|_| parent.to_path_buf());
-                    if !dirs.contains(&dir) {
+                    if seen.insert(dir.clone()) {
                         dirs.push(dir);
                     }
                 }
             } else if path.is_dir() {
                 let dir = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-                if !dirs.contains(&dir) {
+                if seen.insert(dir.clone()) {
                     dirs.push(dir);
                 }
             }
