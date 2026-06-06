@@ -283,6 +283,13 @@ fn process_log_path(
     last_trigger_at: &mut Option<Instant>,
     pb: &ProgressBar,
 ) {
+    if !path.exists() {
+        warn!(
+            "watch: triggered path no longer exists, skipping: {}",
+            path.display()
+        );
+        return;
+    }
     let mut tmp_cfg = cfg.clone();
     tmp_cfg.sqllog.inputs = vec![path.to_string_lossy().into_owned()];
     match crate::cli::run::handle_run(&tmp_cfg, quiet, verbose, interrupted, None) {

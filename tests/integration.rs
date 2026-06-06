@@ -2906,9 +2906,10 @@ mod watch_tests {
     }
 
     /// W3: 新 .log 文件出现时触发 `handle_run`，CSV 输出行数 > header（WATCH-02/05）。
-    /// macOS `FSEvents` + cargo test `stdin`-pipe 下阻塞，需专项 smoke test 修复。
+    /// macOS `FSEvents` 在 cargo test 进程中对临时目录的事件不稳定（coalescence 延迟 > 8s），
+    /// stdin-pipe hang 已由 CR-01 修复，但 `FSEvents` 事件可靠性需 smoke test 环境验证。
     #[test]
-    #[ignore = "macOS FSEvents + test stdin-pipe block; fix in Phase 70 smoke test"]
+    #[ignore = "macOS FSEvents coalescing in cargo test env; smoke test required for reliable verification"]
     fn test_watch_triggers_on_new_log_file() {
         let dir = tempfile::TempDir::new().unwrap();
         let log_dir = dir.path().join("logs");
@@ -2919,9 +2920,17 @@ mod watch_tests {
         let interrupted_clone = Arc::clone(&interrupted);
         let log_dir_clone = log_dir.clone();
         std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_millis(300));
+            std::thread::sleep(Duration::from_millis(500));
             write_minimal_log(&log_dir_clone.join("new_file.log"));
-            std::thread::sleep(Duration::from_millis(1500));
+            // Poll until CSV appears or 8 s elapses, then signal done.
+            let deadline = std::time::Instant::now() + Duration::from_secs(8);
+            let csv_path = log_dir_clone.parent().unwrap().join("out.csv");
+            while std::time::Instant::now() < deadline {
+                if csv_path.exists() {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            }
             interrupted_clone.store(true, Ordering::Relaxed);
         });
         handle_watch(&cfg, true, false, &interrupted).unwrap();
