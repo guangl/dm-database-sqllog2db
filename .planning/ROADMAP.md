@@ -2,6 +2,7 @@
 
 ## Milestones
 
+- 🔄 **v1.19 watch完善与文档对齐** — Phases 71–73 (in progress)
 - ✅ **v1.18 用户体验全面升级** — Phases 67–70 (shipped 2026-06-06)
 - ✅ **v1.17 多文件并行提速** — Phases 64–66.1 (shipped 2026-06-04)
 - ✅ **v1.16.0 工程质量深化** — Phases 59–63 (shipped 2026-06-03)
@@ -225,6 +226,14 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 Full details: `.planning/milestones/v1.18-ROADMAP.md`
 
 </details>
+
+---
+
+**v1.19 watch完善与文档对齐 (Phases 71–73) — IN PROGRESS**
+
+- [ ] **Phase 71: watch 功能完善** — CSV watch 支持、error log 追加模式、Ctrl+C 退出码 130 (WATCH-07/08/09)
+- [ ] **Phase 72: 测试覆盖率与 FSEvents** — watch 测试补充、92%+ 行覆盖率、FSEvents #[ignore] 落地方案 (QUAL-02/03)
+- [ ] **Phase 73: 文档与验证对齐** — VALIDATION.md 补全、README watch/init/进度选项更新、--help 完善 (QUAL-01, DOC-04, DOC-05)
 
 ## Phase Details
 
@@ -693,6 +702,41 @@ Full details: `.planning/milestones/v1.18-ROADMAP.md`
 - [ ] 70-02-PLAN.md — Wave 1：WatchLoopState 扩展 file_offsets/sqlite_db_url + handle_watch 启动加载 offsets + handle_event 按 EventKind 路由 + trigger_full_file/trigger_incremental（Seek+NamedTempFile，强制 sqlite.append=true）+ 3 个新单元测试（WATCH-03/04）
 - [ ] 70-03-PLAN.md — Wave 1：新建 tests/watch_incremental.rs 集成测试（WATCH-03 追加 5 行后 SQLite count=N+M / WATCH-04 重启 offset 恢复后 count=N+M / D-02 无新字节跳过）+ 提升 trigger_* 与 WatchLoopState 可见性为 pub
 
+---
+
+### Phase 71: watch 功能完善
+**Goal**: watch 子命令功能完整：支持 CSV 导出格式增量追加、error log 以追加模式写入不丢失历史错误、Ctrl+C 退出码修正为 130
+**Depends on**: Phase 70
+**Requirements**: WATCH-07, WATCH-08, WATCH-09
+**Success Criteria** (what must be TRUE):
+  1. config.toml 配置 CSV exporter 时，`watch` 子命令可正常启动并将新增记录增量追加到 CSV 文件，多次触发后文件内容为所有触发的累计记录
+  2. watch 长时间运行过程中产生的 parse error 均追加写入 error log，重新触发不覆盖前次错误，error log 包含所有历史触发的错误记录
+  3. 向 watch 进程发送 SIGINT（Ctrl+C）后，进程退出码为 130（与 `run` 子命令 Ctrl+C 行为一致）
+  4. `cargo clippy --all-targets -- -D warnings` + `cargo test` 全部通过，无性能退化
+**Plans**: TBD
+
+### Phase 72: 测试覆盖率与 FSEvents
+**Goal**: watch 功能测试补全，整体行覆盖率达到 92%+，macOS FSEvents #[ignore] 测试有明确的落地方案（跨平台条件编译或 mock 解决）
+**Depends on**: Phase 71
+**Requirements**: QUAL-02, QUAL-03
+**Success Criteria** (what must be TRUE):
+  1. `cargo llvm-cov` 报告整体行覆盖率 ≥ 92%，watch 相关模块（src/cli/watch/）行覆盖率 ≥ 80%
+  2. macOS FSEvents 相关 `#[ignore]` 测试经过调研后，采用以下方案之一：(a) `#[cfg(not(target_os = "macos"))]` 条件编译跳过，(b) mock 文件系统事件注入，或 (c) 文档化说明为已知平台限制并保留 `#[ignore]`——方案选择有书面依据
+  3. 新增 watch 集成测试覆盖 CSV watch 追加（WATCH-07）、error log 追加（WATCH-08）、退出码 130（WATCH-09）三个新场景
+  4. `cargo test` 全部通过（含所有非 ignore 测试），`cargo clippy --all-targets -- -D warnings` 通过
+**Plans**: TBD
+
+### Phase 73: 文档与验证对齐
+**Goal**: 项目文档与 v1.18/v1.19 实际状态完全对齐——VALIDATION.md 补全为正式文件，README 覆盖 watch/init --interactive/进度选项，各子命令 --help 信息完善
+**Depends on**: Phase 72
+**Requirements**: QUAL-01, DOC-04, DOC-05
+**Success Criteria** (what must be TRUE):
+  1. Phase 67/68/69 的 VALIDATION.md 从草稿状态升级为正式验证文件（包含实际验证结果），Phase 70 的 VALIDATION.md 新建完成
+  2. README.md 包含 `watch` 子命令用法示例（启动、停止、CSV/SQLite 配置差异），`init --interactive` 的操作说明，以及 `--quiet`/`--verbose` 进度选项说明
+  3. `sqllog2db watch --help`、`sqllog2db validate --help`、`sqllog2db stats --help` 各自包含至少 2 个使用示例，选项描述清晰无歧义
+  4. `cargo test` 全部通过，`cargo clippy --all-targets -- -D warnings` + `cargo fmt --check` 通过
+**Plans**: TBD
+**UI hint**: yes
 
 ## Coverage Validation
 
@@ -788,7 +832,16 @@ Full details: `.planning/milestones/v1.18-ROADMAP.md`
 | WATCH-03    | 70    |
 | WATCH-04    | 70    |
 
-**83/83 requirements mapped — coverage: 100%**
+| WATCH-07    | 71    |
+| WATCH-08    | 71    |
+| WATCH-09    | 71    |
+| QUAL-02     | 72    |
+| QUAL-03     | 72    |
+| QUAL-01     | 73    |
+| DOC-04      | 73    |
+| DOC-05      | 73    |
+
+**91/91 requirements mapped — coverage: 100%**
 
 ## Progress
 
@@ -833,6 +886,10 @@ Full details: `.planning/milestones/v1.18-ROADMAP.md`
 | 69. Watch 模式核心框架 | 4/4 | Complete    | 2026-06-06 |
 | 70. Watch 增量处理与集成测试 | v1.18 | Complete | 2026-06-06 |
 
+| 71. watch 功能完善 | v1.19 | Not started | - |
+| 72. 测试覆盖率与 FSEvents | v1.19 | Not started | - |
+| 73. 文档与验证对齐 | v1.19 | Not started | - |
+
 ---
 *Created: 2026-05-21 for milestone v1.10*
-*Updated: 2026-06-06 — v1.18 milestone shipped (Phases 67–70)*
+*Updated: 2026-06-06 — v1.19 milestone started (Phases 71–73)*
