@@ -357,10 +357,7 @@ fn refresh_active_status(
     let Some(triggered_at) = last_trigger_at else {
         return; // safe-guard，调用方已检查
     };
-    let dir_str = watch_dirs
-        .first()
-        .map(|p| p.display().to_string())
-        .unwrap_or_default();
+    let dir_str = format_paths_display(watch_dirs);
     pb.set_message(render_active_status(
         &dir_str,
         trigger_count,
