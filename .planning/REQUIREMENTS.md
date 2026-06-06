@@ -1,7 +1,7 @@
 # Requirements: sqllog2db
 
 **Defined:** 2026-06-06
-**Milestone:** v1.19 watch完善与文档对齐
+**Milestone:** watch完善与文档对齐
 **Core Value:** 用户能够精确指定"导出哪些记录的哪些字段"——过滤逻辑清晰可配置，输出结果完全可控。
 
 ## v1.19 Requirements
@@ -50,14 +50,14 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| WATCH-07 | Phase 71 | Pending |
-| WATCH-08 | Phase 71 | Pending |
-| WATCH-09 | Phase 71 | Pending |
-| QUAL-02 | Phase 72 | Pending |
-| QUAL-03 | Phase 72 | Pending |
-| QUAL-01 | Phase 73 | Pending |
-| DOC-04 | Phase 73 | Pending |
-| DOC-05 | Phase 73 | Pending |
+| WATCH-07 | Phase 1 | Pending |
+| WATCH-08 | Phase 1 | Pending |
+| WATCH-09 | Phase 1 | Pending |
+| QUAL-02 | Phase 2 | Pending |
+| QUAL-03 | Phase 2 | Pending |
+| QUAL-01 | Phase 3 | Pending |
+| DOC-04 | Phase 3 | Pending |
+| DOC-05 | Phase 3 | Pending |
 
 **Coverage:**
 - v1.19 requirements: 8 total
@@ -66,4 +66,4 @@
 
 ---
 *Requirements defined: 2026-06-06*
-*Last updated: 2026-06-06 — traceability updated: all 8 requirements mapped to Phases 71–73*
+*Last updated: 2026-06-06 — traceability updated: all 8 requirements mapped to Phases 1–3*

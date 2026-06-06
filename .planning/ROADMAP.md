@@ -2,7 +2,7 @@
 
 ## Milestones
 
-- 🔄 **v1.19 watch完善与文档对齐** — Phases 71–73 (in progress)
+- 🔄 **watch完善与文档对齐** — Phases 1–3 (in progress)
 - ✅ **v1.18 用户体验全面升级** — Phases 67–70 (shipped 2026-06-06)
 - ✅ **v1.17 多文件并行提速** — Phases 64–66.1 (shipped 2026-06-04)
 - ✅ **v1.16.0 工程质量深化** — Phases 59–63 (shipped 2026-06-03)
@@ -229,11 +229,11 @@ Full details: `.planning/milestones/v1.18-ROADMAP.md`
 
 ---
 
-**v1.19 watch完善与文档对齐 (Phases 71–73) — IN PROGRESS**
+**watch完善与文档对齐 (Phases 1–3) — IN PROGRESS**
 
-- [ ] **Phase 71: watch 功能完善** — CSV watch 支持、error log 追加模式、Ctrl+C 退出码 130 (WATCH-07/08/09)
-- [ ] **Phase 72: 测试覆盖率与 FSEvents** — watch 测试补充、92%+ 行覆盖率、FSEvents #[ignore] 落地方案 (QUAL-02/03)
-- [ ] **Phase 73: 文档与验证对齐** — VALIDATION.md 补全、README watch/init/进度选项更新、--help 完善 (QUAL-01, DOC-04, DOC-05)
+- [ ] **Phase 1: watch 功能完善** — CSV watch 支持、error log 追加模式、Ctrl+C 退出码 130 (WATCH-07/08/09)
+- [ ] **Phase 2: 测试覆盖率与 FSEvents** — watch 测试补充、92%+ 行覆盖率、FSEvents #[ignore] 落地方案 (QUAL-02/03)
+- [ ] **Phase 3: 文档与验证对齐** — VALIDATION.md 补全、README watch/init/进度选项更新、--help 完善 (QUAL-01, DOC-04, DOC-05)
 
 ## Phase Details
 
@@ -704,9 +704,9 @@ Full details: `.planning/milestones/v1.18-ROADMAP.md`
 
 ---
 
-### Phase 71: watch 功能完善
+### Phase 1: watch 功能完善
 **Goal**: watch 子命令功能完整：支持 CSV 导出格式增量追加、error log 以追加模式写入不丢失历史错误、Ctrl+C 退出码修正为 130
-**Depends on**: Phase 70
+**Depends on**: —
 **Requirements**: WATCH-07, WATCH-08, WATCH-09
 **Success Criteria** (what must be TRUE):
   1. config.toml 配置 CSV exporter 时，`watch` 子命令可正常启动并将新增记录增量追加到 CSV 文件，多次触发后文件内容为所有触发的累计记录
@@ -715,9 +715,9 @@ Full details: `.planning/milestones/v1.18-ROADMAP.md`
   4. `cargo clippy --all-targets -- -D warnings` + `cargo test` 全部通过，无性能退化
 **Plans**: TBD
 
-### Phase 72: 测试覆盖率与 FSEvents
+### Phase 2: 测试覆盖率与 FSEvents
 **Goal**: watch 功能测试补全，整体行覆盖率达到 92%+，macOS FSEvents #[ignore] 测试有明确的落地方案（跨平台条件编译或 mock 解决）
-**Depends on**: Phase 71
+**Depends on**: Phase 1
 **Requirements**: QUAL-02, QUAL-03
 **Success Criteria** (what must be TRUE):
   1. `cargo llvm-cov` 报告整体行覆盖率 ≥ 92%，watch 相关模块（src/cli/watch/）行覆盖率 ≥ 80%
@@ -726,9 +726,9 @@ Full details: `.planning/milestones/v1.18-ROADMAP.md`
   4. `cargo test` 全部通过（含所有非 ignore 测试），`cargo clippy --all-targets -- -D warnings` 通过
 **Plans**: TBD
 
-### Phase 73: 文档与验证对齐
-**Goal**: 项目文档与 v1.18/v1.19 实际状态完全对齐——VALIDATION.md 补全为正式文件，README 覆盖 watch/init --interactive/进度选项，各子命令 --help 信息完善
-**Depends on**: Phase 72
+### Phase 3: 文档与验证对齐
+**Goal**: 项目文档与最新实际状态完全对齐——VALIDATION.md 补全为正式文件，README 覆盖 watch/init --interactive/进度选项，各子命令 --help 信息完善
+**Depends on**: Phase 2
 **Requirements**: QUAL-01, DOC-04, DOC-05
 **Success Criteria** (what must be TRUE):
   1. Phase 67/68/69 的 VALIDATION.md 从草稿状态升级为正式验证文件（包含实际验证结果），Phase 70 的 VALIDATION.md 新建完成
@@ -832,14 +832,14 @@ Full details: `.planning/milestones/v1.18-ROADMAP.md`
 | WATCH-03    | 70    |
 | WATCH-04    | 70    |
 
-| WATCH-07    | 71    |
-| WATCH-08    | 71    |
-| WATCH-09    | 71    |
-| QUAL-02     | 72    |
-| QUAL-03     | 72    |
-| QUAL-01     | 73    |
-| DOC-04      | 73    |
-| DOC-05      | 73    |
+| WATCH-07    | 1     |
+| WATCH-08    | 1     |
+| WATCH-09    | 1     |
+| QUAL-02     | 2     |
+| QUAL-03     | 2     |
+| QUAL-01     | 3     |
+| DOC-04      | 3     |
+| DOC-05      | 3     |
 
 **91/91 requirements mapped — coverage: 100%**
 
@@ -886,10 +886,10 @@ Full details: `.planning/milestones/v1.18-ROADMAP.md`
 | 69. Watch 模式核心框架 | 4/4 | Complete    | 2026-06-06 |
 | 70. Watch 增量处理与集成测试 | v1.18 | Complete | 2026-06-06 |
 
-| 71. watch 功能完善 | v1.19 | Not started | - |
-| 72. 测试覆盖率与 FSEvents | v1.19 | Not started | - |
-| 73. 文档与验证对齐 | v1.19 | Not started | - |
+| 1. watch 功能完善 | watch完善与文档对齐 | Not started | - |
+| 2. 测试覆盖率与 FSEvents | watch完善与文档对齐 | Not started | - |
+| 3. 文档与验证对齐 | watch完善与文档对齐 | Not started | - |
 
 ---
 *Created: 2026-05-21 for milestone v1.10*
-*Updated: 2026-06-06 — v1.19 milestone started (Phases 71–73)*
+*Updated: 2026-06-06 — milestone watch完善与文档对齐 started (Phases 1–3)*

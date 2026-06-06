@@ -8,7 +8,7 @@
 
 用户能够精确指定"导出哪些记录的哪些字段"——过滤逻辑清晰可配置，输出结果完全可控。
 
-## Current Milestone: v1.19 watch完善与文档对齐
+## Current Milestone: watch完善与文档对齐
 
 **Goal:** 补完 watch 功能短板（CSV 支持、error log 追加写入、退出码修正），提升文档与测试质量，同步 VALIDATION.md 到 v1.18 实际状态。
 
@@ -249,4 +249,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-06 — Milestone v1.19 started: watch 完善（CSV 支持、error log 追加写入、退出码修正）+ 文档对齐 + 测试覆盖率提升*
+*Last updated: 2026-06-06 — Milestone watch完善与文档对齐 started: watch 完善（CSV 支持、error log 追加写入、退出码修正）+ 文档对齐 + 测试覆盖率提升*

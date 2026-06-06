@@ -1,6 +1,6 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.19
+milestone: watch完善与文档对齐
 milestone_name: watch完善与文档对齐
 status: active
 last_updated: "2026-06-06T00:00:00.000Z"
@@ -20,30 +20,30 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-06 after v1.18)
 
 **Core value:** 用户能够精确指定"导出哪些记录的哪些字段"——过滤逻辑清晰可配置，输出结果完全可控
-**Current focus:** v1.19 — watch 功能完善 + 测试覆盖率 + 文档对齐
+**Current focus:** watch完善与文档对齐 — watch 功能完善 + 测试覆盖率 + 文档对齐
 
 ## Current Position
 
-Phase: 71 (watch 功能完善)
+Phase: 1 (watch 功能完善)
 Plan: —
 Status: Ready to plan
-Last activity: 2026-06-06 — Roadmap created for v1.19
+Last activity: 2026-06-06 — Roadmap created for watch完善与文档对齐
 
 ```
-v1.19 Progress: [░░░░░░░░░░░░░░░░░░░░] 0% (0/3 phases)
-Phase 71: watch 功能完善    [ ] Not started
-Phase 72: 测试覆盖率与 FSEvents [ ] Not started
-Phase 73: 文档与验证对齐   [ ] Not started
+watch完善与文档对齐 Progress: [░░░░░░░░░░░░░░░░░░░░] 0% (0/3 phases)
+Phase 1: watch 功能完善    [ ] Not started
+Phase 2: 测试覆盖率与 FSEvents [ ] Not started
+Phase 3: 文档与验证对齐   [ ] Not started
 ```
 
-## Milestone: v1.19 watch完善与文档对齐
+## Milestone: watch完善与文档对齐
 
 **Goal:** 补完 watch 功能短板（CSV 支持、error log 追加写入、退出码修正），提升文档与测试质量，同步 VALIDATION.md 到 v1.18 实际状态。
 
 **Phases:**
-- Phase 71: watch 功能完善 (WATCH-07/08/09)
-- Phase 72: 测试覆盖率与 FSEvents (QUAL-02/03)
-- Phase 73: 文档与验证对齐 (QUAL-01, DOC-04, DOC-05)
+- Phase 1: watch 功能完善 (WATCH-07/08/09)
+- Phase 2: 测试覆盖率与 FSEvents (QUAL-02/03)
+- Phase 3: 文档与验证对齐 (QUAL-01, DOC-04, DOC-05)
 
 ## Deferred Items from v1.18
 
@@ -51,11 +51,11 @@ Items acknowledged at v1.18 milestone close and now scheduled in v1.19:
 
 | Category | Item | v1.19 Phase |
 |----------|------|-------------|
-| watch | Ctrl+C 退出码 0 vs run 130 | Phase 71 (WATCH-09) |
-| watch | write_error_log 覆盖写（只保留最近一次触发的错误） | Phase 71 (WATCH-08) |
-| watch | CSV 导出未支持 | Phase 71 (WATCH-07) |
-| nyquist | VALIDATION.md 草稿（67/68/69）、70-VALIDATION.md 缺失 | Phase 73 (QUAL-01) |
-| test | test_watch_triggers_on_new_log_file #[ignore]（macOS FSEvents 限制） | Phase 72 (QUAL-03) |
+| watch | Ctrl+C 退出码 0 vs run 130 | Phase 1 (WATCH-09) |
+| watch | write_error_log 覆盖写（只保留最近一次触发的错误） | Phase 1 (WATCH-08) |
+| watch | CSV 导出未支持 | Phase 1 (WATCH-07) |
+| nyquist | VALIDATION.md 草稿（67/68/69）、70-VALIDATION.md 缺失 | Phase 3 (QUAL-01) |
+| test | test_watch_triggers_on_new_log_file #[ignore]（macOS FSEvents 限制） | Phase 2 (QUAL-03) |
 
 ## Performance Metrics
 
@@ -80,4 +80,4 @@ Items acknowledged at v1.18 milestone close and now scheduled in v1.19:
 
 ## Operator Next Steps
 
-- Run `/gsd:plan-phase 71` to create plans for Phase 71
+- Run `/gsd:plan-phase 1` to create plans for Phase 1
