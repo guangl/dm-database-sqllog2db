@@ -1,9 +1,9 @@
 ---
-status: diagnosed
+status: partial
 phase: 69-watch
 source: [69-VERIFICATION.md]
 started: 2026-06-06T05:00:00Z
-updated: 2026-06-06T05:15:00Z
+updated: 2026-06-06T08:00:00Z
 ---
 
 ## Current Test
@@ -38,17 +38,23 @@ result: PASSED — `kill -INT` 触发优雅退出，摘要行 "Watch stopped. Tr
 
 total: 4
 passed: 2
-issues: 2
-pending: 0
+issues: 0
+pending: 1
 skipped: 0
 blocked: 0
 
 ## Gaps
 
-- status: failed
+- status: resolved
   test: WATCH-05 状态行 last 字段动态时间
-  description: src/cli/watch.rs:187 hardcoded "just now"，Plan 02 must_have 要求 HumanDuration(last_trigger_at.elapsed())
+  description: Plan 04 修复：render_active_status 使用 HumanDuration(elapsed)，静态 "just now" 字面量已删除。
 
-- status: failed
+- status: resolved
   test: WATCH-02/CR-01 单文件双重触发（无防抖）
-  description: Create(File) + Modify(Data(Content)) 两个事件各触发一次 handle_run，同一文件被处理两次。append 模式产生重复行，统计虚高。需在 handle_event 加入基于路径的防抖（如 500ms 窗口）。
+  description: Plan 04 修复：should_trigger + DEBOUNCE_WINDOW(500ms) HashMap<PathBuf,Instant>，单次写入仅触发一次 handle_run。
+
+## Pending Human Tests
+
+- status: pending
+  test: WATCH-02 端到端 smoke test
+  description: test_watch_triggers_on_new_log_file 标 #[ignore]（macOS FSEvents + cargo test stdin-pipe 阻塞）。人工运行 `cargo run --release -- watch -c config.toml`，写入 .log 文件，确认 trigger_count 仅增加 1，CSV 行数正确，last 字段随时间变化。Phase 70 用 subprocess 模式补充自动化覆盖。
