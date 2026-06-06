@@ -2848,3 +2848,118 @@ fn test_cli_init_interactive_force_overwrites_existing() {
         "old content must be replaced"
     );
 }
+
+// ── watch subcommand tests ─────────────────────────────────────────────────────
+
+mod watch_tests {
+    use dm_database_sqllog2db::cli::watch::handle_watch;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::time::Duration;
+
+    /// 向指定路径写入一行最小可解析的 DM SQL 日志。
+    fn write_minimal_log(path: &std::path::Path) {
+        let line = "2025-01-15 10:30:28.001 (EP[0] sess:0x0001 user:TESTUSER trxid:1 stmt:0x1 appname:App ip:10.0.0.1) [SEL] SELECT id FROM t WHERE id=1. EXECTIME: 5(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.\n";
+        std::fs::write(path, line).unwrap();
+    }
+
+    /// W1: `watch --help` 包含配置文件说明和使用示例（WATCH-01 可发现性）。
+    #[test]
+    fn test_watch_help_lists_subcommand() {
+        use assert_cmd::Command;
+        let output = Command::cargo_bin("sqllog2db")
+            .unwrap()
+            .arg("watch")
+            .arg("--help")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "watch --help should exit 0, got: {:?}",
+            output.status.code()
+        );
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            stdout.contains("TOML configuration file path"),
+            "help should mention 'TOML configuration file path', got:\n{stdout}"
+        );
+        assert!(
+            stdout.contains("sqllog2db watch -c config.toml"),
+            "help should include usage example 'sqllog2db watch -c config.toml', got:\n{stdout}"
+        );
+    }
+
+    /// W2: interrupted=true 预置时 `handle_watch` 立即返回 Ok(())（WATCH-06 优雅退出）。
+    #[test]
+    fn test_watch_exits_when_interrupted() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let log_dir = dir.path().join("logs");
+        std::fs::create_dir_all(&log_dir).unwrap();
+        let csv_file = dir.path().join("out.csv");
+        let cfg = super::make_run_config(&log_dir, &csv_file);
+        let interrupted = Arc::new(AtomicBool::new(true));
+        let result = handle_watch(&cfg, true, false, &interrupted);
+        assert!(
+            result.is_ok(),
+            "handle_watch with interrupted=true should return Ok(()), got: {result:?}"
+        );
+    }
+
+    /// W3: 新 .log 文件出现时触发 `handle_run`，CSV 输出行数 > header（WATCH-02/05）。
+    #[test]
+    fn test_watch_triggers_on_new_log_file() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let log_dir = dir.path().join("logs");
+        std::fs::create_dir_all(&log_dir).unwrap();
+        let csv_file = dir.path().join("out.csv");
+        let cfg = super::make_run_config(&log_dir, &csv_file);
+        let interrupted = Arc::new(AtomicBool::new(false));
+        let interrupted_clone = Arc::clone(&interrupted);
+        let log_dir_clone = log_dir.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(300));
+            write_minimal_log(&log_dir_clone.join("new_file.log"));
+            std::thread::sleep(Duration::from_millis(1500));
+            interrupted_clone.store(true, Ordering::Relaxed);
+        });
+        handle_watch(&cfg, true, false, &interrupted).unwrap();
+        assert!(
+            csv_file.exists(),
+            "CSV output file should exist after watch trigger"
+        );
+        let content = std::fs::read_to_string(&csv_file).unwrap();
+        let line_count = content.lines().count();
+        assert!(
+            line_count > 1,
+            "CSV should have header + at least 1 data row, got {line_count} lines"
+        );
+    }
+
+    /// W4: 写入非 .log 文件不触发 `handle_run`，CSV 输出不产生（WATCH-02 扩展名过滤）。
+    #[test]
+    fn test_watch_ignores_non_log_files() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let log_dir = dir.path().join("logs");
+        std::fs::create_dir_all(&log_dir).unwrap();
+        let csv_file = dir.path().join("out.csv");
+        let cfg = super::make_run_config(&log_dir, &csv_file);
+        let interrupted = Arc::new(AtomicBool::new(false));
+        let interrupted_clone = Arc::clone(&interrupted);
+        let log_dir_clone = log_dir.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(300));
+            std::fs::write(
+                log_dir_clone.join("garbage.txt"),
+                "this is not a log file\n",
+            )
+            .unwrap();
+            std::thread::sleep(Duration::from_millis(700));
+            interrupted_clone.store(true, Ordering::Relaxed);
+        });
+        handle_watch(&cfg, true, false, &interrupted).unwrap();
+        assert!(
+            !csv_file.exists(),
+            "CSV output should NOT exist when only non-.log files are written"
+        );
+    }
+}
