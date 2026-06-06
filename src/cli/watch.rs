@@ -58,7 +58,6 @@ pub fn handle_watch(
         state.total_stats.records_exported,
         quiet,
     );
-    let _ = verbose;
     Ok(())
 }
 
