@@ -674,4 +674,114 @@ mod tests {
             "125 秒的 HumanDuration 输出应包含 'm'（分钟），实际: {status_125}"
         );
     }
+
+    // --- Task 2: trigger_incremental + read_bytes_to_tempfile 测试 ---
+
+    /// 测试 `read_bytes_to_tempfile`：从 `start_offset` 处读取，临时文件仅含新增字节。
+    #[test]
+    fn test_read_bytes_to_tempfile_reads_from_offset() {
+        use std::io::Read;
+        let mut source_file = tempfile::NamedTempFile::new().expect("failed to create tmp");
+        let content = b"Hello World! This is a test file with 50 bytes content!";
+        std::io::Write::write_all(&mut source_file, content).unwrap();
+        let source_path = source_file.path().to_path_buf();
+        let start_offset = 13u64; // skip "Hello World! "
+        let tmp_result = read_bytes_to_tempfile(&source_path, start_offset)
+            .expect("read_bytes_to_tempfile should succeed");
+        let mut actual_content = Vec::new();
+        std::fs::File::open(tmp_result.path())
+            .unwrap()
+            .read_to_end(&mut actual_content)
+            .unwrap();
+        let start_idx = usize::try_from(start_offset).expect("offset fits in usize");
+        assert_eq!(
+            actual_content,
+            &content[start_idx..],
+            "临时文件应仅包含 start_offset 之后的字节"
+        );
+    }
+
+    /// 测试 `read_bytes_to_tempfile`：`start_offset` == 文件大小时，临时文件为空。
+    #[test]
+    fn test_read_bytes_to_tempfile_at_eof_produces_empty() {
+        use std::io::Read;
+        let mut source_file = tempfile::NamedTempFile::new().expect("failed to create tmp");
+        let content = b"some content here";
+        std::io::Write::write_all(&mut source_file, content).unwrap();
+        let source_path = source_file.path().to_path_buf();
+        let start_offset = content.len() as u64; // at EOF
+        let tmp_result = read_bytes_to_tempfile(&source_path, start_offset)
+            .expect("read_bytes_to_tempfile at EOF should succeed");
+        let mut actual_content = Vec::new();
+        std::fs::File::open(tmp_result.path())
+            .unwrap()
+            .read_to_end(&mut actual_content)
+            .unwrap();
+        assert!(
+            actual_content.is_empty(),
+            "offset == 文件大小时，临时文件应为空，实际: {actual_content:?}"
+        );
+    }
+
+    /// 测试 `trigger_incremental`：`new_size` <= `start_offset` 时跳过，`trigger_count` 不增。
+    #[test]
+    fn test_trigger_incremental_skips_if_no_new_bytes() {
+        let source_file = tempfile::NamedTempFile::new().expect("failed to create tmp");
+        let content = vec![0u8; 100];
+        std::fs::write(source_file.path(), &content).unwrap();
+        let canonical_path = source_file.path().canonicalize().unwrap();
+        let mut initial_offsets = HashMap::new();
+        // file_offsets 记录 offset = 100（等于文件大小）
+        initial_offsets.insert(canonical_path, 100u64);
+        let mut state = WatchLoopState::new(initial_offsets, None);
+        let cfg = Config::default();
+        let interrupted = Arc::new(AtomicBool::new(false));
+        let pb = indicatif::ProgressBar::hidden();
+        trigger_incremental(
+            source_file.path(),
+            &cfg,
+            true,
+            false,
+            &interrupted,
+            &mut state,
+            &pb,
+        );
+        assert_eq!(
+            state.trigger_count, 0,
+            "new_size == start_offset 时 trigger_count 不应增加"
+        );
+    }
+
+    /// 测试 `trigger_incremental`：首次 Modify 无 `file_offsets` 记录时，记录基线并跳过处理。
+    #[test]
+    fn test_trigger_incremental_first_seen_records_baseline() {
+        let source_file = tempfile::NamedTempFile::new().expect("failed to create tmp");
+        let content = vec![0u8; 100];
+        std::fs::write(source_file.path(), &content).unwrap();
+        let canonical_path = source_file.path().canonicalize().unwrap();
+        // file_offsets 中无该路径记录
+        let mut state = WatchLoopState::new(HashMap::new(), None);
+        let cfg = Config::default();
+        let interrupted = Arc::new(AtomicBool::new(false));
+        let pb = indicatif::ProgressBar::hidden();
+        trigger_incremental(
+            source_file.path(),
+            &cfg,
+            true,
+            false,
+            &interrupted,
+            &mut state,
+            &pb,
+        );
+        // 应记录基线 offset = 文件大小（100），但不处理
+        assert_eq!(
+            state.trigger_count, 0,
+            "首次 Modify 应跳过处理，trigger_count 不增"
+        );
+        assert_eq!(
+            state.file_offsets.get(&canonical_path),
+            Some(&100u64),
+            "首次 Modify 应将当前文件大小作为基线写入 file_offsets"
+        );
+    }
 }
