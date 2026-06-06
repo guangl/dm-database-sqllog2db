@@ -313,11 +313,12 @@ pub fn trigger_full_file(
     match crate::cli::run::handle_run(&tmp_cfg, quiet, verbose, interrupted, None) {
         Ok(file_stats) => {
             state.total_stats.merge(&file_stats);
+            let last_elapsed = state.last_trigger_at.map(|t| t.elapsed());
             state.trigger_count += 1;
             state.last_trigger_at = Some(Instant::now());
             // handle_run 返回后 SqliteExporter 已 drop（per Pitfall 4），安全写 offset
             record_offset_after_trigger(path, state);
-            update_status_bar(path, state, pb);
+            update_status_bar(path, state, pb, last_elapsed);
         }
         Err(crate::error::Error::Interrupted) => interrupted.store(true, Ordering::Release),
         Err(e) => warn!("watch trigger error (full): {e}"),
@@ -351,7 +352,13 @@ fn record_offset_after_trigger(path: &Path, state: &mut WatchLoopState) {
 }
 
 /// 用当前 `trigger_count` 和 `records_exported` 更新 progress bar 消息。
-fn update_status_bar(path: &Path, state: &WatchLoopState, pb: &ProgressBar) {
+/// `last_elapsed`：上次触发到本次触发之间的间隔（`None` 表示首次触发，显示 0s）。
+fn update_status_bar(
+    path: &Path,
+    state: &WatchLoopState,
+    pb: &ProgressBar,
+    last_elapsed: Option<Duration>,
+) {
     let dir = path
         .parent()
         .map(|p| p.display().to_string())
@@ -360,7 +367,7 @@ fn update_status_bar(path: &Path, state: &WatchLoopState, pb: &ProgressBar) {
         &dir,
         state.trigger_count,
         state.total_stats.records_exported,
-        Duration::from_secs(0),
+        last_elapsed.unwrap_or_default(),
     ));
 }
 
@@ -484,6 +491,7 @@ fn run_incremental_handle_run(
     match crate::cli::run::handle_run(&tmp_cfg, quiet, verbose, interrupted, None) {
         Ok(file_stats) => {
             state.total_stats.merge(&file_stats);
+            let last_elapsed = state.last_trigger_at.map(|t| t.elapsed());
             state.trigger_count += 1;
             state.last_trigger_at = Some(Instant::now());
             // handle_run 返回后 SqliteExporter 已 drop（per Pitfall 4），安全写 offset
@@ -493,7 +501,7 @@ fn run_incremental_handle_run(
             if let Some(ref database_url) = state.sqlite_db_url {
                 offsets::save_offset(database_url, canonical_path, new_size);
             }
-            update_status_bar(original_path, state, pb);
+            update_status_bar(original_path, state, pb, last_elapsed);
         }
         Err(crate::error::Error::Interrupted) => interrupted.store(true, Ordering::Release),
         Err(e) => warn!("watch trigger error (incremental): {e}"),
