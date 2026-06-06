@@ -129,7 +129,11 @@ fn run() -> Result<Option<(ErrorStats, bool)>> {
 
     let needs_simple_logging = !matches!(
         &cli.command,
-        Some(cli::opts::Commands::Run { .. } | cli::opts::Commands::Stats { .. })
+        Some(
+            cli::opts::Commands::Run { .. }
+                | cli::opts::Commands::Stats { .. }
+                | cli::opts::Commands::Watch { .. }
+        )
     );
     if needs_simple_logging {
         init_simple_logging(cli.quiet);
@@ -196,14 +200,25 @@ fn run() -> Result<Option<(ErrorStats, bool)>> {
             Ok(None)
         }
         Some(cli::opts::Commands::Watch { config }) => {
-            let cfg = load_config(config)?;
+            let mut cfg = load_config(config)?;
             cfg.validate()?;
+            apply_verbosity_to_config(&mut cfg, cli.verbose, cli.quiet);
+            logging::init_logging(&cfg.logging, false)?;
+            info!("Application started (watch mode)");
+            info!("Configuration validation passed");
+
+            let pf = preflight::check(&cfg);
+            if pf.print_and_check() {
+                std::process::exit(EXIT_FATAL);
+            }
+
             let interrupted = Arc::new(AtomicBool::new(false));
             let interrupted_flag = Arc::clone(&interrupted);
             ctrlc::set_handler(move || {
                 interrupted_flag.store(true, Ordering::Relaxed);
             })
             .ok();
+
             cli::watch::handle_watch(&cfg, cli.quiet, cli.verbose, &interrupted)?;
             Ok(None)
         }
