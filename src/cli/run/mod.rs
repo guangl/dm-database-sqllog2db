@@ -438,7 +438,7 @@ fn write_error_log(cfg: &crate::config::Config, stats: &ErrorStats) {
         }
     };
     let mut writer = std::io::BufWriter::new(file);
-    let truncated = stats.parse_error_records.len() == 10_000;
+    let truncated = stats.parse_errors > stats.parse_error_records.len();
     for rec in &stats.parse_error_records {
         let _ = writeln!(
             writer,
