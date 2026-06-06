@@ -824,7 +824,7 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 
 | 67. 进度/摘要与诊断增强 | 3/3 | Complete   | 2026-06-05 |
 | 68. 交互式配置向导 | 2/2 | Complete   | 2026-06-05 |
-| 69. Watch 模式核心框架 | 4/4 | Complete   | 2026-06-06 |
+| 69. Watch 模式核心框架 | 4/4 | Complete    | 2026-06-06 |
 | 70. Watch 增量处理与集成测试 | v1.18 | Not started | - |
 
 ---
