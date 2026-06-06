@@ -38,6 +38,9 @@ pub struct Config {
     pub stats: StatsConfig,
     #[serde(default)]
     pub error: Option<ErrorLogConfig>,
+    /// watch 触发时设为 true，使 `write_error_log` 以追加模式打开文件。run 路径默认 false（覆盖写）。
+    #[serde(skip)]
+    pub append_error_log: bool,
 }
 
 impl Config {

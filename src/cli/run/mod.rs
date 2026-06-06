@@ -420,7 +420,7 @@ fn print_run_summary(
     }
 }
 
-/// 将解析错误记录批量写出到配置的 error log 文件（覆盖模式）。
+/// 将解析错误记录批量写出到配置的 error log 文件。`cfg.append_error_log=true` 时为追加模式（watch 触发），`false` 时为覆盖模式（run 子命令默认）。
 /// 无配置或无错误时为空操作；写出失败仅 warn 不终止。
 fn write_error_log(cfg: &crate::config::Config, stats: &ErrorStats) {
     let Some(error_cfg) = cfg.error.as_ref() else {
@@ -430,7 +430,19 @@ fn write_error_log(cfg: &crate::config::Config, stats: &ErrorStats) {
         return;
     }
     use std::io::Write;
-    let file = match std::fs::File::create(&error_cfg.file) {
+    let file = if cfg.append_error_log {
+        std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&error_cfg.file)
+    } else {
+        std::fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&error_cfg.file)
+    };
+    let file = match file {
         Ok(f) => f,
         Err(e) => {
             log::warn!("Failed to create error log {}: {e}", error_cfg.file);
