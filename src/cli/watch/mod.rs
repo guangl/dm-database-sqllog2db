@@ -1,5 +1,7 @@
 //! Watch 子命令的实现入口。Phase 69 核心：notify watcher + watch loop + 状态行 + 退出摘要。
 
+pub(super) mod offsets;
+
 use crate::config::Config;
 use crate::error::{Error, ErrorStats, Result};
 use indicatif::{HumanDuration, ProgressBar, ProgressDrawTarget, ProgressStyle};

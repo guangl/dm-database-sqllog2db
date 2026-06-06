@@ -50,6 +50,7 @@ memchr = "2"
 rusqlite = { version = "0.39.0", features = [
   "bundled",
 ] }
+tempfile = "3.27.0"
 
 
 [lints.rust]
@@ -82,7 +83,6 @@ debug = true
 strip = "none"
 
 [dev-dependencies]
-tempfile = "3.27.0"
 criterion = { version = "0.7", features = ["html_reports"] }
 assert_cmd = "2"
 predicates = "3"
