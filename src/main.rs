@@ -195,6 +195,18 @@ fn run() -> Result<Option<(ErrorStats, bool)>> {
             cli::stats::handle_stats(&cfg, *top, from.clone(), to.clone())?;
             Ok(None)
         }
+        Some(cli::opts::Commands::Watch { config }) => {
+            let cfg = load_config(config)?;
+            cfg.validate()?;
+            let interrupted = Arc::new(AtomicBool::new(false));
+            let interrupted_flag = Arc::clone(&interrupted);
+            ctrlc::set_handler(move || {
+                interrupted_flag.store(true, Ordering::Relaxed);
+            })
+            .ok();
+            cli::watch::handle_watch(&cfg, cli.quiet, cli.verbose, &interrupted)?;
+            Ok(None)
+        }
         None => {
             cli::opts::Cli::command().print_help().ok();
             std::process::exit(0);

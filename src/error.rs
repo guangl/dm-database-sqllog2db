@@ -83,6 +83,7 @@ pub struct ErrorStats {
     pub by_type: HashMap<ErrorKind, u64>,
     pub filtered_out: u64,
     pub parse_error_records: Vec<ParseErrorRecord>,
+    pub records_exported: usize, // 累计成功导出/处理的记录数（D-09，watch 模式累计统计用）
 }
 
 impl ErrorStats {
@@ -126,6 +127,7 @@ impl ErrorStats {
             *self.by_type.entry(*kind).or_insert(0) += count;
         }
         self.filtered_out += other.filtered_out;
+        self.records_exported += other.records_exported;
         const MAX_RECORDS: usize = 10_000;
         let remaining_cap = MAX_RECORDS.saturating_sub(self.parse_error_records.len());
         if remaining_cap > 0 {
