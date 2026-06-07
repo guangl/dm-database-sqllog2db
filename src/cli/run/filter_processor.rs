@@ -365,4 +365,50 @@ mod tests {
         let debug_str = format!("{proc:?}");
         assert!(debug_str.contains("FilterProcessor"));
     }
+
+    // ── build_pipeline 在 indicators/sql 过滤器下的行为测试（WR-02）──────────────
+
+    /// 验证：trxids 为空集合（预扫描无命中的 sentinel）时，
+    /// `FilterProcessor` 仍进入 pipeline 并拒绝所有记录。
+    #[test]
+    fn test_empty_trxid_sentinel_rejects_all_records() {
+        use crate::pipeline::filters::TrxidSet;
+        // 模拟 merge_found_trxids 运行后 trxids 被初始化为空集合（预扫描无命中）
+        let empty_trxids: TrxidSet = TrxidSet::default();
+        let include = IncludeFilters {
+            trxids: Some(empty_trxids),
+            ..Default::default()
+        };
+        let proc = FilterProcessor::from_feature(&make_feature(include, ExcludeFilters::default()));
+        // 空 trxids sentinel 应拒绝所有记录，而不是放行所有记录
+        assert!(
+            !proc.process_with_meta(&make_record("any_user", "1.2.3.4", "TX001", None)),
+            "trxids 为空集合时应拒绝所有记录"
+        );
+        assert!(
+            !proc.process_with_meta(&make_record("other", "10.0.0.1", "TX999", None)),
+            "trxids 为空集合时应拒绝任意 trxid 的记录"
+        );
+    }
+
+    /// 验证：trxids 非空时，仅匹配 trxid 的记录通过过滤器。
+    #[test]
+    fn test_nonempty_trxid_set_filters_correctly() {
+        use crate::pipeline::filters::TrxidSet;
+        let mut trxids: TrxidSet = TrxidSet::default();
+        trxids.insert("TX_MATCH".to_string());
+        let include = IncludeFilters {
+            trxids: Some(trxids),
+            ..Default::default()
+        };
+        let proc = FilterProcessor::from_feature(&make_feature(include, ExcludeFilters::default()));
+        assert!(
+            proc.process_with_meta(&make_record("any_user", "1.2.3.4", "TX_MATCH", None)),
+            "trxid 匹配时应通过过滤器"
+        );
+        assert!(
+            !proc.process_with_meta(&make_record("any_user", "1.2.3.4", "TX_OTHER", None)),
+            "trxid 不匹配时应被过滤"
+        );
+    }
 }
