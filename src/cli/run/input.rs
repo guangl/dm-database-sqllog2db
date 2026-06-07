@@ -1,3 +1,4 @@
+use super::prescan::scan_for_trxids_by_transaction_filters;
 use crate::config::Config;
 use crate::error::Result;
 use crate::parser::SqllogParser;
@@ -5,7 +6,6 @@ use indicatif::{ProgressBar, ProgressStyle};
 use log::{info, warn};
 use std::io::IsTerminal;
 use std::path::PathBuf;
-use super::prescan::scan_for_trxids_by_transaction_filters;
 
 /// 解析输入文件列表并检测 stdin pipe 模式。
 /// 返回 `(log_files, is_stdin_pipe)`。当无文件且非 Unix stdin pipe 时返回错误。

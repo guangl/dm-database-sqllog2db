@@ -1,3 +1,4 @@
+use super::processor::process_log_file;
 use crate::config::Config;
 use crate::error::{Error, ErrorStats, Result};
 use crate::exporter::ExporterManager;
@@ -6,7 +7,6 @@ use log::info;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use super::processor::process_log_file;
 
 /// 顺序导出路径：逐文件处理，维护 `ExporterManager` 生命周期。
 /// 返回 `(per_file_counts, run_stats)`。

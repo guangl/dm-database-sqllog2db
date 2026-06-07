@@ -1,5 +1,8 @@
-use super::*;
+use super::collector;
+use super::orchestrator::handle_run;
 use crate::config::Config;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 #[test]
 fn test_include_performance_metrics_false_csv_excludes_pm_columns() {
@@ -423,7 +426,7 @@ fn test_normalize_and_export_quota_hit_returns_break_quota() {
 /// `pb.length() == Some(3)`，`pb.position() == 0`，模板设置不 panic。
 #[test]
 fn test_progress_bar_template() {
-    let pb = super::make_progress_bar(true, 3);
+    let pb = super::input::make_progress_bar(true, 3);
     assert!(pb.is_some(), "show_progress=true 应返回 Some(ProgressBar)");
     let pb = pb.unwrap();
     assert_eq!(
@@ -446,7 +449,7 @@ fn test_progress_bar_template() {
 /// 验证 `make_progress_bar(false, 3)` 返回 `None`。
 #[test]
 fn test_progress_bar_disabled() {
-    let pb = super::make_progress_bar(false, 3);
+    let pb = super::input::make_progress_bar(false, 3);
     assert!(
         pb.is_none(),
         "show_progress=false 应返回 None，实际返回了 Some"
@@ -526,7 +529,7 @@ fn test_hint_output() {
         "by_type[EncodingError] 应为 3"
     );
     // 调用 print_run_summary 确认不 panic
-    super::print_run_summary(false, false, false, 0.1, &[], 0, 0, &stats);
+    super::summary::print_run_summary(false, false, false, 0.1, &[], 0, 0, &stats);
 }
 
 // WATCH-08: run 路径仍为覆盖写（append_error_log=false 默认值防回归）
@@ -561,7 +564,7 @@ fn test_write_error_log_run_still_truncates() {
         ..ErrorStats::default()
     };
 
-    write_error_log(&cfg, &stats);
+    super::error_log::write_error_log(&cfg, &stats);
 
     let content = std::fs::read_to_string(&tmp_path).expect("failed to read error log");
     assert!(
@@ -602,7 +605,7 @@ fn test_write_error_log_watch_appends() {
         ..ErrorStats::default()
     };
 
-    write_error_log(&cfg, &stats);
+    super::error_log::write_error_log(&cfg, &stats);
 
     let content = std::fs::read_to_string(&path).expect("failed to read error log");
     assert!(
@@ -632,7 +635,7 @@ fn test_run_summary() {
         ..Default::default()
     };
     // 调用 print_run_summary 确认不 panic
-    super::print_run_summary(false, false, false, 1.5, &[], 10, 0, &stats);
+    super::summary::print_run_summary(false, false, false, 1.5, &[], 10, 0, &stats);
 }
 // ── Group 1-4: collector.rs 全分支单元测试 ──────────────────────────────────
 
