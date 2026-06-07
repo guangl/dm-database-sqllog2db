@@ -233,7 +233,7 @@ Full details: `.planning/milestones/v1.18-ROADMAP.md`
 
 - [x] **Phase 1: watch 功能完善** — CSV watch 支持、error log 追加模式、Ctrl+C 退出码 130 (WATCH-07/08/09) (completed 2026-06-06)
 - [x] **Phase 2: 测试覆盖率与 FSEvents** — watch 测试补充、92%+ 行覆盖率、FSEvents #[ignore] 落地方案 (QUAL-02/03) (completed 2026-06-07)
-- [ ] **Phase 3: 文档与验证对齐** — VALIDATION.md 补全、README watch/init/进度选项更新、--help 完善 (QUAL-01, DOC-04, DOC-05)
+- [x] **Phase 3: 文档与验证对齐** — VALIDATION.md 补全、README watch/init/进度选项更新、--help 完善 (QUAL-01, DOC-04, DOC-05) (completed 2026-06-07)
 
 ## Phase Details
 
@@ -741,7 +741,7 @@ Full details: `.planning/milestones/v1.18-ROADMAP.md`
 **Plans**: 3 plans
 - [x] 03-01-PLAN.md — src/cli/opts.rs Watch/Validate variant `after_help` 各追加 1 个示例（quiet/verbose 模式）+ 三道质量门禁（DOC-05, D-08/D-09/D-10/D-11）
 - [x] 03-02-PLAN.md — README.md 第 41 行 CLI 条目升级为 5 命令 + 新增『持续监听』功能特性条目 + 快速入门追加 watch/init --interactive/quiet+verbose 三段示例（DOC-04, D-05/D-06/D-07）
-- [ ] 03-03-PLAN.md — 新建 Phase 67/68/69/70 各 1 份正式 VALIDATION.md（frontmatter 完成态 + Per-Task Verification Map 从 SUMMARY 转录 + Sign-Off）（QUAL-01, D-01/D-02/D-03/D-04）
+- [x] 03-03-PLAN.md — 新建 Phase 67/68/69/70 各 1 份正式 VALIDATION.md（frontmatter 完成态 + Per-Task Verification Map 从 SUMMARY 转录 + Sign-Off）（QUAL-01, D-01/D-02/D-03/D-04）
 **UI hint**: yes
 
 ## Coverage Validation
@@ -894,7 +894,7 @@ Full details: `.planning/milestones/v1.18-ROADMAP.md`
 
 | 1. watch 功能完善 | 1/1 | Complete   | 2026-06-06 |
 | 2. 测试覆盖率与 FSEvents | 2/2 | Complete   | 2026-06-07 |
-| 3. 文档与验证对齐 | 2/3 | In Progress|  |
+| 3. 文档与验证对齐 | 3/3 | Complete   | 2026-06-07 |
 
 ---
 *Created: 2026-05-21 for milestone v1.10*
