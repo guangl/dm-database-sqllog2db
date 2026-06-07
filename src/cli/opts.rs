@@ -172,7 +172,10 @@ EXAMPLES:
         after_help = "\
 EXAMPLES:
     Watch and process new log files automatically:
-        sqllog2db watch -c config.toml"
+        sqllog2db watch -c config.toml
+
+    Watch in quiet mode (suitable for cron/background):
+        sqllog2db watch -c config.toml --quiet"
     )]
     Watch {
         /// TOML configuration file path
