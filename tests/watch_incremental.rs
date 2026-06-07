@@ -217,7 +217,17 @@ fn test_watch_04_offset_persists_across_restart() {
         count_after, 17,
         "重启后增量触发应为 17 行（不重复），实际 {count_after}"
     );
+
+    // 验证 state2.file_offsets 记录了最新文件大小（真正需要验证的属性：offset 恢复正确）
     let new_size = std::fs::metadata(&log_path).unwrap().len();
+    let canonical_log2 = log_path.canonicalize().unwrap();
+    let recorded_offset = state2.file_offsets().get(&canonical_log2).copied();
+    assert_eq!(
+        recorded_offset,
+        Some(new_size),
+        "增量触发后 state2.file_offsets 应记录最新文件大小，\
+         但实际 {recorded_offset:?}（文件大小 {new_size}）"
+    );
     assert!(new_size > offset_after_full, "文件应已增长");
 }
 
