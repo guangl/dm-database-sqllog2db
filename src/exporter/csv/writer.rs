@@ -19,7 +19,7 @@ pub(crate) fn write_csv_escaped(buf: &mut Vec<u8>, bytes: &[u8]) {
 
 /// 热路径：使用已解析的 `Sqllog` 直接格式化并写入。
 #[inline]
-pub(super) fn write_record_preparsed(
+pub(in crate::exporter::csv) fn write_record_preparsed(
     itoa_buf: &mut itoa::Buffer,
     line_buf: &mut Vec<u8>,
     sqllog: &Sqllog,
@@ -210,7 +210,7 @@ pub(super) fn write_record_preparsed(
 
 /// 兼容路径：从 `Sqllog` 直接写入（parser 库已物化所有字段）。
 #[inline]
-pub(super) fn write_record(
+pub(in crate::exporter::csv) fn write_record(
     itoa_buf: &mut itoa::Buffer,
     line_buf: &mut Vec<u8>,
     sqllog: &Sqllog,
