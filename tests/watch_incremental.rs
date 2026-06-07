@@ -67,7 +67,8 @@ fn count_rows(db_path: &Path, table: &str) -> i64 {
     let Ok(conn) = Connection::open(db_path) else {
         return 0;
     };
-    let query = format!("SELECT COUNT(*) FROM \"{table}\"");
+    // 剥离双引号防止 SQL 注入；所有调用点均为硬编码表名，此处作防御性处理
+    let query = format!("SELECT COUNT(*) FROM \"{}\"", table.replace('"', ""));
     conn.query_row(&query, [], |row| row.get::<_, i64>(0))
         .unwrap_or(0)
 }
