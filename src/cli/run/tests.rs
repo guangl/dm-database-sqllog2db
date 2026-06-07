@@ -783,3 +783,185 @@ fn test_collector_interrupted_returns_empty() {
         "interrupted=true 应使循环立即 break，rows 应为空"
     );
 }
+
+// ── prescan: build_indicator_filters / build_sql_*_filters 单元测试 ─────────
+
+#[test]
+fn test_build_indicator_filters_min_row_count_zero() {
+    use crate::pipeline::filters::IndicatorFilters;
+    let indicators = IndicatorFilters {
+        min_row_count: Some(0),
+        ..IndicatorFilters::default()
+    };
+    let filters = super::prescan::build_indicator_filters(&indicators);
+    assert_eq!(
+        filters.len(),
+        1,
+        "min_row_count=0 应构建一个全匹配 Filter（FilterBuilder::new().build() 分支）"
+    );
+}
+
+#[test]
+fn test_build_indicator_filters_min_row_count_positive() {
+    use crate::pipeline::filters::IndicatorFilters;
+    let indicators = IndicatorFilters {
+        min_row_count: Some(5),
+        ..IndicatorFilters::default()
+    };
+    let filters = super::prescan::build_indicator_filters(&indicators);
+    assert_eq!(
+        filters.len(),
+        1,
+        "min_row_count=5 应构建一个带 rowcount_gt(4) 约束的 Filter"
+    );
+}
+
+#[test]
+fn test_build_indicator_filters_empty_returns_empty() {
+    use crate::pipeline::filters::IndicatorFilters;
+    let indicators = IndicatorFilters::default();
+    let filters = super::prescan::build_indicator_filters(&indicators);
+    assert_eq!(filters.len(), 0, "所有字段均为 None 时应返回空 Vec<Filter>");
+}
+
+#[test]
+fn test_build_sql_exclude_filters_multiple_returns_correct_count() {
+    use crate::pipeline::filters::SqlFilters;
+    let sf = SqlFilters {
+        excludes: Some(vec![
+            "SELECT 1".into(),
+            "DROP".into(),
+            "DELETE FROM x".into(),
+        ]),
+        includes: None,
+    };
+    let filters = super::prescan::build_sql_exclude_filters(&sf);
+    assert_eq!(
+        filters.len(),
+        3,
+        "3 个 exclude 模式应构建 3 个 Filter（非空 excludes 分支）"
+    );
+}
+
+#[test]
+fn test_build_sql_exclude_filters_none_returns_empty() {
+    use crate::pipeline::filters::SqlFilters;
+    let sf = SqlFilters::default();
+    let filters = super::prescan::build_sql_exclude_filters(&sf);
+    assert_eq!(
+        filters.len(),
+        0,
+        "excludes=None 应通过 unwrap_or(&[]) 返回空 Vec<Filter>"
+    );
+}
+
+#[test]
+fn test_build_sql_include_filters_multiple() {
+    use crate::pipeline::filters::SqlFilters;
+    let sf = SqlFilters {
+        includes: Some(vec!["SELECT".into(), "UPDATE".into()]),
+        excludes: None,
+    };
+    let filters = super::prescan::build_sql_include_filters(&sf);
+    assert_eq!(filters.len(), 2, "2 个 include 模式应构建 2 个 Filter");
+}
+
+#[test]
+fn test_build_indicator_filters_exec_ids_multiple() {
+    use crate::pipeline::filters::IndicatorFilters;
+    use std::collections::HashSet;
+    let indicators = IndicatorFilters {
+        exec_ids: Some(HashSet::from([1_i64, 2, 42])),
+        ..IndicatorFilters::default()
+    };
+    let filters = super::prescan::build_indicator_filters(&indicators);
+    assert_eq!(
+        filters.len(),
+        3,
+        "3 个 exec_ids 应产生 3 个独立的 Filter（每个 ID 一个）"
+    );
+}
+
+#[test]
+fn test_min_row_count_zero_matches_all_records() {
+    use crate::pipeline::FiltersFeature;
+    use crate::pipeline::filters::IndicatorFilters;
+    use std::fmt::Write as _;
+
+    let dir = tempfile::TempDir::new().unwrap();
+    let logfile = dir.path().join("test.log");
+
+    let mut buf = String::new();
+    for i in 0..3_usize {
+        writeln!(
+            buf,
+            "2025-01-15 10:30:28.001 (EP[0] sess:0x{i:04x} user:U trxid:{i} stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT {i}. EXECTIME: 1(ms) ROWCOUNT: {i}(rows) EXEC_ID: {i}.",
+        ).unwrap();
+    }
+    std::fs::write(&logfile, &buf).unwrap();
+
+    let cfg = Config {
+        filter: Some(FiltersFeature {
+            enable: true,
+            indicators: IndicatorFilters {
+                min_row_count: Some(0),
+                ..IndicatorFilters::default()
+            },
+            ..FiltersFeature::default()
+        }),
+        ..Config::default()
+    };
+
+    let matched = super::prescan::scan_log_file_for_matches(logfile.to_str().unwrap(), &cfg);
+    assert_eq!(
+        matched.len(),
+        3,
+        "min_row_count=0 应匹配所有记录（全匹配 Filter），实际匹配: {matched:?}",
+    );
+}
+
+#[test]
+fn test_scan_for_trxids_by_transaction_filters_dedup_across_files() {
+    use crate::pipeline::FiltersFeature;
+    use crate::pipeline::filters::IndicatorFilters;
+    use std::fmt::Write as _;
+
+    let dir = tempfile::TempDir::new().unwrap();
+
+    let write_log = |filename: &str, ids: &[usize]| {
+        let path = dir.path().join(filename);
+        let mut buf = String::new();
+        for &i in ids {
+            writeln!(
+                buf,
+                "2025-01-15 10:30:28.001 (EP[0] sess:0x{i:04x} user:U trxid:{i} stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT {i}. EXECTIME: 1(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.",
+            ).unwrap();
+        }
+        std::fs::write(&path, &buf).unwrap();
+        path
+    };
+
+    let file1 = write_log("a.log", &[0, 1]);
+    let file2 = write_log("b.log", &[1, 2]);
+
+    let cfg = Config {
+        filter: Some(FiltersFeature {
+            enable: true,
+            indicators: IndicatorFilters {
+                min_row_count: Some(0),
+                ..IndicatorFilters::default()
+            },
+            ..FiltersFeature::default()
+        }),
+        ..Config::default()
+    };
+
+    let mut matched =
+        super::prescan::scan_for_trxids_by_transaction_filters(&[file1, file2], &cfg, 2).unwrap();
+    matched.sort();
+    assert_eq!(
+        matched,
+        vec!["0".to_string(), "1".to_string(), "2".to_string()],
+        "跨文件应返回去重后的 trxid 列表，实际: {matched:?}"
+    );
+}
