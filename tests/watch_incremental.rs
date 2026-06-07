@@ -125,6 +125,8 @@ fn test_watch_03_incremental_appends_only_new_rows() {
     );
 
     // Phase 2: 追加 5 条 + 增量触发（append=true）
+    // start_id=10：必须与 Phase 1 的 start_id=0 不重叠，以确保生成不同的 trxid/exec_id 字段，
+    // 避免 SQLite 中产生重复行（若表存在唯一约束）或导致行数统计不可预期。
     write_test_log_records(&log_path, 10, 5);
     let cfg_incremental = build_sqlite_config(&log_path, &db_path);
     trigger_incremental(
