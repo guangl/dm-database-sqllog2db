@@ -107,7 +107,10 @@ EXAMPLES:
         after_help = "\
 EXAMPLES:
     Validate a configuration file:
-        sqllog2db validate -c config.toml"
+        sqllog2db validate -c config.toml
+
+    Validate and show detailed field information:
+        sqllog2db validate -c config.toml --verbose"
     )]
     Validate {
         /// TOML configuration file path to validate
@@ -172,7 +175,10 @@ EXAMPLES:
         after_help = "\
 EXAMPLES:
     Watch and process new log files automatically:
-        sqllog2db watch -c config.toml"
+        sqllog2db watch -c config.toml
+
+    Watch in quiet mode (suitable for cron/background):
+        sqllog2db watch -c config.toml --quiet"
     )]
     Watch {
         /// TOML configuration file path
