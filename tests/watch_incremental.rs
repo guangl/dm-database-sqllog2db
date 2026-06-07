@@ -1,8 +1,14 @@
 //! Phase 70 集成测试 — WATCH-03（追加增量不重复）与 WATCH-04（重启 offset 恢复）。
+//! Phase 02 集成测试 — WATCH-07（CSV append）、WATCH-08（error log append）、WATCH-09（exit 130）。
 //! 不依赖 notify watcher（FSEvents 不稳定，per Pitfall 6），直接调用 pub `trigger_*` 函数。
 
-use dm_database_sqllog2db::cli::watch::{WatchLoopState, trigger_full_file, trigger_incremental};
-use dm_database_sqllog2db::config::{Config, ExporterConfig, SqliteExporterConfig, SqllogConfig};
+use dm_database_sqllog2db::cli::watch::{
+    WatchLoopState, handle_watch, trigger_full_file, trigger_incremental,
+};
+use dm_database_sqllog2db::config::{
+    Config, CsvExporterConfig, ErrorLogConfig, ExporterConfig, SqliteExporterConfig, SqllogConfig,
+};
+use dm_database_sqllog2db::error::Error;
 use indicatif::{ProgressBar, ProgressDrawTarget};
 use rusqlite::Connection;
 use std::collections::HashMap;
@@ -253,5 +259,151 @@ fn test_watch_03_no_new_bytes_skips() {
         count_rows(&db_path, "sqllog_records"),
         5,
         "无新字节时 SQLite 行数应保持 5"
+    );
+}
+
+// ── Phase 02: WATCH-07/08/09 集成测试 ────────────────────────────────────────
+
+/// 格式非法的日志行，触发解析错误，用于 WATCH-08 测试（对应 `watch/mod.rs::DM_LOG_LINE_GARBAGE`）。
+const INVALID_LOG_LINE: &str = "this is not a valid dm sql log line at all\n";
+
+/// 构造指向 `log_path`（CSV 输入基路径）与 `csv_path` 的 CSV-only Config（SQLite 禁用）。
+/// `append=false, overwrite=true`：`trigger_full_file` 内的 `force_append_for_watch_trigger`
+/// 会在每次触发时将 append 覆盖为 true，因此初始值不影响最终行为（per Pitfall 3）。
+fn build_csv_config(log_path: &std::path::Path, csv_path: &std::path::Path) -> Config {
+    Config {
+        sqllog: SqllogConfig {
+            inputs: vec![log_path.to_string_lossy().into_owned()],
+            path_deprecated: None,
+        },
+        exporter: ExporterConfig {
+            csv: Some(CsvExporterConfig {
+                file: csv_path.to_string_lossy().into_owned(),
+                overwrite: true,
+                append: false,
+                include_performance_metrics: true,
+            }),
+            sqlite: None,
+        },
+        ..Config::default()
+    }
+}
+
+/// WATCH-07：两次 `trigger_full_file` 后，CSV 包含 header + 6 数据行，header 仅出现一次。
+#[test]
+fn test_watch_07_csv_append() {
+    let tmp = TempDir::new().unwrap();
+    let log_path_a = tmp.path().join("a.log");
+    let log_path_b = tmp.path().join("b.log");
+    let csv_path = tmp.path().join("out.csv");
+
+    write_test_log_records(&log_path_a, 0, 3);
+    write_test_log_records(&log_path_b, 3, 3);
+
+    let cfg = build_csv_config(&log_path_a, &csv_path);
+    let interrupted = Arc::new(AtomicBool::new(false));
+    let pb = build_pb();
+    let mut state = WatchLoopState::new(HashMap::new(), None);
+
+    trigger_full_file(
+        &log_path_a,
+        &cfg,
+        true,
+        false,
+        &interrupted,
+        &mut state,
+        &pb,
+    );
+    trigger_full_file(
+        &log_path_b,
+        &cfg,
+        true,
+        false,
+        &interrupted,
+        &mut state,
+        &pb,
+    );
+
+    assert!(csv_path.exists(), "CSV 文件应在触发后存在");
+    let content = std::fs::read_to_string(&csv_path).unwrap();
+    let lines: Vec<&str> = content.lines().collect();
+    assert!(
+        lines.len() >= 7,
+        "应有 header + 6 rows（每次触发 3 行），实际 {} 行，内容:\n{content}",
+        lines.len()
+    );
+    let header = lines[0];
+    let header_count = lines.iter().filter(|&&l| l == header).count();
+    assert_eq!(
+        header_count, 1,
+        "header 行应只出现一次（append 模式不重复写 header），实际出现 {header_count} 次"
+    );
+}
+
+/// WATCH-08：两次带解析错误的触发后，error log 至少包含 2 条 `[ERROR]` 行。
+#[test]
+fn test_watch_08_error_log_append() {
+    let tmp = TempDir::new().unwrap();
+    let log_path_a = tmp.path().join("a.log");
+    let log_path_b = tmp.path().join("b.log");
+    let csv_path = tmp.path().join("out.csv");
+    let error_log_path = tmp.path().join("errors.log");
+
+    // 每个文件 1 条非法行（触发 error log）+ 1 条合法行（保证 handle_run 不提前退出）
+    let valid_line = "2025-01-15 10:30:28.001 (EP[0] sess:0x0001 user:TESTUSER trxid:1 stmt:0x1 appname:App ip:10.0.0.1) [SEL] SELECT id FROM t. EXECTIME: 5(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.\n";
+    std::fs::write(&log_path_a, format!("{INVALID_LOG_LINE}{valid_line}")).unwrap();
+    std::fs::write(&log_path_b, format!("{INVALID_LOG_LINE}{valid_line}")).unwrap();
+
+    let mut cfg = build_csv_config(&log_path_a, &csv_path);
+    cfg.error = Some(ErrorLogConfig {
+        file: error_log_path.to_string_lossy().into_owned(),
+    });
+
+    let interrupted = Arc::new(AtomicBool::new(false));
+    let pb = build_pb();
+    let mut state = WatchLoopState::new(HashMap::new(), None);
+
+    trigger_full_file(
+        &log_path_a,
+        &cfg,
+        true,
+        false,
+        &interrupted,
+        &mut state,
+        &pb,
+    );
+    trigger_full_file(
+        &log_path_b,
+        &cfg,
+        true,
+        false,
+        &interrupted,
+        &mut state,
+        &pb,
+    );
+
+    assert!(error_log_path.exists(), "error log 应在有解析错误时被创建");
+    let error_content = std::fs::read_to_string(&error_log_path).unwrap();
+    let error_line_count = error_content
+        .lines()
+        .filter(|l| l.starts_with("[ERROR]"))
+        .count();
+    assert!(
+        error_line_count >= 2,
+        "应含至少 2 条 [ERROR] 行（来自 A 和 B 各 1 次触发），实际 {error_line_count}\n{error_content}"
+    );
+}
+
+/// WATCH-09：`interrupted=true` 时 `handle_watch` 应返回 `Err(Error::Interrupted)`（对应 exit 130）。
+#[test]
+fn test_watch_09_exit_code_130() {
+    let tmp = TempDir::new().unwrap();
+    let csv_path = tmp.path().join("out.csv");
+    let cfg = build_csv_config(tmp.path(), &csv_path);
+    let interrupted = Arc::new(AtomicBool::new(true));
+    let result = handle_watch(&cfg, true, false, &interrupted);
+    assert!(
+        matches!(result, Err(Error::Interrupted)),
+        "interrupted=true 时 handle_watch 应返回 Err(Error::Interrupted)，实际: {result:?}"
     );
 }
