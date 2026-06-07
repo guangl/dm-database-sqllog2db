@@ -12,6 +12,8 @@
 
 **Goal:** 补完 watch 功能短板（CSV 支持、error log 追加写入、退出码修正），提升文档与测试质量，同步 VALIDATION.md 到 v1.18 实际状态。
 
+**Phase 03 complete (2026-06-07):** 文档对齐完成 — watch/validate --help 各≥2 示例（DOC-05），README 补充 watch + init --interactive + quiet/verbose 说明（DOC-04），phases 67–70 VALIDATION.md 补全为 complete 状态（QUAL-01）。
+
 **Target features:**
 - CSV watch 支持（目前仅限 SQLite）
 - watch error log 追加写入模式（长时间运行不覆盖历史错误）
