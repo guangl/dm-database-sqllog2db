@@ -4,6 +4,52 @@
 
 ---
 
+## Milestone: v1.19 — watch完善与文档对齐
+
+**Shipped:** 2026-06-07
+**Phases:** 4 (1–3, 71) | **Plans:** 16 | **Duration:** ~2 days | **Coverage:** 92.06%
+
+### What Was Built
+
+- watch CSV 增量追加（WATCH-07）：`force_append_for_watch_trigger` 统一注入，trigger_full 和 trigger_incremental 共享同一注入函数（Phase 1）
+- error log 追加写入（WATCH-08）：`write_error_log` OpenOptions 双分支，`append_error_log` config 字段带 `#[serde(skip)]` 防 TOML 污染（Phase 1）
+- Ctrl+C 退出码 130（WATCH-09）：`handle_watch` 返回 `Err(Error::Interrupted)`，main.rs signal-aware exit(130)（Phase 1）
+- 行覆盖率 92.06%（QUAL-02）：collector.rs 4 组单元测试 + filter_processor.rs 5 项字段过滤测试（D-05 补救）（Phase 2）
+- 4 份正式 VALIDATION.md（QUAL-01）：Phase 67/68/69/70 全部以 `status: complete` 落地（Phase 3）
+- README 5 命令 + 持续监听功能特性 + 3 段快速入门示例（DOC-04），watch/validate --help 各≥2 示例（DOC-05）（Phase 3）
+- Phase 71：10 个 mod.rs 拆分为 >30 个命名子模块（watch/mod.rs 998 行拆为 11 个子文件）
+
+### What Worked
+
+- **Tech debt 闭环**：v1.18 遗留的 3 个 tech debt 项（Ctrl+C 退出码/error log 覆盖写/CSV watch 不支持）在 Phase 1 全部修复，milestone 无欠账
+- **force_append_for_watch_trigger 抽取**：统一注入函数消除 trigger_full/trigger_incremental 重复注入逻辑，新增 CSV watch 支持时只改一处
+- **D-05 补救策略**：Phase 2 覆盖率未达标时，识别出 filter_processor 为最短路径，追加 5 个字段过滤单元测试即跨越 92% 阈值，不需要大规模补测
+- **Phase 71 wave 并行化**：10 个 mod.rs 分 Wave 1/2/3 执行，Wave 1 5 个独立模块并行无冲突，Wave 3 两个大文件（run/watch）依次完成，执行顺序清晰
+
+### What Was Inefficient
+
+- **macOS FSEvents #[ignore] 重新出现**：虽然评估了跨平台条件编译方案，但最终保留 #[ignore]，下个里程碑如需真正覆盖仍需 subprocess 方案
+- **Phase 71 review-fix 循环**：71-REVIEW.md 发现 3 项问题（WR-01/02/03 + IN-03），需要额外 4 个 fix commit；mod.rs 拆分后 clippy 新规则暴露了之前隐藏的问题（prescan 内联测试迁移、函数长度）
+
+### Patterns Established
+
+- `#[serde(skip)]` 用于内部 flag 字段：防止 TOML 序列化污染，同时允许 pub 可见性供集成测试使用
+- coverage gap 补救：先识别低覆盖率函数（llvm-cov），再针对性补单元测试，而非广撒网
+- mod.rs 拆分后公开 API 验证：在每个 plan 结束后运行 `cargo test` 确认无 API 破坏，再进入下一个
+
+### Key Lessons
+
+- **tech debt 项目应在下一 milestone Phase 1 优先关闭**：v1.19 的 WATCH-07/08/09 全部是 v1.18 deferred，Phase 1 一次性清掉，没有拖到 Phase 2/3
+- **Phase 71 不应与文档/测试 milestone 混排**：mod.rs 重构是独立的代码质量工作，与 WATCH/QUAL/DOC 需求没有依赖关系，可以单独出一个里程碑
+- **REQUIREMENTS.md 应在 phase 完成时同步勾选**：v1.19 关闭时需手动确认所有 checkbox，依赖 SUMMARY 文件做事后验证而非实时跟踪
+
+### Cost Observations
+
+- Sessions: ~2 working sessions
+- Notable: Phase 71 的 10 个并行 worktree 执行大幅减少总时间，每个 plan ~5 分钟完成
+
+---
+
 ## Milestone: v1.18 — 用户体验全面升级
 
 **Shipped:** 2026-06-06
