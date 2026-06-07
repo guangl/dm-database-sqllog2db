@@ -912,9 +912,9 @@ Full details: `.planning/milestones/v1.18-ROADMAP.md`
 - [x] 71-03-PLAN.md — src/pipeline/mod.rs (347 行) 拆为 field_mask/normalize_config/output_config/processor/tests（Wave 1）
 - [x] 71-04-PLAN.md — src/stats/mod.rs (200 行) 拆为 runner.rs + tests.rs（Wave 1）
 - [x] 71-05-PLAN.md — src/config/mod.rs (194 行) 拆为 root/error_log/tests（Wave 1）
-- [ ] 71-06-PLAN.md — src/exporter/mod.rs (310 行) 拆为 api/kind/manager/stats/util（Wave 2）
-- [ ] 71-07-PLAN.md — src/exporter/csv/mod.rs (243 行) 拆为 exporter.rs + impls.rs（Wave 2）
-- [ ] 71-08-PLAN.md — src/exporter/sqlite/mod.rs (249 行) 拆为 exporter/impls/pragma（Wave 2）
+- [x] 71-06-PLAN.md — src/exporter/mod.rs (310 行) 拆为 api/kind/manager/stats/util（Wave 2）
+- [x] 71-07-PLAN.md — src/exporter/csv/mod.rs (243 行) 拆为 exporter.rs + impls.rs（Wave 2）
+- [x] 71-08-PLAN.md — src/exporter/sqlite/mod.rs (249 行) 拆为 exporter/impls/pragma（Wave 2）
 - [ ] 71-09-PLAN.md — src/cli/run/mod.rs (476 行) 拆为 orchestrator/input/sequential/summary/error_log（Wave 3）
 - [ ] 71-10-PLAN.md — src/cli/watch/mod.rs (998 行) 拆为 handler/state/watcher/event/trigger_full/trigger_incremental/dirs/status/append/debounce/tests（Wave 3）
 
