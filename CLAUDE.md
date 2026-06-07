@@ -41,6 +41,7 @@ Input .log files (sqllogs/)
 ### Key Modules
 
 - **`cli/run/mod.rs`** — main orchestration: loads config, builds pipeline, pre-scans for transaction filters, streams records file by file
+- **`cli/run/parallel.rs`** — multi-file parallel parse path for CSV export (rayon); parse errors logged via `log::warn!`
 - **`cli/run/sqlite_parallel.rs`** — multi-file parallel parse path for SQLite export (rayon); parse errors logged via `log::warn!`
 - **`cli/run/prescan.rs`** — two-phase pre-scan: collects transaction IDs for filter pre-population; logs file-open and non-UTF8 path errors
 - **`exporter/mod.rs`** — `Exporter` trait + `ExporterManager` factory; only one exporter is active per run (priority: CSV > SQLite)
@@ -52,7 +53,7 @@ Input .log files (sqllogs/)
 ### Performance Design
 
 - Single-threaded streaming — constant memory regardless of file size
-- Multi-file parallel parse path for SQLite export via rayon (`sqlite_parallel.rs`)
+- Multi-file parallel parse path for CSV export via rayon (`parallel.rs`) and SQLite export (`sqlite_parallel.rs`)
 - 16MB `BufWriter` + `itoa` crate for zero-allocation CSV formatting
 - `pipeline.is_empty()` check in the hot loop avoids filter overhead when disabled
 - Binary: LTO (`fat`) + strip + `panic=abort` + `opt-level=3`
