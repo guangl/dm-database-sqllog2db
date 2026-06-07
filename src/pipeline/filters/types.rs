@@ -39,7 +39,7 @@ impl IncludeFilters {
             || self.tags.as_ref().is_some_and(|v| !v.is_empty())
             || self.start_ts.is_some()
             || self.end_ts.is_some()
-            || self.trxids.as_ref().is_some_and(|s| !s.is_empty())
+            || self.trxids.is_some()
     }
 }
 

@@ -79,9 +79,11 @@ impl FilterProcessor {
         let include_groups = build_include_groups(f);
         let exclude_groups = build_exclude_groups(f);
         let trxid_set = f.include.trxids.clone();
+        // trxid_set.is_some() 包含空集合（预扫描运行但无命中的 sentinel），
+        // 空集合应拒绝所有记录，因此需要触发元过滤器路径
         let has_meta_filters = include_groups.iter().any(|g| !g.is_empty())
             || exclude_groups.iter().any(|g| !g.is_empty())
-            || trxid_set.as_ref().is_some_and(|s| !s.is_empty());
+            || trxid_set.is_some();
         Self {
             base_filter,
             include_groups,
@@ -119,7 +121,8 @@ impl LogProcessor for FilterProcessor {
         }
 
         if let Some(trxids) = &self.trxid_set {
-            if !trxids.is_empty() && !trxids.contains(record.trxid.as_str()) {
+            // 空集合是预扫描无命中的 sentinel，应拒绝所有记录
+            if trxids.is_empty() || !trxids.contains(record.trxid.as_str()) {
                 return false;
             }
         }

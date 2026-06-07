@@ -37,11 +37,17 @@ impl FiltersFeature {
         self.indicators.has_filters() || self.sql.has_filters()
     }
 
-    /// 合并预扫描发现的事务 ID 到 `IncludeFilters` 中，以便在正式扫描时直接通过 trxid 匹配保留整笔事务
+    /// 合并预扫描发现的事务 ID 到 `IncludeFilters` 中，以便在正式扫描时直接通过 trxid 匹配保留整笔事务。
+    ///
+    /// 即使 `trxids` 为空（预扫描运行但无命中），也会初始化 `include.trxids` 为空集合，
+    /// 使 `has_filters()` 通过 `trxids.is_some()` 返回 `true`，
+    /// 从而确保 `FilterProcessor` 进入 pipeline 并拒绝所有记录。
     pub(crate) fn merge_found_trxids(&mut self, trxids: Vec<String>) {
-        if !self.enable || trxids.is_empty() {
+        if !self.enable {
             return;
         }
+        // 始终初始化 trxids 集合，即使 trxids 为空，
+        // 以确保 include.has_filters() 在预扫描已运行但无命中时返回 true
         self.include
             .trxids
             .get_or_insert_with(TrxidSet::default)
@@ -169,11 +175,18 @@ mod tests {
 
     // ── merge_found_trxids ─────────────────────────────────────
     #[test]
-    fn test_merge_found_trxids_empty_list() {
+    fn test_merge_found_trxids_empty_list_initializes_sentinel() {
+        // 空列表时仍应初始化空集合（sentinel），使 has_filters() 返回 true，
+        // 确保预扫描无命中时 FilterProcessor 进入 pipeline 并拒绝所有记录（CR-01 修复）
         let mut f = make_feature(true);
         f.include.users = Some(vec!["USER".into()]);
         f.merge_found_trxids(vec![]);
-        assert!(f.include.trxids.is_none());
+        let trxids = f
+            .include
+            .trxids
+            .as_ref()
+            .expect("trxids 应已初始化为 Some（空集合）");
+        assert!(trxids.is_empty(), "空列表时集合应为空");
     }
 
     #[test]
