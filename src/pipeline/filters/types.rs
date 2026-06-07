@@ -281,6 +281,16 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_trxids_empty_list_normalizes_to_none() {
+        let toml = "[filter]\nenable = true\ntrxids = []\n";
+        let w: FilterWrapper = toml::from_str(toml).unwrap();
+        assert!(
+            w.filter.include.trxids.is_none(),
+            "trxids = [] should normalize to None so has_filters() returns false"
+        );
+    }
+
     // ── serde_helpers::vec_to_i64_hashset ─────────────────────
 
     #[test]
@@ -301,6 +311,16 @@ mod tests {
         assert!(
             w.filter.indicators.exec_ids.is_none(),
             "exec_ids should be None when absent"
+        );
+    }
+
+    #[test]
+    fn test_exec_ids_empty_list_normalizes_to_none() {
+        let toml = "[filter]\nenable = true\n[filter.indicators]\nexec_ids = []\n";
+        let w: FilterWrapper = toml::from_str(toml).unwrap();
+        assert!(
+            w.filter.indicators.exec_ids.is_none(),
+            "exec_ids = [] should normalize to None so has_filters() returns false"
         );
     }
 

@@ -8,7 +8,15 @@ where
     D: Deserializer<'de>,
 {
     let v: Option<Vec<String>> = Option::deserialize(deserializer)?;
-    Ok(v.map(|items| items.into_iter().collect()))
+    // Empty list normalizes to None so `trxids = []` in config means "no filter".
+    // Only merge_found_trxids may produce Some(empty_set) as a prescan sentinel.
+    Ok(v.and_then(|items| {
+        if items.is_empty() {
+            None
+        } else {
+            Some(items.into_iter().collect())
+        }
+    }))
 }
 
 pub(super) fn vec_to_i64_hashset<'de, D>(
@@ -18,5 +26,11 @@ where
     D: Deserializer<'de>,
 {
     let v: Option<Vec<i64>> = Option::deserialize(deserializer)?;
-    Ok(v.map(|items| items.into_iter().collect()))
+    Ok(v.and_then(|items| {
+        if items.is_empty() {
+            None
+        } else {
+            Some(items.into_iter().collect())
+        }
+    }))
 }

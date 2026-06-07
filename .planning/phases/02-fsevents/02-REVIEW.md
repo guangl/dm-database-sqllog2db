@@ -1,151 +1,179 @@
 ---
-status: findings
 phase: 02-fsevents
-reviewed: 2026-06-07
+reviewed: 2026-06-07T10:00:00Z
 depth: standard
 files_reviewed: 3
 files_reviewed_list:
+  - tests/watch_incremental.rs
   - src/cli/run/tests.rs
   - src/cli/run/filter_processor.rs
-  - tests/watch_incremental.rs
 findings:
-  critical: 0
+  critical: 2
   warning: 3
   info: 2
-  total: 5
+  total: 7
+status: issues_found
 ---
 
-# Phase 02-fsevents: Code Review Report
+# Phase 02: Code Review Report
 
-**Reviewed:** 2026-06-07
+**Reviewed:** 2026-06-07T10:00:00Z
 **Depth:** standard
 **Files Reviewed:** 3
-**Status:** findings
+**Status:** issues_found
 
 ## Summary
 
-本 phase 仅新增测试代码，无生产代码改动。三个文件共增加：Group 1-4 collector 单元测试、5 个 filter_processor 字段过滤测试、3 个 watch 集成测试（WATCH-07/08/09）及若干辅助结构。
+审查了三个文件：`tests/watch_incremental.rs`（集成测试），`src/cli/run/tests.rs`（单元测试），`src/cli/run/filter_processor.rs`（过滤器管道构建）。
 
-总体质量良好，隔离性到位（TempDir 使用正确，无共享可变状态）。发现 3 个 Warning 和 2 个 Info。
+在 `filter_processor.rs` 的 `build_pipeline` 中发现一处逻辑缺陷——当 `indicators`/`sql` 过滤器配置存在但预扫描未匹配到任何事务时，所有记录会被导出（过滤失效）。`tests/watch_incremental.rs` 的测试辅助函数 `count_rows` 存在 SQL 注入风险。测试整体质量较高，断言覆盖合理，但存在数个可靠性和可维护性问题。
+
+## Critical Issues
+
+### CR-01: `build_pipeline` 在 indicators/sql 过滤器无命中时完全失效
+
+**File:** `src/cli/run/filter_processor.rs:9`
+
+**Issue:** `build_pipeline` 仅在 `f.include.has_filters() || f.exclude.has_filters()` 时才添加 `FilterProcessor`。当用户配置了 `[filter.indicators]` 或 `[filter.sql]` 但预扫描（prescan）未找到任何匹配的事务 ID 时：
+1. `scan_for_trxids_by_transaction_filters` 返回空列表
+2. `merge_found_trxids` 检查 `trxids.is_empty()` 为真，提前返回，`include.trxids` 保持 `None`
+3. `include.has_filters()` 返回 `false`
+4. `build_pipeline` 不添加任何 `FilterProcessor`
+5. 所有记录都通过空 pipeline，**全量导出**
+
+期望行为：当 `indicators`/`sql` 过滤器有效配置但无匹配事务时，应导出 0 条记录。
+
+**Fix:**
+```rust
+pub(super) fn build_pipeline(cfg: &Config) -> Pipeline {
+    let mut pipeline = Pipeline::new();
+    if let Some(f) = cfg.filter.as_ref() {
+        if f.enable && (f.include.has_filters() || f.exclude.has_filters()) {
+            pipeline.add(Box::new(FilterProcessor::from_feature(f)));
+        } else if f.enable && f.has_transaction_filters() {
+            // indicators/sql 过滤器已通过 prescan 转换为 trxids；
+            // 若 trxids 为空（无命中），需要添加一个拒绝所有记录的过滤器
+            // 而不是让全部记录通过。
+            pipeline.add(Box::new(RejectAllProcessor));
+        }
+    }
+    pipeline
+}
+```
+
+或者更简洁地，在 `merge_found_trxids` 中当列表为空时插入一个 sentinel（空 HashSet），使 `include.has_filters()` 在有 indicators/sql 过滤器时返回 true：
+
+```rust
+pub(crate) fn merge_found_trxids(&mut self, trxids: Vec<String>) {
+    if !self.enable {
+        return;
+    }
+    // 即使 trxids 为空，也要插入空 HashSet 表示"已预扫描但无命中"，
+    // 触发 FilterProcessor 在主扫描中拒绝所有记录
+    self.include
+        .trxids
+        .get_or_insert_with(TrxidSet::default)
+        .extend(trxids);
+}
+```
 
 ---
+
+### CR-02: `count_rows` 辅助函数存在 SQL 注入漏洞（测试代码）
+
+**File:** `tests/watch_incremental.rs:70`
+
+**Issue:** `count_rows` 使用 `format!` 宏将 `table` 参数拼接进 SQL 字符串：
+
+```rust
+let query = format!("SELECT COUNT(*) FROM \"{table}\"");
+```
+
+虽然所有调用点目前都传入硬编码字符串 `"sqllog_records"`，但该模式在测试代码中依然是不良示例。若将来有测试使用动态或含特殊字符的表名（如 `sqllog"; DROP TABLE sqllog_records; --`），SQLite 的双引号转义仍可能被绕过。测试工具函数应使用参数化查询。
+
+**Fix:**
+```rust
+fn count_rows(db_path: &Path, table: &str) -> i64 {
+    let Ok(conn) = Connection::open(db_path) else {
+        return 0;
+    };
+    // 使用硬编码表名替换，完全避免注入风险
+    // 或者对表名进行白名单验证
+    let query = format!("SELECT COUNT(*) FROM \"{}\"", table.replace('"', ""));
+    conn.query_row(&query, [], |row| row.get::<_, i64>(0))
+        .unwrap_or(0)
+}
+```
 
 ## Warnings
 
-### WR-01: Group 4 测试对"过滤后 params_buf 是否被更新"无实质断言
+### WR-01: `test_watch_04` 的断言 `new_size > offset_after_full` 存在竞态
 
-**File:** `src/cli/run/tests.rs:693-718`
+**File:** `tests/watch_incremental.rs:219-220`
 
-**Issue:**
-`test_collector_filtered_params_normalize`（Group 4）的目标是验证：被过滤的 PARAMS 记录即使不进入 `rows`，也会更新 `params_buf`。但测试只断言了 `rows.is_empty()`，从未验证 `params_buf` 是否确实被写入。
+**Issue:** `offset_after_full`（第 172 行）在 `trigger_full_file` 返回后立即捕获，此时 `log_path` 尚未追加 7 条新记录（写入发生在第 202 行）。断言 `new_size > offset_after_full` 实际上只是在验证"写入 7 条后文件确实变大了"，而不是验证 offset 恢复是否正确。这个断言不会失败，但也不测试预期属性。若文件系统缓存延迟导致 `metadata().len()` 返回旧值（不太可能但理论上可能），测试会虚通过。
 
-对照 Group 1 的并联测试 `test_normalize_and_export_filtered_params_updates_buffer`（tests.rs:275-347），该测试通过 `params_buffer.contains_key(&buf_key)` 做了明确断言。Group 4 缺少等价检查，导致目标行为（`else` 分支更新 buffer）在实际上没被验证——即使 `collector::process_record` 的 `else` 分支被删除，此测试仍能通过。
-
-**Fix:**
-```rust
-// collect_log_file 不直接暴露 params_buf，需通过间接方式验证。
-// 最直接的方法：写两行日志，第一行 PARAMS（被 AlwaysFail 过滤），
-// 第二行是引用该 stmt 的 DML 记录（pipeline 改为空，令其通过），
-// 验证最终 rows[0] 的 normalized_sql 包含替换后的值。
-// 若 params_buf 未更新，normalized_sql 仍为 None 或原始 '?'，断言失败。
-```
-
----
-
-### WR-02: WATCH-08 测试对"第二次触发的 error log 为追加"未显式验证追加语义
-
-**File:** `tests/watch_incremental.rs:344-395`
-
-**Issue:**
-`test_watch_08_error_log_append` 只统计 `[ERROR]` 行总数 `>= 2`，但这个断言无法区分以下两种实现：
-1. 正确实现：`append_error_log=true`，第二次触发以追加方式写，error log 包含来自两次触发的 `[ERROR]` 行。
-2. 错误实现：每次触发覆盖写，恰好文件被覆盖为含有 1 条 `[ERROR]` 行（若解析器将两行无效日志合并为一条错误），仍为 `>= 1`，大于等于 2 才能触发失败。
-
-更根本的问题：两个文件都只有 1 条非法行（`INVALID_LOG_LINE`），每次触发各产生 1 条 `[ERROR]`。如果第二次触发覆盖写（bug），则 error log 只会有 1 条 `[ERROR]`，此时断言 `>= 2` 确实会失败——所以测试的保护力度实际上足够。
-
-**但存在隐患**：若未来 `INVALID_LOG_LINE` 被改为产生 2 条错误（例如多行），则覆盖写模式也能通过 `>= 2` 的断言，测试退化为无效。
+更有意义的断言是验证 `state2.file_offsets` 中的 offset 等于 `new_size`。
 
 **Fix:**
 ```rust
-// 在第一次 trigger_full_file 之后、第二次之前记录文件大小，
-// 第二次触发后验证文件大小增大（不是截断后重写）：
-let size_after_first = std::fs::metadata(&error_log_path).unwrap().len();
-trigger_full_file(&log_path_b, &cfg, ...);
-let size_after_second = std::fs::metadata(&error_log_path).unwrap().len();
-assert!(
-    size_after_second > size_after_first,
-    "error log 应追加（文件变大），而非截断重写"
+// 验证 state2 的 offset 更新为最新文件大小（这才是真正需要验证的属性）
+let new_size = std::fs::metadata(&log_path).unwrap().len();
+let canonical_log2 = log_path.canonicalize().unwrap();
+let recorded_offset = state2.file_offsets().get(&canonical_log2).copied();
+assert_eq!(
+    recorded_offset,
+    Some(new_size),
+    "增量触发后 state2.file_offsets 应记录最新文件大小"
 );
+assert!(new_size > offset_after_full, "文件应已增长");
 ```
 
 ---
 
-### WR-03: `AlwaysFail` 未实现 `Debug`，但 `LogProcessor` trait 要求 `Debug` bound
+### WR-02: `filter_processor.rs` 中 `build_or_group` 映射关系缺少覆盖 `has_filters()` 条件的测试
 
-**File:** `src/cli/run/tests.rs:598-604`
+**File:** `src/cli/run/filter_processor.rs:9`
 
-**Issue:**
-`Pipeline` 的 `processors: Vec<Box<dyn LogProcessor>>` 要求 `LogProcessor: std::fmt::Debug`（见 `src/pipeline/mod.rs:151`）。`AlwaysFail` 在 tests.rs 中标注了 `#[derive(Debug)]`（第 598-599 行），这是正确的。
+**Issue:** `build_pipeline` 的触发条件是 `f.include.has_filters() || f.exclude.has_filters()`，但 `make_feature` 测试辅助函数（第 155 行）不通过 `FiltersFeature::default()` 展开，而是手动构造，这意味着 `indicators` 和 `sql` 字段始终为 `Default::default()`。没有任何 `filter_processor.rs` 内部测试验证 `build_pipeline` 在仅有 `indicators` 或 `sql` 过滤器时的行为，从而掩盖了 CR-01 描述的缺陷。
 
-然而，tests.rs 中另有 `AlwaysFail` 无 Debug 的情况吗？检查后确认仅一处定义，derive 存在。本条降为确认无误的细节——见 Info 区。
-
-**实际 Warning**：`AlwaysFail` 被定义为模块级别（`tests` 模块之外，在 `mod.rs` 的 `#[cfg(test)] mod tests;` 引入的 `tests.rs` 顶层），这导致它对同 crate 内所有测试模块可见但不可复用（无法从集成测试引用）。这不是 bug，但若将来 `collector.rs` 的测试需要相同的 `AlwaysFail`，会有重复定义。
-
-**Fix:** 将 `AlwaysFail` 移入 `tests.rs` 内部的某个 `mod helpers` 中或至少加 `#[cfg(test)]` 注释说明其性质（已隐含在 `tests.rs` 文件范围内，无需动作）。实际上此处风险较低，本条保留为 Warning 是因为它处于 `use super::*` 作用域外但与生产代码共享 `src/cli/run/mod.rs` 的编译单元，可能引起 clippy `dead_code` 警告（若未被所有测试分支引用）。
-
-**验证命令：**
-```bash
-cargo clippy --all-targets -- -D warnings
-```
+**Fix:** 添加测试，覆盖 `indicators`-only 和 `sql`-only 配置传入 `build_pipeline` 后管道状态的验证。
 
 ---
+
+### WR-03: `test_watch_03_incremental_appends_only_new_rows` 中 `start_id` 参数有歧义
+
+**File:** `tests/watch_incremental.rs:127`
+
+**Issue:** `write_test_log_records(&log_path, 10, 5)` 第一个参数是 `start_id`，决定记录中的 trxid、sess_id 等字段。由于 trxid 值直接拼入日志行，当 `start_id=10` 时所有记录的 trxid 均从 `10` 开始，与第一批 `start_id=0` 的记录在 trxid 上连续。在有事务过滤器时这种设计可能导致测试假阳性：trxid 连续不等于行不重复。
+
+当前测试不使用事务过滤器，所以没有实际 bug，但测试的语义假设"ID 不同即内容不同，插入不重复"没有被显式断言验证。建议注释说明 `start_id` 为何需要与前一批不重叠。
+
+**Fix:** 在 `write_test_log_records` 的调用处添加注释，明确 `start_id` 必须与已有记录不重叠，以保证 SQLite 中无重复行（若表有唯一约束）或结果行数可预期。
 
 ## Info
 
-### IN-01: `build_csv_config` helper 注释与实际行为存在描述偏差
+### IN-01: `tests/watch_incremental.rs` 中 `use std::sync::atomic::AtomicBool` 直接引用而未 `use std::sync::atomic::Ordering`
 
-**File:** `tests/watch_incremental.rs:272-290`
+**File:** `tests/watch_incremental.rs:17`
 
-**Issue:**
-注释说"`append=false, overwrite=true`：`trigger_full_file` 内的 `force_append_for_watch_trigger` 会在每次触发时将 append 覆盖为 true"。
+**Issue:** 文件顶部只导入了 `AtomicBool`，未导入 `Ordering`。`Ordering` 在测试中未直接使用（`AtomicBool::new(true)` 不需要 Ordering），但如果将来扩展测试需要手动 `store`/`load`，需要记住补充导入。这是对比 `src/cli/run/tests.rs` 第 766 行中 `use std::sync::atomic::{AtomicBool, Ordering}` 的不一致之处（那个测试文件在局部 `use` 中导入了 Ordering）。纯代码一致性问题。
 
-这描述是准确的，但注释中的"初始值不影响最终行为（per Pitfall 3）"有误导风险：`overwrite=true` 初始值确实会在 `force_append_for_watch_trigger` 被调用后被覆盖为 `false`（强制追加）。但如果有读者直接用 `build_csv_config` 返回值去调用 `handle_run`（而非通过 `trigger_*`），将得到覆盖写语义，与注释暗示的"追加"相悖。
-
-**Fix:** 注释补充说明：此 helper 仅供配合 `trigger_*` 函数使用，不应直接传入 `handle_run`。
+**Fix:** 若将来无需 `Ordering`，保持现状；若测试扩展则与其他测试文件保持一致的 `use` 风格。
 
 ---
 
-### IN-02: `test_watch_07_csv_append` 假设 `trigger_full_file` 对不同文件路径的 CSV 使用同一输出文件，但 `build_csv_config` 的 `log_path` 参数在第二次触发时被忽略
+### IN-02: `filter_processor.rs` 单元测试与集成测试中大量重复的 `make_record` 构造
 
-**File:** `tests/watch_incremental.rs:293-341`
+**File:** `src/cli/run/filter_processor.rs:136-153`
+**File:** `src/cli/run/tests.rs:275-306`
 
-**Issue:**
-两次 `trigger_full_file` 调用传入的 `cfg` 都是用 `log_path_a` 构建的（第 303 行 `let cfg = build_csv_config(&log_path_a, &csv_path)`），但第二次触发时传入的 `path` 参数是 `&log_path_b`（第 318 行）。
+**Issue:** `filter_processor.rs` 内部测试的 `make_record` 与 `tests.rs` 中的 `Sqllog` 字面量构造均包含相同的模板字段（`ep: 0`, `exectime: 0.0`, 等）。两处构造方式不同但无实质差异，增加维护成本。这是测试代码重复，不影响正确性。
 
-在 `trigger_full_file` 实现中（`watch/mod.rs:316`），`tmp_cfg.sqllog.inputs` 会被替换为 `path`（即 `log_path_b`），所以实际读取的是 `log_path_b` 的内容——行为是正确的。
-
-但 `cfg` 的构造用的是 `log_path_a`，这造成了轻微的"入参与注释意图不一致"的代码气味，将来重构 `build_csv_config` 签名时可能引发误解。
-
-**Fix:** 简化为不依赖 `log_path` 参数意义：
-```rust
-// cfg 中的 log_path 会被 trigger_full_file 内部覆盖，传任意有效路径即可
-let cfg = build_csv_config(tmp.path(), &csv_path);
-```
+**Fix:** 考虑将 `make_record` 移入 `#[cfg(test)]` 的公共测试工具模块，供多个测试文件复用。
 
 ---
 
-## Verdict
-
-未发现 Critical（数据丢失、安全漏洞、逻辑错误）问题。3 个 Warning 中：
-
-- **WR-01** 最实质：Group 4 测试对目标行为（`else` 分支更新 params_buf）缺乏断言，测试可能是一个"幽灵通过"——产品代码删除该分支测试仍绿。建议补充断言。
-- **WR-02** 对 append 语义的验证可以加固，但当前保护力度在正常情况下已足够。
-- **WR-03** 是 clippy 潜在警告风险，运行 `cargo clippy --all-targets -- -D warnings` 后确认实际结果。
-
-`filter_processor.rs` 中新增的 5 个测试（sessions/apps/statements/threads/Debug）逻辑正确，断言清晰，隔离良好。
-
----
-
-_Reviewed: 2026-06-07_
+_Reviewed: 2026-06-07T10:00:00Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
