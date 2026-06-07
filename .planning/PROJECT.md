@@ -153,16 +153,16 @@
 - ✓ README stats 用法示例 + CHANGELOG v1.0–v1.15 + config 模板全字段注释 — v1.16（Phase 62）
 - ✓ 行覆盖率 91.86% / 函数覆盖率 89.54%（51 项新测试，740 全部通过）— v1.16（Phase 63）
 
-### Active (v1.19)
+### Recently Validated in watch完善与文档对齐（Phases 1–3）
 
-- [ ] CSV watch 支持（目前仅限 SQLite）
-- [ ] watch error log 追加写入模式
-- [ ] watch Ctrl+C 退出码修正（130）
-- [ ] VALIDATION.md 草稿清理（Phase 67/68/69 补全，70 补充）
-- [ ] 测试覆盖率提升（目标 92%+，watch 相关测试）
-- [ ] macOS FSEvents ignore 测试评估与处理
-- [ ] README 更新（watch / init --interactive / 进度选项）
-- [ ] 各子命令 --help 信息完善
+- ✓ CSV watch 支持（`--output csv` 增量追加，AppendCsv 路径）— Phase 1
+- ✓ watch error log 追加写入模式（OpenOptions::append）— Phase 1
+- ✓ watch Ctrl+C 退出码修正（130，signal-aware）— Phase 1
+- ✓ 测试覆盖率 92.01%（行覆盖率），909 个测试全部通过 — Phase 2
+- ✓ macOS FSEvents ignore 测试标注（#[ignore] + 注释说明）— Phase 2
+- ✓ VALIDATION.md 补全（phases 67/68/69/70，status: complete）— Phase 3
+- ✓ README 更新（watch 子命令、`init --interactive`、`--quiet`/`--verbose` 说明）— Phase 3
+- ✓ watch/validate `--help` 各 ≥2 示例（DOC-05）— Phase 3
 
 ### Recently Validated in v1.18
 
