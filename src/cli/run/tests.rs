@@ -593,3 +593,126 @@ fn test_run_summary() {
     // 调用 print_run_summary 确认不 panic
     super::print_run_summary(false, false, false, 1.5, &[], 10, 0, &stats);
 }
+// ── Group 1-4: collector.rs 全分支单元测试 ──────────────────────────────────
+
+#[derive(Debug)]
+struct AlwaysFail;
+impl crate::pipeline::LogProcessor for AlwaysFail {
+    fn process(&self, _: &dm_database_parser_sqllog::Sqllog) -> bool {
+        false
+    }
+}
+
+// Group 1 — InvalidPath 错误路径（collector.rs lines 26-34）
+// 传入不存在路径应返回 Err(Error::Parser(ParserError::InvalidPath { .. }))
+#[test]
+fn test_collector_invalid_path_returns_error() {
+    use crate::pipeline::Pipeline;
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicBool;
+
+    let pipeline = Pipeline::default();
+    let interrupted = Arc::new(AtomicBool::new(false));
+    let result = collector::collect_log_file(
+        std::path::Path::new("/nonexistent/absolutely/not/there.log"),
+        &pipeline,
+        false,
+        None,
+        &interrupted,
+    );
+    assert!(result.is_err(), "不存在路径应返回 Err，实际: {result:?}");
+    assert!(
+        matches!(
+            result.unwrap_err(),
+            crate::error::Error::Parser(crate::error::ParserError::InvalidPath { .. })
+        ),
+        "应匹配 ParserError::InvalidPath"
+    );
+}
+
+// Group 2 — parse error 累积循环（collector.rs lines 41-63）
+// 含无效行的日志文件应累积 parse_errors 计数，rows 为空
+#[test]
+fn test_collector_parse_error_accumulation() {
+    use crate::pipeline::Pipeline;
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicBool;
+
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_path = dir.path().join("bad.log");
+    std::fs::write(&log_path, "not a valid log line\nalso invalid\n").unwrap();
+    let pipeline = Pipeline::default();
+    let interrupted = Arc::new(AtomicBool::new(false));
+    let (rows, stats) =
+        collector::collect_log_file(&log_path, &pipeline, false, None, &interrupted)
+            .expect("collect_log_file 应不返回 Err");
+    assert!(
+        rows.is_empty(),
+        "全部非法行应不产生记录，实际 rows.len()={}",
+        rows.len()
+    );
+    assert!(
+        stats.parse_errors > 0,
+        "应记录至少 1 条解析错误，实际 parse_errors={}",
+        stats.parse_errors
+    );
+}
+
+// Group 3 — !needs_processing 过滤分支（collector.rs lines 74-76）
+// AlwaysFail 处理器 + DML 记录（tag.is_some()）+ do_normalize=false
+// 使 passes=false 且 needs_processing=false，触发 early return
+#[test]
+fn test_collector_not_needed_filtering() {
+    use crate::pipeline::Pipeline;
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicBool;
+
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_path = dir.path().join("dml.log");
+    let valid_dml = "2025-01-15 10:30:28.001 (EP[0] sess:0x0001 user:TESTUSER trxid:1 stmt:0x1 appname:App ip:10.0.0.1) [SEL] SELECT id FROM t. EXECTIME: 5(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.\n";
+    std::fs::write(&log_path, valid_dml).unwrap();
+
+    let mut pipeline = Pipeline::new();
+    pipeline.add(Box::new(AlwaysFail));
+    assert!(!pipeline.is_empty(), "AlwaysFail 添加后 pipeline 应非空");
+
+    let interrupted = Arc::new(AtomicBool::new(false));
+    let (rows, _parse_errors) =
+        collector::collect_log_file(&log_path, &pipeline, false, None, &interrupted)
+            .expect("collect_log_file 应 Ok");
+    assert!(
+        rows.is_empty(),
+        "AlwaysFail 过滤所有记录，rows 应为空，实际 {}",
+        rows.len()
+    );
+}
+
+// Group 4 — 被过滤的 PARAMS else 分支（collector.rs lines 91-100）
+// AlwaysFail 处理器 + PARAMS 记录（tag.is_none()）+ do_normalize=true
+// 使 passes=false 但 needs_processing=true，触发 compute_normalized 更新 params_buf 但不 push 到 rows
+#[test]
+fn test_collector_filtered_params_normalize() {
+    use crate::pipeline::Pipeline;
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicBool;
+
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_path = dir.path().join("params.log");
+    // PARAMS 行：tag=None，格式与 test_sqlite_parallel_matches_sequential 中已知可解析的样本一致
+    let params_line = "2025-01-15 10:30:28.010 (EP[0] sess:0x0001 user:TESTUSER trxid:1 stmt:0x2 appname:App ip:10.0.0.1) PARAMS(SEQNO, TYPE, DATA)={(0, VARCHAR, 'testvalue')}\n";
+    std::fs::write(&log_path, params_line).unwrap();
+
+    let mut pipeline = Pipeline::new();
+    pipeline.add(Box::new(AlwaysFail));
+
+    let interrupted = Arc::new(AtomicBool::new(false));
+    // do_normalize=true 使被过滤的 PARAMS 行仍走 compute_normalized 分支
+    let (rows, _parse_errors) =
+        collector::collect_log_file(&log_path, &pipeline, true, None, &interrupted)
+            .expect("collect_log_file 应 Ok");
+    assert!(
+        rows.is_empty(),
+        "AlwaysFail 过滤 PARAMS 记录，rows 应为空，实际 {}",
+        rows.len()
+    );
+}
