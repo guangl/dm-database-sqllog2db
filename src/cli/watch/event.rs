@@ -1,7 +1,7 @@
-//! 处理单个 notify 事件：按 EventKind 路由到 trigger_full_file 或 trigger_incremental。
+//! 处理单个 notify 事件：按 `EventKind` 路由到 `trigger_full_file` 或 `trigger_incremental`。
 
 use super::debounce::should_trigger;
-use super::state::{WatchLoopState, DEBOUNCE_WINDOW};
+use super::state::{DEBOUNCE_WINDOW, WatchLoopState};
 use super::trigger_full::trigger_full_file;
 use super::trigger_incremental::trigger_incremental;
 use crate::config::Config;

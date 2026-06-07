@@ -1,4 +1,4 @@
-//! 增量触发：对内容追加的 .log 文件仅读取新增字节段执行 handle_run。
+//! 增量触发：对内容追加的 `.log` 文件仅读取新增字节段执行 `handle_run`。
 
 use super::append::force_append_for_watch_trigger;
 use super::offsets;

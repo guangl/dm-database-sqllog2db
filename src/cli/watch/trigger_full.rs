@@ -1,4 +1,4 @@
-//! 全量触发：对新创建的 .log 文件执行完整的 handle_run，并持久化文件大小为初始 offset。
+//! 全量触发：对新创建的 `.log` 文件执行完整的 `handle_run`，并持久化文件大小为初始 offset。
 
 use super::append::force_append_for_watch_trigger;
 use super::offsets;
