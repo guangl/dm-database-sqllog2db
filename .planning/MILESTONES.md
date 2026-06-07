@@ -1,5 +1,34 @@
 # Milestones: sqllog2db
 
+## v1.19 — watch完善与文档对齐
+
+**Shipped:** 2026-06-07  
+**Phases:** 1–3, 71 | **Plans:** 16 | **Commits:** 96  
+**Duration:** 2026-06-06 → 2026-06-07 (~2 days)  
+**Code changes:** 125 files, +12,685 / -3,149 lines  
+**Tests:** ~909 total (all passing, 2 ignored)  
+**Coverage:** 92.06% line coverage
+
+### Delivered
+
+补完 watch 功能短板并完成大规模模块化重构：watch CSV 增量追加（WATCH-07）、error log 历史保留（WATCH-08）、Ctrl+C 退出码 130（WATCH-09）；测试覆盖率提升至 92.06%；macOS FSEvents 限制落地文档化方案；README 补充 watch/init --interactive/quiet+verbose 完整说明；10 个 mod.rs 文件全部拆分为命名子模块，mod.rs 仅保留 pub use 导入（Phase 71）。
+
+### Key Accomplishments
+
+1. watch 子命令支持 CSV 导出增量追加（WATCH-07）：`force_append_for_watch_trigger` 统一注入 `append=true`，多次触发行数正确累计，header 仅一次
+2. error log 追加写入 + run 路径防回归（WATCH-08）：`write_error_log` OpenOptions 双分支；`test_write_error_log_run_still_truncates` 防回归测试
+3. Ctrl+C 退出码修正为 130（WATCH-09）：`handle_watch` 返回 `Err(Error::Interrupted)`，main.rs signal-aware exit(130)
+4. 行覆盖率 92.06%（QUAL-02）：collector.rs Group 1–4 + filter_processor 5 项字段过滤测试，超越 92% 目标
+5. 4 份正式 VALIDATION.md（QUAL-01）：Phase 67/68/69/70 全部以 `status: complete` 落地，Per-Task Verification Map 转录完整
+6. mod.rs 重构 Phase 71：10 个 mod.rs 共 ~2,600 行拆分为 >30 个命名子模块（watch/mod.rs 998 行拆为 11 个子文件），mod.rs 均精简为声明骨架
+
+### Archives
+
+- `.planning/milestones/v1.19-ROADMAP.md` — 完整 Phase 细节
+- `.planning/milestones/v1.19-REQUIREMENTS.md` — 需求归档（8/8 complete）
+
+---
+
 ## v1.18 — 用户体验全面升级
 
 **Shipped:** 2026-06-06  

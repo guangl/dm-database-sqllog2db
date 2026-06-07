@@ -2,7 +2,7 @@
 
 ## Milestones
 
-- 🔄 **watch完善与文档对齐** — Phases 1–3 (in progress)
+- ✅ **v1.19 watch完善与文档对齐** — Phases 1–3, 71 (shipped 2026-06-07)
 - ✅ **v1.18 用户体验全面升级** — Phases 67–70 (shipped 2026-06-06)
 - ✅ **v1.17 多文件并行提速** — Phases 64–66.1 (shipped 2026-06-04)
 - ✅ **v1.16.0 工程质量深化** — Phases 59–63 (shipped 2026-06-03)
@@ -227,13 +227,17 @@ Full details: `.planning/milestones/v1.18-ROADMAP.md`
 
 </details>
 
----
-
-**watch完善与文档对齐 (Phases 1–3) — IN PROGRESS**
+<details>
+<summary>✅ v1.19 watch完善与文档对齐 (Phases 1–3, 71) — SHIPPED 2026-06-07</summary>
 
 - [x] **Phase 1: watch 功能完善** — CSV watch 支持、error log 追加模式、Ctrl+C 退出码 130 (WATCH-07/08/09) (completed 2026-06-06)
 - [x] **Phase 2: 测试覆盖率与 FSEvents** — watch 测试补充、92%+ 行覆盖率、FSEvents #[ignore] 落地方案 (QUAL-02/03) (completed 2026-06-07)
 - [x] **Phase 3: 文档与验证对齐** — VALIDATION.md 补全、README watch/init/进度选项更新、--help 完善 (QUAL-01, DOC-04, DOC-05) (completed 2026-06-07)
+- [x] **Phase 71: mod.rs 重构** — 10 个 mod.rs 拆分为命名子模块，mod.rs 仅保留 pub use 导入 (completed 2026-06-07)
+
+Full details: `.planning/milestones/v1.19-ROADMAP.md`
+
+</details>
 
 ## Phase Details
 
@@ -887,14 +891,14 @@ Full details: `.planning/milestones/v1.18-ROADMAP.md`
 | 66. 兼容性验证与测试 | v1.17 | Complete | 2026-06-04 |
 | 66.1. 修复并行集成测试覆盖 (INSERTED) | v1.17 | Complete | 2026-06-04 |
 
-| 67. 进度/摘要与诊断增强 | 3/3 | Complete   | 2026-06-05 |
-| 68. 交互式配置向导 | 2/2 | Complete   | 2026-06-05 |
-| 69. Watch 模式核心框架 | 4/4 | Complete    | 2026-06-06 |
+| 67. 进度/摘要与诊断增强 | v1.18 | Complete | 2026-06-05 |
+| 68. 交互式配置向导 | v1.18 | Complete | 2026-06-05 |
+| 69. Watch 模式核心框架 | v1.18 | Complete | 2026-06-06 |
 | 70. Watch 增量处理与集成测试 | v1.18 | Complete | 2026-06-06 |
-
-| 1. watch 功能完善 | 1/1 | Complete   | 2026-06-06 |
-| 2. 测试覆盖率与 FSEvents | 2/2 | Complete   | 2026-06-07 |
-| 3. 文档与验证对齐 | 3/3 | Complete   | 2026-06-07 |
+| 1. watch 功能完善 | v1.19 | Complete | 2026-06-06 |
+| 2. 测试覆盖率与 FSEvents | v1.19 | Complete | 2026-06-07 |
+| 3. 文档与验证对齐 | v1.19 | Complete | 2026-06-07 |
+| 71. mod.rs 重构 | v1.19 | Complete | 2026-06-07 |
 
 ### Phase 71: mod.rs 重构 — 拆分子模块，mod.rs 仅保留 pub use 导入
 

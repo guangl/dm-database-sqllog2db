@@ -8,21 +8,19 @@
 
 用户能够精确指定"导出哪些记录的哪些字段"——过滤逻辑清晰可配置，输出结果完全可控。
 
-## Current Milestone: watch完善与文档对齐
+## Current State: v1.19 已交付
 
-**Goal:** 补完 watch 功能短板（CSV 支持、error log 追加写入、退出码修正），提升文档与测试质量，同步 VALIDATION.md 到 v1.18 实际状态。
+**Shipped:** 2026-06-07  
+**Version:** v1.19 watch完善与文档对齐（Phases 1–3, 71）
 
-**Phase 03 complete (2026-06-07):** 文档对齐完成 — watch/validate --help 各≥2 示例（DOC-05），README 补充 watch + init --interactive + quiet/verbose 说明（DOC-04），phases 67–70 VALIDATION.md 补全为 complete 状态（QUAL-01）。
-
-**Target features:**
-- CSV watch 支持（目前仅限 SQLite）
-- watch error log 追加写入模式（长时间运行不覆盖历史错误）
-- watch Ctrl+C 退出码修正（返回 130，与 run 保持一致）
-- VALIDATION.md 草稿清理（Phase 67/68/69 补全，70 补充）
-- 测试覆盖率提升（目标 92%+，补充 watch 相关测试）
-- macOS FSEvents ignore 测试评估与处理
-- README 补充 watch / init --interactive / 进度选项说明
-- 各子命令 --help 信息完善
+**已交付功能：**
+- watch CSV 增量追加（WATCH-07）：`force_append_for_watch_trigger` 统一注入，多次触发行数正确累计
+- error log 追加写入模式（WATCH-08）：`write_error_log` OpenOptions 双分支，历史错误不丢失
+- watch Ctrl+C 退出码 130（WATCH-09）：signal-aware 退出路径，与 run 命令一致
+- 行覆盖率 92.06%（QUAL-02）：collector.rs + filter_processor.rs 新增单元测试
+- VALIDATION.md 正式落地（QUAL-01）：Phase 67/68/69/70 全部以 `status: complete` 建档
+- README 补充 watch/init --interactive/quiet+verbose（DOC-04），--help 示例完善（DOC-05）
+- Phase 71 mod.rs 重构：10 个 mod.rs 拆分为 >30 个命名子模块，代码结构大幅改善
 
 ## Previous: v1.18 已交付
 
@@ -153,16 +151,15 @@
 - ✓ README stats 用法示例 + CHANGELOG v1.0–v1.15 + config 模板全字段注释 — v1.16（Phase 62）
 - ✓ 行覆盖率 91.86% / 函数覆盖率 89.54%（51 项新测试，740 全部通过）— v1.16（Phase 63）
 
-### Recently Validated in watch完善与文档对齐（Phases 1–3）
-
-- ✓ CSV watch 支持（`--output csv` 增量追加，AppendCsv 路径）— Phase 1
-- ✓ watch error log 追加写入模式（OpenOptions::append）— Phase 1
-- ✓ watch Ctrl+C 退出码修正（130，signal-aware）— Phase 1
-- ✓ 测试覆盖率 92.01%（行覆盖率），909 个测试全部通过 — Phase 2
-- ✓ macOS FSEvents ignore 测试标注（#[ignore] + 注释说明）— Phase 2
-- ✓ VALIDATION.md 补全（phases 67/68/69/70，status: complete）— Phase 3
-- ✓ README 更新（watch 子命令、`init --interactive`、`--quiet`/`--verbose` 说明）— Phase 3
-- ✓ watch/validate `--help` 各 ≥2 示例（DOC-05）— Phase 3
+- ✓ CSV watch 支持（`force_append_for_watch_trigger` 追加注入，AppendCsv 路径）— v1.19（Phase 1）
+- ✓ watch error log 追加写入模式（OpenOptions 双分支，历史错误不丢失）— v1.19（Phase 1）
+- ✓ watch Ctrl+C 退出码修正（130，signal-aware）— v1.19（Phase 1）
+- ✓ 测试覆盖率 92.06%（行覆盖率），909 个测试全部通过 — v1.19（Phase 2）
+- ✓ macOS FSEvents ignore 测试标注（#[ignore] + 注释说明，文档化平台限制）— v1.19（Phase 2）
+- ✓ VALIDATION.md 正式落地（phases 67/68/69/70，status: complete）— v1.19（Phase 3）
+- ✓ README 补充 watch/init --interactive/quiet+verbose 完整说明 — v1.19（Phase 3）
+- ✓ watch/validate `--help` 各 ≥2 示例（DOC-05）— v1.19（Phase 3）
+- ✓ 10 个 mod.rs 拆分为命名子模块（watch/mod.rs 998 行拆为 11 个子文件）— v1.19（Phase 71）
 
 ### Recently Validated in v1.18
 
@@ -195,14 +192,14 @@
 ## Context
 
 - Rust 项目，单线程流式处理，16MB BufWriter 写入
-- 依赖精简（无 reqwest/rustls/self_update 等重依赖，仅新增 indicatif）
-- 当前代码量：~13,819 行 Rust（src + tests）
+- 依赖精简（无 reqwest/rustls/self_update 等重依赖，新增 indicatif + notify）
+- 当前代码量：~13,819+ 行 Rust（src + tests），Phase 71 拆分后文件数大幅增加但总行数相近
 - 性能基线：~5.2M records/sec（合成 CSV），~1.55M records/sec（1.1GB 真实文件）
-- 测试覆盖：780 个测试（lib + integration + jemalloc + bench），全部通过
-- assert_cmd / predicates 加入 dev-dependencies，e2e CLI 测试覆盖大幅提升
-- Phase 57 新增：stats --from/--to 跨字段顺序校验，run CSV/SQLite 全链路断言，init 成功/冲突测试
-- Phase 58 新增：`pub(crate) mod scanner` 公共模块，stats/run 共享文件扫描逻辑；handle_run 拆分 7 个私有函数
-- v1.15 基础设施：GitHub Actions CI/CD workflow 全面修复，Cross.toml aarch64-linux 跨编译支持
+- 测试覆盖：909 个测试（lib + integration + jemalloc + bench），全部通过，2 个 ignore（macOS FSEvents 限制）
+- 行覆盖率 92.06%（v1.19），函数覆盖率 ~89%
+- mod.rs 结构：10 个 mod.rs 已拆分为命名子模块（v1.19 Phase 71），代码结构清晰
+- assert_cmd / predicates dev-dependencies，e2e CLI 测试覆盖齐全
+- GitHub Actions CI/CD workflow 全面修复，Cross.toml aarch64-linux 跨编译支持（SHA256 固定）
 
 ## Constraints
 
@@ -239,6 +236,11 @@
 | _watch_offsets 用独立 rusqlite::Connection | 避免 SqliteExporter EXCLUSIVE 锁冲突 | ✓ Good (v1.18) |
 | handle_run 返回后才 save_offset | 避免 offset 在 exporter 持锁时写入 | ✓ Good (v1.18) |
 | watch Ctrl+C 退出码 0（vs run 的 130） | watch 内部处理 interrupted，与 run 不一致；已知 tech debt | ⚠ Revisit (v1.18) |
+| watch Ctrl+C 退出码修正为 130（WATCH-09） | `Err(Error::Interrupted)` 从 handle_watch 传播到 main.rs exit(130) | ✓ Good (v1.19) |
+| write_error_log OpenOptions 双分支 | append_error_log 字段区分 watch 追加模式和 run 覆盖模式 | ✓ Good (v1.19) |
+| force_append_for_watch_trigger 辅助函数 | 统一注入 CSV append + error_log append，消除 trigger_full/incremental 重复 | ✓ Good (v1.19) |
+| macOS FSEvents #[ignore] 保留 + 文档化 | 保留测试意图可见性；mock 注入方案引入新依赖且与 notify 深度耦合 | ✓ Good (v1.19) |
+| Phase 71 mod.rs 拆分（pub(super) + #[allow]） | WatchLoopState 升级 pub(super) 允许兄弟模块访问；集成测试 pub use 加 #[allow(unused_imports)] | ✓ Good (v1.19) |
 
 ## Evolution
 
@@ -251,4 +253,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-06 — Milestone watch完善与文档对齐 started: watch 完善（CSV 支持、error log 追加写入、退出码修正）+ 文档对齐 + 测试覆盖率提升*
+*Last updated: 2026-06-07 after v1.19 milestone — watch完善与文档对齐（Phases 1–3, 71）*
