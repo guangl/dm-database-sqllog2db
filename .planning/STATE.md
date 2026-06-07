@@ -1,16 +1,17 @@
 ---
 gsd_state_version: 1.0
 milestone: watch完善与文档对齐
-milestone_name: 全部版本的 Added/Changed/Fixed 条目
-status: executing
-last_updated: "2026-06-07T02:33:03.950Z"
+milestone_name: milestone
+status: ready_to_plan
+last_updated: 2026-06-07T03:28:01.082Z
 last_activity: 2026-06-07 -- Phase 02 execution started
 progress:
   total_phases: 39
-  completed_phases: 17
+  completed_phases: 18
   total_plans: 37
-  completed_plans: 54
-  percent: 44
+  completed_plans: 57
+  percent: 46
+stopped_at: Phase 02 complete (2/2) — ready to discuss Phase 35
 ---
 
 # Project State
@@ -20,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-06 after v1.18)
 
 **Core value:** 用户能够精确指定"导出哪些记录的哪些字段"——过滤逻辑清晰可配置，输出结果完全可控
-**Current focus:** Phase 02 — fsevents
+**Current focus:** Phase 35 — cli help
 
 ## Current Position
 
-Phase: 02 (fsevents) — EXECUTING
-Plan: 1 of 2
-Status: Executing Phase 02
-Last activity: 2026-06-07 -- Phase 02 execution started
+Phase: 35
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-06-07
 
 ```
 watch完善与文档对齐 Progress: [░░░░░░░░░░░░░░░░░░░░] 0% (0/3 phases)

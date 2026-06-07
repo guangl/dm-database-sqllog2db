@@ -232,7 +232,7 @@ Full details: `.planning/milestones/v1.18-ROADMAP.md`
 **watch完善与文档对齐 (Phases 1–3) — IN PROGRESS**
 
 - [x] **Phase 1: watch 功能完善** — CSV watch 支持、error log 追加模式、Ctrl+C 退出码 130 (WATCH-07/08/09) (completed 2026-06-06)
-- [ ] **Phase 2: 测试覆盖率与 FSEvents** — watch 测试补充、92%+ 行覆盖率、FSEvents #[ignore] 落地方案 (QUAL-02/03)
+- [x] **Phase 2: 测试覆盖率与 FSEvents** — watch 测试补充、92%+ 行覆盖率、FSEvents #[ignore] 落地方案 (QUAL-02/03) (completed 2026-06-07)
 - [ ] **Phase 3: 文档与验证对齐** — VALIDATION.md 补全、README watch/init/进度选项更新、--help 完善 (QUAL-01, DOC-04, DOC-05)
 
 ## Phase Details
@@ -727,7 +727,7 @@ Full details: `.planning/milestones/v1.18-ROADMAP.md`
   4. `cargo test` 全部通过（含所有非 ignore 测试），`cargo clippy --all-targets -- -D warnings` 通过
 **Plans**: 2 plans
 - [x] 02-01-PLAN.md — tests/watch_incremental.rs 新增 build_csv_config helper + INVALID_LOG_LINE 常量 + WATCH-07/08/09 三个集成测试（QUAL-03 SC3）
-- [ ] 02-02-PLAN.md — src/cli/run/tests.rs 追加 test_collector_invalid_path / test_collector_parse_error_accumulation 单元测试 + cargo llvm-cov 人工 checkpoint 验收 92%+（QUAL-02 SC1）
+- [x] 02-02-PLAN.md — src/cli/run/tests.rs 追加 test_collector_invalid_path / test_collector_parse_error_accumulation 单元测试 + cargo llvm-cov 人工 checkpoint 验收 92%+（QUAL-02 SC1）
 
 ### Phase 3: 文档与验证对齐
 **Goal**: 项目文档与最新实际状态完全对齐——VALIDATION.md 补全为正式文件，README 覆盖 watch/init --interactive/进度选项，各子命令 --help 信息完善
@@ -890,7 +890,7 @@ Full details: `.planning/milestones/v1.18-ROADMAP.md`
 | 70. Watch 增量处理与集成测试 | v1.18 | Complete | 2026-06-06 |
 
 | 1. watch 功能完善 | 1/1 | Complete   | 2026-06-06 |
-| 2. 测试覆盖率与 FSEvents | 1/2 | In Progress|  |
+| 2. 测试覆盖率与 FSEvents | 2/2 | Complete   | 2026-06-07 |
 | 3. 文档与验证对齐 | watch完善与文档对齐 | Not started | - |
 
 ---
