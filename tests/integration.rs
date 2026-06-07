@@ -2936,7 +2936,7 @@ mod watch_tests {
                 }
                 std::thread::sleep(Duration::from_millis(100));
             }
-            interrupted_clone.store(true, Ordering::Relaxed);
+            interrupted_clone.store(true, Ordering::Release);
         });
         let result = handle_watch(&cfg, true, false, &interrupted);
         assert!(
@@ -2978,7 +2978,7 @@ mod watch_tests {
             )
             .unwrap();
             std::thread::sleep(Duration::from_millis(700));
-            interrupted_clone.store(true, Ordering::Relaxed);
+            interrupted_clone.store(true, Ordering::Release);
         });
         let result = handle_watch(&cfg, true, false, &interrupted);
         // WATCH-09: interrupted=true 时 handle_watch 返回 Err(Interrupted)，验证非 .log 文件不触发
