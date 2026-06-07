@@ -896,6 +896,28 @@ Full details: `.planning/milestones/v1.18-ROADMAP.md`
 | 2. 测试覆盖率与 FSEvents | 2/2 | Complete   | 2026-06-07 |
 | 3. 文档与验证对齐 | 3/3 | Complete   | 2026-06-07 |
 
+### Phase 71: mod.rs 重构 — 拆分子模块，mod.rs 仅保留 pub use 导入
+
+**Goal**: 重构 11 个 mod.rs 文件中的 10 个（src/cli/mod.rs 已干净），将其内部实现代码全部拆分到独立的命名文件中，每个 mod.rs 仅保留模块声明（mod / pub mod）与公开 API 重导出（pub use / pub(crate) use / pub(super) use），不再含任何 fn/struct/enum/trait/impl 实现。
+**Depends on**: Phase 3
+**Requirements**: none (内部代码质量重构，无外部需求映射)
+**Success Criteria** (what must be TRUE):
+  1. 10 个目标 mod.rs（cli/run、cli/stats、cli/watch、config、exporter、exporter/csv、exporter/sqlite、pipeline、pipeline/filters、stats）过滤注释/空行后只含 `mod` / `pub mod` / `pub use` / `pub(crate) use` / `pub(super) use` 与属性宏，无 fn/struct/enum/trait/impl
+  2. 所有原公开/crate/super 可见性的 API（类型、函数、常量）在原路径下仍可访问，调用方代码无需修改
+  3. `cargo test` 全部通过（含 tests/integration.rs 与 tests/watch_incremental.rs），原 100+ 单元/集成测试零回归
+  4. `cargo clippy --all-targets -- -D warnings` 通过且无新增警告
+**Plans**: 10 plans
+- [x] 71-01-PLAN.md — src/cli/stats/mod.rs (147 行) 拆为 handler.rs + tests.rs（Wave 1）
+- [x] 71-02-PLAN.md — src/pipeline/filters/mod.rs (246 行) 拆为 feature_ops/indicator_ops/sql_ops/tests（Wave 1）
+- [x] 71-03-PLAN.md — src/pipeline/mod.rs (347 行) 拆为 field_mask/normalize_config/output_config/processor/tests（Wave 1）
+- [x] 71-04-PLAN.md — src/stats/mod.rs (200 行) 拆为 runner.rs + tests.rs（Wave 1）
+- [x] 71-05-PLAN.md — src/config/mod.rs (194 行) 拆为 root/error_log/tests（Wave 1）
+- [ ] 71-06-PLAN.md — src/exporter/mod.rs (310 行) 拆为 api/kind/manager/stats/util（Wave 2）
+- [ ] 71-07-PLAN.md — src/exporter/csv/mod.rs (243 行) 拆为 exporter.rs + impls.rs（Wave 2）
+- [ ] 71-08-PLAN.md — src/exporter/sqlite/mod.rs (249 行) 拆为 exporter/impls/pragma（Wave 2）
+- [ ] 71-09-PLAN.md — src/cli/run/mod.rs (476 行) 拆为 orchestrator/input/sequential/summary/error_log（Wave 3）
+- [ ] 71-10-PLAN.md — src/cli/watch/mod.rs (998 行) 拆为 handler/state/watcher/event/trigger_full/trigger_incremental/dirs/status/append/debounce/tests（Wave 3）
+
 ---
 *Created: 2026-05-21 for milestone v1.10*
 *Updated: 2026-06-06 — milestone watch完善与文档对齐 started (Phases 1–3)*

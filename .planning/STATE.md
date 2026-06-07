@@ -2,16 +2,15 @@
 gsd_state_version: 1.0
 milestone: watch完善与文档对齐
 milestone_name: 全部版本的 Added/Changed/Fixed 条目
-status: ready_to_plan
-last_updated: 2026-06-07T07:45:49.441Z
-last_activity: 2026-06-07 -- Phase 03 execution started
+status: executing
+last_updated: "2026-06-07T09:34:34.318Z"
+last_activity: 2026-06-07 -- Phase 71 execution started
 progress:
-  total_phases: 39
-  completed_phases: 18
-  total_plans: 40
-  completed_plans: 60
-  percent: 46
-stopped_at: Phase 03 complete (3/3) — ready to discuss Phase 35
+  total_phases: 40
+  completed_phases: 19
+  total_plans: 50
+  completed_plans: 59
+  percent: 48
 ---
 
 # Project State
@@ -21,14 +20,14 @@ stopped_at: Phase 03 complete (3/3) — ready to discuss Phase 35
 See: .planning/PROJECT.md (updated 2026-06-06 after v1.18)
 
 **Core value:** 用户能够精确指定"导出哪些记录的哪些字段"——过滤逻辑清晰可配置，输出结果完全可控
-**Current focus:** Phase 35 — cli help
+**Current focus:** Phase 71 — mod-rs-mod-rs-pub-use
 
 ## Current Position
 
-Phase: 35
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-06-07
+Phase: 71 (mod-rs-mod-rs-pub-use) — EXECUTING
+Plan: 1 of 10
+Status: Executing Phase 71
+Last activity: 2026-06-07 -- Phase 71 execution started
 
 ```
 watch完善与文档对齐 Progress: [░░░░░░░░░░░░░░░░░░░░] 0% (0/3 phases)
@@ -66,6 +65,10 @@ Items acknowledged at v1.18 milestone close and now scheduled in v1.19:
 - Build: LTO fat + strip + panic=abort
 
 ## Accumulated Context
+
+### Roadmap Evolution
+
+- Phase 71 added: mod.rs 重构 — 拆分子模块，mod.rs 仅保留 pub use 导入
 
 ### Key Decisions (v1.19)
 
