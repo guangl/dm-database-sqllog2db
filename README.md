@@ -127,6 +127,25 @@ sqllog2db stats -c config.toml --from 2024-01-01 --to 2024-01-31
 sqllog2db stats -c config.toml --from "2024-01-01 00:00:00" --to "2024-01-31 23:59:59" --top 20
 ```
 
+持续监听新 `.log` 文件（按 Ctrl+C 停止并打印摘要）：
+
+```bash
+sqllog2db watch -c config.toml
+```
+
+交互式向导生成配置文件（每步显示示例值与默认值，回车接受默认值）：
+
+```bash
+sqllog2db init --interactive
+```
+
+进度输出控制：`-q`/`--quiet` 抑制非错误输出（适合后台/定时任务），`-v`/`--verbose` 显示每文件详情：
+
+```bash
+sqllog2db run -c config.toml --quiet
+sqllog2db run -c config.toml --verbose
+```
+
 详细用法参见[快速入门指南](./docs/quickstart.md)。
 
 ## 配置
