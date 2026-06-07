@@ -716,3 +716,26 @@ fn test_collector_filtered_params_normalize() {
         rows.len()
     );
 }
+
+// interrupted=true 在第一条记录前命中 break 分支（collector.rs line 42-44）
+#[test]
+fn test_collector_interrupted_returns_empty() {
+    use crate::pipeline::Pipeline;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_path = dir.path().join("data.log");
+    let valid_dml = "2025-01-15 10:30:28.001 (EP[0] sess:0x0001 user:TESTUSER trxid:1 stmt:0x1 appname:App ip:10.0.0.1) [SEL] SELECT id FROM t. EXECTIME: 5(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.\n";
+    std::fs::write(&log_path, valid_dml).unwrap();
+    let pipeline = Pipeline::default();
+    let interrupted = Arc::new(AtomicBool::new(true));
+    interrupted.store(true, Ordering::Release);
+    let (rows, _stats) =
+        collector::collect_log_file(&log_path, &pipeline, false, None, &interrupted)
+            .expect("collect_log_file 应 Ok");
+    assert!(
+        rows.is_empty(),
+        "interrupted=true 应使循环立即 break，rows 应为空"
+    );
+}
