@@ -915,8 +915,8 @@ Full details: `.planning/milestones/v1.18-ROADMAP.md`
 - [x] 71-06-PLAN.md — src/exporter/mod.rs (310 行) 拆为 api/kind/manager/stats/util（Wave 2）
 - [x] 71-07-PLAN.md — src/exporter/csv/mod.rs (243 行) 拆为 exporter.rs + impls.rs（Wave 2）
 - [x] 71-08-PLAN.md — src/exporter/sqlite/mod.rs (249 行) 拆为 exporter/impls/pragma（Wave 2）
-- [ ] 71-09-PLAN.md — src/cli/run/mod.rs (476 行) 拆为 orchestrator/input/sequential/summary/error_log（Wave 3）
-- [ ] 71-10-PLAN.md — src/cli/watch/mod.rs (998 行) 拆为 handler/state/watcher/event/trigger_full/trigger_incremental/dirs/status/append/debounce/tests（Wave 3）
+- [x] 71-09-PLAN.md — src/cli/run/mod.rs (476 行) 拆为 orchestrator/input/sequential/summary/error_log（Wave 3）
+- [x] 71-10-PLAN.md — src/cli/watch/mod.rs (998 行) 拆为 handler/state/watcher/event/trigger_full/trigger_incremental/dirs/status/append/debounce/tests（Wave 3）
 
 ---
 *Created: 2026-05-21 for milestone v1.10*
