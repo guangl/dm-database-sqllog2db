@@ -738,7 +738,10 @@ Full details: `.planning/milestones/v1.18-ROADMAP.md`
   2. README.md 包含 `watch` 子命令用法示例（启动、停止、CSV/SQLite 配置差异），`init --interactive` 的操作说明，以及 `--quiet`/`--verbose` 进度选项说明
   3. `sqllog2db watch --help`、`sqllog2db validate --help`、`sqllog2db stats --help` 各自包含至少 2 个使用示例，选项描述清晰无歧义
   4. `cargo test` 全部通过，`cargo clippy --all-targets -- -D warnings` + `cargo fmt --check` 通过
-**Plans**: TBD
+**Plans**: 3 plans
+- [ ] 03-01-PLAN.md — src/cli/opts.rs Watch/Validate variant `after_help` 各追加 1 个示例（quiet/verbose 模式）+ 三道质量门禁（DOC-05, D-08/D-09/D-10/D-11）
+- [ ] 03-02-PLAN.md — README.md 第 41 行 CLI 条目升级为 5 命令 + 新增『持续监听』功能特性条目 + 快速入门追加 watch/init --interactive/quiet+verbose 三段示例（DOC-04, D-05/D-06/D-07）
+- [ ] 03-03-PLAN.md — 新建 Phase 67/68/69/70 各 1 份正式 VALIDATION.md（frontmatter 完成态 + Per-Task Verification Map 从 SUMMARY 转录 + Sign-Off）（QUAL-01, D-01/D-02/D-03/D-04）
 **UI hint**: yes
 
 ## Coverage Validation
