@@ -1,14 +1,14 @@
 ---
-phase: 68
-slug: init-wizard
+phase: 70
+slug: watch
 status: complete
 nyquist_compliant: true
 wave_0_complete: true
-created: 2026-06-05
+created: 2026-06-06
 updated: 2026-06-07
 ---
 
-# Phase 68 — Validation Strategy
+# Phase 70 — Validation Strategy
 
 > Per-phase validation contract for feedback sampling during execution.
 
@@ -37,8 +37,9 @@ updated: 2026-06-07
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 68-01-01 | 01 | 1 | INIT-01, INIT-02, INIT-03 | — | N/A | unit | `cargo test --lib` | ✅ | ✅ complete |
-| 68-02-01 | 02 | 2 | INIT-01, INIT-02, INIT-03 | — | N/A | integration | `cargo test` | ✅ | ✅ complete |
+| 70-01-01 | 01 | 1 | WATCH-04 | — | N/A | unit | `cargo test --lib` | ✅ | ✅ complete |
+| 70-02-01 | 02 | 2 | WATCH-03, WATCH-04 | — | N/A | unit | `cargo test --lib` | ✅ | ✅ complete |
+| 70-03-01 | 03 | 3 | WATCH-03, WATCH-04 | — | N/A | integration | `cargo test --test watch_incremental` | ✅ | ✅ complete |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -52,4 +53,4 @@ updated: 2026-06-07
 - [x] Feedback latency < 60s
 - [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** complete（依据：68-01/02-SUMMARY.md self-check: PASSED；6 个 e2e assert_cmd 测试通过）
+**Approval:** complete（依据：70-01/02/03-SUMMARY.md self-check: PASSED；5 + 4 单元测试 + 4 个集成测试通过；`cargo test --test watch_incremental` 4 passed, 0 failed）

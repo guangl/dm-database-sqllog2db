@@ -1,6 +1,6 @@
 ---
-phase: 68
-slug: init-wizard
+phase: 67
+slug: prog-diag
 status: complete
 nyquist_compliant: true
 wave_0_complete: true
@@ -8,7 +8,7 @@ created: 2026-06-05
 updated: 2026-06-07
 ---
 
-# Phase 68 — Validation Strategy
+# Phase 67 — Validation Strategy
 
 > Per-phase validation contract for feedback sampling during execution.
 
@@ -37,8 +37,9 @@ updated: 2026-06-07
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 68-01-01 | 01 | 1 | INIT-01, INIT-02, INIT-03 | — | N/A | unit | `cargo test --lib` | ✅ | ✅ complete |
-| 68-02-01 | 02 | 2 | INIT-01, INIT-02, INIT-03 | — | N/A | integration | `cargo test` | ✅ | ✅ complete |
+| 67-01-01 | 01 | 1 | PROG-01, PROG-02 | — | N/A | unit | `cargo test --lib cli::run::tests` | ✅ | ✅ complete |
+| 67-02-01 | 02 | 2 | DIAG-01, DIAG-02 | — | N/A | unit | `cargo test --lib` | ✅ | ✅ complete |
+| 67-03-01 | 03 | 3 | PROG-03, DIAG-03 | — | N/A | unit+integration | `cargo test` | ✅ | ✅ complete |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -52,4 +53,4 @@ updated: 2026-06-07
 - [x] Feedback latency < 60s
 - [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** complete（依据：68-01/02-SUMMARY.md self-check: PASSED；6 个 e2e assert_cmd 测试通过）
+**Approval:** complete（依据：67-01/02/03-SUMMARY.md self-check: PASSED + 344 unit tests passing）
