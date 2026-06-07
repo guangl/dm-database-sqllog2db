@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.16.0] - 2026-06-07
+
+### Added
+
+- **`watch` 子命令**：`sqllog2db watch -c config.toml` 持续监听目录，新增或追加 `.log` 文件时自动触发处理；500ms 路径防抖、HumanDuration 动态状态行、Ctrl+C 最终摘要（WATCH-01/02/05/06，Phase 69）
+- **watch 增量处理**：`_watch_offsets` SQLite 辅助表持久化字节偏移，`trigger_incremental` 通过 Seek 只读新增字节，跨重启恢复不丢失、不重复（WATCH-03/04，Phase 70）
+- **watch CSV 增量追加**：watch 触发时自动注入 `csv.append=true`，多次触发记录累计追加，header 仅写一次（WATCH-07，Phase 1）
+- **watch error log 追加写入**：`write_error_log` 在 watch 路径使用 `OpenOptions::append`，历史错误不被覆盖（WATCH-08，Phase 1）
+- **`init --interactive` 对话式向导**：逐字段提示示例与默认值，Enter 直接接受默认，生成格式与非交互式 `init` 完全一致（INIT-01/02/03，Phase 68）
+- **进度条升级**：`[N/M]` 文件计数器 + records/sec 吞吐量 + indicatif ETA 实时渲染，非终端自动退化（PROG-01/02，Phase 67）
+- **错误诊断增强**：`ErrorKind` 分类（field_missing/parse_failed/encoding_error），error log 含行号与原文前 120 字符，摘要按类型统计并触发 hint（DIAG-01/02/03，PROG-03，Phase 67）
+- **多文件 CSV 并行处理**：2 个以上文件自动激活 rayon 并行路径，temp-file 拼接，输出内容与单线程路径逐行等价（PARALLEL-01–05，Phase 64–65）
+- **SQL 统计分析**：`sqllog2db stats -c config.toml [--top N]` 输出慢 SQL TOP-N（按 elapsed 降序）与高频 SQL TOP-N（标准化分组，按调用次数降序），支持 CSV/SQLite 双格式（STATS-01–05，Phase 51–52）
+- **stats 时间段过滤**：`--from`/`--to` CLI 参数与 `config.toml [stats]` 节，`YYYY-MM-DD` 格式，CLI 优先级高于 config（STATS-07–11，Phase 53–54）
+- **glob 多输入支持**：`inputs: Vec<String>` 替代 `path: String`，config 和 `--input` CLI flag 均支持 glob 展开（INPUT-01/02，Phase 49）
+
+### Changed
+
+- **mod.rs 全面拆分**：10 个 `mod.rs` 文件拆分为命名子模块（`watch/mod.rs` 998 行拆为 11 个子文件），每个 `mod.rs` 仅保留声明与 `pub use` 重导出（Phase 71）
+- **collector.rs 公共模块**：提取共享文件扫描逻辑，`sqlite_parallel` 与 CSV 并行路径复用（Phase 59）
+- **ExportAction 枚举**：替代 `break 'outer`，消除内联控制流，语义更清晰（Phase 59）
+- **`--verbose`/`--quiet` 运行控制**：`--verbose` 逐文件输出，`--quiet` 完全抑制进度与摘要，两者互斥（LOG-01/02/03，Phase 48）
+- **validate 输出优化**：有效配置静默通过，失败输出 `[FAIL] 原因\n  hint: 修复建议`（CONFIG-02，Phase 47）
+- **BufReader 扩容**：单文件读取缓冲区 16KB → 4MB，减少系统调用（IO-01，Phase 65）
+
+### Fixed
+
+- **watch Ctrl+C 退出码**：修正为 130，与 `run` 子命令保持一致（WATCH-09，Phase 1）
+- **生产代码 unwrap/expect 全部注释**：标注 `// infallible` 或改为 `?` 传播（Phase 60）
+- **Cross.toml SHA256 digest 固定**：`aarch64-unknown-linux-gnu` 镜像从 `:edge` 浮动标签替换为固定 digest（CROSS-01，Phase 61）
+- **release workflow 竞争修复**：独立 `create-release` job 消除 4 并行 matrix 竞争写入（CICD-02/03，Phase 55）
+- **GitHub Actions 版本统一**：`@v6/@v7` 全部修正为 `@v4`（CICD-01，Phase 55）
+
 ### CI/CD
 
 - **Cross.toml SHA256 digest 固定**：将 `aarch64-unknown-linux-gnu` 构建镜像从浮动 `:edge` 标签替换为固定 `@sha256:de04c9cd16fb41658de2eb0177481cb2fc717128b784d565bafcb000250508d7`，任意时刻执行 `cross build` 均使用相同镜像层，构建结果可复现（CROSS-01，Phase 61）

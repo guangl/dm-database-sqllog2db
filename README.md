@@ -191,12 +191,14 @@ overwrite = true
 
 ## 版本亮点
 
-### v1.15.0 — CI/CD 修复（2026-06-02）
+### v1.16.0 — watch 持续监听、SQL 统计分析与全面体验升级（2026-06-07）
 
-- 修复 `ci.yaml`、`bench.yml`、`lychee.yml`、`pages.yml` 中误升级的 `actions/checkout@v6` 与 `actions/upload-artifact@v7`，全部回退到 `@v4`（Phase 55）
-- 新增 `Cross.toml`，将 aarch64-linux 跨编译镜像 `ghcr.io/cross-rs/aarch64-unknown-linux-gnu` 锁定到 SHA256 摘要，保证可复现构建（Phase 55 + Phase 61）
-- 重构 `release.yaml`：拆出独立 `create-release` job 在 4 个 matrix 构建 job 之前运行，消除并行写入 release body 的竞争条件（Phase 55）
-- `cli/run` 模块重构：`handle_run` 拆分为 7 个私有辅助函数，`run_sequential` 压缩到 ≤40 行，并新建 `scanner` 公共扫描模块（Phase 58 + Phase 56）
+- **`watch` 子命令**：持续监听目录，新增/追加 `.log` 文件时自动增量处理，支持 CSV/SQLite 双格式，Ctrl+C 退出码 130
+- **`stats` 子命令**：慢 SQL TOP-N + 高频 SQL TOP-N，支持 `--from`/`--to` 时间段过滤，SQL 字面量标准化归一
+- **`init --interactive` 向导**：对话式配置生成，每步提示默认值，Enter 直接接受
+- **进度条升级**：`[N/M]` 文件计数器 + ETA + records/sec；错误诊断按类型分组 + hint
+- **多文件 CSV 并行**：rayon 并行路径与单线程输出等价，自动激活
+- **代码质量**：10 个 `mod.rs` 拆分为命名子模块；行覆盖率 92.06%；全代码库 unwrap 注释审计
 
 ## 链接
 
