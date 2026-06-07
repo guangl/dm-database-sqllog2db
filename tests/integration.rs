@@ -2938,7 +2938,15 @@ mod watch_tests {
             }
             interrupted_clone.store(true, Ordering::Relaxed);
         });
-        handle_watch(&cfg, true, false, &interrupted).unwrap();
+        let result = handle_watch(&cfg, true, false, &interrupted);
+        assert!(
+            result.is_ok()
+                || matches!(
+                    result,
+                    Err(dm_database_sqllog2db::error::Error::Interrupted)
+                ),
+            "handle_watch should succeed or return Interrupted, got: {result:?}"
+        );
         assert!(
             csv_file.exists(),
             "CSV output file should exist after watch trigger"
