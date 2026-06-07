@@ -725,7 +725,9 @@ Full details: `.planning/milestones/v1.18-ROADMAP.md`
   2. macOS FSEvents 相关 `#[ignore]` 测试经过调研后，采用以下方案之一：(a) `#[cfg(not(target_os = "macos"))]` 条件编译跳过，(b) mock 文件系统事件注入，或 (c) 文档化说明为已知平台限制并保留 `#[ignore]`——方案选择有书面依据
   3. 新增 watch 集成测试覆盖 CSV watch 追加（WATCH-07）、error log 追加（WATCH-08）、退出码 130（WATCH-09）三个新场景
   4. `cargo test` 全部通过（含所有非 ignore 测试），`cargo clippy --all-targets -- -D warnings` 通过
-**Plans**: TBD
+**Plans**: 2 plans
+- [x] 02-01-PLAN.md — tests/watch_incremental.rs 新增 build_csv_config helper + INVALID_LOG_LINE 常量 + WATCH-07/08/09 三个集成测试（QUAL-03 SC3）
+- [ ] 02-02-PLAN.md — src/cli/run/tests.rs 追加 test_collector_invalid_path / test_collector_parse_error_accumulation 单元测试 + cargo llvm-cov 人工 checkpoint 验收 92%+（QUAL-02 SC1）
 
 ### Phase 3: 文档与验证对齐
 **Goal**: 项目文档与最新实际状态完全对齐——VALIDATION.md 补全为正式文件，README 覆盖 watch/init --interactive/进度选项，各子命令 --help 信息完善
@@ -888,7 +890,7 @@ Full details: `.planning/milestones/v1.18-ROADMAP.md`
 | 70. Watch 增量处理与集成测试 | v1.18 | Complete | 2026-06-06 |
 
 | 1. watch 功能完善 | 1/1 | Complete   | 2026-06-06 |
-| 2. 测试覆盖率与 FSEvents | watch完善与文档对齐 | Not started | - |
+| 2. 测试覆盖率与 FSEvents | 1/2 | In Progress|  |
 | 3. 文档与验证对齐 | watch完善与文档对齐 | Not started | - |
 
 ---
