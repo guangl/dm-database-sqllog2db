@@ -2889,7 +2889,7 @@ mod watch_tests {
         );
     }
 
-    /// W2: interrupted=true 预置时 `handle_watch` 立即返回 Ok(())（WATCH-06 优雅退出）。
+    /// W2: interrupted=true 预置时 `handle_watch` 返回 `Err(Error::Interrupted)`（WATCH-09 exit 130）。
     #[test]
     fn test_watch_exits_when_interrupted() {
         let dir = tempfile::TempDir::new().unwrap();
