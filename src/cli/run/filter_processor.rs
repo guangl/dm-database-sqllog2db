@@ -300,4 +300,66 @@ mod tests {
         record.ts = "2024-07-01 00:00:00.000".to_string();
         assert!(!proc.process_with_meta(&record));
     }
+
+    #[test]
+    fn test_include_session_filter() {
+        let include = IncludeFilters {
+            sessions: Some(vec!["s".into()]),
+            ..Default::default()
+        };
+        let proc = FilterProcessor::from_feature(&make_feature(include, ExcludeFilters::default()));
+        assert!(proc.process_with_meta(&make_record("u", "ip", "tx", None)));
+        let mut other = make_record("u", "ip", "tx", None);
+        other.sess_id = "other_session".to_string();
+        assert!(!proc.process_with_meta(&other));
+    }
+
+    #[test]
+    fn test_include_app_filter() {
+        let include = IncludeFilters {
+            apps: Some(vec!["app".into()]),
+            ..Default::default()
+        };
+        let proc = FilterProcessor::from_feature(&make_feature(include, ExcludeFilters::default()));
+        assert!(proc.process_with_meta(&make_record("u", "ip", "tx", None)));
+        let mut other = make_record("u", "ip", "tx", None);
+        other.appname = "other_app".to_string();
+        assert!(!proc.process_with_meta(&other));
+    }
+
+    #[test]
+    fn test_include_statement_filter() {
+        let include = IncludeFilters {
+            statements: Some(vec!["st".into()]),
+            ..Default::default()
+        };
+        let proc = FilterProcessor::from_feature(&make_feature(include, ExcludeFilters::default()));
+        assert!(proc.process_with_meta(&make_record("u", "ip", "tx", None)));
+        let mut other = make_record("u", "ip", "tx", None);
+        other.statement = "other_stmt".to_string();
+        assert!(!proc.process_with_meta(&other));
+    }
+
+    #[test]
+    fn test_include_thread_filter() {
+        let include = IncludeFilters {
+            threads: Some(vec!["t".into()]),
+            ..Default::default()
+        };
+        let proc = FilterProcessor::from_feature(&make_feature(include, ExcludeFilters::default()));
+        assert!(proc.process_with_meta(&make_record("u", "ip", "tx", None)));
+        let mut other = make_record("u", "ip", "tx", None);
+        other.thrd_id = "other_thread".to_string();
+        assert!(!proc.process_with_meta(&other));
+    }
+
+    #[test]
+    fn test_debug_format() {
+        let proc = FilterProcessor::from_feature(&make_feature(
+            IncludeFilters::default(),
+            ExcludeFilters::default(),
+        ));
+        let debug_str = format!("{proc:?}");
+        assert!(debug_str.contains("FilterProcessor"));
+    }
 }
