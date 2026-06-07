@@ -1,6 +1,6 @@
 use crate::config::Config;
 use crate::error::{Error, Result};
-use crate::pipeline::filters::types::{IndicatorFilters, SqlFilters};
+use crate::pipeline::filters::{IndicatorFilters, SqlFilters};
 use dm_database_parser_sqllog::{Filter, FilterBuilder, LogParserBuilder};
 
 // ===== Pre-scan: 指标/SQL 过滤器构建 =====
@@ -143,7 +143,7 @@ mod tests {
     use super::*;
     use crate::config::Config;
     use crate::pipeline::FiltersFeature;
-    use crate::pipeline::filters::types::{IndicatorFilters, SqlFilters};
+    use crate::pipeline::filters::{IndicatorFilters, SqlFilters};
 
     #[test]
     fn test_build_indicator_filters_min_row_count_zero() {
