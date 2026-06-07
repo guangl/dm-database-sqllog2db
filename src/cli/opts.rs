@@ -51,7 +51,7 @@ EXAMPLES:
         sqllog2db run -c /path/to/config.toml
 
     Pipe log data via stdin:
-        cat access.log | sqllog2db run -c config.toml
+        cat sqllogs/2025-01-15.log | sqllog2db run -c config.toml
 
     Override input paths from CLI:
         sqllog2db run -c config.toml --input 'sqllogs/*.log' --input archive.log
@@ -109,8 +109,8 @@ EXAMPLES:
     Validate a configuration file:
         sqllog2db validate -c config.toml
 
-    Validate and show detailed field information:
-        sqllog2db validate -c config.toml --verbose"
+    Validate in quiet mode (suppress non-error output):
+        sqllog2db validate -c config.toml --quiet"
     )]
     Validate {
         /// TOML configuration file path to validate
