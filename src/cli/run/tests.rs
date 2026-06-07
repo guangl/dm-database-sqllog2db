@@ -574,6 +574,47 @@ fn test_write_error_log_run_still_truncates() {
     );
 }
 
+// WATCH-08: watch 路径为追加写（append_error_log=true），旧内容应被保留
+/// 验证 `append_error_log=true` 时 `write_error_log` 以追加模式打开文件，旧内容被保留。
+#[test]
+fn test_write_error_log_watch_appends() {
+    use crate::config::ErrorLogConfig;
+    use crate::error::{ErrorKind, ErrorStats, ParseErrorRecord};
+
+    let tmp = tempfile::NamedTempFile::new().expect("failed to create tempfile");
+    let path = tmp.path().to_string_lossy().into_owned();
+    std::fs::write(&path, b"EXISTING\n").expect("failed to write existing content");
+
+    let cfg = Config {
+        error: Some(ErrorLogConfig { file: path.clone() }),
+        append_error_log: true, // watch 路径：追加写
+        ..Config::default()
+    };
+
+    let stats = ErrorStats {
+        parse_errors: 1,
+        total_errors: 1,
+        parse_error_records: vec![ParseErrorRecord {
+            line_number: 1,
+            raw_truncated: "bad".to_string(),
+            kind: ErrorKind::ParseFailed,
+        }],
+        ..ErrorStats::default()
+    };
+
+    write_error_log(&cfg, &stats);
+
+    let content = std::fs::read_to_string(&path).expect("failed to read error log");
+    assert!(
+        content.contains("EXISTING"),
+        "append_error_log=true 时旧内容应被保留（追加模式），实际内容: {content}"
+    );
+    assert!(
+        content.contains("[ERROR] line "),
+        "新错误行应追加到文件末尾，实际内容: {content}"
+    );
+}
+
 /// 验证含 `filtered_out` 的 `ErrorStats` 传入 `print_run_summary` 时不 panic（防回归）。
 #[test]
 fn test_run_summary() {
