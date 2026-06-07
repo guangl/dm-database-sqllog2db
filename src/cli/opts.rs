@@ -107,7 +107,10 @@ EXAMPLES:
         after_help = "\
 EXAMPLES:
     Validate a configuration file:
-        sqllog2db validate -c config.toml"
+        sqllog2db validate -c config.toml
+
+    Validate and show detailed field information:
+        sqllog2db validate -c config.toml --verbose"
     )]
     Validate {
         /// TOML configuration file path to validate
