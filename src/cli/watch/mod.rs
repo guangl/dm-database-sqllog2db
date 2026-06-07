@@ -628,7 +628,7 @@ mod tests {
         let interrupted = Arc::new(AtomicBool::new(true));
         let result = handle_watch(&cfg, true, false, &interrupted);
         // 默认 Config 的 sqllog.inputs = ["sqllogs"]，该目录不存在时返回 Err
-        // 但 interrupted=true 时如果目录存在则立即跳出 loop 返回 Ok
+        // 但 interrupted=true 时如果目录存在则跳出 loop 并返回 Err(Interrupted)（WATCH-09）
         // 我们只验证函数能正常返回（不 panic）
         let _ = result;
     }
