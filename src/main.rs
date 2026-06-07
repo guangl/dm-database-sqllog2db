@@ -30,13 +30,11 @@ const EXIT_INTERRUPTED: i32 = 130;
 /// only support quiet suppression; debug verbosity requires the full logging
 /// stack initialized in the Run path.
 fn init_simple_logging(quiet: bool) {
-    let level = if quiet { "error" } else { "info" };
-
-    let filter = match level {
-        "error" => log::LevelFilter::Error,
-        _ => log::LevelFilter::Info,
+    let filter = if quiet {
+        log::LevelFilter::Error
+    } else {
+        log::LevelFilter::Info
     };
-
     let _ = env_logger::Builder::from_default_env()
         .filter_level(filter)
         .try_init();
@@ -131,15 +129,27 @@ fn run() -> Result<Option<(ErrorStats, bool)>> {
 
     let needs_simple_logging = !matches!(
         &cli.command,
-        Some(cli::opts::Commands::Run { .. } | cli::opts::Commands::Stats { .. })
+        Some(
+            cli::opts::Commands::Run { .. }
+                | cli::opts::Commands::Stats { .. }
+                | cli::opts::Commands::Watch { .. }
+        )
     );
     if needs_simple_logging {
         init_simple_logging(cli.quiet);
     }
 
     match &cli.command {
-        Some(cli::opts::Commands::Init { output, force }) => {
-            cli::init::handle_init(output, *force)?;
+        Some(cli::opts::Commands::Init {
+            output,
+            force,
+            interactive,
+        }) => {
+            if *interactive {
+                cli::init::handle_init_interactive(output, *force)?;
+            } else {
+                cli::init::handle_init(output, *force)?;
+            }
             Ok(None)
         }
         Some(cli::opts::Commands::Run { config, input }) => {
@@ -160,15 +170,15 @@ fn run() -> Result<Option<(ErrorStats, bool)>> {
             let interrupted = Arc::new(AtomicBool::new(false));
             let interrupted_flag = Arc::clone(&interrupted);
             ctrlc::set_handler(move || {
-                interrupted_flag.store(true, Ordering::Relaxed);
+                interrupted_flag.store(true, Ordering::Release);
             })
             .ok();
 
-            let stats = cli::run::handle_run(&cfg, cli.quiet, cli.verbose, &interrupted)?;
+            let stats = cli::run::handle_run(&cfg, cli.quiet, cli.verbose, &interrupted, None)?;
             Ok(Some((stats, cli.quiet)))
         }
         Some(cli::opts::Commands::Validate { config }) => {
-            let cfg = load_config(config)?;
+            let cfg = Config::from_file(Path::new(config))?;
             if let Err(e) = cfg.validate() {
                 eprintln!("{}", format_validate_error(&e));
                 std::process::exit(EXIT_FATAL);
@@ -187,6 +197,29 @@ fn run() -> Result<Option<(ErrorStats, bool)>> {
             apply_verbosity_to_config(&mut cfg, cli.verbose, cli.quiet);
             logging::init_logging(&cfg.logging, false)?;
             cli::stats::handle_stats(&cfg, *top, from.clone(), to.clone())?;
+            Ok(None)
+        }
+        Some(cli::opts::Commands::Watch { config }) => {
+            let mut cfg = load_config(config)?;
+            cfg.validate()?;
+            apply_verbosity_to_config(&mut cfg, cli.verbose, cli.quiet);
+            logging::init_logging(&cfg.logging, false)?;
+            info!("Application started (watch mode)");
+            info!("Configuration validation passed");
+
+            let pf = preflight::check(&cfg);
+            if pf.print_and_check() {
+                std::process::exit(EXIT_FATAL);
+            }
+
+            let interrupted = Arc::new(AtomicBool::new(false));
+            let interrupted_flag = Arc::clone(&interrupted);
+            ctrlc::set_handler(move || {
+                interrupted_flag.store(true, Ordering::Release);
+            })
+            .ok();
+
+            cli::watch::handle_watch(&cfg, cli.quiet, cli.verbose, &interrupted)?;
             Ok(None)
         }
         None => {

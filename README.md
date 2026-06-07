@@ -19,7 +19,7 @@
 
 - **流式解析器**：单线程顺序处理单个文件、目录中的 `.log` 文件或 glob 模式匹配的文件。无论文件大小，内存保持恒定——工具流式处理记录而非加载到内存中。
 - **灵活的输入模式**：支持单文件路径、目录自动扫描（递归查找 `.log` 文件）或 glob 模式（如 `./logs/2025-*.log`）。结果按路径排序以在多次运行间保持确定性顺序。
-- **CSV 导出器**：16 MB `BufWriter` 配合 `itoa` 零分配整数格式化，实现高吞吐、低延迟输出。`memchr` 的 SIMD 加速字节搜索处理 CSV 转义。
+- **CSV 导出器**：16 MB `BufWriter` 配合 `itoa` 零分配整数格式化，实现高吞吐、低延迟输出。`memchr` 的 SIMD 加速字节搜索处理 CSV 转义。多文件场景支持 rayon 并行解析路径（`parallel.rs`）。
 - **SQLite 导出器**：批量事务配合性能 `PRAGMA` 调优（synchronous off、mmap size、cache size）和预编译语句实现批量插入吞吐量。多文件场景支持 rayon 并行解析路径（`sqlite_parallel.rs`）。
 - **优先级路由的 ExporterManager**：每次运行只有一个导出器处于活动状态；两者同时配置时 CSV 优先。`Exporter` trait 允许基准测试在不修改生产代码的情况下注入模拟导出器。
 
@@ -33,12 +33,13 @@
 
 ### 配置与性能
 
-- **嵌套子表的 TOML 配置**：v1.4+ 格式将 `[filter.include]`、`[filter.exclude]` 作为顶级节（而非嵌套在 `[features]` 下）。旧的扁平格式通过 `RawFiltersFeature` 中间结构和 serde 别名支持向后兼容。`validate_and_compile()` 验证最终形式并拒绝旧版布局。
+- **嵌套子表的 TOML 配置**：v1.4+ 格式将 `[filter.include]`、`[filter.exclude]` 作为顶级节（而非嵌套在 `[features]` 下）。旧的扁平格式通过 `RawFiltersFeature` 中间结构和 serde 别名支持向后兼容。`validate()` 验证最终形式并拒绝旧版布局。
 - **零开销快速路径**：当管道为空（无过滤器、无 replace_parameters）时，热循环通过单个 `pipeline.is_empty()` 检查跳过所有功能门控。快速路径中无虚函数调用、无逐记录的条件分支。
 - **预编译的过滤器处理管道**：`CompiledMetaFilters` 和 `CompiledSqlFilters` 在启动时持有编译好的 `RegexSet` 实例。每个过滤器变体带有类型标签（include、exclude、indicator、SQL include、SQL exclude），无需字符串匹配即可派发。
 - **单线程流式处理**：无论数据量大小，性能可预测。使用标准库全局分配器。Release 配置：`opt-level=3`、LTO fat、codegen-units=1、panic=abort、strip=symbols——生成约 5 MB 的二进制文件。
 - **基准测试结果**：~520 万条记录/秒 CSV（criterion，合成 50k 记录数据集，Apple M 系列芯片），~110 万条记录/秒 SQLite（batch + PRAGMA），~155 万条记录/秒（真实 1.1 GB 文件，约 300 万条记录，NVMe SSD）。
-- **简洁的 CLI**：`init`（生成配置）、`validate`（校验）、`run`（执行导出）、`stats`（统计分析）四个命令。
+- **简洁的 CLI**：`init`（生成配置）、`validate`（校验）、`run`（执行导出）、`stats`（统计分析）、`watch`（持续监听）五个命令。
+- **持续监听**：`watch` 子命令监听配置目录下的新 `.log` 文件，500ms 防抖后自动触发增量处理，Ctrl+C 退出并打印本次运行摘要（处理次数、总行数、运行时长）。
 
 ## 架构
 
@@ -70,13 +71,14 @@ graph LR
 ### 关键模块
 
 - **`cli/run/mod.rs`**：主编排——加载配置、构建管道、预扫描事务过滤器、逐个文件流式处理记录。
+- **`cli/run/parallel.rs`**：CSV 导出的多文件并行解析路径（基于 rayon），解析错误通过 `log::warn!` 上报。
 - **`cli/run/sqlite_parallel.rs`**：SQLite 导出的多文件并行解析路径（基于 rayon），解析错误通过 `log::warn!` 上报。
 - **`cli/stats/mod.rs`**：`stats` 子命令入口，委托给 `src/stats/` 完成聚合与写出。
 - **`stats/mod.rs`**：`run_stats` 流式扫描 → `StatsAccumulator` → 写入 `slow_sql.csv` / `frequent_sql.csv`（或 SQLite 表）。
 - **`exporter/mod.rs`**：`Exporter` trait 和 `ExporterManager` 工厂。每次运行只有一个导出器处于活动状态。
 - **`pipeline/mod.rs`**：`LogProcessor` trait 和 `Pipeline`。`pipeline.is_empty()` 启用零开销快速路径。
 - **`pipeline/filters/mod.rs`**：两遍过滤器设计。预扫描使用 `CompiledMetaFilters` 和 `CompiledSqlFilters` 查找匹配的事务 ID。
-- **`config.rs`**：所有配置结构体，支持 serde 反序列化、嵌套子表支持和 `validate_and_compile()` 预验证。
+- **`config/mod.rs`**：所有配置结构体，支持 serde 反序列化、嵌套子表支持和 `validate()` 校验。
 
 ## 安装
 
@@ -126,6 +128,25 @@ sqllog2db stats -c config.toml --from 2024-01-01 --to 2024-01-31
 sqllog2db stats -c config.toml --from "2024-01-01 00:00:00" --to "2024-01-31 23:59:59" --top 20
 ```
 
+持续监听新 `.log` 文件（按 Ctrl+C 停止并打印摘要）：
+
+```bash
+sqllog2db watch -c config.toml
+```
+
+交互式向导生成配置文件（每步显示示例值与默认值，回车接受默认值）：
+
+```bash
+sqllog2db init --interactive
+```
+
+进度输出控制：`-q`/`--quiet` 抑制非错误输出（适合后台/定时任务），`-v`/`--verbose` 显示每文件详情：
+
+```bash
+sqllog2db run -c config.toml --quiet
+sqllog2db run -c config.toml --verbose
+```
+
 详细用法参见[快速入门指南](./docs/quickstart.md)。
 
 ## 配置
@@ -166,16 +187,18 @@ overwrite = true
 
 解析错误不是致命的。当日志行无法解析时，错误信息写入配置的错误日志文件（配置中的 `[error] file`），处理继续到下一条行。该工具使用结构化错误类型（通过 `thiserror`）为所有错误变体提供文件路径和原因上下文。
 
-通过 Ctrl+C 优雅关闭会在当前批次完成后停止。退出码：0（成功）、2（配置错误）、3（文件/解析错误）、4（导出错误）、130（用户中断）。
+通过 Ctrl+C 优雅关闭会在当前批次完成后停止。退出码：0（成功）、1（处理完成但有非致命错误）、2（致命错误，包含配置/文件/解析/导出）、130（用户中断）。
 
 ## 版本亮点
 
-### v1.15.0 — CI/CD 修复（2026-06-02）
+### v1.16.0 — watch 持续监听、SQL 统计分析与全面体验升级（2026-06-07）
 
-- 修复 `ci.yaml`、`bench.yml`、`lychee.yml`、`pages.yml` 中误升级的 `actions/checkout@v6` 与 `actions/upload-artifact@v7`，全部回退到 `@v4`（Phase 55）
-- 新增 `Cross.toml`，将 aarch64-linux 跨编译镜像 `ghcr.io/cross-rs/aarch64-unknown-linux-gnu` 锁定到 SHA256 摘要，保证可复现构建（Phase 55 + Phase 61）
-- 重构 `release.yaml`：拆出独立 `create-release` job 在 4 个 matrix 构建 job 之前运行，消除并行写入 release body 的竞争条件（Phase 55）
-- `cli/run` 模块重构：`handle_run` 拆分为 7 个私有辅助函数，`run_sequential` 压缩到 ≤40 行，并新建 `scanner` 公共扫描模块（Phase 58 + Phase 56）
+- **`watch` 子命令**：持续监听目录，新增/追加 `.log` 文件时自动增量处理，支持 CSV/SQLite 双格式，Ctrl+C 退出码 130
+- **`stats` 子命令**：慢 SQL TOP-N + 高频 SQL TOP-N，支持 `--from`/`--to` 时间段过滤，SQL 字面量标准化归一
+- **`init --interactive` 向导**：对话式配置生成，每步提示默认值，Enter 直接接受
+- **进度条升级**：`[N/M]` 文件计数器 + ETA + records/sec；错误诊断按类型分组 + hint
+- **多文件 CSV 并行**：rayon 并行路径与单线程输出等价，自动激活
+- **代码质量**：10 个 `mod.rs` 拆分为命名子模块；行覆盖率 92.06%；全代码库 unwrap 注释审计
 
 ## 链接
 

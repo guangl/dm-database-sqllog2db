@@ -1,7 +1,10 @@
-use crate::error::{ErrorStats, Result};
+use crate::error::{
+    ErrorStats, ParseErrorRecord, Result, classify_error_kind, truncate_to_120_chars,
+};
 use crate::exporter::ExporterManager;
 use crate::pipeline::Pipeline;
 use crate::pipeline::normalizer::ParamBuffer;
+use dm_database_parser_sqllog::ParseError;
 use dm_database_parser_sqllog::Sqllog;
 use indicatif::ProgressBar;
 use log::info;
@@ -60,6 +63,7 @@ pub(super) fn normalize_and_export(
         if do_normalize && record.tag.is_none() {
             update_params_buffer_only(record, params_buffer, placeholder_override, ns_scratch);
         }
+        file_stats.filtered_out += 1;
         return ExportAction::Continue;
     }
     let ns = if do_normalize && (!params_buffer.is_empty() || record.tag.is_none()) {
@@ -113,7 +117,6 @@ fn setup_progress_bar(
     if reset_pb && show_progress {
         if let Some(pb) = pb {
             pb.set_message(format!("[{file_index}/{total_files}] {file_name}"));
-            pb.set_position(0);
         }
     }
 }
@@ -146,22 +149,36 @@ fn log_file_result(
             pb.set_message(format!(
                 "✓ [{file_index}/{total_files}] {file_path} — {records_in_file}{errors_label}, {elapsed:.2}s",
             ));
+            pb.inc(1);
         }
     }
 }
 
-/// 每 1024 条记录更新进度条并检查中断信号。
+/// 每 1024 条记录更新进度条消息（嵌入 records/sec）并检查中断信号。
 /// 返回 true 表示收到中断信号，调用方应跳出主循环。
 fn tick_progress(
     pb: Option<&ProgressBar>,
     records_in_file: usize,
+    file_start: std::time::Instant,
+    file_name: &str,
     interrupted: &Arc<AtomicBool>,
 ) -> bool {
+    if records_in_file == 0 {
+        return false;
+    }
     if records_in_file.trailing_zeros() >= 10 {
         if let Some(pb) = pb {
-            pb.inc(1024);
+            let elapsed = file_start.elapsed().as_secs_f64();
+            #[allow(clippy::cast_precision_loss)]
+            let rec_per_s = records_in_file as f64 / elapsed.max(1e-9);
+            let speed_label = if rec_per_s >= 10_000.0 {
+                format!("{:.0}k rec/s", rec_per_s / 1000.0)
+            } else {
+                format!("{rec_per_s:.0} rec/s")
+            };
+            pb.set_message(format!("{file_name} | {speed_label}"));
         }
-        if interrupted.load(Ordering::Relaxed) {
+        if interrupted.load(Ordering::Acquire) {
             return true;
         }
     }
@@ -205,17 +222,29 @@ pub(super) fn process_log_file(
                 total_processed = total_processed.wrapping_add(1);
                 match action {
                     ExportAction::BreakQuota | ExportAction::BreakFatal => break 'outer,
-                    ExportAction::Continue if passes && tick_progress(pb, records_in_file, interrupted) => break 'outer,
+                    ExportAction::Continue if passes && tick_progress(pb, records_in_file, file_start, &file_name, interrupted) => break 'outer,
                     // 过滤掉的记录也以相同节奏（每 1024 条）检查中断，与并行路径保持一致
                     ExportAction::Continue if !passes
                         && total_processed.trailing_zeros() >= 10
-                        && interrupted.load(Ordering::Relaxed) => break 'outer,
+                        && interrupted.load(Ordering::Acquire) => break 'outer,
                     ExportAction::Continue => {}
                 }
             }
             Err(e) => {
                 errors_in_file += 1;
-                file_stats.add_parse_error();
+                let (line_number, raw_ref) = match &e {
+                    ParseError::InvalidFormat { raw, line_number } => (*line_number, raw.as_str()),
+                    _ => (0u64, ""),
+                };
+                let kind = classify_error_kind(raw_ref);
+                file_stats.add_parse_error_with_kind(kind);
+                if file_stats.parse_error_records.len() < 10_000 {
+                    file_stats.parse_error_records.push(ParseErrorRecord {
+                        line_number,
+                        raw_truncated: truncate_to_120_chars(raw_ref),
+                        kind,
+                    });
+                }
                 log::warn!("{file_path} | {e:?}");
             }
         }

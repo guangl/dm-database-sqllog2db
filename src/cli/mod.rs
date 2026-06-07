@@ -3,3 +3,4 @@ pub mod opts;
 pub mod run;
 pub mod stats;
 pub mod validate;
+pub mod watch;

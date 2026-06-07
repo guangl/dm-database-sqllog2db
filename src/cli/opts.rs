@@ -12,8 +12,8 @@ EXAMPLES:
     Export all records from SQL log files:
         sqllog2db run -c config.toml
 
-    Export with SQL indicators filter configured:
-        sqllog2db run -c config.toml
+    Override input paths from the command line:
+        sqllog2db run -c config.toml --input 'sqllogs/2025-*.log'
 
     Generate a default configuration file:
         sqllog2db init -o config.toml
@@ -51,7 +51,7 @@ EXAMPLES:
         sqllog2db run -c /path/to/config.toml
 
     Pipe log data via stdin:
-        cat access.log | sqllog2db run -c config.toml
+        cat sqllogs/2025-01-15.log | sqllog2db run -c config.toml
 
     Override input paths from CLI:
         sqllog2db run -c config.toml --input 'sqllogs/*.log' --input archive.log
@@ -97,6 +97,9 @@ EXAMPLES:
         /// Force overwrite if file exists
         #[arg(short = 'f', long = "force")]
         force: bool,
+        /// Start interactive configuration wizard
+        #[arg(short = 'i', long = "interactive")]
+        interactive: bool,
     },
     /// Validate a configuration file
     #[command(
@@ -104,7 +107,10 @@ EXAMPLES:
         after_help = "\
 EXAMPLES:
     Validate a configuration file:
-        sqllog2db validate -c config.toml"
+        sqllog2db validate -c config.toml
+
+    Validate in quiet mode (suppress non-error output):
+        sqllog2db validate -c config.toml --quiet"
     )]
     Validate {
         /// TOML configuration file path to validate
@@ -162,5 +168,27 @@ EXAMPLES:
             help = "End of time range. Formats: \"YYYY-MM-DD\" or \"YYYY-MM-DD HH:MM:SS\". Overrides config [stats].to."
         )]
         to: Option<String>,
+    },
+    /// Watch directory for new .log files and process them automatically
+    #[command(
+        long_about = "Watch configured input directories for new .log files. Automatically triggers processing when new files appear. Press Ctrl+C to stop.",
+        after_help = "\
+EXAMPLES:
+    Watch and process new log files automatically:
+        sqllog2db watch -c config.toml
+
+    Watch in quiet mode (suitable for cron/background):
+        sqllog2db watch -c config.toml --quiet"
+    )]
+    Watch {
+        /// TOML configuration file path
+        #[arg(
+            short = 'c',
+            long = "config",
+            default_value = "config.toml",
+            env = "SQLLOG2DB_CONFIG",
+            help = "TOML configuration file path."
+        )]
+        config: String,
     },
 }

@@ -1,6 +1,6 @@
 //! Integration tests for CLI handlers and the run pipeline.
 
-use dm_database_sqllog2db::cli::init::handle_init;
+use dm_database_sqllog2db::cli::init::{ExporterChoice, handle_init, run_wizard};
 use dm_database_sqllog2db::cli::run::handle_run;
 use dm_database_sqllog2db::cli::validate::handle_validate;
 use dm_database_sqllog2db::config::{
@@ -22,6 +22,46 @@ fn write_test_log(path: &std::path::Path, count: usize) {
             "2025-01-15 10:30:28.001 (EP[0] sess:0x{i:04x} user:TESTUSER trxid:{i} stmt:0x1 appname:App ip:10.0.0.1) [SEL] SELECT * FROM t WHERE id={i}. EXECTIME: {exec}(ms) ROWCOUNT: {rows}(rows) EXEC_ID: {i}.",
             exec = (i * 13) % 1000,
             rows = i % 100,
+        )
+        .unwrap();
+    }
+    std::fs::write(path, buf).unwrap();
+}
+
+/// Like `write_test_log` but records start at `start_offset` so files have non-overlapping IDs.
+fn write_test_log_offset(path: &std::path::Path, count: usize, start_offset: usize) {
+    use std::fmt::Write as _;
+    let mut buf = String::with_capacity(count * 180);
+    for n in 0..count {
+        let i = start_offset + n;
+        writeln!(
+            buf,
+            "2025-01-15 10:30:28.001 (EP[0] sess:0x{i:04x} user:TESTUSER trxid:{i} stmt:0x1 appname:App ip:10.0.0.1) [SEL] SELECT * FROM t WHERE id={i}. EXECTIME: {exec}(ms) ROWCOUNT: {rows}(rows) EXEC_ID: {i}.",
+            exec = (i * 13) % 1000,
+            rows = i % 100,
+        )
+        .unwrap();
+    }
+    std::fs::write(path, buf).unwrap();
+}
+
+fn write_heterogeneous_log(
+    path: &std::path::Path,
+    count: usize,
+    trxid_offset: usize,
+    username: &str,
+) {
+    use std::fmt::Write as _;
+    let mut buf = String::with_capacity(count * 200);
+    for i in 0..count {
+        let trxid = trxid_offset + i;
+        writeln!(
+            buf,
+            "2025-01-15 10:30:28.001 (EP[0] sess:0x{trxid:04x} user:{username} trxid:{trxid} \
+             stmt:0x1 appname:App ip:10.0.0.1) [SEL] SELECT * FROM t WHERE id={trxid}. \
+             EXECTIME: {}(ms) ROWCOUNT: {}(rows) EXEC_ID: {trxid}.",
+            (trxid * 13) % 1000,
+            trxid % 100,
         )
         .unwrap();
     }
@@ -59,7 +99,7 @@ fn test_handle_run_empty_dir_returns_no_files_found() {
     let csv_file = dir.path().join("out.csv");
     let cfg = make_run_config(&log_dir, &csv_file);
     let interrupted = Arc::new(AtomicBool::new(false));
-    let result = handle_run(&cfg, true, false, &interrupted);
+    let result = handle_run(&cfg, true, false, &interrupted, None);
     assert!(result.is_err());
     let err = result.unwrap_err().to_string();
     assert!(err.contains("No log files found matching inputs"));
@@ -82,7 +122,7 @@ fn test_handle_run_multi_file() {
     let cfg = make_run_config(&log_dir, &csv_file);
 
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None).unwrap();
 }
 
 #[test]
@@ -96,15 +136,14 @@ fn test_handle_run_real_csv_export() {
     let cfg = make_run_config(&log_dir, &csv_file);
 
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None).unwrap();
 
     let content = std::fs::read_to_string(&csv_file).unwrap();
     // header + 10 data rows = 11 lines
     assert_eq!(
         content.lines().count(),
         11,
-        "expected header + 10 data rows, got {}",
-        content.lines().count()
+        "expected header + 10 data rows"
     );
 }
 
@@ -120,7 +159,7 @@ fn test_handle_run_interrupted() {
 
     // Pre-set interrupted flag — run returns Err(Interrupted) when flag is set before processing
     let interrupted = Arc::new(AtomicBool::new(true));
-    let result = handle_run(&cfg, true, false, &interrupted);
+    let result = handle_run(&cfg, true, false, &interrupted, None);
     assert!(
         matches!(
             result,
@@ -404,7 +443,7 @@ fn test_handle_run_non_quiet_prints_summary() {
     let cfg = make_run_config(&log_dir, &csv_file);
     let interrupted = Arc::new(AtomicBool::new(false));
     // quiet=false exercises the summary print path
-    handle_run(&cfg, false, false, &interrupted).unwrap();
+    handle_run(&cfg, false, false, &interrupted, None).unwrap();
 }
 
 #[test]
@@ -427,7 +466,14 @@ fn test_handle_run_with_filters_builds_pipeline() {
         ..Default::default()
     });
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    // include.users = ["TESTUSER"]，全部 20 条匹配 → header + 20 = 21 行
+    let content = std::fs::read_to_string(&csv_file).unwrap();
+    assert_eq!(
+        content.lines().count(),
+        21,
+        "expected header + 20 matching records"
+    );
 }
 
 #[test]
@@ -452,7 +498,14 @@ fn test_handle_run_with_transaction_filters_prescans() {
         ..Default::default()
     });
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    // exec_ids = [0, 1, 2]，30 条记录中匹配 3 条 → header + 3 = 4 行
+    let content = std::fs::read_to_string(&csv_file).unwrap();
+    assert_eq!(
+        content.lines().count(),
+        4,
+        "expected header + 3 records matching exec_ids [0,1,2]"
+    );
 }
 
 #[test]
@@ -477,7 +530,15 @@ fn test_handle_run_with_min_runtime_filter() {
         ..Default::default()
     });
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    // EXECTIME = (i*13)%1000：i=0 时为 0ms（被过滤），其余 19 条 ≥ 13ms
+    // → header + 19 = 20 行
+    let content = std::fs::read_to_string(&csv_file).unwrap();
+    assert_eq!(
+        content.lines().count(),
+        20,
+        "expected header + 19 records with EXECTIME >= 1ms"
+    );
 }
 
 // ── parallel CSV tests ──────────────────────────────────────────────────────
@@ -497,7 +558,7 @@ fn test_handle_run_parallel_csv_multiple_files() {
     let interrupted = Arc::new(AtomicBool::new(false));
 
     // jobs=2, multiple files, no limit, CSV exporter → triggers process_csv_parallel
-    handle_run(&cfg, true, false, &interrupted).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None).unwrap();
 
     let content = std::fs::read_to_string(&csv_file).unwrap();
     let data_lines = content.lines().count().saturating_sub(1);
@@ -533,7 +594,7 @@ fn test_csv_throughput_baseline() {
 
     let interrupted = Arc::new(AtomicBool::new(false));
     let start = std::time::Instant::now();
-    handle_run(&cfg, true, false, &interrupted).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None).unwrap();
     let elapsed = start.elapsed().as_secs_f64();
 
     let rate = f64::from(u32::try_from(RECORD_COUNT).expect("20_000 fits in u32")) / elapsed;
@@ -634,15 +695,14 @@ fn test_e2e_filter_pipeline() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None).unwrap();
 
     // Assert: header + 10 条数据行 = 11 行
     let content = std::fs::read_to_string(&csv_file).unwrap();
     assert_eq!(
         content.lines().count(),
         11,
-        "expected header + 10 data rows, got {}",
-        content.lines().count()
+        "expected header + 10 data rows"
     );
 
     // 追加一个包含 user=OTHER 的第二个日志文件
@@ -671,14 +731,13 @@ fn test_e2e_filter_pipeline() {
         exclude: ExcludeFilters::default(),
         ..Default::default()
     });
-    handle_run(&cfg2, true, false, &Arc::new(AtomicBool::new(false))).unwrap();
+    handle_run(&cfg2, true, false, &Arc::new(AtomicBool::new(false)), None).unwrap();
     let content2 = std::fs::read_to_string(&csv_file2).unwrap();
     // OTHER 全被过滤，只有 header
     assert_eq!(
         content2.lines().count(),
         1,
-        "expected only header row when all records filtered out, got {}",
-        content2.lines().count()
+        "expected only header row when all records filtered out"
     );
 }
 
@@ -702,7 +761,7 @@ fn test_e2e_field_projection() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None).unwrap();
 
     // Assert: header 精确为 "ts,username,sql"（已验证字段投影正确）
     // 数据行只验证行数（不用 split(',').count()，SQL 含逗号时会误判）
@@ -736,7 +795,7 @@ fn test_boundary_empty_log_file() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None).unwrap();
 
     // Assert: CSV 文件存在且只有 header（1 行）
     assert!(
@@ -747,8 +806,7 @@ fn test_boundary_empty_log_file() {
     assert_eq!(
         content.lines().count(),
         1,
-        "expected only header row for empty log, got {} lines",
-        content.lines().count()
+        "expected only header row for empty log"
     );
 }
 
@@ -774,21 +832,20 @@ fn test_boundary_all_filtered() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None).unwrap();
 
     // Assert: CSV 只有 header（全部记录被过滤）
     let content = std::fs::read_to_string(&csv_file).unwrap();
     assert_eq!(
         content.lines().count(),
         1,
-        "expected only header row when all records filtered, got {} lines",
-        content.lines().count()
+        "expected only header row when all records filtered"
     );
 }
 
 #[test]
 fn test_boundary_malformed_line() {
-    // Arrange: 2 条正常行 + 1 条无效行 + 2 条正常行 = 4 条正常记录
+    // Arrange: 1 条无效行（文件开头）+ 4 条正常行 = 4 条正常记录
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
     std::fs::create_dir_all(&log_dir).unwrap();
@@ -812,15 +869,14 @@ fn test_boundary_malformed_line() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None).unwrap();
 
     // Assert: 无效行被跳过，4 条正常记录导出 → header + 4 data = 5 行
     let csv_content = std::fs::read_to_string(&csv_file).unwrap();
     assert_eq!(
         csv_content.lines().count(),
         5,
-        "expected header + 4 data rows (malformed line skipped), got {} lines",
-        csv_content.lines().count()
+        "expected header + 4 data rows (malformed line skipped)"
     );
 }
 
@@ -842,15 +898,14 @@ fn test_boundary_long_sql() {
 
     // Act: 不应 panic，不应 OOM
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None).unwrap();
 
     // Assert: 1 条记录正常导出 → header + 1 data = 2 行
     let csv_content = std::fs::read_to_string(&csv_file).unwrap();
     assert_eq!(
         csv_content.lines().count(),
         2,
-        "expected header + 1 data row for long SQL, got {} lines",
-        csv_content.lines().count()
+        "expected header + 1 data row for long SQL"
     );
 }
 
@@ -1035,6 +1090,47 @@ fn test_cli_verbose_prints_processing_line_per_file() {
     assert!(
         processing_count >= 1,
         "expected >=1 Processing line, got {processing_count}: {stderr}"
+    );
+}
+
+/// Verify that `--verbose run` with multiple log files emits `Processing: <path>` to stderr for
+/// each file regardless of whether the parallel or sequential path is taken.
+///
+/// Two files are created so that on multi-core machines the parallel path (PARALLEL-05) is
+/// exercised.  On single-core CI (jobs=1) the sequential path still emits the same line per
+/// file, so the assertion holds in both cases.
+#[test]
+fn test_cli_verbose_parallel_prints_processing_lines() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_dir = dir.path().join("logs");
+    std::fs::create_dir_all(&log_dir).unwrap();
+    // Two files: on multi-core hosts this triggers the parallel path (jobs > 1 && files > 1).
+    write_test_log(&log_dir.join("a.log"), 5);
+    write_test_log(&log_dir.join("b.log"), 5);
+
+    let csv_file = dir.path().join("out.csv");
+    let error_log = dir.path().join("errors.log");
+    let app_log = dir.path().join("app.log");
+    let config_path = dir.path().join("config.toml");
+    std::fs::write(
+        &config_path,
+        make_toml_config(&log_dir, &csv_file, &error_log, &app_log),
+    )
+    .unwrap();
+
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_sqllog2db"))
+        .args(["--verbose", "run", "-c", config_path.to_str().unwrap()])
+        .output()
+        .expect("failed to spawn sqllog2db binary");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "verbose multi-file run should succeed, stderr: {stderr}"
+    );
+    let processing_count = stderr.matches("Processing: ").count();
+    assert!(
+        processing_count >= 2,
+        "expected >=2 'Processing: ' lines (one per file), got {processing_count}: {stderr}"
     );
 }
 
@@ -1242,8 +1338,7 @@ fn test_cli_input_flag_overrides_config_inputs() {
     assert_eq!(
         content.lines().count(),
         9,
-        "expected header + 8 data rows (5+3), got {}",
-        content.lines().count()
+        "expected header + 8 data rows (5+3)"
     );
 }
 
@@ -1277,8 +1372,7 @@ fn test_cli_input_flag_with_glob() {
     assert_eq!(
         content.lines().count(),
         11,
-        "expected header + 10 data rows (4+6 from *.log), got {}",
-        content.lines().count()
+        "expected header + 10 data rows (4+6 from *.log)"
     );
 }
 
@@ -1602,15 +1696,15 @@ fn test_stats_csv_top_5_limits_rows() {
     // 数据行 = total lines - 1 (header)
     let slow_data = slow.lines().count() - 1;
     assert!(
-        slow_data <= 5,
-        "slow_sql.csv data rows should be ≤ 5, got {slow_data}"
+        (1..=5).contains(&slow_data),
+        "slow_sql.csv data rows should be 1..=5, got {slow_data}"
     );
 
     let freq = std::fs::read_to_string(out_dir.join("frequent_sql.csv")).unwrap();
     let freq_data = freq.lines().count() - 1;
     assert!(
-        freq_data <= 5,
-        "frequent_sql.csv data rows should be ≤ 5, got {freq_data}"
+        (1..=5).contains(&freq_data),
+        "frequent_sql.csv data rows should be 1..=5, got {freq_data}"
     );
 }
 
@@ -2153,4 +2247,751 @@ fn test_cli_init_existing_file_without_force_exits_nonzero() {
         .assert()
         .failure()
         .stderr(contains("already exists"));
+}
+
+// ── Phase 66 兼容性验证集成测试 (COMPAT-01/02/03) ───────────────────────────
+
+/// COMPAT-02: 并行路径输出内容与逐文件顺序路径完全一致（集合排序后相等）。
+///
+/// 策略：
+/// 1. 写入 2 个各含 20 条记录的 .log 文件
+/// 2. 顺序基线：对每个文件单独构建 Config（单文件 inputs），逐个运行 `handle_run`，收集数据行
+/// 3. 并行路径：将两个文件配置为 inputs，一次 `handle_run`（触发并行路径），读取数据行
+/// 4. 对两组数据行排序后断言相等；同时验证并行输出存在 header 行
+#[test]
+fn test_parallel_csv_content_matches_sequential() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_dir = dir.path().join("logs");
+    std::fs::create_dir_all(&log_dir).unwrap();
+    let file_a = log_dir.join("a.log");
+    let file_b = log_dir.join("b.log");
+    // 使用非重叠 ID 范围，使意外去重问题可检测
+    write_test_log_offset(&file_a, 20, 0);
+    write_test_log_offset(&file_b, 20, 20);
+
+    let interrupted = Arc::new(AtomicBool::new(false));
+
+    // 顺序基线：每个文件单独运行，收集数据行
+    let mut seq_lines: Vec<String> = Vec::new();
+    for log_file in [&file_a, &file_b] {
+        let seq_csv = dir.path().join(format!(
+            "seq_{}.csv",
+            log_file.file_name().unwrap().to_string_lossy()
+        ));
+        let mut seq_cfg = Config {
+            sqllog: SqllogConfig {
+                inputs: vec![log_file.to_str().unwrap().to_string()],
+                path_deprecated: None,
+            },
+            exporter: ExporterConfig {
+                csv: Some(CsvExporterConfig {
+                    file: seq_csv.to_str().unwrap().to_string(),
+                    overwrite: true,
+                    append: false,
+                    ..CsvExporterConfig::default()
+                }),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        // 禁用 csv.append 确保顺序路径（单文件不触发并行）
+        seq_cfg.exporter.csv.as_mut().unwrap().append = false;
+        handle_run(&seq_cfg, true, false, &interrupted, None).unwrap();
+        let content = std::fs::read_to_string(&seq_csv).unwrap();
+        // 跳过 header 行，收集数据行
+        for line in content.lines().skip(1) {
+            if !line.is_empty() {
+                seq_lines.push(line.to_string());
+            }
+        }
+    }
+
+    // 并行路径：两个文件一次 handle_run
+    let par_csv = dir.path().join("parallel.csv");
+    let par_cfg = Config {
+        sqllog: SqllogConfig {
+            inputs: vec![
+                file_a.to_str().unwrap().to_string(),
+                file_b.to_str().unwrap().to_string(),
+            ],
+            path_deprecated: None,
+        },
+        exporter: ExporterConfig {
+            csv: Some(CsvExporterConfig {
+                file: par_csv.to_str().unwrap().to_string(),
+                overwrite: true,
+                append: false,
+                ..CsvExporterConfig::default()
+            }),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    handle_run(&par_cfg, true, false, &interrupted, None).unwrap();
+
+    let par_content = std::fs::read_to_string(&par_csv).unwrap();
+    let mut par_lines_iter = par_content.lines();
+    // 验证并行输出存在 header 行
+    let header = par_lines_iter
+        .next()
+        .expect("parallel CSV must have a header");
+    assert!(
+        header.contains("ts") || header.contains("username"),
+        "first line should be a header, got: {header}"
+    );
+    let mut par_lines: Vec<String> = par_lines_iter
+        .filter(|l| !l.is_empty())
+        .map(String::from)
+        .collect();
+
+    // 排序后比较（并行路径文件间行顺序不确定）
+    seq_lines.sort();
+    par_lines.sort();
+    assert_eq!(
+        seq_lines.len(),
+        par_lines.len(),
+        "parallel and sequential should produce the same number of records"
+    );
+    assert_eq!(
+        seq_lines, par_lines,
+        "parallel CSV content must match sequential after sorting"
+    );
+}
+
+/// COMPAT-02: 并行路径在启用 include 过滤器时，与顺序路径输出内容一致（集合排序后相等）。
+///
+/// 使用 `include.users = ["TESTUSER"]` 过滤器；合成记录的 user 字段均为 TESTUSER，
+/// 因此所有记录应通过过滤，并行与顺序结果相同。
+#[test]
+fn test_parallel_csv_filter_matches_sequential() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_dir = dir.path().join("logs");
+    std::fs::create_dir_all(&log_dir).unwrap();
+    let file_a = log_dir.join("filter_a.log");
+    let file_b = log_dir.join("filter_b.log");
+    // 使用非重叠 ID 范围，使意外去重问题可检测
+    write_test_log_offset(&file_a, 20, 0);
+    write_test_log_offset(&file_b, 20, 20);
+
+    let interrupted = Arc::new(AtomicBool::new(false));
+
+    let filter_cfg = Some(FiltersFeature {
+        enable: true,
+        include: IncludeFilters {
+            users: Some(vec!["TESTUSER".to_string()]),
+            ..Default::default()
+        },
+        exclude: ExcludeFilters::default(),
+        ..Default::default()
+    });
+
+    // 顺序基线
+    let mut seq_lines: Vec<String> = Vec::new();
+    for log_file in [&file_a, &file_b] {
+        let seq_csv = dir.path().join(format!(
+            "seq_filter_{}.csv",
+            log_file.file_name().unwrap().to_string_lossy()
+        ));
+        let seq_cfg = Config {
+            sqllog: SqllogConfig {
+                inputs: vec![log_file.to_str().unwrap().to_string()],
+                path_deprecated: None,
+            },
+            exporter: ExporterConfig {
+                csv: Some(CsvExporterConfig {
+                    file: seq_csv.to_str().unwrap().to_string(),
+                    overwrite: true,
+                    append: false,
+                    ..CsvExporterConfig::default()
+                }),
+                ..Default::default()
+            },
+            filter: filter_cfg.clone(),
+            ..Default::default()
+        };
+        handle_run(&seq_cfg, true, false, &interrupted, None).unwrap();
+        let content = std::fs::read_to_string(&seq_csv).unwrap();
+        for line in content.lines().skip(1) {
+            if !line.is_empty() {
+                seq_lines.push(line.to_string());
+            }
+        }
+    }
+
+    // 并行路径（带过滤器）
+    let par_csv = dir.path().join("parallel_filter.csv");
+    let par_cfg = Config {
+        sqllog: SqllogConfig {
+            inputs: vec![
+                file_a.to_str().unwrap().to_string(),
+                file_b.to_str().unwrap().to_string(),
+            ],
+            path_deprecated: None,
+        },
+        exporter: ExporterConfig {
+            csv: Some(CsvExporterConfig {
+                file: par_csv.to_str().unwrap().to_string(),
+                overwrite: true,
+                append: false,
+                ..CsvExporterConfig::default()
+            }),
+            ..Default::default()
+        },
+        filter: filter_cfg,
+        ..Default::default()
+    };
+    handle_run(&par_cfg, true, false, &interrupted, None).unwrap();
+
+    let par_content = std::fs::read_to_string(&par_csv).unwrap();
+    let mut par_lines: Vec<String> = par_content
+        .lines()
+        .skip(1)
+        .filter(|l| !l.is_empty())
+        .map(String::from)
+        .collect();
+
+    seq_lines.sort();
+    par_lines.sort();
+    assert_eq!(
+        seq_lines.len(),
+        par_lines.len(),
+        "filtered parallel and sequential should produce the same number of records"
+    );
+    assert_eq!(
+        seq_lines, par_lines,
+        "filtered parallel CSV content must match sequential after sorting"
+    );
+}
+
+/// COMPAT-03: `sqllog2db init` 生成的 config.toml 模板不包含并行相关新字段
+/// （如 "parallel" 或 "jobs" 字样），确认 v1.16 config 格式没有被修改。
+#[test]
+fn test_init_no_parallel_fields() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let config_path = dir.path().join("config.toml");
+    handle_init(config_path.to_str().unwrap(), false).unwrap();
+    let content = std::fs::read_to_string(&config_path).unwrap();
+    assert!(
+        !content.contains("parallel"),
+        "init template must not contain 'parallel' field, got:\n{content}"
+    );
+    assert!(
+        !content.contains("jobs"),
+        "init template must not contain 'jobs' field, got:\n{content}"
+    );
+    // 验证核心格式字段仍然存在（格式未被破坏）
+    assert!(
+        content.contains("[sqllog]"),
+        "init template must still contain [sqllog] section"
+    );
+    assert!(
+        content.contains("[exporter.csv]"),
+        "init template must still contain [exporter.csv] section"
+    );
+}
+
+/// PARALLEL-06: `jobs_override=Some(2)` 强制并行路径在所有环境下被执行。
+///
+/// 使用两个异构文件（trxid 空间不重叠、不同 user），强制 jobs=2 触发并行路径，
+/// 断言输出总行数 == 35（20+15），且两个 user 均出现在输出中。
+#[test]
+fn test_parallel_csv_jobs_override_forces_parallel() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_dir = dir.path().join("logs");
+    std::fs::create_dir_all(&log_dir).unwrap();
+    let file_a = log_dir.join("a.log");
+    let file_b = log_dir.join("b.log");
+    write_heterogeneous_log(&file_a, 20, 0, "USERA");
+    write_heterogeneous_log(&file_b, 15, 1000, "USERB");
+
+    let par_csv = dir.path().join("parallel_jobs.csv");
+    let interrupted = Arc::new(AtomicBool::new(false));
+    let par_cfg = Config {
+        sqllog: SqllogConfig {
+            inputs: vec![
+                file_a.to_str().unwrap().to_string(),
+                file_b.to_str().unwrap().to_string(),
+            ],
+            path_deprecated: None,
+        },
+        exporter: ExporterConfig {
+            csv: Some(CsvExporterConfig {
+                file: par_csv.to_str().unwrap().to_string(),
+                overwrite: true,
+                append: false,
+                ..CsvExporterConfig::default()
+            }),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    handle_run(&par_cfg, true, false, &interrupted, Some(2)).unwrap();
+
+    let par_content = std::fs::read_to_string(&par_csv).unwrap();
+    let data_lines: Vec<&str> = par_content
+        .lines()
+        .skip(1)
+        .filter(|l| !l.is_empty())
+        .collect();
+    assert_eq!(
+        data_lines.len(),
+        35,
+        "jobs_override=Some(2) 并行路径应输出 35 条记录 (20+15)，实际 {}",
+        data_lines.len()
+    );
+    assert!(par_content.contains("USERA"), "并行输出应包含 USERA 的记录");
+    assert!(par_content.contains("USERB"), "并行输出应包含 USERB 的记录");
+}
+
+/// PARALLEL-07: 异构数据(不重叠 trxid + 不同 user)下并行 == 顺序；任何聚合 bug 立即可见。
+///
+/// 顺序基线逐文件运行，并行路径强制 jobs=2，排序后逐字节比对。
+/// 若并行路径漏记录（任何聚合 bug），`len()` 断言立即失败。
+#[test]
+fn test_parallel_csv_heterogeneous_matches_sequential() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_dir = dir.path().join("logs");
+    std::fs::create_dir_all(&log_dir).unwrap();
+    let file_a = log_dir.join("hetero_a.log");
+    let file_b = log_dir.join("hetero_b.log");
+    write_heterogeneous_log(&file_a, 20, 0, "USERA");
+    write_heterogeneous_log(&file_b, 15, 1000, "USERB");
+
+    let interrupted = Arc::new(AtomicBool::new(false));
+
+    // 顺序基线：每个文件单独运行收集数据行
+    let mut seq_lines: Vec<String> = Vec::new();
+    for (log_file, suffix) in [(&file_a, "a"), (&file_b, "b")] {
+        let seq_csv = dir.path().join(format!("seq_hetero_{suffix}.csv"));
+        let seq_cfg = Config {
+            sqllog: SqllogConfig {
+                inputs: vec![log_file.to_str().unwrap().to_string()],
+                path_deprecated: None,
+            },
+            exporter: ExporterConfig {
+                csv: Some(CsvExporterConfig {
+                    file: seq_csv.to_str().unwrap().to_string(),
+                    overwrite: true,
+                    append: false,
+                    ..CsvExporterConfig::default()
+                }),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        handle_run(&seq_cfg, true, false, &interrupted, None).unwrap();
+        let content = std::fs::read_to_string(&seq_csv).unwrap();
+        for line in content.lines().skip(1).filter(|l| !l.is_empty()) {
+            seq_lines.push(line.to_string());
+        }
+    }
+
+    // 并行路径：强制 jobs=2
+    let par_csv = dir.path().join("par_hetero.csv");
+    let par_cfg = Config {
+        sqllog: SqllogConfig {
+            inputs: vec![
+                file_a.to_str().unwrap().to_string(),
+                file_b.to_str().unwrap().to_string(),
+            ],
+            path_deprecated: None,
+        },
+        exporter: ExporterConfig {
+            csv: Some(CsvExporterConfig {
+                file: par_csv.to_str().unwrap().to_string(),
+                overwrite: true,
+                append: false,
+                ..CsvExporterConfig::default()
+            }),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    handle_run(&par_cfg, true, false, &interrupted, Some(2)).unwrap();
+
+    let par_content = std::fs::read_to_string(&par_csv).unwrap();
+    let mut par_lines: Vec<String> = par_content
+        .lines()
+        .skip(1)
+        .filter(|l| !l.is_empty())
+        .map(String::from)
+        .collect();
+
+    seq_lines.sort();
+    par_lines.sort();
+    assert_eq!(
+        seq_lines.len(),
+        par_lines.len(),
+        "异构数据下并行 ({}) 与顺序 ({}) 行数应相同",
+        par_lines.len(),
+        seq_lines.len()
+    );
+    assert_eq!(
+        seq_lines, par_lines,
+        "异构数据下并行 CSV 内容排序后应与顺序基线完全一致"
+    );
+}
+
+// ── run_wizard integration tests ─────────────────────────────────────────────
+
+#[test]
+fn test_wizard_integration_all_defaults() {
+    let input = b"\n\n\n";
+    let mut reader = std::io::Cursor::new(input.as_ref());
+    let mut writer = Vec::<u8>::new();
+    let answers = run_wizard(&mut reader, &mut writer).unwrap();
+    assert_eq!(answers.inputs, "sqllogs");
+    assert!(matches!(answers.exporter, ExporterChoice::Csv));
+    assert_eq!(answers.csv_file.as_deref(), Some("outputs/sqllog.csv"));
+}
+
+#[test]
+fn test_wizard_integration_sqlite() {
+    let input = b"\nsqlite\ndb/out.db\nmy_records\n";
+    let mut reader = std::io::Cursor::new(input.as_ref());
+    let mut writer = Vec::<u8>::new();
+    let answers = run_wizard(&mut reader, &mut writer).unwrap();
+    assert!(matches!(answers.exporter, ExporterChoice::Sqlite));
+    assert_eq!(answers.sqlite_db.as_deref(), Some("db/out.db"));
+    assert_eq!(answers.sqlite_table.as_deref(), Some("my_records"));
+}
+
+// ── e2e CLI 测试: init --interactive (INIT-01/02/03 + SC4 + D-02) ─────────────
+
+/// INIT-01/02: `init -i` 全默认 Enter×3，退出 0，生成含默认路径的 config.toml
+#[test]
+fn test_cli_init_interactive_all_defaults() {
+    use assert_cmd::Command;
+    let dir = tempfile::TempDir::new().unwrap();
+    let out_file = dir.path().join("cfg.toml");
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["init", "-i", "-o"])
+        .arg(&out_file)
+        .write_stdin("\n\n\n")
+        .assert()
+        .success();
+
+    assert!(out_file.exists(), "init -i must create the config file");
+    let content = std::fs::read_to_string(&out_file).unwrap();
+    assert!(
+        content.contains(r#"inputs = ["sqllogs"]"#),
+        "default inputs must be sqllogs"
+    );
+    assert!(
+        content.contains(r#"file = "outputs/sqllog.csv""#),
+        "default csv file path must be outputs/sqllog.csv"
+    );
+}
+
+/// INIT-02: `init -i` 自定义 inputs 路径，生成的 config.toml 包含自定义值
+#[test]
+fn test_cli_init_interactive_custom_inputs() {
+    use assert_cmd::Command;
+    let dir = tempfile::TempDir::new().unwrap();
+    let out_file = dir.path().join("cfg.toml");
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["init", "-i", "-o"])
+        .arg(&out_file)
+        .write_stdin("my/dir\n\n\n")
+        .assert()
+        .success();
+
+    let content = std::fs::read_to_string(&out_file).unwrap();
+    assert!(
+        content.contains(r#"inputs = ["my/dir"]"#),
+        "custom inputs path must appear in generated config"
+    );
+}
+
+/// INIT-02: `init -i` sqlite 模式，生成 config.toml 含正确的 `SQLite` 配置段
+#[test]
+fn test_cli_init_interactive_sqlite() {
+    use assert_cmd::Command;
+    let dir = tempfile::TempDir::new().unwrap();
+    let out_file = dir.path().join("cfg.toml");
+
+    // stdin: inputs=默认\n, format=sqlite\n, sqlite_db=默认\n, sqlite_table=默认\n
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["init", "-i", "-o"])
+        .arg(&out_file)
+        .write_stdin("\nsqlite\n\n\n")
+        .assert()
+        .success();
+
+    let content = std::fs::read_to_string(&out_file).unwrap();
+    assert!(
+        content.contains("[exporter.sqlite]"),
+        "[exporter.sqlite] must be activated (uncommented)"
+    );
+    assert!(
+        !content.contains("# [exporter.sqlite]"),
+        "[exporter.sqlite] must not remain commented"
+    );
+    assert!(
+        content.contains(r#"database_url = "export/sqllog2db.db""#),
+        "database_url must use default value"
+    );
+    assert!(
+        content.contains(r#"table_name = "sqllog_records""#),
+        "table_name must use default value"
+    );
+    assert!(
+        content.contains("# [exporter.csv]"),
+        "[exporter.csv] must be commented out in sqlite mode"
+    );
+}
+
+/// SC4: 向导生成的 config.toml 能被 `validate` 子命令通过
+#[test]
+fn test_cli_init_interactive_generates_validatable_config() {
+    use assert_cmd::Command;
+    let dir = tempfile::TempDir::new().unwrap();
+    let out_file = dir.path().join("cfg.toml");
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["init", "-i", "-o"])
+        .arg(&out_file)
+        .write_stdin("\n\n\n")
+        .assert()
+        .success();
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["validate", "-c"])
+        .arg(&out_file)
+        .assert()
+        .success();
+}
+
+/// INIT-03: 交互式全默认与非交互式生成的 config.toml 字节级相同
+#[test]
+fn test_cli_init_interactive_format_matches_non_interactive() {
+    use assert_cmd::Command;
+    let dir = tempfile::TempDir::new().unwrap();
+    let interactive_file = dir.path().join("a.toml");
+    let non_interactive_file = dir.path().join("b.toml");
+
+    // 交互式（全默认）
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["init", "-i", "-o"])
+        .arg(&interactive_file)
+        .write_stdin("\n\n\n")
+        .assert()
+        .success();
+
+    // 非交互式
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["init", "-o"])
+        .arg(&non_interactive_file)
+        .assert()
+        .success();
+
+    let interactive_content = std::fs::read_to_string(&interactive_file).unwrap();
+    let non_interactive_content = std::fs::read_to_string(&non_interactive_file).unwrap();
+    assert_eq!(
+        interactive_content, non_interactive_content,
+        "interactive and non-interactive must produce identical default config"
+    );
+}
+
+/// D-02: interactive 模式下文件已存在且未传 --force 时退出非零，stderr 含 "already exists"
+#[test]
+fn test_cli_init_interactive_existing_without_force_fails() {
+    use assert_cmd::Command;
+    use predicates::str::contains;
+    let dir = tempfile::TempDir::new().unwrap();
+    let out_file = dir.path().join("cfg.toml");
+    std::fs::write(&out_file, "existing content").unwrap();
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["init", "-i", "-o"])
+        .arg(&out_file)
+        .write_stdin("")
+        .assert()
+        .failure()
+        .stderr(contains("already exists"));
+}
+
+/// IN-03: `init -i --force` overwrites an existing file with the wizard output
+#[test]
+fn test_cli_init_interactive_force_overwrites_existing() {
+    use assert_cmd::Command;
+    let dir = tempfile::TempDir::new().unwrap();
+    let out_file = dir.path().join("cfg.toml");
+    std::fs::write(&out_file, "old content").unwrap();
+
+    Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .args(["init", "-i", "-o"])
+        .arg(&out_file)
+        .arg("--force")
+        .write_stdin("\n\n\n")
+        .assert()
+        .success();
+
+    let content = std::fs::read_to_string(&out_file).unwrap();
+    assert!(
+        content.contains("[sqllog]"),
+        "force should overwrite with template config"
+    );
+    assert!(
+        !content.contains("old content"),
+        "old content must be replaced"
+    );
+}
+
+// ── watch subcommand tests ─────────────────────────────────────────────────────
+
+mod watch_tests {
+    use dm_database_sqllog2db::cli::watch::handle_watch;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::time::Duration;
+
+    /// 向指定路径写入一行最小可解析的 DM SQL 日志。
+    fn write_minimal_log(path: &std::path::Path) {
+        let line = "2025-01-15 10:30:28.001 (EP[0] sess:0x0001 user:TESTUSER trxid:1 stmt:0x1 appname:App ip:10.0.0.1) [SEL] SELECT id FROM t WHERE id=1. EXECTIME: 5(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.\n";
+        std::fs::write(path, line).unwrap();
+    }
+
+    /// W1: `watch --help` 包含配置文件说明和使用示例（WATCH-01 可发现性）。
+    #[test]
+    fn test_watch_help_lists_subcommand() {
+        use assert_cmd::Command;
+        let output = Command::cargo_bin("sqllog2db")
+            .unwrap()
+            .arg("watch")
+            .arg("--help")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "watch --help should exit 0, got: {:?}",
+            output.status.code()
+        );
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            stdout.contains("TOML configuration file path"),
+            "help should mention 'TOML configuration file path', got:\n{stdout}"
+        );
+        assert!(
+            stdout.contains("sqllog2db watch -c config.toml"),
+            "help should include usage example 'sqllog2db watch -c config.toml', got:\n{stdout}"
+        );
+    }
+
+    /// W2: interrupted=true 预置时 `handle_watch` 返回 `Err(Error::Interrupted)`（WATCH-09 exit 130）。
+    #[test]
+    fn test_watch_exits_when_interrupted() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let log_dir = dir.path().join("logs");
+        std::fs::create_dir_all(&log_dir).unwrap();
+        let csv_file = dir.path().join("out.csv");
+        let cfg = super::make_run_config(&log_dir, &csv_file);
+        let interrupted = Arc::new(AtomicBool::new(true));
+        let result = handle_watch(&cfg, true, false, &interrupted);
+        // WATCH-09: interrupted=true 时 handle_watch 应返回 Err(Error::Interrupted)，
+        // main.rs 处理该错误并 exit(130)
+        assert!(
+            matches!(
+                result,
+                Err(dm_database_sqllog2db::error::Error::Interrupted)
+            ),
+            "handle_watch with interrupted=true should return Err(Interrupted), got: {result:?}"
+        );
+    }
+
+    /// W3: 新 .log 文件出现时触发 `handle_run`，CSV 输出行数 > header（WATCH-02/05）。
+    /// macOS `FSEvents` 在 cargo test 进程中对临时目录的事件不稳定（coalescence 延迟 > 8s），
+    /// stdin-pipe hang 已由 CR-01 修复，但 `FSEvents` 事件可靠性需 smoke test 环境验证。
+    #[test]
+    #[ignore = "macOS FSEvents coalescing in cargo test env; smoke test required for reliable verification"]
+    fn test_watch_triggers_on_new_log_file() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let log_dir = dir.path().join("logs");
+        std::fs::create_dir_all(&log_dir).unwrap();
+        let csv_file = dir.path().join("out.csv");
+        let cfg = super::make_run_config(&log_dir, &csv_file);
+        let interrupted = Arc::new(AtomicBool::new(false));
+        let interrupted_clone = Arc::clone(&interrupted);
+        let log_dir_clone = log_dir.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(500));
+            write_minimal_log(&log_dir_clone.join("new_file.log"));
+            // Poll until CSV appears or 8 s elapses, then signal done.
+            let deadline = std::time::Instant::now() + Duration::from_secs(8);
+            let csv_path = log_dir_clone.parent().unwrap().join("out.csv");
+            while std::time::Instant::now() < deadline {
+                if csv_path.exists() {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            interrupted_clone.store(true, Ordering::Release);
+        });
+        let result = handle_watch(&cfg, true, false, &interrupted);
+        assert!(
+            result.is_ok()
+                || matches!(
+                    result,
+                    Err(dm_database_sqllog2db::error::Error::Interrupted)
+                ),
+            "handle_watch should succeed or return Interrupted, got: {result:?}"
+        );
+        assert!(
+            csv_file.exists(),
+            "CSV output file should exist after watch trigger"
+        );
+        let content = std::fs::read_to_string(&csv_file).unwrap();
+        let line_count = content.lines().count();
+        assert!(
+            line_count > 1,
+            "CSV should have header + at least 1 data row, got {line_count} lines"
+        );
+    }
+
+    /// W4: 写入非 .log 文件不触发 `handle_run`，CSV 输出不产生（WATCH-02 扩展名过滤）。
+    #[test]
+    fn test_watch_ignores_non_log_files() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let log_dir = dir.path().join("logs");
+        std::fs::create_dir_all(&log_dir).unwrap();
+        let csv_file = dir.path().join("out.csv");
+        let cfg = super::make_run_config(&log_dir, &csv_file);
+        let interrupted = Arc::new(AtomicBool::new(false));
+        let interrupted_clone = Arc::clone(&interrupted);
+        let log_dir_clone = log_dir.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(300));
+            std::fs::write(
+                log_dir_clone.join("garbage.txt"),
+                "this is not a log file\n",
+            )
+            .unwrap();
+            std::thread::sleep(Duration::from_millis(700));
+            interrupted_clone.store(true, Ordering::Release);
+        });
+        let result = handle_watch(&cfg, true, false, &interrupted);
+        // WATCH-09: interrupted=true 时 handle_watch 返回 Err(Interrupted)，验证非 .log 文件不触发
+        assert!(
+            matches!(
+                result,
+                Err(dm_database_sqllog2db::error::Error::Interrupted)
+            ),
+            "handle_watch should return Err(Interrupted) after interrupt, got: {result:?}"
+        );
+        assert!(
+            !csv_file.exists(),
+            "CSV output should NOT exist when only non-.log files are written"
+        );
+    }
 }

@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-type ParseResults = Vec<Result<Option<(PathBuf, Vec<(Sqllog, Option<String>)>, usize)>>>;
+type ParseResults = Vec<Result<Option<(PathBuf, Vec<(Sqllog, Option<String>)>, ErrorStats)>>>;
 
 /// 创建 rayon 线程池并并行解析所有文件，返回原始结果列表。
 ///
@@ -28,17 +28,17 @@ fn run_parallel_parse(
         log_files
             .par_iter()
             .map(|file| {
-                if interrupted.load(Ordering::Relaxed) {
+                if interrupted.load(Ordering::Acquire) {
                     return Ok(None);
                 }
-                let (rows, parse_errors) = super::collector::collect_log_file(
+                let (rows, file_stats) = super::collector::collect_log_file(
                     file,
                     pipeline,
                     do_normalize,
                     placeholder_override,
                     interrupted,
                 )?;
-                Ok(Some((file.clone(), rows, parse_errors)))
+                Ok(Some((file.clone(), rows, file_stats)))
             })
             .collect()
     }))
@@ -46,7 +46,7 @@ fn run_parallel_parse(
 
 /// 在 rayon 线程池中并行解析所有文件，返回每个文件的 `(path, Vec<(Sqllog, Option<String>)>)`。
 ///
-/// 返回 `(collected, skipped_files, total_parse_errors)`，其中 `collected` 保留 path 与记录的对应关系。
+/// 返回 `(collected, skipped_files, merged_stats)`，其中 `collected` 保留 path 与记录的对应关系。
 fn parallel_collect(
     log_files: &[PathBuf],
     pipeline: &Pipeline,
@@ -54,7 +54,11 @@ fn parallel_collect(
     do_normalize: bool,
     placeholder_override: Option<bool>,
     interrupted: &Arc<AtomicBool>,
-) -> Result<(Vec<(PathBuf, Vec<(Sqllog, Option<String>)>)>, usize, usize)> {
+) -> Result<(
+    Vec<(PathBuf, Vec<(Sqllog, Option<String>)>)>,
+    usize,
+    ErrorStats,
+)> {
     let results = run_parallel_parse(
         log_files,
         pipeline,
@@ -68,11 +72,11 @@ fn parallel_collect(
         Vec::with_capacity(log_files.len());
     let mut first_err: Option<Error> = None;
     let mut skipped = 0usize;
-    let mut total_parse_errors = 0usize;
+    let mut merged_stats = ErrorStats::default();
     for result in results {
         match result {
-            Ok(Some((path, rows, parse_errors))) => {
-                total_parse_errors += parse_errors;
+            Ok(Some((path, rows, file_stats))) => {
+                merged_stats.merge(&file_stats);
                 collected.push((path, rows));
             }
             Ok(None) => skipped += 1,
@@ -87,7 +91,7 @@ fn parallel_collect(
     if let Some(e) = first_err {
         return Err(e);
     }
-    Ok((collected, skipped, total_parse_errors))
+    Ok((collected, skipped, merged_stats))
 }
 
 /// `SQLite` 并行处理：每个文件独立在 rayon 线程上解析，主线程按文件原始顺序写入 `SQLite`。
@@ -112,7 +116,7 @@ pub(super) fn process_sqlite_parallel(
     _field_mask: FieldMask,
     _ordered_indices: &[usize],
 ) -> Result<(Vec<(PathBuf, usize)>, usize, ErrorStats)> {
-    let (collected, skipped, total_parse_errors) = parallel_collect(
+    let (collected, skipped, parallel_stats) = parallel_collect(
         log_files,
         pipeline,
         jobs,
@@ -121,14 +125,11 @@ pub(super) fn process_sqlite_parallel(
         interrupted,
     )?;
 
-    if total_parse_errors > 0 {
-        log::warn!("SQLite parallel: {total_parse_errors} parse error(s) across all files");
-    }
-
-    // 将解析错误计数转换为 ErrorStats，供调用方合并到全局统计
-    let mut parallel_stats = ErrorStats::default();
-    for _ in 0..total_parse_errors {
-        parallel_stats.add_parse_error();
+    if parallel_stats.parse_errors > 0 {
+        log::warn!(
+            "SQLite parallel: {} parse error(s) across all files",
+            parallel_stats.parse_errors
+        );
     }
 
     // 写入 SQLite 并同时构建每文件 (path, count) 列表

@@ -2,11 +2,48 @@
 
 ## What This Is
 
-解析达梦（DaMeng）数据库 SQL 日志文件，流式导出到 CSV 或 SQLite 的命令行工具。支持可配置的过滤管道和字段投影，让用户精确控制"导出哪些记录的哪些字段"。支持 stdin 管道输入、实时进度显示、错误类型细分（fatal/non-fatal），以及 3 级退出码。
+解析达梦（DaMeng）数据库 SQL 日志文件，流式导出到 CSV 或 SQLite 的命令行工具。支持可配置的过滤管道和字段投影，让用户精确控制"导出哪些记录的哪些字段"。支持 stdin 管道输入、实时进度显示与错误诊断、交互式配置向导（`init --interactive`）、以及 `watch` 子命令持续监听目录并增量插入新记录。
 
 ## Core Value
 
 用户能够精确指定"导出哪些记录的哪些字段"——过滤逻辑清晰可配置，输出结果完全可控。
+
+## Current State: v1.19 已交付
+
+**Shipped:** 2026-06-07  
+**Version:** v1.19 watch完善与文档对齐（Phases 1–3, 71）
+
+**已交付功能：**
+- watch CSV 增量追加（WATCH-07）：`force_append_for_watch_trigger` 统一注入，多次触发行数正确累计
+- error log 追加写入模式（WATCH-08）：`write_error_log` OpenOptions 双分支，历史错误不丢失
+- watch Ctrl+C 退出码 130（WATCH-09）：signal-aware 退出路径，与 run 命令一致
+- 行覆盖率 92.06%（QUAL-02）：collector.rs + filter_processor.rs 新增单元测试
+- VALIDATION.md 正式落地（QUAL-01）：Phase 67/68/69/70 全部以 `status: complete` 建档
+- README 补充 watch/init --interactive/quiet+verbose（DOC-04），--help 示例完善（DOC-05）
+- Phase 71 mod.rs 重构：10 个 mod.rs 拆分为 >30 个命名子模块，代码结构大幅改善
+
+## Previous: v1.18 已交付
+
+**Shipped:** 2026-06-06  
+**Version:** v1.18 用户体验全面升级（Phases 67–70）
+
+**已交付功能：**
+- 进度条升级：`[N/M]` 文件计数器 + ETA + records/sec 实时显示（PROG-01/02）
+- 错误诊断：ErrorKind 分类 + error log 含行号与原文前 120 字符 + 摘要 hint（DIAG-01/02/03）
+- `init --interactive` 对话式配置向导（INIT-01/02/03）
+- `watch` 子命令：notify 监听 + 500ms 防抖 + HumanDuration 状态行 + Ctrl+C 摘要（WATCH-01/02/05/06）
+- watch 增量处理：`_watch_offsets` SQLite 辅助表 + Seek 增量读 + 跨重启恢复（WATCH-03/04）
+
+## Previous: v1.17 已交付
+
+**Shipped:** 2026-06-04
+**Version:** v1.17 多文件并行提速（Phases 64–66）
+
+**已交付功能：**
+- CSV 多文件并行处理（process_csv_parallel，基于 rayon work-stealing，对齐 SQLite 并行路径）
+- 单文件 I/O 优化（16KB→4MB BufReader，减少系统调用）
+- 3 条兼容性集成测试（COMPAT-01/02/03）：并行路径与顺序路径 CSV 内容一致性验证，及 init 模板格式稳定性验证
+- 全量 777 个测试通过，0 回归
 
 ## Previous: v1.16 已交付
 
@@ -114,9 +151,32 @@
 - ✓ README stats 用法示例 + CHANGELOG v1.0–v1.15 + config 模板全字段注释 — v1.16（Phase 62）
 - ✓ 行覆盖率 91.86% / 函数覆盖率 89.54%（51 项新测试，740 全部通过）— v1.16（Phase 63）
 
-### Active
+- ✓ CSV watch 支持（`force_append_for_watch_trigger` 追加注入，AppendCsv 路径）— v1.19（Phase 1）
+- ✓ watch error log 追加写入模式（OpenOptions 双分支，历史错误不丢失）— v1.19（Phase 1）
+- ✓ watch Ctrl+C 退出码修正（130，signal-aware）— v1.19（Phase 1）
+- ✓ 测试覆盖率 92.06%（行覆盖率），909 个测试全部通过 — v1.19（Phase 2）
+- ✓ macOS FSEvents ignore 测试标注（#[ignore] + 注释说明，文档化平台限制）— v1.19（Phase 2）
+- ✓ VALIDATION.md 正式落地（phases 67/68/69/70，status: complete）— v1.19（Phase 3）
+- ✓ README 补充 watch/init --interactive/quiet+verbose 完整说明 — v1.19（Phase 3）
+- ✓ watch/validate `--help` 各 ≥2 示例（DOC-05）— v1.19（Phase 3）
+- ✓ 10 个 mod.rs 拆分为命名子模块（watch/mod.rs 998 行拆为 11 个子文件）— v1.19（Phase 71）
 
-（下一里程碑待规划）
+### Recently Validated in v1.18
+
+- ✓ `[N/M]` 文件计数器进度条 + ETA + records/sec — v1.18（Phase 67）
+- ✓ ErrorKind 分类 + error log 行号/原文 + 摘要 hint — v1.18（Phase 67）
+- ✓ `init --interactive` 对话式配置向导 — v1.18（Phase 68）
+- ✓ `watch` 子命令（notify 监听 + 500ms 防抖 + Ctrl+C 摘要）— v1.18（Phase 69）
+- ✓ watch 增量处理（_watch_offsets 辅助表 + Seek + 跨重启恢复）— v1.18（Phase 70）
+
+### Recently Validated in v1.17
+
+- ✓ CSV 多文件并行处理（rayon，基于 process_csv_parallel，对齐 SQLite 并行路径）— Phase 64
+- ✓ 单文件 I/O 优化（16KB→4MB BufReader，减少系统调用）— Phase 65
+- ✓ verbose 透传链（并行路径逐文件 "Processing:" 输出，与顺序路径格式一致）— Phase 65
+- ✓ 兼容性验证（COMPAT-01/02/03：并行路径与顺序路径输出一致，init 模板格式稳定）— Phase 66
+- ✓ jobs_override: Option<usize> 扩展 handle_run（36 处调用点），强制单核 CI 进入并行路径 — Phase 66.1
+- ✓ write_heterogeneous_log helper（trxid/username 两维差异化），验证跨文件聚合正确性 — Phase 66.1
 
 ### Out of Scope
 
@@ -132,14 +192,14 @@
 ## Context
 
 - Rust 项目，单线程流式处理，16MB BufWriter 写入
-- 依赖精简（无 reqwest/rustls/self_update 等重依赖，仅新增 indicatif）
-- 当前代码量：~8,833 行 Rust（src）+ 1,503 行（tests）
+- 依赖精简（无 reqwest/rustls/self_update 等重依赖，新增 indicatif + notify）
+- 当前代码量：~13,819+ 行 Rust（src + tests），Phase 71 拆分后文件数大幅增加但总行数相近
 - 性能基线：~5.2M records/sec（合成 CSV），~1.55M records/sec（1.1GB 真实文件）
-- 测试覆盖：~558 个测试（226 lib + 69 integration + 1 jemalloc + 单元测试），全部通过
-- assert_cmd / predicates 加入 dev-dependencies，e2e CLI 测试覆盖大幅提升
-- Phase 57 新增：stats --from/--to 跨字段顺序校验，run CSV/SQLite 全链路断言，init 成功/冲突测试
-- Phase 58 新增：`pub(crate) mod scanner` 公共模块，stats/run 共享文件扫描逻辑；handle_run 拆分 7 个私有函数
-- v1.15 基础设施：GitHub Actions CI/CD workflow 全面修复，Cross.toml aarch64-linux 跨编译支持
+- 测试覆盖：909 个测试（lib + integration + jemalloc + bench），全部通过，2 个 ignore（macOS FSEvents 限制）
+- 行覆盖率 92.06%（v1.19），函数覆盖率 ~89%
+- mod.rs 结构：10 个 mod.rs 已拆分为命名子模块（v1.19 Phase 71），代码结构清晰
+- assert_cmd / predicates dev-dependencies，e2e CLI 测试覆盖齐全
+- GitHub Actions CI/CD workflow 全面修复，Cross.toml aarch64-linux 跨编译支持（SHA256 固定）
 
 ## Constraints
 
@@ -172,6 +232,15 @@
 | collector.rs pub(super) 可见性 | 限定在 cli/run 子模块内，不对外暴露 | ✓ Good (v1.16) |
 | parallel_collect 行数口径采用函数体（33 行）| cargo fmt 展开含参数行，函数体逻辑满足设计意图 | ✓ Good (v1.16) |
 | SHA256 digest 使用宿主机（amd64）平台 | cross-rs 在 amd64 主机运行，应取宿主 digest | ✓ Good (v1.16) |
+| watch 仅支持 SQLite 导出 | CSV 增量写入语义复杂（追加 vs 全量重写），延后 | ✓ Good (v1.18) |
+| _watch_offsets 用独立 rusqlite::Connection | 避免 SqliteExporter EXCLUSIVE 锁冲突 | ✓ Good (v1.18) |
+| handle_run 返回后才 save_offset | 避免 offset 在 exporter 持锁时写入 | ✓ Good (v1.18) |
+| watch Ctrl+C 退出码 0（vs run 的 130） | watch 内部处理 interrupted，与 run 不一致；已知 tech debt | ⚠ Revisit (v1.18) |
+| watch Ctrl+C 退出码修正为 130（WATCH-09） | `Err(Error::Interrupted)` 从 handle_watch 传播到 main.rs exit(130) | ✓ Good (v1.19) |
+| write_error_log OpenOptions 双分支 | append_error_log 字段区分 watch 追加模式和 run 覆盖模式 | ✓ Good (v1.19) |
+| force_append_for_watch_trigger 辅助函数 | 统一注入 CSV append + error_log append，消除 trigger_full/incremental 重复 | ✓ Good (v1.19) |
+| macOS FSEvents #[ignore] 保留 + 文档化 | 保留测试意图可见性；mock 注入方案引入新依赖且与 notify 深度耦合 | ✓ Good (v1.19) |
+| Phase 71 mod.rs 拆分（pub(super) + #[allow]） | WatchLoopState 升级 pub(super) 允许兄弟模块访问；集成测试 pub use 加 #[allow(unused_imports)] | ✓ Good (v1.19) |
 
 ## Evolution
 
@@ -184,4 +253,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-03 after v1.16.0 milestone complete*
+*Last updated: 2026-06-07 after v1.19 milestone — watch完善与文档对齐（Phases 1–3, 71）*

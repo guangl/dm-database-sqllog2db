@@ -79,9 +79,11 @@ impl FilterProcessor {
         let include_groups = build_include_groups(f);
         let exclude_groups = build_exclude_groups(f);
         let trxid_set = f.include.trxids.clone();
+        // trxid_set.is_some() 包含空集合（预扫描运行但无命中的 sentinel），
+        // 空集合应拒绝所有记录，因此需要触发元过滤器路径
         let has_meta_filters = include_groups.iter().any(|g| !g.is_empty())
             || exclude_groups.iter().any(|g| !g.is_empty())
-            || trxid_set.as_ref().is_some_and(|s| !s.is_empty());
+            || trxid_set.is_some();
         Self {
             base_filter,
             include_groups,
@@ -119,7 +121,8 @@ impl LogProcessor for FilterProcessor {
         }
 
         if let Some(trxids) = &self.trxid_set {
-            if !trxids.is_empty() && !trxids.contains(record.trxid.as_str()) {
+            // 空集合是预扫描无命中的 sentinel，应拒绝所有记录
+            if trxids.is_empty() || !trxids.contains(record.trxid.as_str()) {
                 return false;
             }
         }
@@ -299,5 +302,113 @@ mod tests {
         assert!(!proc.process_with_meta(&record));
         record.ts = "2024-07-01 00:00:00.000".to_string();
         assert!(!proc.process_with_meta(&record));
+    }
+
+    #[test]
+    fn test_include_session_filter() {
+        let include = IncludeFilters {
+            sessions: Some(vec!["s".into()]),
+            ..Default::default()
+        };
+        let proc = FilterProcessor::from_feature(&make_feature(include, ExcludeFilters::default()));
+        assert!(proc.process_with_meta(&make_record("u", "ip", "tx", None)));
+        let mut other = make_record("u", "ip", "tx", None);
+        other.sess_id = "other_session".to_string();
+        assert!(!proc.process_with_meta(&other));
+    }
+
+    #[test]
+    fn test_include_app_filter() {
+        let include = IncludeFilters {
+            apps: Some(vec!["app".into()]),
+            ..Default::default()
+        };
+        let proc = FilterProcessor::from_feature(&make_feature(include, ExcludeFilters::default()));
+        assert!(proc.process_with_meta(&make_record("u", "ip", "tx", None)));
+        let mut other = make_record("u", "ip", "tx", None);
+        other.appname = "other_app".to_string();
+        assert!(!proc.process_with_meta(&other));
+    }
+
+    #[test]
+    fn test_include_statement_filter() {
+        let include = IncludeFilters {
+            statements: Some(vec!["st".into()]),
+            ..Default::default()
+        };
+        let proc = FilterProcessor::from_feature(&make_feature(include, ExcludeFilters::default()));
+        assert!(proc.process_with_meta(&make_record("u", "ip", "tx", None)));
+        let mut other = make_record("u", "ip", "tx", None);
+        other.statement = "other_stmt".to_string();
+        assert!(!proc.process_with_meta(&other));
+    }
+
+    #[test]
+    fn test_include_thread_filter() {
+        let include = IncludeFilters {
+            threads: Some(vec!["t".into()]),
+            ..Default::default()
+        };
+        let proc = FilterProcessor::from_feature(&make_feature(include, ExcludeFilters::default()));
+        assert!(proc.process_with_meta(&make_record("u", "ip", "tx", None)));
+        let mut other = make_record("u", "ip", "tx", None);
+        other.thrd_id = "other_thread".to_string();
+        assert!(!proc.process_with_meta(&other));
+    }
+
+    #[test]
+    fn test_debug_format() {
+        let proc = FilterProcessor::from_feature(&make_feature(
+            IncludeFilters::default(),
+            ExcludeFilters::default(),
+        ));
+        let debug_str = format!("{proc:?}");
+        assert!(debug_str.contains("FilterProcessor"));
+    }
+
+    // ── build_pipeline 在 indicators/sql 过滤器下的行为测试（WR-02）──────────────
+
+    /// 验证：trxids 为空集合（预扫描无命中的 sentinel）时，
+    /// `FilterProcessor` 仍进入 pipeline 并拒绝所有记录。
+    #[test]
+    fn test_empty_trxid_sentinel_rejects_all_records() {
+        use crate::pipeline::filters::TrxidSet;
+        // 模拟 merge_found_trxids 运行后 trxids 被初始化为空集合（预扫描无命中）
+        let empty_trxids: TrxidSet = TrxidSet::default();
+        let include = IncludeFilters {
+            trxids: Some(empty_trxids),
+            ..Default::default()
+        };
+        let proc = FilterProcessor::from_feature(&make_feature(include, ExcludeFilters::default()));
+        // 空 trxids sentinel 应拒绝所有记录，而不是放行所有记录
+        assert!(
+            !proc.process_with_meta(&make_record("any_user", "1.2.3.4", "TX001", None)),
+            "trxids 为空集合时应拒绝所有记录"
+        );
+        assert!(
+            !proc.process_with_meta(&make_record("other", "10.0.0.1", "TX999", None)),
+            "trxids 为空集合时应拒绝任意 trxid 的记录"
+        );
+    }
+
+    /// 验证：trxids 非空时，仅匹配 trxid 的记录通过过滤器。
+    #[test]
+    fn test_nonempty_trxid_set_filters_correctly() {
+        use crate::pipeline::filters::TrxidSet;
+        let mut trxids: TrxidSet = TrxidSet::default();
+        trxids.insert("TX_MATCH".to_string());
+        let include = IncludeFilters {
+            trxids: Some(trxids),
+            ..Default::default()
+        };
+        let proc = FilterProcessor::from_feature(&make_feature(include, ExcludeFilters::default()));
+        assert!(
+            proc.process_with_meta(&make_record("any_user", "1.2.3.4", "TX_MATCH", None)),
+            "trxid 匹配时应通过过滤器"
+        );
+        assert!(
+            !proc.process_with_meta(&make_record("any_user", "1.2.3.4", "TX_OTHER", None)),
+            "trxid 不匹配时应被过滤"
+        );
     }
 }

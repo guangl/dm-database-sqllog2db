@@ -2,6 +2,9 @@
 
 ## Milestones
 
+- ✅ **v1.19 watch完善与文档对齐** — Phases 1–3, 71 (shipped 2026-06-07)
+- ✅ **v1.18 用户体验全面升级** — Phases 67–70 (shipped 2026-06-06)
+- ✅ **v1.17 多文件并行提速** — Phases 64–66.1 (shipped 2026-06-04)
 - ✅ **v1.16.0 工程质量深化** — Phases 59–63 (shipped 2026-06-03)
 - ✅ **v1.15 工程质量全面提升** — Phases 55–58 (shipped 2026-06-02)
 - ✅ **v1.14 stats 时间段过滤** — Phases 53–54 (shipped 2026-06-02)
@@ -194,6 +197,45 @@ Full details: `.planning/milestones/v1.15-ROADMAP.md`
 - [x] **Phase 63: 测试覆盖提升** — 运行覆盖率分析并按结果补全关键路径测试 (completed 2026-06-03)
 
 Full details: `.planning/milestones/v1.16.0-ROADMAP.md`
+
+</details>
+
+---
+
+<details>
+<summary>✅ v1.17 多文件并行提速 (Phases 64–66.1) — SHIPPED 2026-06-04</summary>
+
+- [x] **Phase 64: CSV 并行路径基础设施** — 建立多文件 rayon 并行解析 + temp-file 拼接架构 (completed 2026-06-04)
+- [x] **Phase 65: 行为等价性保障** — 字段格式/过滤管道/输出控制与单线程路径完全对齐，verbose 透传 (completed 2026-06-04)
+- [x] **Phase 66: 兼容性验证与测试** — 全量测试通过，新增多文件 CSV 集成测试，config 格式不变 (completed 2026-06-04)
+- [x] **Phase 66.1: 修复并行集成测试覆盖** (INSERTED) — jobs_override 强制并行路径 + write_heterogeneous_log + 2 条强制并行测试 (completed 2026-06-04)
+
+Full details: `.planning/milestones/v1.17-ROADMAP.md`
+
+</details>
+
+
+<details>
+<summary>✅ v1.18 用户体验全面升级 (Phases 67–70) — SHIPPED 2026-06-06</summary>
+
+- [x] **Phase 67: 进度/摘要与诊断增强** — 多文件进度计数器、realtime records/sec+ETA、错误分组统计与 hint (PROG-01/02/03, DIAG-01/02/03) (completed 2026-06-05)
+- [x] **Phase 68: 交互式配置向导** — `init --interactive` 对话式向导，每步提示示例+默认值，生成格式与非交互式 init 完全一致 (INIT-01/02/03) (completed 2026-06-05)
+- [x] **Phase 69: Watch 模式核心框架** — `watch` 子命令 + notify crate 监听、新增文件触发处理、实时状态显示、Ctrl+C 优雅退出 (WATCH-01/02/05/06) (completed 2026-06-06)
+- [x] **Phase 70: Watch 增量处理与集成测试** — 文件追加增量处理、SQLite 字节偏移去重、watch 路径全套集成测试 (WATCH-03/04) (completed 2026-06-06)
+
+Full details: `.planning/milestones/v1.18-ROADMAP.md`
+
+</details>
+
+<details>
+<summary>✅ v1.19 watch完善与文档对齐 (Phases 1–3, 71) — SHIPPED 2026-06-07</summary>
+
+- [x] **Phase 1: watch 功能完善** — CSV watch 支持、error log 追加模式、Ctrl+C 退出码 130 (WATCH-07/08/09) (completed 2026-06-06)
+- [x] **Phase 2: 测试覆盖率与 FSEvents** — watch 测试补充、92%+ 行覆盖率、FSEvents #[ignore] 落地方案 (QUAL-02/03) (completed 2026-06-07)
+- [x] **Phase 3: 文档与验证对齐** — VALIDATION.md 补全、README watch/init/进度选项更新、--help 完善 (QUAL-01, DOC-04, DOC-05) (completed 2026-06-07)
+- [x] **Phase 71: mod.rs 重构** — 10 个 mod.rs 拆分为命名子模块，mod.rs 仅保留 pub use 导入 (completed 2026-06-07)
+
+Full details: `.planning/milestones/v1.19-ROADMAP.md`
 
 </details>
 
@@ -567,6 +609,145 @@ Full details: `.planning/milestones/v1.16.0-ROADMAP.md`
 - [x] 63-03-PLAN.md — error.rs mod tests 末尾追加 12+ 个错误变体方法测试 + cli/run/prescan.rs 新建 mod tests 覆盖 build_indicator_filters/build_sql_exclude_filters 边界
 - [x] 63-04-PLAN.md — 重新运行 cargo llvm-cov 采集 after 数字 + 生成 63-COVERAGE-REPORT.md 对比报告（baseline → after + 难以测试路径 D-04 文档化）+ 三道质量门禁验证
 
+---
+
+### Phase 64: CSV 并行路径基础设施
+**Goal**: 用户输入多个文件且目标为 CSV 时，工具自动切换到多文件并行解析路径，各解析线程通过 channel 将记录传递给单一写入线程，内存占用不随文件数量线性增长
+**Depends on**: Phase 63
+**Requirements**: PARALLEL-01, PARALLEL-02
+**Success Criteria** (what must be TRUE):
+  1. 输入 2 个以上 .log 文件 + CSV 输出时，工具自动使用并行路径，无需修改 config.toml 任何字段
+  2. 并行路径中每个 rayon 解析线程通过 channel 将记录发送给写入线程，写入线程持有唯一的 BufWriter，无全量内存缓冲
+  3. 处理 3 个 300MB 文件时，进程峰值内存使用不超过单线程路径的 2 倍（channel back-pressure 生效）
+  4. 输入仅 1 个文件时回退到单线程路径，行为与现有实现完全一致
+**Plans**: 1 plan
+- [x] 64-01-PLAN.md — 运行质量门禁（cargo test + clippy）核查 SC1–SC4 + 更新 REQUIREMENTS.md PARALLEL-02 描述与 temp-file 实现对齐（D-01）
+
+### Phase 65: 行为等价性保障
+**Goal**: 并行路径产生的 CSV 内容、过滤结果、输出控制与单线程路径在语义上完全等价，同时 BufReader 缓冲区扩容以减少大文件系统调用
+**Depends on**: Phase 64
+**Requirements**: PARALLEL-03, PARALLEL-04, PARALLEL-05, IO-01
+**Success Criteria** (what must be TRUE):
+  1. 对同一组输入文件，并行路径与单线程路径输出的 CSV 行集合完全相同（忽略文件间行顺序），字段值、转义、has_metrics 条件逐字节一致
+  2. 启用 include/exclude/sql/indicators 任意组合过滤器时，并行路径过滤后的记录数与单线程路径完全一致
+  3. `--verbose` 在并行路径下输出每个文件的处理进度，`--quiet` 完全抑制所有非错误输出,处理摘要（总行数/错误数）正确累加
+  4. 读取 .log 文件的 BufReader 缓冲区大小 ≥ 64KB（代码可审查，或通过 strace 系统调用次数对比验证）
+**Plans**: 1 plan
+- [x] 65-01-PLAN.md — process_csv_parallel/run_parallel_tasks 新增 verbose: bool + 逐文件 eprintln + mod.rs 透传 + IO-01 mmap 注释 + 三道质量门禁（PARALLEL-03/04/05, IO-01）
+
+### Phase 66: 兼容性验证与测试
+**Goal**: 现有全量测试在并行路径引入后继续通过，新增集成测试验证多文件 CSV 内容一致性，config.toml 格式和 init 模板不受影响
+**Depends on**: Phase 65
+**Requirements**: COMPAT-01, COMPAT-02, COMPAT-03
+**Success Criteria** (what must be TRUE):
+  1. `cargo test` 运行全部 740+ 测试（lib/integration/benchmark）全部通过，无任何回归
+  2. `tests/integration.rs` 包含至少 2 条新集成测试：多文件并行 CSV 输出与逐文件单线程合并结果的内容对比断言（行集合相等）
+  3. `sqllog2db init -o /tmp/test.toml` 生成的 config.toml 与 v1.16 基线内容一致，不含并行相关新字段
+  4. `cargo clippy --all-targets -- -D warnings` + `cargo fmt --check` 通过，无新增警告
+**Plans**: 1 plan
+- [x] 66-01-PLAN.md — tests/integration.rs 新增 test_parallel_csv_content_matches_sequential + test_parallel_csv_filter_matches_sequential + test_init_no_parallel_fields + 全量 cargo test（COMPAT-01/02/03）
+
+### Phase 67: 进度/摘要与诊断增强
+**Goal**: 用户运行时得到更丰富的实时反馈与错误诊断——进度条显示文件计数器和 ETA，摘要包含过滤率与错误分布，error log 携带行号和原文
+**Depends on**: Phase 66.1
+**Requirements**: PROG-01, PROG-02, PROG-03, DIAG-01, DIAG-02, DIAG-03
+**Success Criteria** (what must be TRUE):
+  1. 多文件运行时进度条显示 `[2/5]` 格式文件计数器，用户无需猜测当前处理到第几个文件
+  2. 进度条实时显示 records/sec 吞吐量和预计剩余时间（ETA），非终端自动退化不输出 ANSI 控制码
+  3. error log 每条 parse error 包含行号（如 `line 42:`）和原始内容前 120 字符，用户可定位问题行
+  4. 导出摘要按错误类型分组统计（field_missing/parse_failed/encoding_error），显示各类型出现次数
+  5. 当某类错误超过阈值时触发具体 hint（如"多行 encoding_error：建议检查文件编码是否为 GBK"）
+**Plans**: 3 plans
+- [x] 67-01-PLAN.md — make_progress_bar/tick_progress 升级为 [N/M] + records/sec + ETA + 顺序路径 pb.inc(1) 文件计数器（PROG-01/PROG-02）
+- [x] 67-02-PLAN.md — ErrorKind 枚举 + ParseErrorRecord + ErrorStats 新增 by_type/filtered_out/parse_error_records + Config.error 字段 + process_log_file Err 路径收集（DIAG-01/DIAG-02）
+- [x] 67-03-PLAN.md — print_run_summary 扩展 errors-by-type/filtered/hint + write_error_log 文件批量写出 + normalize_and_export filtered_out 递增（PROG-03/DIAG-03）
+**UI hint**: yes
+
+### Phase 68: 交互式配置向导
+**Goal**: 首次使用者可通过 `sqllog2db init --interactive` 以对话方式完成配置，无需阅读文档即可生成可用的 config.toml
+**Depends on**: Phase 67
+**Requirements**: INIT-01, INIT-02, INIT-03
+**Success Criteria** (what must be TRUE):
+  1. `sqllog2db init --interactive` 启动向导，逐字段提示（输入目录、导出格式、输出路径等），每步显示示例值和默认值
+  2. 用户直接按 Enter 可接受默认值，所有字段均可跳过（使用默认），向导不因空输入崩溃
+  3. 向导完成后生成的 config.toml 与 `sqllog2db init -o config.toml` 格式完全一致，包含相同的行内注释
+  4. `sqllog2db validate -c <向导生成的文件>` 通过验证，退出码为 0
+**Plans**: 2 plans
+- [x] 68-01-PLAN.md — init.rs 新增 WizardAnswers/ExporterChoice/run_wizard + apply_wizard_answers_to_template + write_config_file 提取 + 12+ 单元测试覆盖 INIT-02/INIT-03 核心
+- [x] 68-02-PLAN.md — opts.rs interactive bool flag + main.rs 分发分支 + handle_init_interactive + 6 个 e2e CLI 测试覆盖 INIT-01/INIT-02/INIT-03（SC4 validate 通过）
+**UI hint**: yes
+
+### Phase 69: Watch 模式核心框架
+**Goal**: 用户可通过 `sqllog2db watch -c config.toml` 启动持续监听，目录内新增 .log 文件时自动触发处理，实时显示监听状态，Ctrl+C 优雅退出
+**Depends on**: Phase 68
+**Requirements**: WATCH-01, WATCH-02, WATCH-05, WATCH-06
+**Success Criteria** (what must be TRUE):
+  1. `sqllog2db watch -c config.toml` 启动后持续运行，终端显示正在监听的路径和上次触发时间
+  2. 向监听目录新增 `.log` 文件后，工具在 2 秒内自动触发处理并更新累计已处理行数
+  3. 状态行实时刷新：监听路径、上次触发时间戳、累计已处理行数，不干扰错误输出
+  4. 按下 Ctrl+C 后程序优雅退出，打印最终摘要（总触发次数、累计处理行数、运行时长），退出码 0
+**Plans**: 3 plans
+- [x] 69-01-PLAN.md — Cargo.toml 新增 notify = "6" + ErrorStats 新增 records_exported 字段与 merge 累计 + handle_run 赋值 + Commands::Watch variant + cli/mod.rs pub mod watch + src/cli/watch.rs 签名骨架（含 notify 包合法性 human-verify checkpoint，WATCH-01）
+- [x] 69-02-PLAN.md — handle_watch 函数体完整实现（notify RecommendedWatcher + mpsc channel + ProgressBar spinner + watch loop 100ms 轮询 + EventKind::Create(_) + .log 过滤 + tmp_cfg 委托 handle_run + ErrorStats 累计 + Ctrl+C 摘要）+ main.rs Watch arm 接入 + needs_simple_logging 排除（WATCH-01/02/05/06）
+- [x] 69-03-PLAN.md — tests/integration.rs 新增 4 个 watch e2e 测试（help/interrupted/触发/非log忽略）+ 全套 cargo test/clippy/fmt 质量门禁（WATCH-02/05/06）
+**UI hint**: yes
+
+### Phase 70: Watch 增量处理与集成测试
+**Goal**: watch 模式对已有文件的追加内容实现增量处理，SQLite 导出通过字节偏移去重避免重复插入，并通过集成测试验证 watch 路径的正确性
+**Depends on**: Phase 69
+**Requirements**: WATCH-03, WATCH-04
+**Success Criteria** (what must be TRUE):
+  1. 向已有 .log 文件追加内容时，watch 仅处理新增字节（从上次读取的偏移量继续），不重复处理已有内容
+  2. SQLite 导出模式下，同一文件多次触发不产生重复行——通过持久化字节偏移记录确保幂等性
+  3. 重启 watch 进程后，从上次记录的字节偏移恢复，不丢失也不重复已有记录
+  4. 集成测试覆盖：新文件触发、追加触发、SQLite 去重三个场景，`cargo test` 全部通过
+**Plans**: 3 plans
+- [ ] 70-01-PLAN.md — Wave 0：Cargo.toml 提升 tempfile 为生产依赖 + git mv src/cli/watch.rs → src/cli/watch/mod.rs + 新建 src/cli/watch/offsets.rs（ensure_offset_table / load_offsets / save_offset 三函数 + 5 个单元测试，WATCH-04 基础设施）
+- [ ] 70-02-PLAN.md — Wave 1：WatchLoopState 扩展 file_offsets/sqlite_db_url + handle_watch 启动加载 offsets + handle_event 按 EventKind 路由 + trigger_full_file/trigger_incremental（Seek+NamedTempFile，强制 sqlite.append=true）+ 3 个新单元测试（WATCH-03/04）
+- [ ] 70-03-PLAN.md — Wave 1：新建 tests/watch_incremental.rs 集成测试（WATCH-03 追加 5 行后 SQLite count=N+M / WATCH-04 重启 offset 恢复后 count=N+M / D-02 无新字节跳过）+ 提升 trigger_* 与 WatchLoopState 可见性为 pub
+
+---
+
+### Phase 1: watch 功能完善
+**Goal**: watch 子命令功能完整：支持 CSV 导出格式增量追加、error log 以追加模式写入不丢失历史错误、Ctrl+C 退出码修正为 130
+**Depends on**: —
+**Requirements**: WATCH-07, WATCH-08, WATCH-09
+**Success Criteria** (what must be TRUE):
+  1. config.toml 配置 CSV exporter 时，`watch` 子命令可正常启动并将新增记录增量追加到 CSV 文件，多次触发后文件内容为所有触发的累计记录
+  2. watch 长时间运行过程中产生的 parse error 均追加写入 error log，重新触发不覆盖前次错误，error log 包含所有历史触发的错误记录
+  3. 向 watch 进程发送 SIGINT（Ctrl+C）后，进程退出码为 130（与 `run` 子命令 Ctrl+C 行为一致）
+  4. `cargo clippy --all-targets -- -D warnings` + `cargo test` 全部通过，无性能退化
+**Plans**: 1 plan
+- [x] 01-01-PLAN.md — Config.append_error_log 字段 + write_error_log 双分支 + watch 触发函数注入 CSV append + handle_watch 退出码检查 + 4 个 Wave 0 测试（WATCH-07/08/09）
+
+### Phase 2: 测试覆盖率与 FSEvents
+**Goal**: watch 功能测试补全，整体行覆盖率达到 92%+，macOS FSEvents #[ignore] 测试有明确的落地方案（跨平台条件编译或 mock 解决）
+**Depends on**: Phase 1
+**Requirements**: QUAL-02, QUAL-03
+**Success Criteria** (what must be TRUE):
+  1. `cargo llvm-cov` 报告整体行覆盖率 ≥ 92%，watch 相关模块（src/cli/watch/）行覆盖率 ≥ 80%
+  2. macOS FSEvents 相关 `#[ignore]` 测试经过调研后，采用以下方案之一：(a) `#[cfg(not(target_os = "macos"))]` 条件编译跳过，(b) mock 文件系统事件注入，或 (c) 文档化说明为已知平台限制并保留 `#[ignore]`——方案选择有书面依据
+  3. 新增 watch 集成测试覆盖 CSV watch 追加（WATCH-07）、error log 追加（WATCH-08）、退出码 130（WATCH-09）三个新场景
+  4. `cargo test` 全部通过（含所有非 ignore 测试），`cargo clippy --all-targets -- -D warnings` 通过
+**Plans**: 2 plans
+- [x] 02-01-PLAN.md — tests/watch_incremental.rs 新增 build_csv_config helper + INVALID_LOG_LINE 常量 + WATCH-07/08/09 三个集成测试（QUAL-03 SC3）
+- [x] 02-02-PLAN.md — src/cli/run/tests.rs 追加 test_collector_invalid_path / test_collector_parse_error_accumulation 单元测试 + cargo llvm-cov 人工 checkpoint 验收 92%+（QUAL-02 SC1）
+
+### Phase 3: 文档与验证对齐
+**Goal**: 项目文档与最新实际状态完全对齐——VALIDATION.md 补全为正式文件，README 覆盖 watch/init --interactive/进度选项，各子命令 --help 信息完善
+**Depends on**: Phase 2
+**Requirements**: QUAL-01, DOC-04, DOC-05
+**Success Criteria** (what must be TRUE):
+  1. Phase 67/68/69 的 VALIDATION.md 从草稿状态升级为正式验证文件（包含实际验证结果），Phase 70 的 VALIDATION.md 新建完成
+  2. README.md 包含 `watch` 子命令用法示例（启动、停止、CSV/SQLite 配置差异），`init --interactive` 的操作说明，以及 `--quiet`/`--verbose` 进度选项说明
+  3. `sqllog2db watch --help`、`sqllog2db validate --help`、`sqllog2db stats --help` 各自包含至少 2 个使用示例，选项描述清晰无歧义
+  4. `cargo test` 全部通过，`cargo clippy --all-targets -- -D warnings` + `cargo fmt --check` 通过
+**Plans**: 3 plans
+- [x] 03-01-PLAN.md — src/cli/opts.rs Watch/Validate variant `after_help` 各追加 1 个示例（quiet/verbose 模式）+ 三道质量门禁（DOC-05, D-08/D-09/D-10/D-11）
+- [x] 03-02-PLAN.md — README.md 第 41 行 CLI 条目升级为 5 命令 + 新增『持续监听』功能特性条目 + 快速入门追加 watch/init --interactive/quiet+verbose 三段示例（DOC-04, D-05/D-06/D-07）
+- [x] 03-03-PLAN.md — 新建 Phase 67/68/69/70 各 1 份正式 VALIDATION.md（frontmatter 完成态 + Per-Task Verification Map 从 SUMMARY 转录 + Sign-Off）（QUAL-01, D-01/D-02/D-03/D-04）
+**UI hint**: yes
+
 ## Coverage Validation
 
 | Requirement | Phase |
@@ -633,8 +814,44 @@ Full details: `.planning/milestones/v1.16.0-ROADMAP.md`
 | DOC-03      | 62    |
 | TEST-01     | 63    |
 | TEST-02     | 63    |
+| PARALLEL-01 | 64    |
+| PARALLEL-02 | 64    |
+| PARALLEL-03 | 65    |
+| PARALLEL-04 | 65    |
+| PARALLEL-05 | 65    |
+| IO-01       | 65    |
+| COMPAT-01   | 66    |
+| COMPAT-02   | 66    |
+| COMPAT-03   | 66    |
+| PARALLEL-06 | 66.1  |
+| PARALLEL-07 | 66.1  |
 
-**63/63 requirements mapped — coverage: 100%**
+| PROG-01     | 67    |
+| PROG-02     | 67    |
+| PROG-03     | 67    |
+| DIAG-01     | 67    |
+| DIAG-02     | 67    |
+| DIAG-03     | 67    |
+| INIT-01     | 68    |
+| INIT-02     | 68    |
+| INIT-03     | 68    |
+| WATCH-01    | 69    |
+| WATCH-02    | 69    |
+| WATCH-05    | 69    |
+| WATCH-06    | 69    |
+| WATCH-03    | 70    |
+| WATCH-04    | 70    |
+
+| WATCH-07    | 1     |
+| WATCH-08    | 1     |
+| WATCH-09    | 1     |
+| QUAL-02     | 2     |
+| QUAL-03     | 2     |
+| QUAL-01     | 3     |
+| DOC-04      | 3     |
+| DOC-05      | 3     |
+
+**91/91 requirements mapped — coverage: 100%**
 
 ## Progress
 
@@ -669,7 +886,42 @@ Full details: `.planning/milestones/v1.16.0-ROADMAP.md`
 | 61. Cross.toml SHA 固定 | v1.16.0 | Complete | 2026-06-03 |
 | 62. 文档完善 | v1.16.0 | Complete | 2026-06-03 |
 | 63. 测试覆盖提升 | v1.16.0 | Complete | 2026-06-03 |
+| 64. CSV 并行路径基础设施 | v1.17 | Complete | 2026-06-04 |
+| 65. 行为等价性保障 | v1.17 | Complete | 2026-06-04 |
+| 66. 兼容性验证与测试 | v1.17 | Complete | 2026-06-04 |
+| 66.1. 修复并行集成测试覆盖 (INSERTED) | v1.17 | Complete | 2026-06-04 |
+
+| 67. 进度/摘要与诊断增强 | v1.18 | Complete | 2026-06-05 |
+| 68. 交互式配置向导 | v1.18 | Complete | 2026-06-05 |
+| 69. Watch 模式核心框架 | v1.18 | Complete | 2026-06-06 |
+| 70. Watch 增量处理与集成测试 | v1.18 | Complete | 2026-06-06 |
+| 1. watch 功能完善 | v1.19 | Complete | 2026-06-06 |
+| 2. 测试覆盖率与 FSEvents | v1.19 | Complete | 2026-06-07 |
+| 3. 文档与验证对齐 | v1.19 | Complete | 2026-06-07 |
+| 71. mod.rs 重构 | v1.19 | Complete | 2026-06-07 |
+
+### Phase 71: mod.rs 重构 — 拆分子模块，mod.rs 仅保留 pub use 导入
+
+**Goal**: 重构 11 个 mod.rs 文件中的 10 个（src/cli/mod.rs 已干净），将其内部实现代码全部拆分到独立的命名文件中，每个 mod.rs 仅保留模块声明（mod / pub mod）与公开 API 重导出（pub use / pub(crate) use / pub(super) use），不再含任何 fn/struct/enum/trait/impl 实现。
+**Depends on**: Phase 3
+**Requirements**: none (内部代码质量重构，无外部需求映射)
+**Success Criteria** (what must be TRUE):
+  1. 10 个目标 mod.rs（cli/run、cli/stats、cli/watch、config、exporter、exporter/csv、exporter/sqlite、pipeline、pipeline/filters、stats）过滤注释/空行后只含 `mod` / `pub mod` / `pub use` / `pub(crate) use` / `pub(super) use` 与属性宏，无 fn/struct/enum/trait/impl
+  2. 所有原公开/crate/super 可见性的 API（类型、函数、常量）在原路径下仍可访问，调用方代码无需修改
+  3. `cargo test` 全部通过（含 tests/integration.rs 与 tests/watch_incremental.rs），原 100+ 单元/集成测试零回归
+  4. `cargo clippy --all-targets -- -D warnings` 通过且无新增警告
+**Plans**: 10 plans
+- [x] 71-01-PLAN.md — src/cli/stats/mod.rs (147 行) 拆为 handler.rs + tests.rs（Wave 1）
+- [x] 71-02-PLAN.md — src/pipeline/filters/mod.rs (246 行) 拆为 feature_ops/indicator_ops/sql_ops/tests（Wave 1）
+- [x] 71-03-PLAN.md — src/pipeline/mod.rs (347 行) 拆为 field_mask/normalize_config/output_config/processor/tests（Wave 1）
+- [x] 71-04-PLAN.md — src/stats/mod.rs (200 行) 拆为 runner.rs + tests.rs（Wave 1）
+- [x] 71-05-PLAN.md — src/config/mod.rs (194 行) 拆为 root/error_log/tests（Wave 1）
+- [x] 71-06-PLAN.md — src/exporter/mod.rs (310 行) 拆为 api/kind/manager/stats/util（Wave 2）
+- [x] 71-07-PLAN.md — src/exporter/csv/mod.rs (243 行) 拆为 exporter.rs + impls.rs（Wave 2）
+- [x] 71-08-PLAN.md — src/exporter/sqlite/mod.rs (249 行) 拆为 exporter/impls/pragma（Wave 2）
+- [x] 71-09-PLAN.md — src/cli/run/mod.rs (476 行) 拆为 orchestrator/input/sequential/summary/error_log（Wave 3）
+- [x] 71-10-PLAN.md — src/cli/watch/mod.rs (998 行) 拆为 handler/state/watcher/event/trigger_full/trigger_incremental/dirs/status/append/debounce/tests（Wave 3）
 
 ---
 *Created: 2026-05-21 for milestone v1.10*
-*Updated: 2026-06-03 — v1.16.0 milestone archived*
+*Updated: 2026-06-06 — milestone watch完善与文档对齐 started (Phases 1–3)*

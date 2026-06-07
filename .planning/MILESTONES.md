@@ -1,5 +1,95 @@
 # Milestones: sqllog2db
 
+## v1.19 — watch完善与文档对齐
+
+**Shipped:** 2026-06-07  
+**Phases:** 1–3, 71 | **Plans:** 16 | **Commits:** 96  
+**Duration:** 2026-06-06 → 2026-06-07 (~2 days)  
+**Code changes:** 125 files, +12,685 / -3,149 lines  
+**Tests:** ~909 total (all passing, 2 ignored)  
+**Coverage:** 92.06% line coverage
+
+### Delivered
+
+补完 watch 功能短板并完成大规模模块化重构：watch CSV 增量追加（WATCH-07）、error log 历史保留（WATCH-08）、Ctrl+C 退出码 130（WATCH-09）；测试覆盖率提升至 92.06%；macOS FSEvents 限制落地文档化方案；README 补充 watch/init --interactive/quiet+verbose 完整说明；10 个 mod.rs 文件全部拆分为命名子模块，mod.rs 仅保留 pub use 导入（Phase 71）。
+
+### Key Accomplishments
+
+1. watch 子命令支持 CSV 导出增量追加（WATCH-07）：`force_append_for_watch_trigger` 统一注入 `append=true`，多次触发行数正确累计，header 仅一次
+2. error log 追加写入 + run 路径防回归（WATCH-08）：`write_error_log` OpenOptions 双分支；`test_write_error_log_run_still_truncates` 防回归测试
+3. Ctrl+C 退出码修正为 130（WATCH-09）：`handle_watch` 返回 `Err(Error::Interrupted)`，main.rs signal-aware exit(130)
+4. 行覆盖率 92.06%（QUAL-02）：collector.rs Group 1–4 + filter_processor 5 项字段过滤测试，超越 92% 目标
+5. 4 份正式 VALIDATION.md（QUAL-01）：Phase 67/68/69/70 全部以 `status: complete` 落地，Per-Task Verification Map 转录完整
+6. mod.rs 重构 Phase 71：10 个 mod.rs 共 ~2,600 行拆分为 >30 个命名子模块（watch/mod.rs 998 行拆为 11 个子文件），mod.rs 均精简为声明骨架
+
+### Archives
+
+- `.planning/milestones/v1.19-ROADMAP.md` — 完整 Phase 细节
+- `.planning/milestones/v1.19-REQUIREMENTS.md` — 需求归档（8/8 complete）
+
+---
+
+## v1.18 — 用户体验全面升级
+
+**Shipped:** 2026-06-06  
+**Phases:** 67–70 | **Plans:** 12 | **Commits:** 130  
+**Duration:** 2026-06-04 → 2026-06-06 (~2 days)  
+**Code:** ~13,819 lines Rust  
+**Tests:** ~880 total (376 lib + ~500 integration, 0 failed, 2 ignored)
+
+### Delivered
+
+全面改善用户交互体验：watch 实时监控目录（增量 SQLite 插入，字节偏移持久化跨重启恢复）、交互式配置向导（`init --interactive` 对话式引导，支持 CSV/SQLite 导出格式选择）、运行时错误诊断（parse error 按 ErrorKind 分类，error log 含行号与前 120 字符原文，摘要触发 encoding/field hint）、进度显示升级（[N/M] 文件计数器 + ETA + records/sec + 过滤率统计）。
+
+### Key Accomplishments
+
+1. 进度条升级为 `[N/M]` 文件计数器 + records/sec 吞吐显示 + indicatif 自动渲染 ETA（PROG-01/02）
+2. ErrorStats 扩展：by_type HashMap + ParseErrorRecord 结构体 + 10k 上限收集；摘要按类型分组输出 + encoding/field hint（PROG-03/DIAG-01/02/03）
+3. `init --interactive` 对话式配置向导：prompt_line 泛型 IO、str::replace 模板替换、6 个 e2e CLI 测试覆盖 INIT-01/02/03（含 SC4 validate 通过）
+4. `watch` 子命令：notify RecommendedWatcher + mpsc channel + 500ms 路径防抖 + HumanDuration 动态状态行 + Ctrl+C 最终摘要（WATCH-01/02/05/06）
+5. watch 增量处理：`_watch_offsets` SQLite 辅助表（独立 Connection），trigger_incremental Seek + NamedTempFile，跨重启 load_offsets 恢复，4 个集成测试全通过（WATCH-03/04）
+
+### Known Deferred Items
+
+- watch Ctrl+C 退出码 0 vs run 命令 130（非阻塞行为不一致）
+- write_error_log 覆盖写（watch 长时间运行只保留最近一次触发的错误）
+- VALIDATION.md 文件为草稿状态（Phases 67/68/69）；70-VALIDATION.md 缺失
+
+### Archives
+
+- `.planning/milestones/v1.18-ROADMAP.md` — 完整 Phase 细节
+- `.planning/milestones/v1.18-REQUIREMENTS.md` — 需求归档（15/15 complete）
+- `.planning/v1.18-MILESTONE-AUDIT.md` — 审计报告（tech_debt，无阻塞缺口）
+
+---
+
+## v1.17 — 多文件并行提速
+
+**Shipped:** 2026-06-04  
+**Phases:** 64–66.1 | **Plans:** 4 | **Commits:** 40  
+**Duration:** 2026-06-04 → 2026-06-04 (~1 day)  
+**Tests:** 780 total (all passing, 0 failed)
+
+### Delivered
+
+为 CSV 导出路径新增多文件 rayon 并行处理（temp-file 方案），对齐已有的 SQLite 并行路径；verbose 透传链保证并行路径与顺序路径输出行为完全一致；追加 Phase 66.1 修复单核 CI 上并行路径无法激活的测试盲点，引入 write_heterogeneous_log 异构测试数据 helper。
+
+### Key Accomplishments
+
+1. CSV 多文件并行处理（process_csv_parallel，rayon work-stealing + temp-file 拼接），2 个以上文件自动激活，1 个文件回退顺序路径（PARALLEL-01/02）
+2. verbose 透传链：run_parallel_tasks → process_csv_parallel → run_csv_parallel → handle_run，逐文件 "Processing: {path}" 输出与顺序路径格式一致（PARALLEL-05）
+3. 3 条兼容性集成测试（COMPAT-01/02/03）：并行与顺序路径 CSV 行集合相等（排序对比），过滤器等价性，init 模板格式无变化
+4. jobs_override: Option<usize> 扩展 handle_run（36 处调用点同步），强制单核 CI 进入并行路径（PARALLEL-06）
+5. write_heterogeneous_log helper（trxid_offset + username 两维度差异化），验证跨文件聚合正确性（PARALLEL-07）
+
+### Archives
+
+- `.planning/milestones/v1.17-ROADMAP.md` — 完整 Phase 细节
+- `.planning/milestones/v1.17-REQUIREMENTS.md` — 需求归档（11/11 满足，含 PARALLEL-06/07）
+- `.planning/v1.17-MILESTONE-AUDIT.md` — 审计报告（tech_debt，3 项轻微，Phase 66.1 关闭 WARNING-01/02）
+
+---
+
 ## v1.16.0 — 工程质量深化
 
 **Shipped:** 2026-06-03  
