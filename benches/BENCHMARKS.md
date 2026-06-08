@@ -726,3 +726,63 @@ gh run download <run-id> -n bench-results-<sha>
 **Goal:** D-04 — CI artifact upload + download workflow（bench.yml）
 **Benchmark impact:** No new criterion benchmark groups introduced. Existing baselines
 (Phases 4/5/42/44) remain current. See "CI Benchmark Artifact 使用说明" above.
+
+---
+
+## Phase 72 — 基准体系完善（v1.20）
+
+**Date:** 2026-06-08
+**Goal:** 建立 v1.20 里程碑 CLI 冷启动基线（BENCH-01）+ criterion throughput baseline 存档（BENCH-02，由 Plan 72-02 完成）
+**Test environment:** Apple Silicon (Darwin 25.5.0), release build (`opt-level=3`, LTO=fat, strip=symbols, panic=abort)
+
+### CLI 冷启动基线（hyperfine, BENCH-01）
+
+测量命令与 Phase 9 保持一致（per D-01）：
+
+```bash
+hyperfine --warmup 3 './target/release/sqllog2db --version'
+hyperfine --warmup 3 './target/release/sqllog2db validate -c config.toml'
+```
+
+| 命令 | Phase 9 (v1.9) mean | Phase 72 (v1.20) mean | 差值 |
+|------|--------------------|-----------------------|------|
+| `--version` | ~2.9 ms | 2.1 ms | −0.8 ms |
+| `validate -c config.toml` | ~2.8 ms | 2.2 ms | −0.6 ms |
+
+<details>
+<summary>hyperfine 原始输出（--version）</summary>
+
+```
+Benchmark 1: ./target/release/sqllog2db --version
+  Time (mean ± σ):       2.1 ms ±   0.1 ms    [User: 1.2 ms, System: 0.5 ms]
+  Range (min … max):     1.8 ms …   2.8 ms    642 runs
+
+  Warning: Command took less than 5 ms to complete. Note that the results might be inaccurate because hyperfine can not calibrate the shell startup time much more precise than this limit. You can try to use the `-N`/`--shell=none` option to disable the shell completely.
+```
+
+</details>
+
+<details>
+<summary>hyperfine 原始输出（validate）</summary>
+
+```
+Benchmark 1: ./target/release/sqllog2db validate -c config.toml
+  Time (mean ± σ):       2.2 ms ±   0.1 ms    [User: 1.3 ms, System: 0.6 ms]
+  Range (min … max):     1.9 ms …   2.9 ms    643 runs
+
+  Warning: Command took less than 5 ms to complete. Note that the results might be inaccurate because hyperfine can not calibrate the shell startup time much more precise than this limit. You can try to use the `-N`/`--shell=none` option to disable the shell completely.
+  Warning: Ignoring non-zero exit code.
+```
+
+</details>
+
+### Criterion v1.20 Baseline 存档（BENCH-02）
+
+详见 Plan 72-02 — 由 `CRITERION_HOME=benches/baselines cargo bench -- --save-baseline v1.20` 写入，全部 baseline JSON 已纳入 repo。
+
+### 结论
+
+- [x] BENCH-01 hyperfine 冷启动数值已记录（--version + validate 两命令），与 Phase 9 ~3ms 形成对比表
+- [ ] BENCH-02 criterion v1.20 baseline 存档（由 Plan 72-02 完成）
+
+---
