@@ -1,5 +1,15 @@
 # sqllog2db
 
+## Current Milestone: v1.20 性能全面提升
+
+**Goal:** 前瞻性探索解析速度、SQLite 写入、内存占用与启动速度四个维度，找出并落地实际收益
+
+**Target features:**
+- 解析速度优化（热路径分析，减少分配/拷贝）
+- SQLite 导出提速（batch write、WAL 调优、prepared stmt 复用）
+- 内存占用控制（大文件批量场景下峰值内存分析与优化）
+- 启动速度（冷启动延迟基准测量与优化）
+
 ## What This Is
 
 解析达梦（DaMeng）数据库 SQL 日志文件，流式导出到 CSV 或 SQLite 的命令行工具。支持可配置的过滤管道和字段投影，让用户精确控制"导出哪些记录的哪些字段"。支持 stdin 管道输入、实时进度显示与错误诊断、交互式配置向导（`init --interactive`）、以及 `watch` 子命令持续监听目录并增量插入新记录。
@@ -253,4 +263,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-07 after v1.19 milestone — watch完善与文档对齐（Phases 1–3, 71）*
+*Last updated: 2026-06-07 — started v1.20 milestone 性能全面提升*

@@ -2,6 +2,7 @@
 
 ## Milestones
 
+- 🚧 **v1.20 性能全面提升** — Phases 72–76 (in progress)
 - ✅ **v1.19 watch完善与文档对齐** — Phases 1–3, 71 (shipped 2026-06-07)
 - ✅ **v1.18 用户体验全面升级** — Phases 67–70 (shipped 2026-06-06)
 - ✅ **v1.17 多文件并行提速** — Phases 64–66.1 (shipped 2026-06-04)
@@ -236,6 +237,17 @@ Full details: `.planning/milestones/v1.18-ROADMAP.md`
 - [x] **Phase 71: mod.rs 重构** — 10 个 mod.rs 拆分为命名子模块，mod.rs 仅保留 pub use 导入 (completed 2026-06-07)
 
 Full details: `.planning/milestones/v1.19-ROADMAP.md`
+
+</details>
+
+<details>
+<summary>🚧 v1.20 性能全面提升 (Phases 72–76) — IN PROGRESS</summary>
+
+- [ ] **Phase 72: 基准体系完善** — hyperfine 冷启动测量 + criterion baseline 存档（BENCH-01, BENCH-02）
+- [ ] **Phase 73: SQLite batch INSERT** — multi-row 批量插入实现 + benchmark 量化提升（SQLITE-01, SQLITE-02）
+- [ ] **Phase 74: 内存与分配优化** — normalizer Arc key + CSV line_buf 预热（MEM-01, MEM-02）
+- [ ] **Phase 75: 并行路径公共逻辑提取** — parallel.rs 与 sqlite_parallel.rs 共享模块（STRUCT-04）
+- [ ] **Phase 76: 异步解析路径迁移** — 切换为 dm-database-parser-sqllog async API，添加 tokio（ASYNC-01）
 
 </details>
 
@@ -851,7 +863,16 @@ Full details: `.planning/milestones/v1.19-ROADMAP.md`
 | DOC-04      | 3     |
 | DOC-05      | 3     |
 
-**91/91 requirements mapped — coverage: 100%**
+| BENCH-01    | 72    |
+| BENCH-02    | 72    |
+| SQLITE-01   | 73    |
+| SQLITE-02   | 73    |
+| MEM-01      | 74    |
+| MEM-02      | 74    |
+| STRUCT-04   | 75    |
+| ASYNC-01    | 76    |
+
+**99/99 requirements mapped — coverage: 100%**
 
 ## Progress
 
@@ -899,6 +920,11 @@ Full details: `.planning/milestones/v1.19-ROADMAP.md`
 | 2. 测试覆盖率与 FSEvents | v1.19 | Complete | 2026-06-07 |
 | 3. 文档与验证对齐 | v1.19 | Complete | 2026-06-07 |
 | 71. mod.rs 重构 | v1.19 | Complete | 2026-06-07 |
+| 72. 基准体系完善 | v1.20 | Not started | - |
+| 73. SQLite batch INSERT | v1.20 | Not started | - |
+| 74. 内存与分配优化 | v1.20 | Not started | - |
+| 75. 并行路径公共逻辑提取 | v1.20 | Not started | - |
+| 76. 异步解析路径迁移 | v1.20 | Not started | - |
 
 ### Phase 71: mod.rs 重构 — 拆分子模块，mod.rs 仅保留 pub use 导入
 
@@ -922,6 +948,64 @@ Full details: `.planning/milestones/v1.19-ROADMAP.md`
 - [x] 71-09-PLAN.md — src/cli/run/mod.rs (476 行) 拆为 orchestrator/input/sequential/summary/error_log（Wave 3）
 - [x] 71-10-PLAN.md — src/cli/watch/mod.rs (998 行) 拆为 handler/state/watcher/event/trigger_full/trigger_incremental/dirs/status/append/debounce/tests（Wave 3）
 
+### Phase 72: 基准体系完善
+**Goal**: 开发者可以用 hyperfine 测量 CLI 冷启动延迟，用 criterion `--save-baseline` 将基准结果存档到 `benches/baselines/`，版本间性能趋势有迹可循
+**Depends on**: —
+**Requirements**: BENCH-01, BENCH-02
+**Success Criteria** (what must be TRUE):
+  1. 开发者运行 `hyperfine 'sqllog2db --version'`（或等效命令）可得到冷启动延迟数据，结果示例记录在 BENCHMARKS.md 中
+  2. BENCHMARKS.md 包含 hyperfine 冷启动基准段落，说明测量方法、典型延迟数值、与 v1.19 基线的对比
+  3. `cargo bench -- --save-baseline v1.20` 执行成功，基准结果文件保存至 `benches/baselines/v1.20/`（或 criterion 默认 baseline 目录）
+  4. `benches/baselines/` 目录存在且包含可用的 baseline 快照，`cargo bench -- --baseline v1.20` 可加载对比并输出 regression/improvement 信息
+  5. `cargo clippy --all-targets -- -D warnings` + `cargo test` 全部通过，无性能退化
+**Plans**: TBD
+
+### Phase 73: SQLite batch INSERT
+**Goal**: SQLite 导出吞吐量因 multi-row batch INSERT 而提升，benchmark 可量化展示对比当前单行模式的收益
+**Depends on**: Phase 72
+**Requirements**: SQLITE-01, SQLITE-02
+**Success Criteria** (what must be TRUE):
+  1. SQLite 导出路径使用 multi-row batch INSERT（缓冲 N 条记录，单次执行 `INSERT INTO t VALUES (...),(...),...`），缓冲大小可通过内部常量调整
+  2. 批量写入与现有单行写入的输出结果完全一致——对同一输入，SQLite 数据库中的记录数和字段值逐行等价
+  3. `cargo bench` 中 SQLite 导出 benchmark 可以量化输出 multi-row 模式 vs 单行模式的吞吐量（records/sec），结果在 BENCHMARKS.md 中记录
+  4. `cargo test` 全部通过，包含 multi-row INSERT 正确性的集成测试（记录数、字段值、边界：空输入、最后一批不满 N 条）
+  5. `cargo clippy --all-targets -- -D warnings` 通过，新增代码无 unsafe
+**Plans**: TBD
+
+### Phase 74: 内存与分配优化
+**Goal**: normalizer 热路径消除每条记录的重复 String clone，CSV line_buf 按典型 SQL 长度预热，堆分配压力在 benchmark 下可量化降低
+**Depends on**: Phase 72
+**Requirements**: MEM-01, MEM-02
+**Success Criteria** (what must be TRUE):
+  1. normalizer 中 HashMap key 不再对每条记录执行 `String::clone`——改用 `Arc<str>` 或调整生命周期后，`cargo bench` 中 CSV 导出吞吐量不低于 v1.19 基线（无退化），分配次数可通过 jemalloc stats 或 criterion iteration count 间接验证
+  2. CSV exporter 的 `line_buf`（或等效写缓冲）在初始化时设置合理的初始容量（如 512 字节），避免处理典型 SQL 记录时触发 Vec grow，代码注释说明容量选取依据
+  3. 两项优化均有对应单元或集成测试保证行为不变（记录内容、过滤结果与优化前完全一致）
+  4. `cargo clippy --all-targets -- -D warnings` + `cargo test` 全部通过，不引入新的 unsafe 或重量级依赖
+**Plans**: TBD
+
+### Phase 75: 并行路径公共逻辑提取
+**Goal**: `cli/run/parallel.rs` 与 `cli/run/sqlite_parallel.rs` 中重复的文件收集、记录处理、错误统计逻辑提取为共享模块，消除代码重复，两条并行路径均调用共享实现
+**Depends on**: Phase 72
+**Requirements**: STRUCT-04
+**Success Criteria** (what must be TRUE):
+  1. `cli/run/parallel.rs` 与 `cli/run/sqlite_parallel.rs` 中原有重复的公共逻辑（文件收集、记录处理循环、错误统计累积）提取到独立的共享模块，`git diff` 可见两文件行数净减少
+  2. 两条并行路径（CSV 和 SQLite）均通过共享模块处理记录，行为与重构前完全一致
+  3. `cargo test` 全部通过，包括现有并行路径集成测试（COMPAT-01/02/03），无任何回归
+  4. `cargo clippy --all-targets -- -D warnings` + `cargo fmt --check` 通过，无新增警告
+**Plans**: TBD
+
+### Phase 76: 异步解析路径迁移
+**Goal**: 解析主循环从同步 API 迁移到 `dm-database-parser-sqllog` 的 async API，添加 tokio 运行时并更新所有调用点，保持功能和性能不退化
+**Depends on**: Phase 75
+**Requirements**: ASYNC-01
+**Success Criteria** (what must be TRUE):
+  1. `dm-database-parser-sqllog` 的调用点（parse 主循环）改用 async/await 语法，`Cargo.toml` 包含 tokio 依赖（至少启用 `rt` feature）
+  2. 迁移后 `cargo bench` 中 CSV 导出吞吐量不低于 v1.19 基线（~1.55M records/sec 真实文件），无性能退化
+  3. 全量 `cargo test` 通过（含集成测试与 watch 路径测试），无任何功能回归
+  4. `cargo clippy --all-targets -- -D warnings` 通过，async 代码路径无 `unwrap` 在错误路径上裸用
+  5. `cargo build --release` 成功，二进制体积增量合理（tokio 引入不超过预期）
+**Plans**: TBD
+
 ---
 *Created: 2026-05-21 for milestone v1.10*
-*Updated: 2026-06-06 — milestone watch完善与文档对齐 started (Phases 1–3)*
+*Updated: 2026-06-08 — milestone v1.20 性能全面提升 roadmap expanded to Phases 72–76 (8 requirements)*
