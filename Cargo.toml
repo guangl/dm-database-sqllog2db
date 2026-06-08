@@ -47,7 +47,7 @@ glob = "0.3"
 indicatif = "0.18"
 rayon = "1.12"
 memchr = "2"
-rusqlite = { version = "0.39.0", features = [
+rusqlite = { version = "0.40.1", features = [
   "bundled",
 ] }
 tempfile = "3.27.0"
