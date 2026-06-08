@@ -744,13 +744,15 @@ gh run download <run-id> -n bench-results-<sha>
 
 ```bash
 hyperfine --warmup 3 './target/release/sqllog2db --version'
-hyperfine --warmup 3 './target/release/sqllog2db validate -c config.toml'
+hyperfine --warmup 3 './target/release/sqllog2db validate -c benches/hyperfine-validate.toml'
 ```
 
 | 命令 | Phase 9 (v1.9) mean | Phase 72 (v1.20) mean | 差值 |
 |------|--------------------|-----------------------|------|
 | `--version` | ~2.9 ms | 2.1 ms | −0.8 ms |
-| `validate -c config.toml` | ~2.8 ms | 2.2 ms | −0.6 ms |
+| `validate -c benches/hyperfine-validate.toml` | ~2.8 ms | 2.4 ms | −0.4 ms |
+
+> validate 行使用 `benches/hyperfine-validate.toml` 作为测量 fixture（含 `inputs = ["sqllogs"]`），确保 v1.20 binary 走完整 validate 成功路径与 Phase 9 同口径可比；根目录 `config.toml` 因含旧字段 `directory`（v1.12 已改名为 `inputs`）会触发 exit 2 失败路径，不可用于冷启动基准测量。
 
 <details>
 <summary>hyperfine 原始输出（--version）</summary>
@@ -769,12 +771,11 @@ Benchmark 1: ./target/release/sqllog2db --version
 <summary>hyperfine 原始输出（validate）</summary>
 
 ```
-Benchmark 1: ./target/release/sqllog2db validate -c config.toml
-  Time (mean ± σ):       2.2 ms ±   0.1 ms    [User: 1.3 ms, System: 0.6 ms]
-  Range (min … max):     1.9 ms …   2.9 ms    643 runs
+Benchmark 1: ./target/release/sqllog2db validate -c benches/hyperfine-validate.toml
+  Time (mean ± σ):       2.4 ms ±   0.2 ms    [User: 1.4 ms, System: 0.6 ms]
+  Range (min … max):     2.0 ms …   4.0 ms    621 runs
 
   Warning: Command took less than 5 ms to complete. Note that the results might be inaccurate because hyperfine can not calibrate the shell startup time much more precise than this limit. You can try to use the `-N`/`--shell=none` option to disable the shell completely.
-  Warning: Ignoring non-zero exit code.
 ```
 
 </details>

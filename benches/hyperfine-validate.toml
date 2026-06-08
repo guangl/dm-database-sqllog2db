@@ -1,0 +1,26 @@
+# hyperfine 冷启动测量专用 fixture（v1.20 Phase 72，由 Plan 72-03 创建以闭合 CR-01）
+#
+# 用途: 为 `./target/release/sqllog2db validate -c benches/hyperfine-validate.toml` 提供
+#        最小合法配置，使 validate 走完整成功路径（exit 0），从而让 hyperfine 测得的
+#        毫秒值与 Phase 9（v1.9）成功路径基线同口径可比。
+#
+# 注意:
+#   - inputs 指向 sqllogs/，该目录在 repo 中被 gitignore；validate 子命令只校验 config
+#     结构（inputs 非空、无空白条目、无 deprecated `path` 键），不要求该目录在磁盘上存在。
+#   - 本文件仅用于基准测量，不参与生产运行，请勿在 run/stats/watch 流程中引用。
+
+[sqllog]
+inputs = ["sqllogs"]
+
+[error]
+file = "export/errors.log"
+
+[logging]
+file = "logs/sqllog2db.log"
+level = "info"
+retention_days = 7
+
+[exporter.csv]
+file = "outputs/sqllog.csv"
+overwrite = true
+append = false
