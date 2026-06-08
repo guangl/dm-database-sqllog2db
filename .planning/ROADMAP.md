@@ -920,7 +920,7 @@ Full details: `.planning/milestones/v1.19-ROADMAP.md`
 | 2. 测试覆盖率与 FSEvents | v1.19 | Complete | 2026-06-07 |
 | 3. 文档与验证对齐 | v1.19 | Complete | 2026-06-07 |
 | 71. mod.rs 重构 | v1.19 | Complete | 2026-06-07 |
-| 72. 基准体系完善 | v1.20 | Not started | - |
+| 72. 基准体系完善 | 1/2 | In Progress|  |
 | 73. SQLite batch INSERT | v1.20 | Not started | - |
 | 74. 内存与分配优化 | v1.20 | Not started | - |
 | 75. 并行路径公共逻辑提取 | v1.20 | Not started | - |
@@ -959,7 +959,7 @@ Full details: `.planning/milestones/v1.19-ROADMAP.md`
   4. `benches/baselines/` 目录存在且包含可用的 baseline 快照，`cargo bench -- --baseline v1.20` 可加载对比并输出 regression/improvement 信息
   5. `cargo clippy --all-targets -- -D warnings` + `cargo test` 全部通过，无性能退化
 **Plans**: 2 plans
-- [ ] 72-01-PLAN.md — cargo build --release + hyperfine --warmup 3 两条命令冷启动测量 + BENCHMARKS.md 末尾追加 Phase 72 段落（hyperfine 半部分 + 与 Phase 9 ~3ms 对比表 + 原始输出折叠块 + D-03 占位回退）（BENCH-01）
+- [x] 72-01-PLAN.md — cargo build --release + hyperfine --warmup 3 两条命令冷启动测量 + BENCHMARKS.md 末尾追加 Phase 72 段落（hyperfine 半部分 + 与 Phase 9 ~3ms 对比表 + 原始输出折叠块 + D-03 占位回退）（BENCH-01）
 - [ ] 72-02-PLAN.md — CRITERION_HOME=benches/baselines cargo bench -- --save-baseline v1.20 存档 4 个 bench 文件 baseline + git 提交 + BENCHMARKS.md "How to compare" 段落追加 v1.20 命令 + Phase 72 段落 Criterion 半部分补全 + 结论 checklist 翻转（BENCH-02）
 
 ### Phase 73: SQLite batch INSERT
