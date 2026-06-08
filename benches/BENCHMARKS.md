@@ -33,6 +33,9 @@ CRITERION_HOME=benches/baselines cargo bench --bench bench_sqlite -- --baseline 
 
 # 保存新的 named baseline（例如 Phase 4 优化后）
 CRITERION_HOME=benches/baselines cargo bench --bench bench_csv -- --save-baseline phase4
+
+# v1.20 baseline（已由 Phase 72 写入）
+CRITERION_HOME=benches/baselines cargo bench -- --baseline v1.20
 ```
 
 criterion 输出会标注 "Performance has improved" / "Performance has regressed" / "No change in performance detected"。
@@ -778,11 +781,23 @@ Benchmark 1: ./target/release/sqllog2db validate -c config.toml
 
 ### Criterion v1.20 Baseline 存档（BENCH-02）
 
-详见 Plan 72-02 — 由 `CRITERION_HOME=benches/baselines cargo bench -- --save-baseline v1.20` 写入，全部 baseline JSON 已纳入 repo。
+v1.20 criterion baseline 已存档至 `benches/baselines/`，覆盖 4 个 bench 文件（bench_csv、bench_sqlite、bench_filters、bench_parser）的全部合成场景（csv_export 3 sizes、csv_format_only、sqlite_export 3 sizes、sqlite_single_row 2 sizes、filters 7 场景、parser_throughput 3 sizes，共 19 个 v1.20 目录）。`csv_export_real` 与 `sqlite_export_real` 因 `sqllogs/` 不在 repo 内自动 skip（与 Phase 4 处理方式一致）。
+
+```bash
+# 存档命令（已执行）
+CRITERION_HOME=benches/baselines cargo bench -- --save-baseline v1.20
+```
+
+```bash
+# 后续版本对比命令
+CRITERION_HOME=benches/baselines cargo bench -- --baseline v1.20
+```
+
+criterion 输出将标注 "Performance has improved" / "Performance has regressed" / "No change in performance detected"。
 
 ### 结论
 
 - [x] BENCH-01 hyperfine 冷启动数值已记录（--version + validate 两命令），与 Phase 9 ~3ms 形成对比表
-- [ ] BENCH-02 criterion v1.20 baseline 存档（由 Plan 72-02 完成）
+- [x] BENCH-02 criterion v1.20 baseline 存档至 `benches/baselines/`，覆盖 4 个 bench 文件全部合成场景
 
 ---
