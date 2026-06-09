@@ -922,7 +922,7 @@ Full details: `.planning/milestones/v1.19-ROADMAP.md`
 | 71. mod.rs 重构 | v1.19 | Complete | 2026-06-07 |
 | 72. 基准体系完善 | 3/3 | Complete    | 2026-06-08 |
 | 73. SQLite batch INSERT | 2/2 | Complete    | 2026-06-09 |
-| 74. 内存与分配优化 | 2/2 | Complete   | 2026-06-09 |
+| 74. 内存与分配优化 | 2/2 | Complete    | 2026-06-09 |
 | 75. 并行路径公共逻辑提取 | v1.20 | Not started | - |
 | 76. 异步解析路径迁移 | v1.20 | Not started | - |
 
