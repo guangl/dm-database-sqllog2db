@@ -18,10 +18,11 @@
 
 用户能够精确指定"导出哪些记录的哪些字段"——过滤逻辑清晰可配置，输出结果完全可控。
 
-## Current State: v1.19 已交付
+## Current State: v1.20 benchmark 基线已存档（Phase 72 完成）
 
 **Shipped:** 2026-06-07  
-**Version:** v1.19 watch完善与文档对齐（Phases 1–3, 71）
+**Version:** v1.19 watch完善与文档对齐（Phases 1–3, 71）  
+**In progress:** v1.20 性能全面提升（Milestone）— Phase 72 完成（2026-06-08），hyperfine + Criterion v1.20 基线已存档，validate 成功路径基准已闭合 CR-01
 
 **已交付功能：**
 - watch CSV 增量追加（WATCH-07）：`force_append_for_watch_trigger` 统一注入，多次触发行数正确累计
@@ -263,4 +264,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-07 — started v1.20 milestone 性能全面提升*
+*Last updated: 2026-06-08 — Phase 72 bench-baseline 完成，v1.20 benchmark 基线存档*

@@ -243,7 +243,7 @@ Full details: `.planning/milestones/v1.19-ROADMAP.md`
 <details>
 <summary>🚧 v1.20 性能全面提升 (Phases 72–76) — IN PROGRESS</summary>
 
-- [ ] **Phase 72: 基准体系完善** — hyperfine 冷启动测量 + criterion baseline 存档（BENCH-01, BENCH-02）
+- [x] **Phase 72: 基准体系完善** — hyperfine 冷启动测量 + criterion baseline 存档（BENCH-01, BENCH-02） (completed 2026-06-08)
 - [ ] **Phase 73: SQLite batch INSERT** — multi-row 批量插入实现 + benchmark 量化提升（SQLITE-01, SQLITE-02）
 - [ ] **Phase 74: 内存与分配优化** — normalizer Arc key + CSV line_buf 预热（MEM-01, MEM-02）
 - [ ] **Phase 75: 并行路径公共逻辑提取** — parallel.rs 与 sqlite_parallel.rs 共享模块（STRUCT-04）
@@ -920,7 +920,7 @@ Full details: `.planning/milestones/v1.19-ROADMAP.md`
 | 2. 测试覆盖率与 FSEvents | v1.19 | Complete | 2026-06-07 |
 | 3. 文档与验证对齐 | v1.19 | Complete | 2026-06-07 |
 | 71. mod.rs 重构 | v1.19 | Complete | 2026-06-07 |
-| 72. 基准体系完善 | 2/2 | Complete   | 2026-06-08 |
+| 72. 基准体系完善 | 3/3 | Complete    | 2026-06-08 |
 | 73. SQLite batch INSERT | v1.20 | Not started | - |
 | 74. 内存与分配优化 | v1.20 | Not started | - |
 | 75. 并行路径公共逻辑提取 | v1.20 | Not started | - |
@@ -961,7 +961,7 @@ Full details: `.planning/milestones/v1.19-ROADMAP.md`
 **Plans**: 3 plans
 - [x] 72-01-PLAN.md — cargo build --release + hyperfine --warmup 3 两条命令冷启动测量 + BENCHMARKS.md 末尾追加 Phase 72 段落（hyperfine 半部分 + 与 Phase 9 ~3ms 对比表 + 原始输出折叠块 + D-03 占位回退）（BENCH-01）
 - [x] 72-02-PLAN.md — CRITERION_HOME=benches/baselines cargo bench -- --save-baseline v1.20 存档 4 个 bench 文件 baseline + git 提交 + BENCHMARKS.md "How to compare" 段落追加 v1.20 命令 + Phase 72 段落 Criterion 半部分补全 + 结论 checklist 翻转（BENCH-02） (completed 2026-06-08)
-- [ ] 72-03-PLAN.md — gap closure CR-01：新建 benches/hyperfine-validate.toml（inputs = ["sqllogs"]）+ 重测 hyperfine validate 成功路径 + 替换 BENCHMARKS.md Phase 72 段落 validate 行数据/原始输出/脚注（移除 exit 2 失败路径痕迹）（BENCH-01）
+- [x] 72-03-PLAN.md — gap closure CR-01：新建 benches/hyperfine-validate.toml（inputs = ["sqllogs"]）+ 重测 hyperfine validate 成功路径 + 替换 BENCHMARKS.md Phase 72 段落 validate 行数据/原始输出/脚注（移除 exit 2 失败路径痕迹）（BENCH-01） (completed 2026-06-08)
 
 ### Phase 73: SQLite batch INSERT
 **Goal**: SQLite 导出吞吐量因 multi-row batch INSERT 而提升，benchmark 可量化展示对比当前单行模式的收益

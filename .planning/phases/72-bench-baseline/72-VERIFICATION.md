@@ -1,27 +1,24 @@
 ---
 phase: 72-bench-baseline
-verified: 2026-06-08T11:18:34Z
-status: gaps_found
-score: 4/5 must-haves verified
+verified: 2026-06-08T12:00:00Z
+status: passed
+score: 5/5 must-haves verified
 overrides_applied: 0
-gaps:
-  - truth: "BENCHMARKS.md 包含 hyperfine 冷启动基准段落，说明测量方法、典型延迟数值、与 v1.19 基线的对比（ROADMAP SC-2）"
-    status: partial
-    reason: "validate 测量结果反映的是失败退出路径（exit 2），而非成功路径。config.toml 的 directory 字段已废弃（v1.12 改名为 inputs），serde 静默丢弃该字段，validate() 立即因 inputs=[] 报错退出。Phase 72 的 2.2ms 与 Phase 9 的 ~2.8ms 来自不同执行路径，-0.6ms 对比数值不可作为冷启动改进的证据（CR-01）。BENCHMARKS.md 未对此偏差作任何标注或脚注。"
-    artifacts:
-      - path: "benches/BENCHMARKS.md"
-        issue: "第 753 行 validate 对比行显示 -0.6ms 改进，但此值来自失败路径，与 Phase 9 成功路径测量不可比。第 777 行有 'Warning: Ignoring non-zero exit code.' 但无解释性注释。"
-    missing:
-      - "在 validate 对比行添加脚注（Option A）：说明 v1.20 binary 对此 config.toml 非零退出，计时反映失败路径，不可用于断言冷启动改进/回归"
-      - "或重新采集 validate 成功路径数据（Option B）：使用含 inputs = [\"sqllogs\"] 的有效 config 重新测量，替换表格中的值"
+re_verification:
+  previous_status: gaps_found
+  previous_score: 4/5
+  gaps_closed:
+    - "BENCHMARKS.md validate 行展示的是 v1.20 binary 走完整 validate 成功路径（exit 0）的真实毫秒值（CR-01 已闭合）"
+  gaps_remaining: []
+  regressions: []
 ---
 
 # Phase 72: 基准体系完善（v1.20）Verification Report
 
-**Phase Goal:** 开发者可以用 hyperfine 测量 CLI 冷启动延迟，用 criterion `--save-baseline` 将基准结果存档到 `benches/baselines/`，版本间性能趋势有迹可循
-**Verified:** 2026-06-08T11:18:34Z
-**Status:** gaps_found
-**Re-verification:** No — initial verification
+**Phase Goal:** 采集并存档 v1.20 里程碑的 CLI 冷启动（hyperfine）与 Criterion benchmark 基线，作为 Phase 73-76 性能改进工作的回归判定锚点
+**Verified:** 2026-06-08T12:00:00Z
+**Status:** passed
+**Re-verification:** Yes — after CR-01 gap closure (Plan 72-03)
 
 ---
 
@@ -31,13 +28,13 @@ gaps:
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| SC-1 | 开发者运行 `hyperfine 'sqllog2db --version'` 可得到冷启动延迟数据，结果示例记录在 BENCHMARKS.md | VERIFIED | BENCHMARKS.md 第 755-766 行含 --version 原始 hyperfine 输出（2.1ms），commit fd91d63 |
-| SC-2 | BENCHMARKS.md 包含 hyperfine 冷启动基准段落，说明测量方法、典型延迟数值、与 v1.19 基线的对比 | PARTIAL | 段落存在（第 741-780 行），--version 对比有效；但 validate 计时来自失败路径（exit 2），-0.6ms 对比数值误导性，无脚注说明（CR-01，见 Gaps） |
+| SC-1 | 开发者运行 `hyperfine 'sqllog2db --version'` 可得到冷启动延迟数据，结果示例记录在 BENCHMARKS.md | VERIFIED | BENCHMARKS.md 第 761-763 行含 --version 原始 hyperfine 输出（2.1ms），commit fd91d63 |
+| SC-2 | BENCHMARKS.md 包含 hyperfine 冷启动基准段落，说明测量方法、典型延迟数值、与 v1.19 基线的对比 | VERIFIED | 段落存在（第 741-781 行）；validate 行已更新为 benches/hyperfine-validate.toml 成功路径（2.4ms，exit 0），无 "Warning: Ignoring non-zero exit code."，新增脚注说明 fixture 用途（第 755 行）；CR-01 已闭合 |
 | SC-3 | `cargo bench -- --save-baseline v1.20` 执行成功，基准结果文件保存至 criterion 默认 baseline 目录 | VERIFIED | 19 个 v1.20 目录（`benches/baselines/<group>/<id>/v1.20/`），含 benchmark.json + estimates.json + sample.json + tukey.json；commit 8da9f83 |
-| SC-4 | `benches/baselines/` 目录存在且包含可用的 baseline 快照，`cargo bench -- --baseline v1.20` 可加载对比 | VERIFIED | 目录存在，19 个场景覆盖 4 个 bench 文件全部合成场景；冒烟测试通过（"No change in performance detected"） |
-| SC-5 | `cargo clippy --all-targets -- -D warnings` + `cargo test` 全部通过，无性能退化 | VERIFIED | clippy 无警告；cargo test 912 通过（395+426+3+87+1+7）0 失败 |
+| SC-4 | `benches/baselines/` 目录存在且包含可用的 baseline 快照，`cargo bench -- --baseline v1.20` 可加载对比 | VERIFIED | 目录存在，19 个场景覆盖 4 个 bench 文件全部合成场景；冒烟测试通过 |
+| SC-5 | `cargo clippy --all-targets -- -D warnings` + `cargo test` 全部通过，无性能退化 | VERIFIED | clippy 无警告；cargo test 919 通过（395+426+3+87+1+7）0 失败 |
 
-**Score:** 4/5 truths verified (SC-2 PARTIAL — 构成 BLOCKER)
+**Score:** 5/5 truths verified
 
 ---
 
@@ -45,7 +42,8 @@ gaps:
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `benches/BENCHMARKS.md` | Phase 72 段落（hyperfine + Criterion 两部分） | VERIFIED | 第 735-803 行，三个子节齐全，checklist BENCH-01 [x] BENCH-02 [x] |
+| `benches/BENCHMARKS.md` | Phase 72 段落（hyperfine + Criterion 两部分） | VERIFIED | 第 735-804 行，三个子节齐全，checklist BENCH-01 [x] BENCH-02 [x] |
+| `benches/hyperfine-validate.toml` | hyperfine validate 子命令专用最小合法 config fixture | VERIFIED | 文件存在，含 `inputs = ["sqllogs"]`，无旧字段 `directory`，validate exit 0 确认；commit 3dcd35d |
 | `benches/baselines/csv_export/1000/v1.20/benchmark.json` | criterion v1.20 baseline 数据 | VERIFIED | 文件存在，含标准 criterion JSON |
 | `benches/baselines/parser_throughput/1000/v1.20/benchmark.json` | criterion v1.20 baseline 数据 | VERIFIED | 文件存在 |
 | `benches/baselines/sqlite_export/1000/v1.20/benchmark.json` | criterion v1.20 baseline 数据 | VERIFIED | 文件存在 |
@@ -58,9 +56,11 @@ gaps:
 | From | To | Via | Status | Details |
 |------|----|-----|--------|---------|
 | Phase 72 对比表格 | Phase 9 历史值 ~2.9ms / ~2.8ms | 表格 Phase 9 (v1.9) mean 列 | VERIFIED | 第 750-753 行，列头和值均存在 |
-| hyperfine 折叠原始输出块 | 实测 stdout | `<details><summary>hyperfine 原始输出</summary>` | VERIFIED | 第 755-780 行，两个 `<details>` 块，14 个 `<details>` 与 `</details>` 全部配对 |
+| hyperfine 折叠原始输出块 | 实测 stdout | `<details><summary>hyperfine 原始输出</summary>` | VERIFIED | 14 个 `<details>` / `</details>` 全部配对（含 Phase 72 两个块） |
 | How to compare 段落 | v1.20 对比命令 | bash 代码块 `--baseline v1.20` | VERIFIED | 第 38 行，位于 How to compare bash 代码块内 |
-| Phase 72 段落 Criterion 小节 | benches/baselines/ v1.20 目录 | `--save-baseline v1.20` 引用 | VERIFIED | 第 787-793 行，存档命令 + 对比命令均在文档中 |
+| Phase 72 段落 validate 命令 | benches/hyperfine-validate.toml fixture | 命令字符串引用 | VERIFIED | 第 747、753、774 行均引用 `benches/hyperfine-validate.toml`；fixture 文件存在 |
+| Phase 72 validate 行 | 成功路径数值（exit 0） | `./target/release/sqllog2db validate -c benches/hyperfine-validate.toml` | VERIFIED | 实测 exit=0 确认；stdout 含 "Configuration valid."；原始输出块无 non-zero exit 警告 |
+| Phase 72 段落 Criterion 小节 | benches/baselines/ v1.20 目录 | `--save-baseline v1.20` 引用 | VERIFIED | 第 787-794 行，存档命令 + 对比命令均在文档中 |
 
 ---
 
@@ -75,15 +75,19 @@ gaps:
 | Behavior | Command | Result | Status |
 |----------|---------|--------|--------|
 | BENCHMARKS.md Phase 72 段落标题唯一 | `grep -c "^## Phase 72 — 基准体系完善（v1.20）$" benches/BENCHMARKS.md` | 1 | PASS |
-| Phase 72 段落位于 Phase 56 之后（line > 723） | `grep -n "^## Phase 72" benches/BENCHMARKS.md` | 第 735 行 | PASS |
-| 对比表表头包含两列 | `grep -q "Phase 9 (v1.9) mean \| Phase 72 (v1.20) mean"` | 存在（第 750 行） | PASS |
-| `<details>` 数量 >= 2 | `grep -c "<details>" benches/BENCHMARKS.md` | 14（其中第 755、768 行属 Phase 72） | PASS |
-| BENCH-01 checklist [x] | `grep -q "^\- \[x\] BENCH-01"` | 第 800 行 | PASS |
-| BENCH-02 checklist [x] | `grep -q "^\- \[x\] BENCH-02"` | 第 801 行 | PASS |
-| --baseline v1.20 在 BENCHMARKS.md 出现 >= 2 次 | `grep -c "baseline v1.20"` | 2（第 38、793 行） | PASS |
-| validate 二进制实际退出码 | `./target/release/sqllog2db validate -c config.toml; echo $?` | 2（exit FATAL） | FAIL — 确认 CR-01 根因 |
+| validate fixture 文件存在 | `test -f benches/hyperfine-validate.toml` | exit 0 | PASS |
+| fixture 含合法 inputs 字段 | `grep -q 'inputs = ["sqllogs"]' benches/hyperfine-validate.toml` | exit 0 | PASS |
+| fixture 不含旧 directory 字段 | `! grep -q '^directory' benches/hyperfine-validate.toml` | exit 0 | PASS |
+| validate 走成功路径 | `./target/release/sqllog2db validate -c benches/hyperfine-validate.toml; echo $?` | 0（"Configuration valid."） | PASS |
+| Warning 行已彻底移除 | `! grep -q "Warning: Ignoring non-zero exit code." benches/BENCHMARKS.md` | exit 0 | PASS |
+| validate 行引用新 fixture | `grep -q "validate -c benches/hyperfine-validate.toml" benches/BENCHMARKS.md` | exit 0（第 747/753/774 行） | PASS |
+| 脚注说明 fixture 用途 | `grep -q "validate 行使用 \`benches/hyperfine-validate.toml\`" benches/BENCHMARKS.md` | exit 0（第 755 行） | PASS |
+| --version 行未被修改 | `grep -q "| \`--version\` | ~2.9 ms | 2.1 ms |" benches/BENCHMARKS.md` | exit 0（第 752 行） | PASS |
+| `<details>` 标签平衡 | `awk '/<details>/{o++} /<\/details>/{c++} END{exit !(o>=2 && o==c)}'` | 14/14 平衡 | PASS |
+| BENCH-01 checklist [x] | `grep -q "^\- \[x\] BENCH-01"` | 第 801 行 | PASS |
+| BENCH-02 checklist [x] | `grep -q "^\- \[x\] BENCH-02"` | 第 802 行 | PASS |
 | cargo clippy | `cargo clippy --all-targets -- -D warnings` | 无警告 | PASS |
-| cargo test | `cargo test` | 912 通过 / 0 失败 | PASS |
+| cargo test | `cargo test` | 919 通过 / 0 失败 | PASS |
 
 ---
 
@@ -97,7 +101,7 @@ gaps:
 
 | Requirement | Source Plan | Description | Status | Evidence |
 |-------------|------------|-------------|--------|----------|
-| BENCH-01 | 72-01-PLAN.md | 开发者可以用 hyperfine 测量 CLI 冷启动延迟，结果存入 BENCHMARKS.md | PARTIAL | hyperfine --version 测量有效；validate 测量基于失败路径（CR-01），对比数值不可作为回归基准 |
+| BENCH-01 | 72-01-PLAN.md (+ 72-03-PLAN.md gap-closure) | 开发者可以用 hyperfine 测量 CLI 冷启动延迟，结果存入 BENCHMARKS.md | SATISFIED | --version 2.1ms + validate 2.4ms（成功路径）均已记录；benches/hyperfine-validate.toml fixture 确保 validate 走 exit 0 完整路径，与 Phase 9 同口径可比；CR-01 已闭合 |
 | BENCH-02 | 72-02-PLAN.md | 开发者可以用 `--save-baseline` 将 criterion 结果存档到 `benches/baselines/`，版本间对比有迹可循 | SATISFIED | 19 个 v1.20 目录已纳入 repo，`--baseline v1.20` 冒烟通过 |
 
 ---
@@ -106,8 +110,7 @@ gaps:
 
 | File | Line | Pattern | Severity | Impact |
 |------|------|---------|----------|--------|
-| benches/BENCHMARKS.md | 777 | `Warning: Ignoring non-zero exit code.` — 原始输出中有非零退出警告，但文档无解释 | WARNING | 任何未来阅读此段落的开发者无法判断 validate 2.2ms 是否可信；CR-01 已记录此问题 |
-| benches/BENCHMARKS.md | 753 | `validate -c config.toml` 行显示 -0.6ms 改进，但两相对比的执行路径不同 | BLOCKER | 基准文档的核心价值是提供可比较的回归基准；失败路径 vs 成功路径的对比值会误导 Phase 73-76 的性能判断 |
+| 无 | — | — | — | 上次 BLOCKER（validate 失败路径误导）已由 Plan 72-03 闭合 |
 
 ---
 
@@ -117,29 +120,30 @@ gaps:
 
 ---
 
-## Gaps Summary
+## CR-01 闭合确认
 
-**1 个 BLOCKER 阻止完整验收：**
+初次验证发现的 BLOCKER（validate 计时反映 exit 2 失败路径）已由 Plan 72-03 完整解决：
 
-**CR-01: validate 计时反映失败退出路径（gaps_found）**
-
-BENCHMARKS.md 第 753 行记录了 validate -0.6ms 改进，但：
-- `config.toml` 含废弃字段 `directory = "sqllogs"`，v1.12 后该字段已改名为 `inputs`
-- serde 静默丢弃 `directory`，`inputs` 默认为空数组
-- `SqllogConfig::validate()` 立即因 `inputs=[]` 返回 `ConfigError::InvalidValue` 并以 exit 2 退出
-- 直接验证：`./target/release/sqllog2db validate -c config.toml` → exit 2
-- Phase 9 的 ~2.8ms 是成功路径（完整 validate + print），Phase 72 的 2.2ms 是失败路径（无 validate 逻辑执行）
-- 差值 -0.6ms 不代表性能改进，而是执行路径缩短
-
-**可选修复方案（二选一）：**
-
-**Option A（文档标注，低成本）：** 在 validate 对比行添加脚注，说明"v1.20 binary 对此 config.toml 以非零退出（inputs 字段重命名）；计时反映失败路径，不可用于断言冷启动回归/改进"。
-
-**Option B（重新测量，高准确性）：** 用含 `inputs = ["sqllogs"]` 的有效 config 重新运行 hyperfine，记录成功路径数值，替换表格内容。
-
-BENCH-01 的 `--version` 测量（2.1ms）不受影响，保持有效。
+| 判别项 | 初次验证（gaps_found） | 本次 re-verification（passed） |
+|--------|----------------------|-------------------------------|
+| `validate -c <config>` 退出码 | exit 2（失败路径） | exit 0（成功路径） |
+| hyperfine stdout 含 non-zero exit 警告 | 是（第 777 行） | 否（已彻底移除） |
+| 对比表 validate 数据来源 | 失败路径（立即 ConfigError 退出） | 成功路径（完整 validate + 打印） |
+| fixture 文件 | 无（引用了旧字段的 config.toml） | `benches/hyperfine-validate.toml`（inputs 非空，v1.12+ 合法字段） |
+| 与 Phase 9 可比性 | 不可比 | 同口径可比（均为成功路径） |
 
 ---
 
-_Verified: 2026-06-08T11:18:34Z_
+## Gaps Summary
+
+无 — 初次验证的 1 个 BLOCKER 已完整闭合，Phase 72 全部目标达成。
+
+**BENCH-01 完整达成：** --version（2.1ms）+ validate（2.4ms，成功路径）两条 hyperfine 数值均来自 exit 0 路径，与 Phase 9 历史基线（~2.9ms / ~2.8ms）同口径可比，可作 Phase 73-76 性能改进的回归判定锚点。
+
+**BENCH-02 完整达成：** 19 个 v1.20 criterion baseline 目录存档于 `benches/baselines/`，覆盖 4 个 bench 文件全部合成场景。
+
+---
+
+_Verified: 2026-06-08T12:00:00Z_
 _Verifier: Claude (gsd-verifier)_
+_Re-verification: Yes — after Plan 72-03 CR-01 gap closure_
