@@ -921,7 +921,7 @@ Full details: `.planning/milestones/v1.19-ROADMAP.md`
 | 3. 文档与验证对齐 | v1.19 | Complete | 2026-06-07 |
 | 71. mod.rs 重构 | v1.19 | Complete | 2026-06-07 |
 | 72. 基准体系完善 | 3/3 | Complete    | 2026-06-08 |
-| 73. SQLite batch INSERT | 2/2 | Complete   | 2026-06-09 |
+| 73. SQLite batch INSERT | 2/2 | Complete    | 2026-06-09 |
 | 74. 内存与分配优化 | v1.20 | Not started | - |
 | 75. 并行路径公共逻辑提取 | v1.20 | Not started | - |
 | 76. 异步解析路径迁移 | v1.20 | Not started | - |
@@ -984,7 +984,9 @@ Full details: `.planning/milestones/v1.19-ROADMAP.md`
   2. CSV exporter 的 `line_buf`（或等效写缓冲）在初始化时设置合理的初始容量（如 512 字节），避免处理典型 SQL 记录时触发 Vec grow，代码注释说明容量选取依据
   3. 两项优化均有对应单元或集成测试保证行为不变（记录内容、过滤结果与优化前完全一致）
   4. `cargo clippy --all-targets -- -D warnings` + `cargo test` 全部通过，不引入新的 unsafe 或重量级依赖
-**Plans**: TBD
+**Plans**: 2 plans
+- [ ] 74-01-PLAN.md — ParamBuffer 重构为二级 HashMap<String, HashMap<String, Arc<Vec<ParamValue>>>> + compute_normalized 零分配 &str 查询 + PARAMS insert 改 entry API + cli/run/tests.rs 断言更新 + 新增 nested_lookup_missing_statement 边界测试 (MEM-01)
+- [ ] 74-02-PLAN.md — CsvExporter::new() line_buf 初始容量 2048→4096 + 容量依据注释 + writer.rs 动态 reserve 保留不变 (MEM-02)
 
 ### Phase 75: 并行路径公共逻辑提取
 **Goal**: `cli/run/parallel.rs` 与 `cli/run/sqlite_parallel.rs` 中重复的文件收集、记录处理、错误统计逻辑提取为共享模块，消除代码重复，两条并行路径均调用共享实现
