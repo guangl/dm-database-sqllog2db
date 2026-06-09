@@ -16,6 +16,12 @@ pub(crate) struct SqliteExporter {
     pub(crate) normalize: bool,
     pub(crate) field_mask: crate::pipeline::FieldMask,
     pub(crate) ordered_indices: Vec<usize>,
+    pub(super) multi_row_batch_size: usize,
+    // row_buffer and sql_cache are used in flush_batch (impls.rs Task 2)
+    #[allow(dead_code)]
+    pub(super) row_buffer: Vec<Vec<rusqlite::types::Value>>,
+    #[allow(dead_code)]
+    pub(super) sql_cache: std::collections::HashMap<usize, String>,
 }
 
 impl std::fmt::Debug for SqliteExporter {
@@ -52,6 +58,9 @@ impl SqliteExporter {
             normalize: true,
             field_mask: crate::pipeline::FieldMask::ALL,
             ordered_indices: (0..crate::pipeline::FIELD_NAMES.len()).collect(),
+            multi_row_batch_size: 64,
+            row_buffer: Vec::new(),
+            sql_cache: std::collections::HashMap::new(),
         }
     }
 
@@ -64,6 +73,7 @@ impl SqliteExporter {
             config.append,
         );
         exporter.batch_size = config.batch_size;
+        exporter.multi_row_batch_size = config.multi_row_batch_size;
         exporter
     }
 

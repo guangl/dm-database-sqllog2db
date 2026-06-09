@@ -133,12 +133,17 @@ fn test_sqlite_from_config() {
         overwrite: true,
         append: false,
         batch_size: 42_000,
+        multi_row_batch_size: 32,
     };
     let mut exporter = SqliteExporter::from_config(&cfg);
     // 验证 from_config 正确映射 batch_size 字段（默认值是 10_000，这里用 42_000 区分）
     assert_eq!(
         exporter.batch_size, cfg.batch_size,
         "from_config must map batch_size correctly"
+    );
+    assert_eq!(
+        exporter.multi_row_batch_size, cfg.multi_row_batch_size,
+        "from_config must map multi_row_batch_size correctly"
     );
     exporter.initialize().unwrap();
     exporter.finalize().unwrap();

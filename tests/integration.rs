@@ -348,6 +348,7 @@ fn test_handle_validate_with_sqlite_exporter() {
                 overwrite: true,
                 append: false,
                 batch_size: 10_000,
+                multi_row_batch_size: 64,
             }),
         },
         ..Default::default()
