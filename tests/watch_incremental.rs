@@ -56,6 +56,7 @@ fn build_sqlite_config(log_path: &Path, db_path: &Path) -> Config {
                 overwrite: false,
                 append: true,
                 batch_size: 10_000,
+                multi_row_batch_size: 64,
             }),
         },
         ..Config::default()

@@ -16,6 +16,9 @@ pub(crate) struct SqliteExporter {
     pub(crate) normalize: bool,
     pub(crate) field_mask: crate::pipeline::FieldMask,
     pub(crate) ordered_indices: Vec<usize>,
+    pub(super) multi_row_batch_size: usize,
+    pub(super) row_buffer: Vec<Vec<rusqlite::types::Value>>,
+    pub(super) sql_cache: std::collections::HashMap<usize, String>,
 }
 
 impl std::fmt::Debug for SqliteExporter {
@@ -52,6 +55,9 @@ impl SqliteExporter {
             normalize: true,
             field_mask: crate::pipeline::FieldMask::ALL,
             ordered_indices: (0..crate::pipeline::FIELD_NAMES.len()).collect(),
+            multi_row_batch_size: 64,
+            row_buffer: Vec::new(),
+            sql_cache: std::collections::HashMap::new(),
         }
     }
 
@@ -64,6 +70,7 @@ impl SqliteExporter {
             config.append,
         );
         exporter.batch_size = config.batch_size;
+        exporter.multi_row_batch_size = config.multi_row_batch_size;
         exporter
     }
 
@@ -104,6 +111,31 @@ impl SqliteExporter {
                 .map_err(|e| Self::db_err(format!("batch commit failed: {e}")))?;
         }
         Ok(())
+    }
+
+    /// 将 `row_buffer` 中缓积的行批量写入数据库。
+    /// 返回已写入的行数（即 buffer 原长度）；buffer 在返回前被清空。
+    pub(super) fn flush_batch(&mut self) -> Result<usize> {
+        if self.row_buffer.is_empty() {
+            return Ok(0);
+        }
+        let flushed = self.row_buffer.len();
+        let col_count = self.ordered_indices.len();
+        // 从缓存获取 SQL；若缓存未命中则构建并存入缓存
+        if !self.sql_cache.contains_key(&flushed) {
+            let built = super::sql_builder::build_multi_row_insert_sql(
+                &self.table_name,
+                col_count,
+                flushed,
+            );
+            self.sql_cache.insert(flushed, built);
+        }
+        let sql = self.sql_cache[&flushed].clone();
+        let flattened: Vec<rusqlite::types::Value> = self.row_buffer.drain(..).flatten().collect();
+        let conn = self.conn_ref()?;
+        conn.execute(&sql, rusqlite::params_from_iter(flattened.iter()))
+            .map_err(|e| Self::db_err(format!("batch insert failed: {e}")))?;
+        Ok(flushed)
     }
 
     pub(super) fn handle_delete_clear_result(result: rusqlite::Result<usize>, table_name: &str) {
