@@ -339,12 +339,13 @@ fn test_normalize_and_export_filtered_params_updates_buffer() {
         "passes=false 时 records_in_file 应保持为 0，实际为 {records_in_file}"
     );
     // params_buffer 应已被更新（PARAMS 记录已解析入缓冲区）
-    let buf_key = ("sess_gap1".to_string(), "stmt_gap1".to_string());
     assert!(
-        params_buffer.contains_key(&buf_key),
+        params_buffer
+            .get("sess_gap1")
+            .and_then(|inner| inner.get("stmt_gap1"))
+            .is_some(),
         "passes=false+do_normalize=true 下 PARAMS 记录应写入 params_buffer，\
-         但 key ({:?}) 不存在; buffer keys={:?}",
-        buf_key,
+         但 key (sess_gap1, stmt_gap1) 不存在; outer keys={:?}",
         params_buffer.keys().collect::<Vec<_>>()
     );
 }
