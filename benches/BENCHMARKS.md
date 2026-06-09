@@ -732,6 +732,79 @@ gh run download <run-id> -n bench-results-<sha>
 
 ---
 
+## Phase 73 — SQLite batch INSERT（v1.21）
+
+**Date:** 2026-06-09
+**Goal:** multi-row batch INSERT 吞吐量量化（SQLITE-02）
+**Test environment:** Apple Silicon (Darwin 25.5.0)，release build（opt-level=3, LTO=fat, strip=symbols, panic=abort）
+
+### SQLite multi-row INSERT 对比（criterion，sqlite_multi_row group）
+
+| n | multi_row_batch_size | throughput (elem/s) |
+|---|----------------------|---------------------|
+| 10,000 | 1  | 397,200 |
+| 10,000 | 16 | 523,410 |
+| 10,000 | 32 | 507,970 |
+| 10,000 | 64 | 503,250 |
+| 50,000 | 1  | 398,230 |
+| 50,000 | 16 | 517,820 |
+| 50,000 | 32 | 501,120 |
+| 50,000 | 64 | 499,240 |
+
+**量化收益（SQLITE-02 验收）：**
+- n=10,000：multi_row=64 vs multi_row=1 吞吐量提升 26.7%（397,200 → 503,250 elem/s）
+- n=50,000：multi_row=64 vs multi_row=1 吞吐量提升 25.4%（398,230 → 499,240 elem/s）
+
+> 注：multi_row=16 在两种规模下均为最高吞吐（523K / 518K elem/s），优于 multi_row=64。推测原因：在合成场景（单线程批量写入无竞争）下，更小的 VALUES 子句（16 行）可完整保留在 SQLite 内部缓存中，大批次（64 行）反而触发额外内存压力。此行为与具体机器/系统负载有关，生产环境可按实际数据规模调优 multi_row_batch_size。
+
+### Criterion 输出原文
+
+<details>
+<summary>cargo bench --bench bench_sqlite sqlite_multi_row（Phase 73）</summary>
+
+```
+sqlite_multi_row/n=10000/multi_row=1
+                        time:   [25.113 ms 25.176 ms 25.243 ms]
+                        thrpt:  [396.16 Kelem/s 397.20 Kelem/s 398.19 Kelem/s]
+
+sqlite_multi_row/n=10000/multi_row=16
+                        time:   [19.042 ms 19.105 ms 19.185 ms]
+                        thrpt:  [521.24 Kelem/s 523.41 Kelem/s 525.14 Kelem/s]
+
+sqlite_multi_row/n=10000/multi_row=32
+                        time:   [19.657 ms 19.686 ms 19.712 ms]
+                        thrpt:  [507.30 Kelem/s 507.97 Kelem/s 508.74 Kelem/s]
+
+sqlite_multi_row/n=10000/multi_row=64
+                        time:   [19.832 ms 19.871 ms 19.911 ms]
+                        thrpt:  [502.23 Kelem/s 503.25 Kelem/s 504.25 Kelem/s]
+
+sqlite_multi_row/n=50000/multi_row=1
+                        time:   [125.15 ms 125.56 ms 125.96 ms]
+                        thrpt:  [396.96 Kelem/s 398.23 Kelem/s 399.52 Kelem/s]
+
+sqlite_multi_row/n=50000/multi_row=16
+                        time:   [96.273 ms 96.559 ms 96.944 ms]
+                        thrpt:  [515.76 Kelem/s 517.82 Kelem/s 519.36 Kelem/s]
+
+sqlite_multi_row/n=50000/multi_row=32
+                        time:   [99.425 ms 99.776 ms 100.18 ms]
+                        thrpt:  [499.10 Kelem/s 501.12 Kelem/s 502.89 Kelem/s]
+
+sqlite_multi_row/n=50000/multi_row=64
+                        time:   [100.01 ms 100.15 ms 100.29 ms]
+                        thrpt:  [498.55 Kelem/s 499.24 Kelem/s 499.96 Kelem/s]
+```
+
+</details>
+
+### 结论
+
+- [x] SQLITE-02：benchmark 已量化 multi-row INSERT 相较于单行模式的吞吐量提升（multi_row=64 vs multi_row=1 约提升 26%）
+- v1.20 baseline 对比：Phase 73 新增 sqlite_multi_row group，无直接 v1.20 baseline 对比（该 group 为首次引入）；sqlite_export group 无回归
+
+---
+
 ## Phase 72 — 基准体系完善（v1.20）
 
 **Date:** 2026-06-08
