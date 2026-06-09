@@ -39,8 +39,6 @@ pub(super) fn build_insert_sql(table_name: &str, ordered_indices: &[usize]) -> S
 
 /// 生成多行批量 INSERT SQL：`INSERT INTO "table" VALUES (?, ...), (?, ...), ...`
 /// `col_count` 为每行列数，`row_count` 为批量行数。
-// Used by flush_batch in exporter.rs (Task 2)
-#[allow(dead_code)]
 pub(super) fn build_multi_row_insert_sql(
     table_name: &str,
     col_count: usize,

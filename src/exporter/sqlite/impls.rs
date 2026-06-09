@@ -1,8 +1,8 @@
 use super::super::{ExportStats, Exporter};
 use super::exporter::SqliteExporter;
 use super::pragma::initialize_pragmas;
-use super::sql_builder::{build_create_sql, build_insert_sql};
-use super::write::do_insert_preparsed;
+use super::sql_builder::{build_create_sql, build_insert_sql, build_multi_row_insert_sql};
+use super::write::sqllog_to_values;
 use crate::error::Result;
 use dm_database_parser_sqllog::Sqllog;
 use log::info;
@@ -31,6 +31,15 @@ impl Exporter for SqliteExporter {
 
         self.insert_sql = build_insert_sql(&self.table_name, &self.ordered_indices);
 
+        // 预填充 sql_cache，覆盖 1..=multi_row_batch_size 所有行数
+        let col_count = self.ordered_indices.len();
+        for n in 1..=self.multi_row_batch_size {
+            self.sql_cache.insert(
+                n,
+                build_multi_row_insert_sql(&self.table_name, col_count, n),
+            );
+        }
+
         let conn = self.conn_ref()?;
         let create_sql = build_create_sql(&self.table_name, &self.ordered_indices);
         conn.execute(&create_sql, [])
@@ -57,30 +66,29 @@ impl Exporter for SqliteExporter {
         _include_pm: bool,
         normalized: Option<&str>,
     ) -> Result<()> {
-        {
-            let conn = self
-                .conn
-                .as_ref()
-                .ok_or_else(|| Self::db_err("not initialized"))?;
-            let mut stmt = conn
-                .prepare_cached(&self.insert_sql)
-                .map_err(|e| Self::db_err(format!("prepare failed: {e}")))?;
-            let ns_ref = if self.normalize { normalized } else { None };
-            do_insert_preparsed(
-                &mut stmt,
-                sqllog,
-                ns_ref,
-                self.field_mask,
-                &self.ordered_indices,
-            )
-            .map_err(|e| Self::db_err(format!("insert failed: {e}")))?;
+        // conn=None 检查（未初始化保护）
+        if self.conn.is_none() {
+            return Err(Self::db_err("not initialized"));
         }
+        let ns_ref = if self.normalize { normalized } else { None };
+        let row_values = sqllog_to_values(sqllog, ns_ref, self.field_mask, &self.ordered_indices);
+        self.row_buffer.push(row_values);
         self.stats.record_success();
-        self.batch_commit_if_needed()?;
+        if self.row_buffer.len() >= self.multi_row_batch_size {
+            let flushed = self.flush_batch()?;
+            for _ in 0..flushed {
+                self.batch_commit_if_needed()?;
+            }
+        }
         Ok(())
     }
 
     fn finalize(&mut self) -> Result<()> {
+        // flush 尾部不满批的行，防止记录丢失
+        let flushed = self.flush_batch()?;
+        for _ in 0..flushed {
+            self.batch_commit_if_needed()?;
+        }
         if let Some(conn) = &self.conn {
             conn.execute_batch("COMMIT;")
                 .map_err(|e| Self::db_err(format!("commit failed: {e}")))?;

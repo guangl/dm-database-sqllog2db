@@ -659,3 +659,209 @@ fn test_sqlite_projection_subset_export() {
         .unwrap();
     assert_eq!(col_count, 3, "投影后表应有 3 列，实际: {col_count}");
 }
+
+// ---- multi-row batch INSERT 正确性测试（73-01 Task 2）----
+
+fn parse_records(logfile: &std::path::Path) -> Vec<dm_database_parser_sqllog::Sqllog> {
+    LogParserBuilder::new(logfile.to_str().unwrap())
+        .build()
+        .unwrap()
+        .iter()
+        .filter_map(std::result::Result::ok)
+        .collect()
+}
+
+fn count_rows_in_db(dbfile: &std::path::Path, table: &str) -> i64 {
+    let conn = rusqlite::Connection::open(dbfile).unwrap();
+    conn.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get(0))
+        .unwrap()
+}
+
+#[test]
+fn test_sqlite_multi_row_basic() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let logfile = dir.path().join("t.log");
+    let dbfile = dir.path().join("out.db");
+    write_test_log(&logfile, 100);
+    let records = parse_records(&logfile);
+
+    {
+        let mut exporter =
+            SqliteExporter::new(dbfile.to_string_lossy().into(), "tbl".into(), true, false);
+        exporter.multi_row_batch_size = 64;
+        exporter.initialize().unwrap();
+        for r in &records {
+            exporter.export_one_normalized(r, None).unwrap();
+        }
+        exporter.finalize().unwrap();
+    }
+
+    assert_eq!(count_rows_in_db(&dbfile, "tbl"), 100);
+}
+
+#[test]
+fn test_sqlite_multi_row_partial_tail() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let logfile = dir.path().join("t.log");
+    let dbfile = dir.path().join("out.db");
+    write_test_log(&logfile, 65);
+    let records = parse_records(&logfile);
+
+    {
+        let mut exporter =
+            SqliteExporter::new(dbfile.to_string_lossy().into(), "tbl".into(), true, false);
+        exporter.multi_row_batch_size = 64;
+        exporter.initialize().unwrap();
+        for r in &records {
+            exporter.export_one_normalized(r, None).unwrap();
+        }
+        exporter.finalize().unwrap();
+    }
+
+    assert_eq!(
+        count_rows_in_db(&dbfile, "tbl"),
+        65,
+        "finalize 前 flush 应刷尾部 1 条"
+    );
+}
+
+#[test]
+fn test_sqlite_multi_row_empty_input() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let dbfile = dir.path().join("out.db");
+
+    {
+        let mut exporter =
+            SqliteExporter::new(dbfile.to_string_lossy().into(), "tbl".into(), true, false);
+        exporter.multi_row_batch_size = 64;
+        exporter.initialize().unwrap();
+        exporter.finalize().unwrap();
+    }
+
+    assert_eq!(count_rows_in_db(&dbfile, "tbl"), 0);
+}
+
+#[test]
+fn test_sqlite_multi_row_batch1_equals_single() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let logfile = dir.path().join("t.log");
+    let dbfile = dir.path().join("out.db");
+    write_test_log(&logfile, 5);
+    let records = parse_records(&logfile);
+
+    {
+        let mut exporter =
+            SqliteExporter::new(dbfile.to_string_lossy().into(), "tbl".into(), true, false);
+        exporter.multi_row_batch_size = 1;
+        exporter.initialize().unwrap();
+        for r in &records {
+            exporter.export_one_normalized(r, None).unwrap();
+        }
+        exporter.finalize().unwrap();
+    }
+
+    assert_eq!(
+        count_rows_in_db(&dbfile, "tbl"),
+        5,
+        "batch_size=1 应等价于改造前单行模式"
+    );
+}
+
+#[test]
+fn test_sqlite_multi_row_projection_equivalence() {
+    use crate::pipeline::FieldMask;
+
+    let dir = tempfile::TempDir::new().unwrap();
+    let logfile = dir.path().join("t.log");
+    let dbfile_full = dir.path().join("full.db");
+    let dbfile_proj = dir.path().join("proj.db");
+    write_test_log(&logfile, 5);
+    let records = parse_records(&logfile);
+
+    // 全量路径
+    {
+        let mut exporter = SqliteExporter::new(
+            dbfile_full.to_string_lossy().into(),
+            "tbl".into(),
+            true,
+            false,
+        );
+        exporter.multi_row_batch_size = 4;
+        exporter.initialize().unwrap();
+        for r in &records {
+            exporter.export_one_normalized(r, None).unwrap();
+        }
+        exporter.finalize().unwrap();
+    }
+
+    // 投影路径：ts(0)/username(4)/sql(10)
+    {
+        let mut exporter = SqliteExporter::new(
+            dbfile_proj.to_string_lossy().into(),
+            "tbl".into(),
+            true,
+            false,
+        );
+        exporter.multi_row_batch_size = 4;
+        exporter.normalize = false;
+        exporter.field_mask =
+            FieldMask::from_names(&["ts".to_string(), "username".to_string(), "sql".to_string()])
+                .unwrap();
+        exporter.ordered_indices = vec![0, 4, 10];
+        exporter.initialize().unwrap();
+        for r in &records {
+            exporter.export_one_normalized(r, None).unwrap();
+        }
+        exporter.finalize().unwrap();
+    }
+
+    let conn_full = rusqlite::Connection::open(&dbfile_full).unwrap();
+    let conn_proj = rusqlite::Connection::open(&dbfile_proj).unwrap();
+
+    for i in 0..5i64 {
+        let (ts_full, username_full, sql_full): (String, String, String) = conn_full
+            .query_row(
+                "SELECT ts, username, sql FROM tbl ORDER BY rowid LIMIT 1 OFFSET ?1",
+                [i],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .unwrap();
+        let (ts_proj, username_proj, sql_proj): (String, String, String) = conn_proj
+            .query_row(
+                "SELECT ts, username, sql FROM tbl ORDER BY rowid LIMIT 1 OFFSET ?1",
+                [i],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(ts_full, ts_proj, "row {i}: ts mismatch");
+        assert_eq!(username_full, username_proj, "row {i}: username mismatch");
+        assert_eq!(sql_full, sql_proj, "row {i}: sql mismatch");
+    }
+}
+
+#[test]
+fn test_sqlite_multi_row_batch_commit_interaction() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let logfile = dir.path().join("t.log");
+    let dbfile = dir.path().join("out.db");
+    write_test_log(&logfile, 10);
+    let records = parse_records(&logfile);
+
+    {
+        let mut exporter =
+            SqliteExporter::new(dbfile.to_string_lossy().into(), "tbl".into(), true, false);
+        exporter.batch_size = 2;
+        exporter.multi_row_batch_size = 4;
+        exporter.initialize().unwrap();
+        for r in &records {
+            exporter.export_one_normalized(r, None).unwrap();
+        }
+        exporter.finalize().unwrap();
+    }
+
+    assert_eq!(
+        count_rows_in_db(&dbfile, "tbl"),
+        10,
+        "batch_size=2 + multi_row_batch_size=4 交互，10 条记录应全部持久化"
+    );
+}
