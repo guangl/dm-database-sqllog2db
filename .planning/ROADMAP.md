@@ -244,7 +244,7 @@ Full details: `.planning/milestones/v1.19-ROADMAP.md`
 <summary>🚧 v1.20 性能全面提升 (Phases 72–76) — IN PROGRESS</summary>
 
 - [x] **Phase 72: 基准体系完善** — hyperfine 冷启动测量 + criterion baseline 存档（BENCH-01, BENCH-02） (completed 2026-06-08)
-- [ ] **Phase 73: SQLite batch INSERT** — multi-row 批量插入实现 + benchmark 量化提升（SQLITE-01, SQLITE-02）
+- [x] **Phase 73: SQLite batch INSERT** — multi-row 批量插入实现 + benchmark 量化提升（SQLITE-01, SQLITE-02） (completed 2026-06-09)
 - [ ] **Phase 74: 内存与分配优化** — normalizer Arc key + CSV line_buf 预热（MEM-01, MEM-02）
 - [ ] **Phase 75: 并行路径公共逻辑提取** — parallel.rs 与 sqlite_parallel.rs 共享模块（STRUCT-04）
 - [ ] **Phase 76: 异步解析路径迁移** — 切换为 dm-database-parser-sqllog async API，添加 tokio（ASYNC-01）
@@ -921,7 +921,7 @@ Full details: `.planning/milestones/v1.19-ROADMAP.md`
 | 3. 文档与验证对齐 | v1.19 | Complete | 2026-06-07 |
 | 71. mod.rs 重构 | v1.19 | Complete | 2026-06-07 |
 | 72. 基准体系完善 | 3/3 | Complete    | 2026-06-08 |
-| 73. SQLite batch INSERT | v1.20 | Not started | - |
+| 73. SQLite batch INSERT | 2/2 | Complete   | 2026-06-09 |
 | 74. 内存与分配优化 | v1.20 | Not started | - |
 | 75. 并行路径公共逻辑提取 | v1.20 | Not started | - |
 | 76. 异步解析路径迁移 | v1.20 | Not started | - |
