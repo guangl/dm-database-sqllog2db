@@ -2,7 +2,7 @@
 
 ## Milestones
 
-- 🚧 **v1.20 性能全面提升** — Phases 72–76 (in progress)
+- ✅ **v1.20 性能全面提升** — Phases 72–76 (shipped 2026-06-11)
 - ✅ **v1.19 watch完善与文档对齐** — Phases 1–3, 71 (shipped 2026-06-07)
 - ✅ **v1.18 用户体验全面升级** — Phases 67–70 (shipped 2026-06-06)
 - ✅ **v1.17 多文件并行提速** — Phases 64–66.1 (shipped 2026-06-04)
@@ -247,7 +247,7 @@ Full details: `.planning/milestones/v1.19-ROADMAP.md`
 - [x] **Phase 73: SQLite batch INSERT** — multi-row 批量插入实现 + benchmark 量化提升（SQLITE-01, SQLITE-02） (completed 2026-06-09)
 - [x] **Phase 74: 内存与分配优化** — normalizer Arc key + CSV line_buf 预热（MEM-01, MEM-02） (completed 2026-06-09)
 - [x] **Phase 75: 并行路径公共逻辑提取** — parallel.rs 与 sqlite_parallel.rs 共享模块（STRUCT-04） (completed 2026-06-11)
-- [ ] **Phase 76: 异步解析路径迁移** — 切换为 dm-database-parser-sqllog async API，添加 tokio（ASYNC-01）
+- [x] **Phase 76: 异步解析路径迁移** — 切换为 dm-database-parser-sqllog async API，添加 tokio（ASYNC-01） (completed 2026-06-11)
 
 </details>
 
@@ -924,7 +924,7 @@ Full details: `.planning/milestones/v1.19-ROADMAP.md`
 | 73. SQLite batch INSERT | 2/2 | Complete    | 2026-06-09 |
 | 74. 内存与分配优化 | 2/2 | Complete    | 2026-06-09 |
 | 75. 并行路径公共逻辑提取 | 1/1 | Complete    | 2026-06-11 |
-| 76. 异步解析路径迁移 | v1.20 | Not started | - |
+| 76. 异步解析路径迁移 | v1.20 | Complete | 2026-06-11 |
 
 ### Phase 71: mod.rs 重构 — 拆分子模块，mod.rs 仅保留 pub use 导入
 
@@ -1015,3 +1015,4 @@ Full details: `.planning/milestones/v1.19-ROADMAP.md`
 ---
 *Created: 2026-05-21 for milestone v1.10*
 *Updated: 2026-06-08 — milestone v1.20 性能全面提升 roadmap expanded to Phases 72–76 (8 requirements)*
+*Updated: 2026-06-11 — milestone v1.20 closed, Phase 76 ASYNC-01 completed*

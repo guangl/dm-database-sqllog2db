@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.20
 milestone_name: 性能全面提升
-status: executing
-last_updated: "2026-06-11T12:51:21.084Z"
-last_activity: 2026-06-11 -- Phase 76 execution started
+status: completed
+last_updated: "2026-06-11T12:57:00.000Z"
+last_activity: 2026-06-11 -- Phase 76 async migration complete
 progress:
   total_phases: 38
-  completed_phases: 26
+  completed_phases: 27
   total_plans: 58
   completed_plans: 78
-  percent: 68
+  percent: 71
 ---
 
 # Project State
@@ -24,11 +24,11 @@ See: .planning/PROJECT.md (updated 2026-06-07 after v1.20 start)
 
 ## Current Position
 
-Phase: 76 (async-migration) — EXECUTING
-Plan: 1 of 1
-Status: Executing Phase 76
-Last activity: 2026-06-11 -- Phase 76 execution started
-Resume: .planning/phases/74-memory-alloc/74-CONTEXT.md
+Phase: 76
+Plan: 76-01 (verified + docs flipped)
+Status: Milestone complete
+Last activity: 2026-06-11 -- Phase 76 async migration complete
+Resume: .planning/phases/76-async-migration/76-CONTEXT.md
 
 ## Accumulated Context
 
