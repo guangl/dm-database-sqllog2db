@@ -37,20 +37,33 @@ pub(super) fn build_insert_sql(table_name: &str, ordered_indices: &[usize]) -> S
     )
 }
 
-/// 生成多行批量 INSERT SQL：`INSERT INTO "table" VALUES (?, ...), (?, ...), ...`
-/// `col_count` 为每行列数，`row_count` 为批量行数。
+/// 生成多行批量 INSERT SQL：
+/// - 全量投影：`INSERT INTO "table" VALUES (?, ...), ...`
+/// - 部分投影：`INSERT INTO "table" (col1, col2) VALUES (?, ...), ...`
+///
+/// 与 `build_insert_sql` 保持一致——部分投影时显式列出列名，
+/// 避免追加模式下列顺序不同导致的静默错误。
 pub(super) fn build_multi_row_insert_sql(
     table_name: &str,
-    col_count: usize,
+    ordered_indices: &[usize],
     row_count: usize,
 ) -> String {
+    let col_count = ordered_indices.len();
     debug_assert!(row_count > 0);
     debug_assert!(col_count > 0);
     let one_row = format!("({})", vec!["?"; col_count].join(", "));
     let value_rows = std::iter::repeat_n(one_row.as_str(), row_count)
         .collect::<Vec<_>>()
         .join(", ");
-    format!("INSERT INTO \"{table_name}\" VALUES {value_rows}")
+    if ordered_indices.len() == FIELD_NAMES.len() {
+        format!("INSERT INTO \"{table_name}\" VALUES {value_rows}")
+    } else {
+        let cols = projected_field_names(ordered_indices);
+        format!(
+            "INSERT INTO \"{table_name}\" ({}) VALUES {value_rows}",
+            cols.join(", ")
+        )
+    }
 }
 
 /// 根据有序字段索引列表生成 CREATE TABLE SQL。
@@ -97,21 +110,26 @@ mod tests {
 
     #[test]
     fn test_build_multi_row_insert_sql_basic() {
-        let sql = build_multi_row_insert_sql("t", 3, 2);
-        assert_eq!(sql, "INSERT INTO \"t\" VALUES (?, ?, ?), (?, ?, ?)");
+        // 部分投影（3列），应包含列名
+        let sql = build_multi_row_insert_sql("t", &[10, 4, 0], 2);
+        assert_eq!(
+            sql,
+            "INSERT INTO \"t\" (sql, username, ts) VALUES (?, ?, ?), (?, ?, ?)"
+        );
     }
 
     #[test]
     fn test_build_multi_row_insert_sql_single_row() {
         let all_indices: Vec<usize> = (0..15).collect();
-        let single_row_sql = build_multi_row_insert_sql("t", 15, 1);
+        let single_row_sql = build_multi_row_insert_sql("t", &all_indices, 1);
         let full_path_sql = build_insert_sql("t", &all_indices);
         assert_eq!(single_row_sql, full_path_sql);
     }
 
     #[test]
     fn test_build_multi_row_insert_sql_64_rows() {
-        let sql = build_multi_row_insert_sql("t", 15, 64);
+        let all_indices: Vec<usize> = (0..15).collect();
+        let sql = build_multi_row_insert_sql("t", &all_indices, 64);
         // 验证以 INSERT INTO "t" VALUES 开头
         assert!(sql.starts_with("INSERT INTO \"t\" VALUES "));
         // 验证包含 64 个 "(" 开头的占位符组
