@@ -118,6 +118,10 @@ async fn test_jemalloc_peak_baseline() {
     let interrupted = Arc::new(AtomicBool::new(false));
 
     let (allocated_delta, resident_delta) = measure_alloc_delta(|| {
+        // block_in_place is required because measure_alloc_delta takes a synchronous
+        // closure, so we cannot .await handle_run directly. block_in_place yields the
+        // tokio worker thread to the blocking pool, allowing block_on to drive the
+        // async handle_run without nesting runtimes.
         tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(handle_run(
                 &cfg,
