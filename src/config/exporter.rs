@@ -67,6 +67,15 @@ impl CsvExporterConfig {
                 reason: "CSV output file path cannot be empty".to_string(),
             }));
         }
+        if !self.append && !self.overwrite {
+            return Err(Error::Config(ConfigError::InvalidValue {
+                field: "exporter.csv".to_string(),
+                value: "overwrite=false, append=false".to_string(),
+                reason: "at least one of overwrite or append must be true; \
+                    both false would silently truncate an existing file"
+                    .to_string(),
+            }));
+        }
         Ok(())
     }
 }
