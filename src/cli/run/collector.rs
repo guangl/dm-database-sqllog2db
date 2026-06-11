@@ -1,7 +1,7 @@
 use crate::error::{Error, ErrorStats, ParserError, Result};
 use crate::pipeline::Pipeline;
 use crate::pipeline::normalizer::ParamBuffer;
-use dm_database_parser_sqllog::{AsyncLogParser, Sqllog};
+use dm_database_parser_sqllog::{AsyncError, AsyncLogParser, ParseError, Sqllog};
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -14,19 +14,24 @@ pub(super) async fn collect_log_file(
     placeholder_override: Option<bool>,
     interrupted: &Arc<AtomicBool>,
 ) -> Result<(Vec<(Sqllog, Option<String>)>, ErrorStats)> {
-    // Check path exists first so IO errors are distinct from parse errors
-    if !file.exists() {
-        return Err(Error::Parser(ParserError::InvalidPath {
-            path: file.to_path_buf(),
-            reason: "file not found".to_string(),
-            line_number: None,
-        }));
-    }
+    // Parse the file, distinguishing IO / not-found errors from line-level parse errors.
+    // We do not pre-check file.exists() to avoid the TOCTOU race where the file could
+    // disappear between the check and the open — instead we inspect the error variant.
     let records = match AsyncLogParser::new(file).parse().await {
         Ok(r) => r,
-        Err(e) => {
-            log::warn!("collect_log_file: parse error in '{}': {e}", file.display());
+        Err(AsyncError::Parse(ParseError::InvalidFormat { .. })) => {
+            // Line-level parse failure is non-fatal; treat as an empty file.
+            log::warn!("collect_log_file: parse error in '{}'", file.display());
             return Ok((Vec::new(), ErrorStats::default()));
+        }
+        Err(e) => {
+            // IO errors, FileNotFound, Panic — propagate as Err so the caller
+            // can distinguish "file missing or inaccessible" from parse failures.
+            return Err(Error::Parser(ParserError::InvalidPath {
+                path: file.to_path_buf(),
+                reason: e.to_string(),
+                line_number: None,
+            }));
         }
     };
 
