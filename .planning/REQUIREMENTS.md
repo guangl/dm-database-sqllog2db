@@ -26,7 +26,7 @@
 
 ### 异步解析路径（ASYNC）
 
-- [ ] **ASYNC-01**: 将解析路径从同步 API 切换为 `dm-database-parser-sqllog` 的 async API，解析主循环使用 `.await`（crate 已原生支持 async，添加 tokio 运行时并迁移调用点）
+- [x] **ASYNC-01**: 将解析路径从同步 API 切换为 `dm-database-parser-sqllog` 的 async API，解析主循环使用 `.await`（crate 已原生支持 async，添加 tokio 运行时并迁移调用点）
 
 ## Future Requirements
 
@@ -56,7 +56,7 @@
 | MEM-01 | Phase 74 | Pending |
 | MEM-02 | Phase 74 | Pending |
 | STRUCT-04 | Phase 75 | Pending |
-| ASYNC-01 | Phase 76 | Pending |
+| ASYNC-01 | Phase 76 | Done |
 
 **Coverage:**
 - v1.20 requirements: 8 total
@@ -65,4 +65,4 @@
 
 ---
 *Requirements defined: 2026-06-07*
-*Last updated: 2026-06-08 — roadmap Phase 72–76 assigned (8/8 requirements mapped)*
+*Last updated: 2026-06-11 — Phase 76 ASYNC-01 completed; v1.20 milestone closed*
