@@ -21,16 +21,16 @@
 
 [auto] Q: "如何在 CLI 主入口接入 tokio 运行时？" → Selected: "#[tokio::main] + multi_thread flavor" (推荐默认)
 
-- **D-01:** `src/main.rs` 使用 `#[tokio::main]` 宏，`main()` 和 `run()` 均为 `async fn`
+- **D-01 [informational]:** `src/main.rs` 使用 `#[tokio::main]` 宏，`main()` 和 `run()` 均为 `async fn`
   - `features = ["rt-multi-thread", "macros"]` 已写入 `Cargo.toml`
   - multi-thread flavor 支持 `block_in_place`（rayon 路径必须），single-thread 不支持
-- **D-02:** 不使用 `Runtime::new().block_on()` 作为主入口（保留给 bench 测试用，见 D-07）
+- **D-02 [informational]:** 不使用 `Runtime::new().block_on()` 作为主入口（保留给 bench 测试用，见 D-07）
 
 ### Rayon/Tokio 混合路径桥接
 
 [auto] Q: "rayon worker 线程如何驱动 async 解析器？" → Selected: "block_in_place + Handle::current().block_on()" (推荐默认)
 
-- **D-03:** `parallel.rs` 和 `prescan.rs` 中的 rayon 路径采用：
+- **D-03 [informational]:** `parallel.rs` 和 `prescan.rs` 中的 rayon 路径采用：
   ```rust
   let handle = tokio::runtime::Handle::current();
   let records = tokio::task::block_in_place(|| {
@@ -38,13 +38,13 @@
   });
   ```
   `block_in_place` 通知 tokio 运行时当前线程将阻塞，避免占用 tokio worker；`block_on` 在当前线程上同步驱动 async future
-- **D-04:** 不在 rayon 任务内部创建新的 `Runtime`（会 panic：嵌套 runtime）；不使用 `futures::executor::block_on`（不集成 tokio reactor，会死锁）
+- **D-04 [informational]:** 不在 rayon 任务内部创建新的 `Runtime`（会 panic：嵌套 runtime）；不使用 `futures::executor::block_on`（不集成 tokio reactor，会死锁）
 
 ### 顺序路径与 Scanner
 
 [auto] Q: "非 rayon 路径如何处理 async？" → Selected: "native async fn + .await" (推荐默认)
 
-- **D-05:** `sequential.rs`、`collector.rs`、`processor.rs`、`scanner.rs` 全部改为 `async fn`，`.await` AsyncLogParser 结果
+- **D-05 [informational]:** `sequential.rs`、`collector.rs`、`processor.rs`、`scanner.rs` 全部改为 `async fn`，`.await` AsyncLogParser 结果
   - 调用链：`orchestrator.rs → sequential.rs → processor.rs → AsyncLogParser`，全链路 async
   - `sqlite_parallel.rs` 使用 `async fn` + `.await`（SQLite 写入本身串行，无 rayon）
 
@@ -52,7 +52,7 @@
 
 [auto] Q: "async 解析路径的错误如何处理？" → Selected: "graceful warn + skip（与现有策略一致）" (推荐默认)
 
-- **D-06:** AsyncLogParser 解析错误：`log::warn!` 记录，跳过该文件，继续处理下一文件
+- **D-06 [informational]:** AsyncLogParser 解析错误：`log::warn!` 记录，跳过该文件，继续处理下一文件
   - 与 Phase 36 确立的"非致命解析错误不中断处理"策略保持一致
   - 注意：`AsyncLogParser` 不追踪逐条解析错误（不写 error log），`parse_errors` 统计恒为 0（测试已更新）
 
@@ -60,13 +60,13 @@
 
 [auto] Q: "criterion bench 如何在 sync 闭包中使用 async 解析？" → Selected: "Runtime::new().block_on() per bench" (推荐默认)
 
-- **D-07:** bench 文件（`bench_csv.rs`、`bench_sqlite.rs`、`bench_filters.rs`、`bench_parser.rs`）在 bench setup 中用 `tokio::runtime::Runtime::new().unwrap().block_on(...)` 驱动 async 解析，criterion harness 本身保持同步不变
+- **D-07 [informational]:** bench 文件（`bench_csv.rs`、`bench_sqlite.rs`、`bench_filters.rs`、`bench_parser.rs`）在 bench setup 中用 `tokio::runtime::Runtime::new().unwrap().block_on(...)` 驱动 async 解析，criterion harness 本身保持同步不变
 
 ### 测试迁移策略
 
 [auto] Q: "如何将现有 #[test] 迁移到 async？" → Selected: "#[tokio::test] + multi_thread flavor" (推荐默认)
 
-- **D-08:** 需要 rayon 的测试（如 parallel 路径）使用 `#[tokio::test(flavor = "multi_thread")]`；纯 async 不涉及 rayon 的测试使用标准 `#[tokio::test]`
+- **D-08 [informational]:** 需要 rayon 的测试（如 parallel 路径）使用 `#[tokio::test(flavor = "multi_thread")]`；纯 async 不涉及 rayon 的测试使用标准 `#[tokio::test]`
   - 已迁移：`tests/integration.rs`（187 行差异）、`tests/watch_incremental.rs`、`src/cli/run/tests.rs`、`src/cli/watch/tests.rs`、`src/cli/stats/tests.rs`、`src/stats/tests.rs`、`tests/jemalloc_peak.rs`
 
 ### Claude's Discretion
