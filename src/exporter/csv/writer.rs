@@ -231,31 +231,3 @@ pub(in crate::exporter::csv) fn write_record_preparsed(
         })
     })
 }
-
-/// 兼容路径：从 `Sqllog` 直接写入（parser 库已物化所有字段）。
-#[inline]
-pub(in crate::exporter::csv) fn write_record(
-    itoa_buf: &mut itoa::Buffer,
-    line_buf: &mut Vec<u8>,
-    sqllog: &Sqllog,
-    writer: &mut BufWriter<File>,
-    path: &Path,
-    normalize: bool,
-    normalized_sql: Option<&str>,
-    field_mask: crate::pipeline::FieldMask,
-    ordered_indices: &[usize],
-    include_performance_metrics: bool,
-) -> Result<()> {
-    write_record_preparsed(
-        itoa_buf,
-        line_buf,
-        sqllog,
-        writer,
-        path,
-        normalize,
-        normalized_sql,
-        field_mask,
-        ordered_indices,
-        include_performance_metrics,
-    )
-}

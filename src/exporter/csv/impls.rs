@@ -1,6 +1,6 @@
 use super::super::{ExportStats, Exporter};
 use super::exporter::{CsvExporter, open_for_write, writer_ref};
-use super::writer::{write_record, write_record_preparsed};
+use super::writer::write_record_preparsed;
 use crate::error::{Error, ExportError, Result};
 use dm_database_parser_sqllog::Sqllog;
 use std::io::{BufWriter, Write};
@@ -34,7 +34,7 @@ impl Exporter for CsvExporter {
 
     fn export(&mut self, sqllog: &Sqllog) -> Result<()> {
         let writer = writer_ref(&mut self.writer, &self.path)?;
-        write_record(
+        write_record_preparsed(
             &mut self.itoa_buf,
             &mut self.line_buf,
             sqllog,
@@ -52,7 +52,7 @@ impl Exporter for CsvExporter {
 
     fn export_one_normalized(&mut self, sqllog: &Sqllog, normalized: Option<&str>) -> Result<()> {
         let writer = writer_ref(&mut self.writer, &self.path)?;
-        write_record(
+        write_record_preparsed(
             &mut self.itoa_buf,
             &mut self.line_buf,
             sqllog,
