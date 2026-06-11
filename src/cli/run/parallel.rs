@@ -1,6 +1,7 @@
 use crate::error::{Error, ErrorStats, Result};
 use crate::exporter::{CsvExporter, ExporterManager};
 use crate::pipeline::{FieldMask, Pipeline, normalizer::ParamBuffer};
+use dm_database_parser_sqllog::AsyncLogParser;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -103,6 +104,7 @@ fn parse_and_write_csv(
     ordered_indices: &[usize],
     include_performance_metrics: bool,
     interrupted: &Arc<AtomicBool>,
+    handle: &tokio::runtime::Handle,
 ) -> Result<(usize, ErrorStats)> {
     let mut exporter = CsvExporter::new(temp_path);
     exporter.normalize = do_normalize;
@@ -113,13 +115,15 @@ fn parse_and_write_csv(
     em.initialize()?;
     let include_pm = em.csv_include_performance_metrics();
 
-    let records = crate::async_rt::parse_file_sync(file).map_err(|e| {
-        Error::Parser(crate::error::ParserError::InvalidPath {
-            path: file.to_path_buf(),
-            reason: format!("{e}"),
-            line_number: None,
-        })
-    })?;
+    let records = match handle.block_on(AsyncLogParser::new(file).parse()) {
+        Ok(r) => r,
+        Err(e) => {
+            log::warn!("parse failed for '{}': {e}", file.display());
+            let mut file_stats = ErrorStats::default();
+            file_stats.add_parse_error();
+            return Ok((0, file_stats));
+        }
+    };
 
     let mut params_buf = ParamBuffer::default();
     let mut ns_scratch: Vec<u8> = Vec::with_capacity(4096);
@@ -185,34 +189,38 @@ fn run_parallel_tasks(
     verbose: bool,
 ) -> Result<Vec<Result<TaskResult>>> {
     use rayon::prelude::*;
+    let handle = tokio::runtime::Handle::current();
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(jobs)
         .build()
         .map_err(|e| Error::Io(std::io::Error::other(e)))?;
-    let results: Vec<Result<TaskResult>> = pool.install(|| {
-        log_files
-            .par_iter()
-            .enumerate()
-            .map(|(idx, file)| {
-                if interrupted.load(Ordering::Acquire) {
-                    return Ok(None);
-                }
-                verbose.then(|| eprintln!("Processing: {}", file.display()));
-                let temp_path = parts_dir.join(format!("{idx:08}.csv"));
-                let (count, file_stats) = parse_and_write_csv(
-                    file,
-                    &temp_path,
-                    pipeline,
-                    do_normalize,
-                    placeholder_override,
-                    field_mask,
-                    ordered_indices,
-                    csv_include_performance_metrics,
-                    interrupted,
-                )?;
-                Ok(Some((file.clone(), temp_path, count, file_stats)))
-            })
-            .collect()
+    let results: Vec<Result<TaskResult>> = tokio::task::block_in_place(|| {
+        pool.install(|| {
+            log_files
+                .par_iter()
+                .enumerate()
+                .map(|(idx, file)| {
+                    if interrupted.load(Ordering::Acquire) {
+                        return Ok(None);
+                    }
+                    verbose.then(|| eprintln!("Processing: {}", file.display()));
+                    let temp_path = parts_dir.join(format!("{idx:08}.csv"));
+                    let (count, file_stats) = parse_and_write_csv(
+                        file,
+                        &temp_path,
+                        pipeline,
+                        do_normalize,
+                        placeholder_override,
+                        field_mask,
+                        ordered_indices,
+                        csv_include_performance_metrics,
+                        interrupted,
+                        &handle,
+                    )?;
+                    Ok(Some((file.clone(), temp_path, count, file_stats)))
+                })
+                .collect()
+        })
     });
     Ok(results)
 }

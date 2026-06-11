@@ -94,8 +94,8 @@ fn smoke_test_helpers_compile() {
 }
 
 /// WATCH-03：追加 M 条后增量触发，SQLite 总行数为 N+M（不重复历史 N 行）。
-#[test]
-fn test_watch_03_incremental_appends_only_new_rows() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_watch_03_incremental_appends_only_new_rows() {
     let tmp = TempDir::new().unwrap();
     let log_path = tmp.path().join("test_watch03.log");
     let db_path = tmp.path().join("test_watch03.db");
@@ -118,7 +118,8 @@ fn test_watch_03_incremental_appends_only_new_rows() {
         &interrupted,
         &mut state,
         &pb,
-    );
+    )
+    .await;
     assert_eq!(
         count_rows(&db_path, "sqllog_records"),
         10,
@@ -138,7 +139,8 @@ fn test_watch_03_incremental_appends_only_new_rows() {
         &interrupted,
         &mut state,
         &pb,
-    );
+    )
+    .await;
 
     let count_after = count_rows(&db_path, "sqllog_records");
     assert_eq!(
@@ -148,8 +150,8 @@ fn test_watch_03_incremental_appends_only_new_rows() {
 }
 
 /// WATCH-04：销毁 `WatchLoopState` 后通过 `_watch_offsets` 恢复 offset，再次追加只插入新行。
-#[test]
-fn test_watch_04_offset_persists_across_restart() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_watch_04_offset_persists_across_restart() {
     let tmp = TempDir::new().unwrap();
     let log_path = tmp.path().join("test_watch04.log");
     let db_path = tmp.path().join("test_watch04.db");
@@ -172,7 +174,8 @@ fn test_watch_04_offset_persists_across_restart() {
         &interrupted,
         &mut state1,
         &pb,
-    );
+    )
+    .await;
     let offset_after_full = std::fs::metadata(&log_path).unwrap().len();
     let canonical_log = log_path.canonicalize().unwrap();
     assert!(
@@ -213,7 +216,8 @@ fn test_watch_04_offset_persists_across_restart() {
         &interrupted,
         &mut state2,
         &pb,
-    );
+    )
+    .await;
 
     let count_after = count_rows(&db_path, "sqllog_records");
     assert_eq!(
@@ -235,8 +239,8 @@ fn test_watch_04_offset_persists_across_restart() {
 }
 
 /// D-02 验证：无新字节时 `trigger_incremental` 不增加 `trigger_count`。
-#[test]
-fn test_watch_03_no_new_bytes_skips() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_watch_03_no_new_bytes_skips() {
     let tmp = TempDir::new().unwrap();
     let log_path = tmp.path().join("test_skip.log");
     let db_path = tmp.path().join("test_skip.db");
@@ -250,7 +254,7 @@ fn test_watch_03_no_new_bytes_skips() {
     let interrupted = Arc::new(AtomicBool::new(false));
     let pb = build_pb();
     let mut state = WatchLoopState::new(HashMap::new(), Some(db_url));
-    trigger_full_file(&log_path, &cfg, true, false, &interrupted, &mut state, &pb);
+    trigger_full_file(&log_path, &cfg, true, false, &interrupted, &mut state, &pb).await;
     assert_eq!(state.trigger_count(), 1, "全文触发后 trigger_count 应为 1");
 
     // 不追加，立即增量触发 —— 应跳过（D-02：new_size <= start_offset）
@@ -263,7 +267,8 @@ fn test_watch_03_no_new_bytes_skips() {
         &interrupted,
         &mut state,
         &pb,
-    );
+    )
+    .await;
     assert_eq!(
         state.trigger_count(),
         1,
@@ -304,8 +309,8 @@ fn build_csv_config(log_path: &std::path::Path, csv_path: &std::path::Path) -> C
 }
 
 /// WATCH-07：两次 `trigger_full_file` 后，CSV 包含 header + 6 数据行，header 仅出现一次。
-#[test]
-fn test_watch_07_csv_append() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_watch_07_csv_append() {
     let tmp = TempDir::new().unwrap();
     let log_path_a = tmp.path().join("a.log");
     let log_path_b = tmp.path().join("b.log");
@@ -327,7 +332,8 @@ fn test_watch_07_csv_append() {
         &interrupted,
         &mut state,
         &pb,
-    );
+    )
+    .await;
     trigger_full_file(
         &log_path_b,
         &cfg,
@@ -336,7 +342,8 @@ fn test_watch_07_csv_append() {
         &interrupted,
         &mut state,
         &pb,
-    );
+    )
+    .await;
 
     assert!(csv_path.exists(), "CSV 文件应在触发后存在");
     let content = std::fs::read_to_string(&csv_path).unwrap();
@@ -355,8 +362,8 @@ fn test_watch_07_csv_append() {
 }
 
 /// WATCH-08：两次带解析错误的触发后，error log 至少包含 2 条 `[ERROR]` 行。
-#[test]
-fn test_watch_08_error_log_append() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_watch_08_error_log_append() {
     let tmp = TempDir::new().unwrap();
     let log_path_a = tmp.path().join("a.log");
     let log_path_b = tmp.path().join("b.log");
@@ -385,7 +392,8 @@ fn test_watch_08_error_log_append() {
         &interrupted,
         &mut state,
         &pb,
-    );
+    )
+    .await;
     trigger_full_file(
         &log_path_b,
         &cfg,
@@ -394,7 +402,8 @@ fn test_watch_08_error_log_append() {
         &interrupted,
         &mut state,
         &pb,
-    );
+    )
+    .await;
 
     // AsyncLogParser 静默丢弃逐条解析错误，error log 不再写出
     assert!(
@@ -404,13 +413,13 @@ fn test_watch_08_error_log_append() {
 }
 
 /// WATCH-09：`interrupted=true` 时 `handle_watch` 应返回 `Err(Error::Interrupted)`（对应 exit 130）。
-#[test]
-fn test_watch_09_exit_code_130() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_watch_09_exit_code_130() {
     let tmp = TempDir::new().unwrap();
     let csv_path = tmp.path().join("out.csv");
     let cfg = build_csv_config(tmp.path(), &csv_path);
     let interrupted = Arc::new(AtomicBool::new(true));
-    let result = handle_watch(&cfg, true, false, &interrupted);
+    let result = handle_watch(&cfg, true, false, &interrupted).await;
     assert!(
         matches!(result, Err(Error::Interrupted)),
         "interrupted=true 时 handle_watch 应返回 Err(Error::Interrupted)，实际: {result:?}"

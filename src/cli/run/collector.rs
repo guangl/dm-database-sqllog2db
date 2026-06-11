@@ -1,26 +1,34 @@
 use crate::error::{Error, ErrorStats, ParserError, Result};
 use crate::pipeline::Pipeline;
 use crate::pipeline::normalizer::ParamBuffer;
-use dm_database_parser_sqllog::Sqllog;
+use dm_database_parser_sqllog::{AsyncLogParser, Sqllog};
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 /// 线程内解析单个日志文件，收集记录为 Vec，不写出到任何存储。
-pub(super) fn collect_log_file(
+pub(super) async fn collect_log_file(
     file: &Path,
     pipeline: &Pipeline,
     do_normalize: bool,
     placeholder_override: Option<bool>,
     interrupted: &Arc<AtomicBool>,
 ) -> Result<(Vec<(Sqllog, Option<String>)>, ErrorStats)> {
-    let records = crate::async_rt::parse_file_sync(file).map_err(|e| {
-        Error::Parser(ParserError::InvalidPath {
+    // Check path exists first so IO errors are distinct from parse errors
+    if !file.exists() {
+        return Err(Error::Parser(ParserError::InvalidPath {
             path: file.to_path_buf(),
-            reason: format!("{e}"),
+            reason: "file not found".to_string(),
             line_number: None,
-        })
-    })?;
+        }));
+    }
+    let records = match AsyncLogParser::new(file).parse().await {
+        Ok(r) => r,
+        Err(e) => {
+            log::warn!("collect_log_file: parse error in '{}': {e}", file.display());
+            return Ok((Vec::new(), ErrorStats::default()));
+        }
+    };
 
     let mut params_buf = ParamBuffer::default();
     let mut ns_scratch = Vec::with_capacity(4096);

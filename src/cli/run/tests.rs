@@ -4,8 +4,8 @@ use crate::config::Config;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-#[test]
-fn test_include_performance_metrics_false_csv_excludes_pm_columns() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_include_performance_metrics_false_csv_excludes_pm_columns() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_path = dir.path().join("t.log");
     std::fs::write(
@@ -26,7 +26,9 @@ fn test_include_performance_metrics_false_csv_excludes_pm_columns() {
     );
     let cfg: Config = toml::from_str(&toml).unwrap();
 
-    handle_run(&cfg, true, false, &Arc::new(AtomicBool::new(false)), None).unwrap();
+    handle_run(&cfg, true, false, &Arc::new(AtomicBool::new(false)), None)
+        .await
+        .unwrap();
 
     let content = std::fs::read_to_string(&csv_path).unwrap();
     let header = content.lines().next().unwrap();
@@ -45,8 +47,8 @@ fn test_include_performance_metrics_false_csv_excludes_pm_columns() {
     assert!(header.contains("sql"), "sql column should remain: {header}");
 }
 
-#[test]
-fn test_handle_run_default_config_succeeds() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_handle_run_default_config_succeeds() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_path = dir.path().join("t.log");
     std::fs::write(
@@ -67,12 +69,12 @@ fn test_handle_run_default_config_succeeds() {
     );
     let cfg: Config = toml::from_str(&toml).unwrap();
 
-    let result = handle_run(&cfg, true, false, &Arc::new(AtomicBool::new(false)), None);
+    let result = handle_run(&cfg, true, false, &Arc::new(AtomicBool::new(false)), None).await;
     assert!(result.is_ok(), "handle_run 应在默认配置时成功: {result:?}");
 }
 
-#[test]
-fn test_filter_path() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_filter_path() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_path = dir.path().join("t.log");
     std::fs::write(
@@ -93,7 +95,9 @@ fn test_filter_path() {
     );
     let cfg: Config = toml::from_str(&toml).unwrap();
 
-    handle_run(&cfg, true, false, &Arc::new(AtomicBool::new(false)), None).unwrap();
+    handle_run(&cfg, true, false, &Arc::new(AtomicBool::new(false)), None)
+        .await
+        .unwrap();
 
     let content = std::fs::read_to_string(&csv_path).unwrap();
     assert!(
@@ -102,8 +106,8 @@ fn test_filter_path() {
     );
 }
 
-#[test]
-fn test_parallel_merge_consistent() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_parallel_merge_consistent() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_line = "2025-01-15 10:30:28.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT id FROM orders WHERE user_id = 42. EXECTIME: 5(ms) ROWCOUNT: 3(rows) EXEC_ID: 1.\n";
     let error_log = dir.path().join("errors.log");
@@ -138,7 +142,8 @@ fn test_parallel_merge_consistent() {
         false,
         &Arc::new(AtomicBool::new(false)),
         None,
-    );
+    )
+    .await;
     assert!(result_seq.is_ok(), "顺序路径应成功: {result_seq:?}");
 
     // Parallel: two files trigger multi-file parallel path on modern multi-core machines
@@ -159,7 +164,8 @@ fn test_parallel_merge_consistent() {
         false,
         &Arc::new(AtomicBool::new(false)),
         Some(2),
-    );
+    )
+    .await;
     assert!(result_par.is_ok(), "并行路径应成功: {result_par:?}");
 
     // Sequential has 1 file (1 data row + 1 header), parallel has 2 files (2 data rows + 1 header)
@@ -172,8 +178,8 @@ fn test_parallel_merge_consistent() {
     );
 }
 
-#[test]
-fn test_sqlite_parallel_matches_sequential() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sqlite_parallel_matches_sequential() {
     let dir = tempfile::TempDir::new().unwrap();
     let error_log = dir.path().join("errors.log");
     let app_log = dir.path().join("app.log");
@@ -232,6 +238,7 @@ fn test_sqlite_parallel_matches_sequential() {
         &Arc::new(AtomicBool::new(false)),
         None,
     )
+    .await
     .unwrap();
     handle_run(
         &make_cfg(&par_dir, &par_db),
@@ -240,6 +247,7 @@ fn test_sqlite_parallel_matches_sequential() {
         &Arc::new(AtomicBool::new(false)),
         None,
     )
+    .await
     .unwrap();
 
     let read_rows = |path: &str| {
@@ -462,8 +470,8 @@ fn test_progress_bar_disabled() {
 /// 验证 `handle_run` 在有解析错误时写出 error log 文件。
 /// 无效行放文件前面（独立记录），解析器以 `\n20` 时间戳为记录边界，
 /// 前置无效行无时间戳前缀会独立返回 `InvalidFormat`，从而触发 `parse_error_records`。
-#[test]
-fn test_error_log_written() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_error_log_written() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_path = dir.path().join("t.log");
     // 无效行放前面（独立记录）+ 合法 SEL 放后面
@@ -485,7 +493,9 @@ fn test_error_log_written() {
     );
     let cfg: Config = toml::from_str(&toml).unwrap();
 
-    handle_run(&cfg, true, false, &Arc::new(AtomicBool::new(false)), None).unwrap();
+    handle_run(&cfg, true, false, &Arc::new(AtomicBool::new(false)), None)
+        .await
+        .unwrap();
 
     // AsyncLogParser 静默丢弃逐条解析错误，error log 不再写出
     assert!(
@@ -642,8 +652,8 @@ impl crate::pipeline::LogProcessor for AlwaysFail {
 
 // Group 1 — InvalidPath 错误路径（collector.rs lines 26-34）
 // 传入不存在路径应返回 Err(Error::Parser(ParserError::InvalidPath { .. }))
-#[test]
-fn test_collector_invalid_path_returns_error() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_collector_invalid_path_returns_error() {
     use crate::pipeline::Pipeline;
     use std::sync::Arc;
     use std::sync::atomic::AtomicBool;
@@ -656,7 +666,8 @@ fn test_collector_invalid_path_returns_error() {
         false,
         None,
         &interrupted,
-    );
+    )
+    .await;
     assert!(result.is_err(), "不存在路径应返回 Err，实际: {result:?}");
     assert!(
         matches!(
@@ -669,8 +680,8 @@ fn test_collector_invalid_path_returns_error() {
 
 // Group 2 — parse error 累积循环（collector.rs lines 41-63）
 // 含无效行的日志文件应累积 parse_errors 计数，rows 为空
-#[test]
-fn test_collector_parse_error_accumulation() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_collector_parse_error_accumulation() {
     use crate::pipeline::Pipeline;
     use std::sync::Arc;
     use std::sync::atomic::AtomicBool;
@@ -682,6 +693,7 @@ fn test_collector_parse_error_accumulation() {
     let interrupted = Arc::new(AtomicBool::new(false));
     let (rows, stats) =
         collector::collect_log_file(&log_path, &pipeline, false, None, &interrupted)
+            .await
             .expect("collect_log_file 应不返回 Err");
     assert!(
         rows.is_empty(),
@@ -698,8 +710,8 @@ fn test_collector_parse_error_accumulation() {
 // Group 3 — !needs_processing 过滤分支（collector.rs lines 74-76）
 // AlwaysFail 处理器 + DML 记录（tag.is_some()）+ do_normalize=false
 // 使 passes=false 且 needs_processing=false，触发 early return
-#[test]
-fn test_collector_not_needed_filtering() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_collector_not_needed_filtering() {
     use crate::pipeline::Pipeline;
     use std::sync::Arc;
     use std::sync::atomic::AtomicBool;
@@ -716,6 +728,7 @@ fn test_collector_not_needed_filtering() {
     let interrupted = Arc::new(AtomicBool::new(false));
     let (rows, _parse_errors) =
         collector::collect_log_file(&log_path, &pipeline, false, None, &interrupted)
+            .await
             .expect("collect_log_file 应 Ok");
     assert!(
         rows.is_empty(),
@@ -727,8 +740,8 @@ fn test_collector_not_needed_filtering() {
 // Group 4 — 被过滤的 PARAMS else 分支（collector.rs lines 91-100）
 // AlwaysFail 处理器 + PARAMS 记录（tag.is_none()）+ do_normalize=true
 // 使 passes=false 但 needs_processing=true，触发 compute_normalized 更新 params_buf 但不 push 到 rows
-#[test]
-fn test_collector_filtered_params_normalize() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_collector_filtered_params_normalize() {
     use crate::pipeline::Pipeline;
     use std::sync::Arc;
     use std::sync::atomic::AtomicBool;
@@ -746,6 +759,7 @@ fn test_collector_filtered_params_normalize() {
     // do_normalize=true 使被过滤的 PARAMS 行仍走 compute_normalized 分支
     let (rows, _parse_errors) =
         collector::collect_log_file(&log_path, &pipeline, true, None, &interrupted)
+            .await
             .expect("collect_log_file 应 Ok");
     assert!(
         rows.is_empty(),
@@ -755,8 +769,8 @@ fn test_collector_filtered_params_normalize() {
 }
 
 // interrupted=true 在第一条记录前命中 break 分支（collector.rs line 42-44）
-#[test]
-fn test_collector_interrupted_returns_empty() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_collector_interrupted_returns_empty() {
     use crate::pipeline::Pipeline;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -770,6 +784,7 @@ fn test_collector_interrupted_returns_empty() {
     interrupted.store(true, Ordering::Release);
     let (rows, _stats) =
         collector::collect_log_file(&log_path, &pipeline, false, None, &interrupted)
+            .await
             .expect("collect_log_file 应 Ok");
     assert!(
         rows.is_empty(),
@@ -875,8 +890,8 @@ fn test_build_indicator_filters_exec_ids_multiple() {
     );
 }
 
-#[test]
-fn test_min_row_count_zero_matches_all_records() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_min_row_count_zero_matches_all_records() {
     use crate::pipeline::FiltersFeature;
     use crate::pipeline::filters::IndicatorFilters;
     use std::fmt::Write as _;
@@ -905,7 +920,9 @@ fn test_min_row_count_zero_matches_all_records() {
         ..Config::default()
     };
 
-    let matched = super::prescan::scan_log_file_for_matches(logfile.to_str().unwrap(), &cfg);
+    let handle = tokio::runtime::Handle::current();
+    let matched =
+        super::prescan::scan_log_file_for_matches(logfile.to_str().unwrap(), &cfg, &handle);
     assert_eq!(
         matched.len(),
         3,
@@ -913,8 +930,8 @@ fn test_min_row_count_zero_matches_all_records() {
     );
 }
 
-#[test]
-fn test_scan_for_trxids_by_transaction_filters_dedup_across_files() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_scan_for_trxids_by_transaction_filters_dedup_across_files() {
     use crate::pipeline::FiltersFeature;
     use crate::pipeline::filters::IndicatorFilters;
     use std::fmt::Write as _;

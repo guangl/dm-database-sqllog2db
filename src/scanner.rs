@@ -1,4 +1,4 @@
-use crate::error::{Error, ErrorStats, ParserError, Result};
+use crate::error::{ErrorStats, Result};
 use dm_database_parser_sqllog::AsyncLogParser;
 use std::path::PathBuf;
 
@@ -28,11 +28,7 @@ where
                     remaining,
                     e
                 );
-                return Err(Error::Parser(ParserError::InvalidPath {
-                    path: file_path.clone(),
-                    reason: format!("{e}"),
-                    line_number: None,
-                }));
+                continue;
             }
         };
 

@@ -1,7 +1,7 @@
 use crate::config::Config;
 use crate::error::{Error, Result};
 use crate::pipeline::filters::{IndicatorFilters, SqlFilters};
-use dm_database_parser_sqllog::{Filter, FilterBuilder};
+use dm_database_parser_sqllog::{AsyncLogParser, Filter, FilterBuilder};
 
 // ===== Pre-scan: 指标/SQL 过滤器构建 =====
 
@@ -52,7 +52,12 @@ pub(super) fn build_sql_exclude_filters(sf: &SqlFilters) -> Vec<Filter> {
 ///
 /// 文件内部使用 `par_iter()` 并行处理各行，无共享可变状态，
 /// 可被上层跨文件的 `par_iter()` 安全调用（两级 rayon 嵌套并行）。
-pub(super) fn scan_log_file_for_matches(file_path: &str, cfg: &Config) -> Vec<String> {
+/// `handle` 为调用方在进入 rayon 前捕获的 tokio Handle，用于在非 tokio 线程上驱动异步解析。
+pub(super) fn scan_log_file_for_matches(
+    file_path: &str,
+    cfg: &Config,
+    handle: &tokio::runtime::Handle,
+) -> Vec<String> {
     use rayon::prelude::*;
 
     let filters = match &cfg.filter {
@@ -60,7 +65,9 @@ pub(super) fn scan_log_file_for_matches(file_path: &str, cfg: &Config) -> Vec<St
         _ => return Vec::new(),
     };
 
-    let records = match crate::async_rt::parse_file_sync(std::path::Path::new(file_path)) {
+    let records = match tokio::task::block_in_place(|| {
+        handle.block_on(AsyncLogParser::new(std::path::Path::new(file_path)).parse())
+    }) {
         Ok(r) => r,
         Err(e) => {
             log::warn!("Pre-scan: failed to parse '{file_path}': {e}");
@@ -112,26 +119,29 @@ pub(super) fn scan_for_trxids_by_transaction_filters(
         log_files.len()
     );
 
+    let handle = tokio::runtime::Handle::current();
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(jobs)
         .build()
         .map_err(|e| Error::Io(std::io::Error::other(format!("rayon thread pool: {e}"))))?;
 
-    let matched: std::collections::HashSet<String> = pool.install(|| {
-        log_files
-            .par_iter()
-            .flat_map(|file| {
-                if let Some(path) = file.to_str() {
-                    scan_log_file_for_matches(path, cfg)
-                } else {
-                    log::warn!(
-                        "Pre-scan: skipping file with non-UTF8 path: {}",
-                        file.display()
-                    );
-                    Vec::new()
-                }
-            })
-            .collect()
+    let matched: std::collections::HashSet<String> = tokio::task::block_in_place(|| {
+        pool.install(|| {
+            log_files
+                .par_iter()
+                .flat_map(|file| {
+                    if let Some(path) = file.to_str() {
+                        scan_log_file_for_matches(path, cfg, &handle)
+                    } else {
+                        log::warn!(
+                            "Pre-scan: skipping file with non-UTF8 path: {}",
+                            file.display()
+                        );
+                        Vec::new()
+                    }
+                })
+                .collect()
+        })
     });
 
     Ok(matched.into_iter().collect())

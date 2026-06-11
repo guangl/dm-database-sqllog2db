@@ -19,7 +19,7 @@ use std::sync::mpsc::RecvTimeoutError;
 use std::time::{Duration, Instant};
 
 /// Watch 子命令主入口：初始化 notify watcher，进入 watch loop，Ctrl+C 后打印摘要。
-pub fn handle_watch(
+pub async fn handle_watch(
     cfg: &Config,
     quiet: bool,
     verbose: bool,
@@ -54,7 +54,8 @@ pub fn handle_watch(
         &watch_dirs,
         &pb,
         &mut state,
-    );
+    )
+    .await;
     pb.finish_and_clear();
     print_final_summary(
         &start,
@@ -70,7 +71,7 @@ pub fn handle_watch(
 }
 
 /// Watch 主循环：接收 notify 事件并分发，在 Timeout 分支节流刷新状态行。
-fn run_watch_loop(
+async fn run_watch_loop(
     rx: &Receiver<notify::Result<notify::Event>>,
     cfg: &Config,
     quiet: bool,
@@ -81,8 +82,12 @@ fn run_watch_loop(
     state: &mut WatchLoopState,
 ) {
     loop {
-        match rx.recv_timeout(Duration::from_millis(100)) {
-            Ok(Ok(event)) => handle_event(&event, cfg, quiet, verbose, interrupted, state, pb),
+        let recv_result =
+            tokio::task::block_in_place(|| rx.recv_timeout(Duration::from_millis(100)));
+        match recv_result {
+            Ok(Ok(event)) => {
+                handle_event(&event, cfg, quiet, verbose, interrupted, state, pb).await;
+            }
             Ok(Err(e)) => warn!("notify error: {e}"),
             Err(RecvTimeoutError::Timeout) => maybe_refresh_status(
                 pb,

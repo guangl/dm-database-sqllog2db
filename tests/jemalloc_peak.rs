@@ -93,8 +93,8 @@ append = false
 /// 临时内存已释放，allocated delta 可能为 0。同时输出 `resident` 值作为补充指标。
 ///
 /// 运行方式：`cargo test test_jemalloc_peak_baseline -- --nocapture`
-#[test]
-fn test_jemalloc_peak_baseline() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_jemalloc_peak_baseline() {
     use tikv_jemalloc_ctl::{epoch, stats};
 
     // Verify jemalloc is active and stats are accessible
@@ -118,7 +118,16 @@ fn test_jemalloc_peak_baseline() {
     let interrupted = Arc::new(AtomicBool::new(false));
 
     let (allocated_delta, resident_delta) = measure_alloc_delta(|| {
-        handle_run(&cfg, true, false, &interrupted, None).unwrap();
+        tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(handle_run(
+                &cfg,
+                true,
+                false,
+                &interrupted,
+                None,
+            ))
+        })
+        .unwrap();
     });
 
     // Final state for absolute reporting

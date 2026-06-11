@@ -92,8 +92,9 @@ fn format_validate_error(error: &Error) -> String {
     }
 }
 
-fn main() {
-    match run() {
+#[tokio::main]
+async fn main() {
+    match run().await {
         Ok(Some((stats, quiet))) => {
             if stats.has_fatal() {
                 std::process::exit(EXIT_FATAL);
@@ -120,7 +121,7 @@ fn main() {
     }
 }
 
-fn run() -> Result<Option<(ErrorStats, bool)>> {
+async fn run() -> Result<Option<(ErrorStats, bool)>> {
     use clap::{CommandFactory, FromArgMatches};
 
     let cmd = cli::opts::Cli::command();
@@ -174,7 +175,8 @@ fn run() -> Result<Option<(ErrorStats, bool)>> {
             })
             .ok();
 
-            let stats = cli::run::handle_run(&cfg, cli.quiet, cli.verbose, &interrupted, None)?;
+            let stats =
+                cli::run::handle_run(&cfg, cli.quiet, cli.verbose, &interrupted, None).await?;
             Ok(Some((stats, cli.quiet)))
         }
         Some(cli::opts::Commands::Validate { config }) => {
@@ -196,7 +198,7 @@ fn run() -> Result<Option<(ErrorStats, bool)>> {
             cfg.validate()?;
             apply_verbosity_to_config(&mut cfg, cli.verbose, cli.quiet);
             logging::init_logging(&cfg.logging, false)?;
-            cli::stats::handle_stats(&cfg, *top, from.clone(), to.clone())?;
+            cli::stats::handle_stats(&cfg, *top, from.clone(), to.clone()).await?;
             Ok(None)
         }
         Some(cli::opts::Commands::Watch { config }) => {
@@ -219,7 +221,7 @@ fn run() -> Result<Option<(ErrorStats, bool)>> {
             })
             .ok();
 
-            cli::watch::handle_watch(&cfg, cli.quiet, cli.verbose, &interrupted)?;
+            cli::watch::handle_watch(&cfg, cli.quiet, cli.verbose, &interrupted).await?;
             Ok(None)
         }
         None => {

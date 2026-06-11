@@ -37,7 +37,8 @@ pub(super) async fn run_sequential(
         show_progress,
         pb,
         interrupted,
-    );
+    )
+    .await;
     // 无论 loop_result 成功与否都调用 finalize，确保 BufWriter 数据落盘
     let finalize_result = exporter_manager.finalize();
     (!quiet).then(|| exporter_manager.log_stats());
@@ -58,7 +59,7 @@ pub(super) async fn run_sequential(
 /// 返回 `(per_file_counts, run_stats)`。
 #[allow(clippy::too_many_arguments)]
 #[allow(clippy::fn_params_excessive_bools)]
-fn run_file_loop(
+async fn run_file_loop(
     log_files: &[PathBuf],
     exporter_manager: &mut ExporterManager,
     pipeline: &crate::pipeline::Pipeline,
@@ -93,7 +94,8 @@ fn run_file_loop(
             &mut ns_scratch,
             true,
             pb,
-        )?;
+        )
+        .await?;
         // 先检查 fatal，再合并统计：fatal 路径直接返回，合并无意义
         if file_stats.has_fatal() {
             return Err(Error::Export(crate::error::ExportError::DatabaseFailed {

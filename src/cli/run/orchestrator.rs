@@ -82,7 +82,7 @@ fn run_csv_parallel(
     Ok((files, skipped, stats))
 }
 
-fn run_sqlite_parallel(
+async fn run_sqlite_parallel(
     ctx: &RunContext<'_>,
     log_files: &[PathBuf],
     jobs: usize,
@@ -107,11 +107,12 @@ fn run_sqlite_parallel(
         ctx.placeholder_override,
         ctx.field_mask,
         &ctx.ordered_indices,
-    )?;
+    )
+    .await?;
     Ok((files, skipped, stats))
 }
 
-fn route_processing(
+async fn route_processing(
     ctx: &RunContext<'_>,
     log_files: &[PathBuf],
     jobs: usize,
@@ -126,7 +127,7 @@ fn route_processing(
         return run_csv_parallel(ctx, log_files, jobs, verbose, interrupted);
     }
     if multi_file && ctx.cfg.exporter.sqlite.is_some() {
-        return run_sqlite_parallel(ctx, log_files, jobs, verbose, interrupted);
+        return run_sqlite_parallel(ctx, log_files, jobs, verbose, interrupted).await;
     }
     let (files, stats) = run_sequential(
         log_files,
@@ -139,7 +140,8 @@ fn route_processing(
         pb.is_some(),
         pb,
         interrupted,
-    )?;
+    )
+    .await?;
     Ok((files, 0, stats))
 }
 
@@ -175,7 +177,7 @@ fn finalize_run(
 /// 主编排函数：解析日志文件并导出到配置的导出器。
 /// 并行路径：CSV + 多文件 + jobs > 1；顺序路径：其他情况。
 /// `jobs_override` 为测试钩子，生产代码传 None 保持 `available_parallelism` 原行为。
-pub fn handle_run(
+pub async fn handle_run(
     cfg: &Config,
     quiet: bool,
     verbose: bool,
@@ -203,7 +205,8 @@ pub fn handle_run(
         quiet,
         pb.as_ref(),
         interrupted,
-    )?;
+    )
+    .await?;
     run_stats.merge(&stats);
     finalize_run(
         final_cfg,

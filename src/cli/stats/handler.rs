@@ -18,7 +18,7 @@ pub(super) fn merge_stats_options(
 /// Merges CLI args with config values using priority: CLI > config > default.
 /// `top` defaults to 20 when neither CLI nor config provides a value.
 /// `cfg` must already have verbosity applied before calling this function.
-pub fn handle_stats(
+pub async fn handle_stats(
     cfg: &Config,
     top: Option<u32>,
     from: Option<String>,
@@ -37,5 +37,5 @@ pub fn handle_stats(
         merged_cfg.stats.to
     );
 
-    crate::stats::run_stats(&merged_cfg, effective_top)
+    crate::stats::run_stats(&merged_cfg, effective_top).await
 }
