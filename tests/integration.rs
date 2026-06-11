@@ -89,9 +89,9 @@ fn make_run_config(log_dir: &std::path::Path, csv_file: &std::path::Path) -> Con
 
 // ── handle_run tests ─────────────────────────────────────────────────────────
 
-#[test]
+#[tokio::test(flavor = "multi_thread")]
 #[cfg(target_os = "windows")]
-fn test_handle_run_empty_dir_returns_no_files_found() {
+async fn test_handle_run_empty_dir_returns_no_files_found() {
     // Windows: stdin pipe fallback disabled, NoFilesFound is the only path
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
