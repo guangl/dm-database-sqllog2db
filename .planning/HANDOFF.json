@@ -1,35 +1,63 @@
 {
   "version": "1.0",
-  "timestamp": "2026-06-06T03:29:42.329Z",
-  "phase": "69",
-  "phase_name": "watch",
-  "phase_dir": ".planning/phases/69-watch",
-  "plan": 3,
-  "task": 1,
-  "total_tasks": 1,
+  "timestamp": "2026-06-11T08:40:26.703Z",
+  "phase": null,
+  "phase_name": "ad-hoc: dm-database-parser-sqllog async migration",
+  "phase_dir": null,
+  "plan": null,
+  "task": null,
+  "total_tasks": null,
   "status": "paused",
   "completed_tasks": [
-    {"id": "69-01", "name": "基础设施骨架（notify依赖、ErrorStats字段、Watch variant、handle_watch骨架）", "status": "done", "commit": "0a4c6c5,7192009,9570d72"},
-    {"id": "69-02", "name": "handle_watch 核心实现（watch loop、状态行、Ctrl+C摘要、main.rs接入）", "status": "done", "commit": "b129dda,72ee41d,c737af9"},
-    {"id": "69-03-task1", "name": "4个 e2e 集成测试（WATCH-01/02/05/06）", "status": "done_with_caveat", "commit": "d2545c3", "caveat": "test_watch_triggers_on_new_log_file marked #[ignore] due to macOS FSEvents + stdin-pipe block"}
+    {"id": 1, "name": "upgrade dm-database-parser-sqllog 2.0.3 → 2.0.4", "status": "done"},
+    {"id": 2, "name": "add tokio macros feature to Cargo.toml", "status": "done"},
+    {"id": 3, "name": "delete src/async_rt.rs bridge layer", "status": "done"}
   ],
   "remaining_tasks": [
-    {"id": "phase-verify", "name": "Phase 69 验证（gsd-verifier）", "status": "not_started"},
-    {"id": "phase-complete", "name": "update_roadmap + PROJECT.md 演进", "status": "not_started"}
+    {"id": 4, "name": "remove 'mod async_rt' from lib.rs and main.rs", "status": "not_started"},
+    {"id": 5, "name": "add #[tokio::main] to main()", "status": "not_started"},
+    {"id": 6, "name": "make parse_and_write_csv async + use AsyncLogParser::new().parse().await", "status": "not_started"},
+    {"id": 7, "name": "make parse_and_write_sqlite async", "status": "not_started"},
+    {"id": 8, "name": "make process_log_file async", "status": "not_started"},
+    {"id": 9, "name": "make collect_log_file async", "status": "not_started"},
+    {"id": 10, "name": "make scan_log_file_for_matches async", "status": "not_started"},
+    {"id": 11, "name": "make scan_files async", "status": "not_started"},
+    {"id": 12, "name": "propagate async up: run_file_loop, run_sequential, run_csv_parallel, run_sqlite_parallel, handle_run, merge_trxid_prescan, run_stats", "status": "not_started"},
+    {"id": 13, "name": "replace rayon par_iter cross-file in parallel.rs with tokio JoinSet", "status": "not_started"},
+    {"id": 14, "name": "handle AsyncError::Parse vs AsyncError::Panic at each call site", "status": "not_started"},
+    {"id": 15, "name": "cargo test + cargo clippy pass", "status": "not_started"}
   ],
   "blockers": [
     {
-      "description": "test_watch_triggers_on_new_log_file 因 macOS FSEvents + cargo test stdin-pipe 导致 handle_run 读 stdin 阻塞",
+      "description": "CODE DOES NOT COMPILE: async_rt.rs deleted but lib.rs and main.rs still have 'mod async_rt', and 6 source files still call crate::async_rt::parse_file_sync(). Must fix immediately.",
       "type": "technical",
-      "workaround": "已标记 #[ignore]，需 Phase 70 用 assert_cmd subprocess 方式测试端到端行为"
+      "workaround": "Start with task 4 — remove mod async_rt references"
     }
   ],
   "human_actions_pending": [],
   "decisions": [
-    {"decision": "collect_watch_dirs canonicalize 路径", "rationale": "macOS /var -> /private/var 符号链接导致 FSEvents 路径与 watcher 注册路径不匹配", "phase": "69"},
-    {"decision": "handle_event 同时响应 Modify(Data(Content))", "rationale": "macOS FSEvents 先发 Create(File)（文件可能空），再发 Modify 写入数据", "phase": "69"}
+    {
+      "decision": "Use AsyncLogParser::new(path).parse().await as the primary parsing API (not block_on bridge)",
+      "rationale": "User requirement: proper async-api pattern"
+    },
+    {
+      "decision": "2.0.4: AsyncLogParser::parse() fails on FIRST bad record via iter().collect()",
+      "rationale": "Handle AsyncError::Parse as file-level error: log warn, count in stats, continue to next file (0 records from that file)"
+    },
+    {
+      "decision": "Replace rayon par_iter cross-file parallel in parallel.rs with tokio JoinSet",
+      "rationale": "Cannot .await inside rayon threads; keep rayon only for CPU-bound in-file work"
+    }
   ],
-  "uncommitted_files": [],
-  "next_action": "运行 /gsd:execute-phase 69 继续——所有 3 个 plan 的 SUMMARY.md 已存在，执行器会跳过它们直接进入 verify_phase_goal 步骤",
-  "context_notes": "3个波次的 executor agent 均已成功完成并合并回主分支。Wave 3 的测试存在一个 macOS 平台相关的限制，但不影响 Phase 69 核心需求（WATCH-01/02/05/06）的验证。"
+  "uncommitted_files": [
+    "Cargo.lock", "Cargo.toml", "src/lib.rs", "src/main.rs", "src/scanner.rs",
+    "src/error.rs", "src/cli/run/collector.rs", "src/cli/run/parallel.rs",
+    "src/cli/run/prescan.rs", "src/cli/run/processor.rs", "src/cli/run/sqlite_parallel.rs",
+    "src/cli/run/tests.rs", "src/cli/watch/tests.rs", "src/exporter/csv/tests.rs",
+    "src/exporter/sqlite/tests.rs", "src/pipeline/tests.rs",
+    "benches/bench_csv.rs", "benches/bench_parser.rs",
+    "tests/integration.rs", "tests/watch_incremental.rs"
+  ],
+  "next_action": "Remove 'pub(crate) mod async_rt;' from src/lib.rs and 'mod async_rt;' from src/main.rs. Then work through tasks 5-15.",
+  "context_notes": "Mid-migration. Bridge layer (async_rt.rs) deleted this session but 6 files still reference crate::async_rt::parse_file_sync — code won't compile. Full async chain: handle_run, route_processing, run_sequential, run_file_loop, run_csv_parallel, run_sqlite_parallel, merge_trxid_prescan, scan_for_trxids_by_transaction_filters, run_stats, scan_files_into_accumulator all need async fn."
 }

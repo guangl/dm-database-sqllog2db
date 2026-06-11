@@ -1,7 +1,7 @@
 use crate::config::Config;
 use crate::error::{Error, Result};
 use crate::pipeline::filters::{IndicatorFilters, SqlFilters};
-use dm_database_parser_sqllog::{Filter, FilterBuilder, LogParserBuilder};
+use dm_database_parser_sqllog::{Filter, FilterBuilder};
 
 // ===== Pre-scan: 指标/SQL 过滤器构建 =====
 
@@ -55,24 +55,23 @@ pub(super) fn build_sql_exclude_filters(sf: &SqlFilters) -> Vec<Filter> {
 pub(super) fn scan_log_file_for_matches(file_path: &str, cfg: &Config) -> Vec<String> {
     use rayon::prelude::*;
 
-    let parser = match LogParserBuilder::new(file_path).build() {
-        Ok(p) => p,
-        Err(e) => {
-            log::warn!("Pre-scan: failed to open '{file_path}': {e}");
-            return Vec::new();
-        }
-    };
     let filters = match &cfg.filter {
         Some(f) if f.has_transaction_filters() => f,
         _ => return Vec::new(),
+    };
+
+    let records = match crate::async_rt::parse_file_sync(std::path::Path::new(file_path)) {
+        Ok(r) => r,
+        Err(e) => {
+            log::warn!("Pre-scan: failed to parse '{file_path}': {e}");
+            return Vec::new();
+        }
     };
 
     let indicator_filters = build_indicator_filters(&filters.indicators);
     let sql_include_filters = build_sql_include_filters(&filters.sql);
     let sql_exclude_filters = build_sql_exclude_filters(&filters.sql);
     let has_sql_filters = filters.sql.has_filters();
-
-    let records: Vec<_> = parser.iter().filter_map(std::result::Result::ok).collect();
     let trxids: std::collections::HashSet<String> = records
         .par_iter()
         .filter_map(|record| {

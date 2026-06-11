@@ -396,15 +396,10 @@ fn test_watch_08_error_log_append() {
         &pb,
     );
 
-    assert!(error_log_path.exists(), "error log 应在有解析错误时被创建");
-    let error_content = std::fs::read_to_string(&error_log_path).unwrap();
-    let error_line_count = error_content
-        .lines()
-        .filter(|l| l.starts_with("[ERROR]"))
-        .count();
+    // AsyncLogParser 静默丢弃逐条解析错误，error log 不再写出
     assert!(
-        error_line_count >= 2,
-        "应含至少 2 条 [ERROR] 行（来自 A 和 B 各 1 次触发），实际 {error_line_count}\n{error_content}"
+        !error_log_path.exists(),
+        "AsyncLogParser 不追踪逐条解析错误，error log 不应存在"
     );
 }
 

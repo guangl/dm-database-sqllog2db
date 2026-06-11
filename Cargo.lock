@@ -358,19 +358,20 @@ dependencies = [
 
 [[package]]
 name = "dm-database-parser-sqllog"
-version = "2.0.2"
+version = "2.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4fdb42038032fc2a1ff6ed4b445d3b5f99a539a8ba8d42bb3cda2c7e6cf8a78"
+checksum = "f94f1288e07f9e93ca980d078f186fa941f097489f377e187157d44b8c21827a"
 dependencies = [
  "atoi",
  "encoding",
  "memchr",
  "thiserror",
+ "tokio",
 ]
 
 [[package]]
 name = "dm-database-sqllog2db"
-version = "1.15.0"
+version = "1.16.0"
 dependencies = [
  "assert_cmd",
  "clap",
@@ -392,6 +393,7 @@ dependencies = [
  "thiserror",
  "tikv-jemalloc-ctl",
  "tikv-jemallocator",
+ "tokio",
  "toml",
 ]
 
@@ -1337,6 +1339,27 @@ checksum = "be4d6b5f19ff7664e8c98d03e2139cb510db9b0a60b55f8e8709b689d939b6bc"
 dependencies = [
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "tokio"
+version = "1.52.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8fc7f01b389ac15039e4dc9531aa973a135d7a4135281b12d7c1bc79fd57fffe"
+dependencies = [
+ "pin-project-lite",
+ "tokio-macros",
+]
+
+[[package]]
+name = "tokio-macros"
+version = "2.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "385a6cb71ab9ab790c5fe8d67f1645e6c450a7ce006a33de03daa956cf70a496"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

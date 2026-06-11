@@ -29,7 +29,13 @@ fn bench_parser_throughput(c: &mut Criterion) {
                 let parser = LogParserBuilder::new(black_box(path.to_str().unwrap()))
                     .build()
                     .unwrap();
-                black_box(parser.iter().filter_map(std::result::Result::ok).count())
+                black_box(
+                    parser
+                        .iter()
+                        .unwrap()
+                        .filter_map(std::result::Result::ok)
+                        .count(),
+                )
             });
         });
     }

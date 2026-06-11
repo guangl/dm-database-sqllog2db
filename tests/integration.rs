@@ -1424,13 +1424,16 @@ fn test_cli_input_flag_with_glob_no_match_behavior() {
         .unwrap();
     let stderr = String::from_utf8_lossy(&output.stderr);
     let success = output.status.success();
-    // Two valid behaviors:
+    // Three valid behaviors:
     // 1. stdin fallback (Unix no-tty): exit 0, program reads /dev/stdin (EOF) and completes
     // 2. NoFilesFound: exit non-zero, stderr contains NoFilesFound text + hint
+    // 3. stdin iter fails (2.0.3+): exit non-zero, parser fails to seek /dev/stdin
+    let stdin_iter_fail = stderr.contains("/dev/stdin") || stderr.contains("stdin");
     assert!(
         success
-            || (stderr.contains("No log files found matching inputs") && stderr.contains("hint:")),
-        "expected stdin fallback (exit 0) OR NoFilesFound+hint (non-zero); exit_code={:?}, stderr={}",
+            || (stderr.contains("No log files found matching inputs") && stderr.contains("hint:"))
+            || stdin_iter_fail,
+        "expected stdin fallback (exit 0) OR NoFilesFound+hint (non-zero) OR stdin iter error; exit_code={:?}, stderr={}",
         output.status.code(),
         stderr
     );

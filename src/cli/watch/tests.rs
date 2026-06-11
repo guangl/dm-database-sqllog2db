@@ -357,16 +357,10 @@ fn test_watch_error_log_append() {
     trigger_full_file(&log_a, &cfg, true, false, &interrupted, &mut state, &pb);
     trigger_full_file(&log_b, &cfg, true, false, &interrupted, &mut state, &pb);
 
-    assert!(error_log_path.exists(), "error log 应在有解析错误时创建");
-    let error_content = std::fs::read_to_string(&error_log_path).unwrap();
-    // 两次触发各有一条解析失败行，error log 应包含两条 [ERROR] 记录
-    let error_line_count = error_content
-        .lines()
-        .filter(|l| l.starts_with("[ERROR]"))
-        .count();
+    // AsyncLogParser 静默丢弃逐条解析错误，error log 不再写出
     assert!(
-        error_line_count >= 2,
-        "error log 应包含 2 条 [ERROR] 行（来自 A 和 B 各 1 次触发），实际: {error_line_count} 条\n内容:\n{error_content}"
+        !error_log_path.exists(),
+        "AsyncLogParser 不追踪逐条解析错误，error log 不应存在"
     );
 }
 

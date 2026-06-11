@@ -141,7 +141,7 @@ fn test_process_with_meta_default_delegates_to_process() {
     let parser = LogParserBuilder::new(log.to_str().unwrap())
         .build()
         .unwrap();
-    let records: Vec<_> = parser.iter().flatten().collect();
+    let records: Vec<_> = parser.iter().unwrap().flatten().collect();
     assert!(!records.is_empty());
 
     let record = &records[0];

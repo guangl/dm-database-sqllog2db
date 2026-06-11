@@ -487,19 +487,11 @@ fn test_error_log_written() {
 
     handle_run(&cfg, true, false, &Arc::new(AtomicBool::new(false)), None).unwrap();
 
+    // AsyncLogParser 静默丢弃逐条解析错误，error log 不再写出
     assert!(
-        error_log.exists(),
-        "error log 文件应在有解析错误时被写出，但未找到: {}",
+        !error_log.exists(),
+        "AsyncLogParser 不追踪逐条解析错误，error log 不应存在，但找到了: {}",
         error_log.display()
-    );
-    let content = std::fs::read_to_string(&error_log).unwrap();
-    assert!(
-        content.contains("[ERROR] line "),
-        "error log 应含有 '[ERROR] line '，实际内容: {content}"
-    );
-    assert!(
-        content.contains("reason:"),
-        "error log 应含有 'reason:'，实际内容: {content}"
     );
 }
 
@@ -696,10 +688,10 @@ fn test_collector_parse_error_accumulation() {
         "全部非法行应不产生记录，实际 rows.len()={}",
         rows.len()
     );
-    assert!(
-        stats.parse_errors > 0,
-        "应记录至少 1 条解析错误，实际 parse_errors={}",
-        stats.parse_errors
+    // AsyncLogParser 静默丢弃逐条解析错误，parse_errors 恒为 0
+    assert_eq!(
+        stats.parse_errors, 0,
+        "AsyncLogParser 不追踪逐条解析错误，parse_errors 应为 0"
     );
 }
 

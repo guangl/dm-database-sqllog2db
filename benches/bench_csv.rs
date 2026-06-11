@@ -109,7 +109,11 @@ fn bench_csv_format_only(c: &mut Criterion) {
     let parser = LogParserBuilder::new(log_path.to_str().unwrap())
         .build()
         .unwrap();
-    let records: Vec<_> = parser.iter().filter_map(std::result::Result::ok).collect();
+    let records: Vec<_> = parser
+        .iter()
+        .unwrap()
+        .filter_map(std::result::Result::ok)
+        .collect();
     assert_eq!(
         records.len(),
         N,
