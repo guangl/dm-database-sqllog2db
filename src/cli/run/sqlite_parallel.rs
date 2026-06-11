@@ -1,6 +1,6 @@
 use crate::error::{ErrorStats, Result};
 use crate::exporter::ExporterManager;
-use crate::pipeline::{FieldMask, Pipeline, normalizer::ParamBuffer};
+use crate::pipeline::{FieldMask, Pipeline};
 use dm_database_parser_sqllog::AsyncLogParser;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -24,49 +24,16 @@ async fn parse_and_write_sqlite(
         }
     };
 
-    let mut params_buf = ParamBuffer::default();
-    let mut ns_scratch: Vec<u8> = Vec::with_capacity(4096);
     let mut file_stats = ErrorStats::default();
-    let mut count = 0usize;
-
-    for record in records {
-        if interrupted.load(Ordering::Acquire) {
-            break;
-        }
-
-        let passes = pipeline.is_empty() || pipeline.run_with_meta(&record);
-        let needs_processing = passes || (do_normalize && record.tag.is_none());
-        if !needs_processing {
-            file_stats.filtered_out += 1;
-            continue;
-        }
-
-        if passes {
-            let normalized = if do_normalize && (!params_buf.is_empty() || record.tag.is_none()) {
-                crate::pipeline::compute_normalized(
-                    &record,
-                    &record.sql,
-                    &mut params_buf,
-                    placeholder_override,
-                    &mut ns_scratch,
-                )
-                .map(str::to_owned)
-            } else {
-                None
-            };
-            em.export_one_preparsed(&record, true, normalized.as_deref())?;
-            count += 1;
-        } else {
-            file_stats.filtered_out += 1;
-            crate::pipeline::compute_normalized(
-                &record,
-                &record.sql,
-                &mut params_buf,
-                placeholder_override,
-                &mut ns_scratch,
-            );
-        }
-    }
+    let count = super::record_iter::iterate_records(
+        records,
+        pipeline,
+        do_normalize,
+        placeholder_override,
+        interrupted,
+        &mut file_stats,
+        |record, normalized| em.export_one_preparsed(record, true, normalized),
+    )?;
 
     Ok((count, file_stats))
 }
