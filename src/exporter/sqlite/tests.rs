@@ -251,9 +251,13 @@ fn test_sqlite_stats_snapshot() {
     for r in &records {
         exporter.export(r).unwrap();
     }
-    let snap = exporter.stats_snapshot().unwrap();
-    assert_eq!(snap.exported, 4);
+    // 4 条记录未满 batch_size（64），尚在缓冲区中，未写入 DB，exported 应为 0
+    let snap_before = exporter.stats_snapshot().unwrap();
+    assert_eq!(snap_before.exported, 0, "flush 前 exported 应为 0");
     exporter.finalize().unwrap();
+    // finalize() 触发 flush，记录写入 DB 后才计入 exported
+    let snap_after = exporter.stats_snapshot().unwrap();
+    assert_eq!(snap_after.exported, 4);
 }
 
 #[test]

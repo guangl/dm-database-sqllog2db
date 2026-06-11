@@ -32,11 +32,11 @@ impl Exporter for SqliteExporter {
         self.insert_sql = build_insert_sql(&self.table_name, &self.ordered_indices);
 
         // 预填充 sql_cache，覆盖 1..=multi_row_batch_size 所有行数
-        let col_count = self.ordered_indices.len();
+        let ordered_indices_snapshot = self.ordered_indices.clone();
         for n in 1..=self.multi_row_batch_size {
             self.sql_cache.insert(
                 n,
-                build_multi_row_insert_sql(&self.table_name, col_count, n),
+                build_multi_row_insert_sql(&self.table_name, &ordered_indices_snapshot, n),
             );
         }
 
@@ -47,6 +47,11 @@ impl Exporter for SqliteExporter {
 
         conn.execute_batch("BEGIN TRANSACTION;")
             .map_err(|e| Self::db_err(format!("begin transaction failed: {e}")))?;
+
+        // DELETE FROM 在事务内执行，确保初始化路径的原子性（WR-03）
+        if !self.overwrite && !self.append {
+            self.clear_table_rows_in_txn()?;
+        }
 
         info!("SQLite exporter initialized: {}", self.database_url);
         Ok(())
@@ -71,12 +76,12 @@ impl Exporter for SqliteExporter {
             return Err(Self::db_err("not initialized"));
         }
         let ns_ref = if self.normalize { normalized } else { None };
-        let row_values = sqllog_to_values(sqllog, ns_ref, self.field_mask, &self.ordered_indices);
+        let row_values = sqllog_to_values(sqllog, ns_ref, &self.ordered_indices);
         self.row_buffer.push(row_values);
-        self.stats.record_success();
         if self.row_buffer.len() >= self.multi_row_batch_size {
             let flushed = self.flush_batch()?;
             for _ in 0..flushed {
+                self.stats.record_success();
                 self.batch_commit_if_needed()?;
             }
         }
@@ -87,6 +92,7 @@ impl Exporter for SqliteExporter {
         // flush 尾部不满批的行，防止记录丢失
         let flushed = self.flush_batch()?;
         for _ in 0..flushed {
+            self.stats.record_success();
             self.batch_commit_if_needed()?;
         }
         if let Some(conn) = &self.conn {
