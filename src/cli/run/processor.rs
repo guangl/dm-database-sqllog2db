@@ -233,6 +233,6 @@ pub(super) async fn process_log_file(
         }
     }
     let elapsed = file_start.elapsed().as_secs_f64();
-    log_file_result(pb, show_progress, file_path, file_index, total_files, records_in_file, 0, elapsed);
+    log_file_result(pb, show_progress, file_path, file_index, total_files, records_in_file, file_stats.total_errors, elapsed);
     Ok((records_in_file, file_stats))
 }
