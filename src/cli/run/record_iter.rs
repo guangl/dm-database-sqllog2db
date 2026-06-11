@@ -42,7 +42,8 @@ where
         let passes = pipeline.is_empty() || pipeline.run_with_meta(&record);
         let needs_processing = passes || (do_normalize && record.tag.is_none());
         if !needs_processing {
-            file_stats.filtered_out += 1;
+            // 与 processor.rs 保持一致：!needs_processing 路径不计入 filtered_out。
+            // filtered_out 只在 needs_processing=true && !passes 的分支（被过滤的 PARAMS 记录）累加。
             continue;
         }
 
