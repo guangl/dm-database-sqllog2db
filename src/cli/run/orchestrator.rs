@@ -124,6 +124,13 @@ async fn route_processing(
 ) -> ProcessResult {
     let multi_file = jobs > 1 && log_files.len() > 1 && !is_stdin_pipe;
     if multi_file && ctx.cfg.exporter.csv.is_some() {
+        // NOTE: run_csv_parallel is a synchronous blocking function (it uses block_in_place
+        // internally) called directly from this async fn. Ideally this would be wrapped in
+        // spawn_blocking, but RunContext holds borrowed references (&Config, &Pipeline) that
+        // are not 'static and cannot be moved into a spawn_blocking closure without
+        // restructuring the call chain. The current call blocks the async task for the
+        // duration of the parallel CSV export. This is acceptable because handle_run is the
+        // top-level orchestrator and no other async tasks depend on its progress.
         return run_csv_parallel(ctx, log_files, jobs, verbose, interrupted);
     }
     if multi_file && ctx.cfg.exporter.sqlite.is_some() {
