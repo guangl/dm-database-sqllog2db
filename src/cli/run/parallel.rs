@@ -61,13 +61,16 @@ pub(super) fn concat_csv_parts(
     }
 
     use std::io::Write as _;
-    // 先 flush 确保所有数据已落盘，再删除临时文件；flush 失败时保留临时文件便于诊断
-    writer.flush()?;
+    // flush 结果延后传播：无论成功与否都先清理临时文件，避免 flush 失败时留下磁盘残留。
+    // 显式 drop writer 确保文件句柄在 remove 前关闭（Windows 不允许删除已打开的文件）。
+    let flush_result = writer.flush();
+    drop(writer);
     for p in parts_to_remove {
         if let Err(e) = std::fs::remove_file(p) {
             log::warn!("failed to remove temp part {}: {e}", p.display());
         }
     }
+    flush_result?;
     Ok(())
 }
 
