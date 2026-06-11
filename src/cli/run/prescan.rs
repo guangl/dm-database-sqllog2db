@@ -65,6 +65,14 @@ pub(super) fn scan_log_file_for_matches(
         _ => return Vec::new(),
     };
 
+    // block_in_place is required here because this function may be called either:
+    // (a) directly from a tokio async context (e.g. tests) — block_in_place yields
+    //     the tokio worker thread before block_on drives the async parser; or
+    // (b) from within the outer block_in_place in scan_for_trxids_by_transaction_filters
+    //     via a rayon thread — on a rayon thread block_in_place is a no-op, so
+    //     block_on is safe without double-blocking.
+    // In case (b) the rayon thread is not a tokio worker, so there is no nested
+    // runtime drive; the outer block_in_place only surrenders the *tokio* thread.
     let records = match tokio::task::block_in_place(|| {
         handle.block_on(AsyncLogParser::new(std::path::Path::new(file_path)).parse())
     }) {
