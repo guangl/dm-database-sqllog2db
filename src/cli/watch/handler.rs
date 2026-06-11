@@ -82,6 +82,10 @@ async fn run_watch_loop(
     state: &mut WatchLoopState,
 ) {
     loop {
+        // block_in_place is acceptable here: the 100ms timeout bounds each individual
+        // blocking call to at most 100ms, keeping the block duration short per the
+        // tokio guidance for block_in_place. The watch loop is the only long-running
+        // consumer on this tokio worker thread and does not compete with other async tasks.
         let recv_result =
             tokio::task::block_in_place(|| rx.recv_timeout(Duration::from_millis(100)));
         match recv_result {
