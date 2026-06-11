@@ -246,7 +246,7 @@ Full details: `.planning/milestones/v1.19-ROADMAP.md`
 - [x] **Phase 72: 基准体系完善** — hyperfine 冷启动测量 + criterion baseline 存档（BENCH-01, BENCH-02） (completed 2026-06-08)
 - [x] **Phase 73: SQLite batch INSERT** — multi-row 批量插入实现 + benchmark 量化提升（SQLITE-01, SQLITE-02） (completed 2026-06-09)
 - [x] **Phase 74: 内存与分配优化** — normalizer Arc key + CSV line_buf 预热（MEM-01, MEM-02） (completed 2026-06-09)
-- [ ] **Phase 75: 并行路径公共逻辑提取** — parallel.rs 与 sqlite_parallel.rs 共享模块（STRUCT-04）
+- [x] **Phase 75: 并行路径公共逻辑提取** — parallel.rs 与 sqlite_parallel.rs 共享模块（STRUCT-04） (completed 2026-06-11)
 - [ ] **Phase 76: 异步解析路径迁移** — 切换为 dm-database-parser-sqllog async API，添加 tokio（ASYNC-01）
 
 </details>
@@ -923,7 +923,7 @@ Full details: `.planning/milestones/v1.19-ROADMAP.md`
 | 72. 基准体系完善 | 3/3 | Complete    | 2026-06-08 |
 | 73. SQLite batch INSERT | 2/2 | Complete    | 2026-06-09 |
 | 74. 内存与分配优化 | 2/2 | Complete    | 2026-06-09 |
-| 75. 并行路径公共逻辑提取 | v1.20 | Not started | - |
+| 75. 并行路径公共逻辑提取 | 1/1 | Complete   | 2026-06-11 |
 | 76. 异步解析路径迁移 | v1.20 | Not started | - |
 
 ### Phase 71: mod.rs 重构 — 拆分子模块，mod.rs 仅保留 pub use 导入
