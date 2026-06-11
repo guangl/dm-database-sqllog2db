@@ -924,7 +924,7 @@ Full details: `.planning/milestones/v1.19-ROADMAP.md`
 | 73. SQLite batch INSERT | 2/2 | Complete    | 2026-06-09 |
 | 74. 内存与分配优化 | 2/2 | Complete    | 2026-06-09 |
 | 75. 并行路径公共逻辑提取 | 1/1 | Complete    | 2026-06-11 |
-| 76. 异步解析路径迁移 | v1.20 | Complete | 2026-06-11 |
+| 76. 异步解析路径迁移 | 1/1 | Complete   | 2026-06-11 |
 
 ### Phase 71: mod.rs 重构 — 拆分子模块，mod.rs 仅保留 pub use 导入
 
@@ -1010,7 +1010,7 @@ Full details: `.planning/milestones/v1.19-ROADMAP.md`
   4. `cargo clippy --all-targets -- -D warnings` 通过，async 代码路径无 `unwrap` 在错误路径上裸用
   5. `cargo build --release` 成功，二进制体积增量合理（tokio 引入不超过预期）
 **Plans**: 1 plan
-- [ ] 76-01-PLAN.md — 运行 SC-1/3/4/5 验收命令（cargo test/clippy/build/Cargo.toml grep）+ 条件运行 SC-2 bench（sqllogs/ 存在时）+ 翻转 ROADMAP/REQUIREMENTS/STATE 三份文档完成标记（ASYNC-01）
+- [x] 76-01-PLAN.md — 运行 SC-1/3/4/5 验收命令（cargo test/clippy/build/Cargo.toml grep）+ 条件运行 SC-2 bench（sqllogs/ 存在时）+ 翻转 ROADMAP/REQUIREMENTS/STATE 三份文档完成标记（ASYNC-01）
 
 ---
 *Created: 2026-05-21 for milestone v1.10*
