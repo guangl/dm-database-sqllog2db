@@ -18,7 +18,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 /// - `on_pass`：通过过滤时的写出回调，接收 `(&Sqllog, Option<&str>)`（记录与归一化 SQL）
 ///
 /// 返回成功写出的记录数。
-#[allow(dead_code)]
 pub(super) fn iterate_records<F>(
     records: Vec<Sqllog>,
     pipeline: &Pipeline,
