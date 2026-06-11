@@ -90,7 +90,7 @@ fn process_record(
         rows.push((record, normalized));
     } else {
         file_stats.filtered_out += 1;
-        crate::pipeline::compute_normalized(
+        let _ = crate::pipeline::compute_normalized(
             &record,
             &record.sql,
             params_buf,
