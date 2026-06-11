@@ -9,6 +9,7 @@ mod orchestrator;
 mod parallel;
 mod prescan;
 mod processor;
+mod record_iter;
 mod sequential;
 mod sqlite_parallel;
 mod summary;
