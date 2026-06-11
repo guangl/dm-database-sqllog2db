@@ -241,7 +241,7 @@ Full details: `.planning/milestones/v1.19-ROADMAP.md`
 </details>
 
 <details>
-<summary>🚧 v1.20 性能全面提升 (Phases 72–76) — IN PROGRESS</summary>
+<summary>✅ v1.20 性能全面提升 (Phases 72–76) — shipped 2026-06-11</summary>
 
 - [x] **Phase 72: 基准体系完善** — hyperfine 冷启动测量 + criterion baseline 存档（BENCH-01, BENCH-02） (completed 2026-06-08)
 - [x] **Phase 73: SQLite batch INSERT** — multi-row 批量插入实现 + benchmark 量化提升（SQLITE-01, SQLITE-02） (completed 2026-06-09)
