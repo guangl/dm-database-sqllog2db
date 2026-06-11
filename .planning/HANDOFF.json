@@ -1,63 +1,80 @@
 {
   "version": "1.0",
-  "timestamp": "2026-06-11T08:40:26.703Z",
+  "timestamp": "2026-06-11T09:00:37.000Z",
   "phase": null,
   "phase_name": "ad-hoc: dm-database-parser-sqllog async migration",
   "phase_dir": null,
   "plan": null,
-  "task": null,
-  "total_tasks": null,
+  "task": 9,
+  "total_tasks": 20,
   "status": "paused",
   "completed_tasks": [
     {"id": 1, "name": "upgrade dm-database-parser-sqllog 2.0.3 → 2.0.4", "status": "done"},
     {"id": 2, "name": "add tokio macros feature to Cargo.toml", "status": "done"},
-    {"id": 3, "name": "delete src/async_rt.rs bridge layer", "status": "done"}
+    {"id": 3, "name": "delete src/async_rt.rs bridge layer", "status": "done"},
+    {"id": 4, "name": "remove 'mod async_rt' from lib.rs and main.rs", "status": "done"},
+    {"id": 5, "name": "make scanner.rs scan_files async + use AsyncLogParser", "status": "done"},
+    {"id": 6, "name": "make stats/runner.rs run_stats + scan_files_into_accumulator async", "status": "done"},
+    {"id": 7, "name": "make processor.rs process_log_file async + use AsyncLogParser", "status": "done"},
+    {"id": 8, "name": "make sequential.rs run_sequential async signature (partial — run_file_loop NOT yet async)", "status": "in_progress", "progress": "run_sequential fn signature is async, but run_file_loop still calls process_log_file() without .await → COMPILE ERROR"}
   ],
   "remaining_tasks": [
-    {"id": 4, "name": "remove 'mod async_rt' from lib.rs and main.rs", "status": "not_started"},
-    {"id": 5, "name": "add #[tokio::main] to main()", "status": "not_started"},
-    {"id": 6, "name": "make parse_and_write_csv async + use AsyncLogParser::new().parse().await", "status": "not_started"},
-    {"id": 7, "name": "make parse_and_write_sqlite async", "status": "not_started"},
-    {"id": 8, "name": "make process_log_file async", "status": "not_started"},
-    {"id": 9, "name": "make collect_log_file async", "status": "not_started"},
-    {"id": 10, "name": "make scan_log_file_for_matches async", "status": "not_started"},
-    {"id": 11, "name": "make scan_files async", "status": "not_started"},
-    {"id": 12, "name": "propagate async up: run_file_loop, run_sequential, run_csv_parallel, run_sqlite_parallel, handle_run, merge_trxid_prescan, run_stats", "status": "not_started"},
-    {"id": 13, "name": "replace rayon par_iter cross-file in parallel.rs with tokio JoinSet", "status": "not_started"},
-    {"id": 14, "name": "handle AsyncError::Parse vs AsyncError::Panic at each call site", "status": "not_started"},
-    {"id": 15, "name": "cargo test + cargo clippy pass", "status": "not_started"}
+    {"id": 9, "name": "make sequential.rs run_file_loop async + call process_log_file().await", "status": "not_started"},
+    {"id": 10, "name": "make sqlite_parallel.rs parse_and_write_sqlite + process_sqlite_parallel async + use AsyncLogParser", "status": "not_started"},
+    {"id": 11, "name": "make parallel.rs parse_and_write_csv use AsyncLogParser via block_in_place strategy (see context_notes)", "status": "not_started"},
+    {"id": 12, "name": "make prescan.rs scan_log_file_for_matches use AsyncLogParser via block_in_place strategy", "status": "not_started"},
+    {"id": 13, "name": "make input.rs merge_trxid_prescan async", "status": "not_started"},
+    {"id": 14, "name": "make orchestrator.rs route_processing/run_csv_parallel/run_sqlite_parallel/handle_run async", "status": "not_started"},
+    {"id": 15, "name": "make cli/stats/handler.rs handle_stats async", "status": "not_started"},
+    {"id": 16, "name": "make watch trigger_full/trigger_incremental/event/handler async (use block_in_place for recv_timeout)", "status": "not_started"},
+    {"id": 17, "name": "make main.rs run() async + add #[tokio::main]", "status": "not_started"},
+    {"id": 18, "name": "convert cli/run/tests.rs tests to #[tokio::test]", "status": "not_started"},
+    {"id": 19, "name": "convert watch/tests.rs tests calling async fns to #[tokio::test]", "status": "not_started"},
+    {"id": 20, "name": "cargo clippy + cargo test pass", "status": "not_started"}
   ],
   "blockers": [
     {
-      "description": "CODE DOES NOT COMPILE: async_rt.rs deleted but lib.rs and main.rs still have 'mod async_rt', and 6 source files still call crate::async_rt::parse_file_sync(). Must fix immediately.",
+      "description": "CODE DOES NOT COMPILE: partial async migration. run_file_loop in sequential.rs calls process_log_file() without .await (process_log_file is now async). parallel.rs, prescan.rs, sqlite_parallel.rs still reference crate::async_rt::parse_file_sync (which no longer exists).",
       "type": "technical",
-      "workaround": "Start with task 4 — remove mod async_rt references"
+      "workaround": "Complete remaining tasks 9-20 in order. Start with task 9 (run_file_loop async)."
     }
   ],
   "human_actions_pending": [],
   "decisions": [
     {
-      "decision": "Use AsyncLogParser::new(path).parse().await as the primary parsing API (not block_on bridge)",
-      "rationale": "User requirement: proper async-api pattern"
+      "decision": "Use AsyncLogParser::new(path).parse().await as the primary parsing API",
+      "rationale": "User requirement: proper async-api pattern from dm-database-parser-sqllog 2.0.4"
     },
     {
-      "decision": "2.0.4: AsyncLogParser::parse() fails on FIRST bad record via iter().collect()",
-      "rationale": "Handle AsyncError::Parse as file-level error: log warn, count in stats, continue to next file (0 records from that file)"
+      "decision": "AsyncError::Parse → log warn + return Ok((0, stats_with_parse_error)); do NOT propagate error up",
+      "rationale": "File-level error: skip file with 0 records, continue processing remaining files. AsyncLogParser fails entire file on first bad record (no per-record error details). Tests already updated to expect no error log (test_watch_error_log_append asserts error log does NOT exist)."
     },
     {
-      "decision": "Replace rayon par_iter cross-file parallel in parallel.rs with tokio JoinSet",
-      "rationale": "Cannot .await inside rayon threads; keep rayon only for CPU-bound in-file work"
+      "decision": "For rayon parallel paths (parallel.rs, prescan.rs): capture tokio Handle BEFORE rayon, use block_in_place to wrap rayon work, then inside rayon closures call handle.block_on(AsyncLogParser::new(path).parse())",
+      "rationale": "Cannot .await inside rayon threads. JoinSet requires Pipeline to be Clone which is complex. block_in_place + handle.block_on is the pragmatic approach for a CLI tool. Rayon threads are NOT async contexts so handle.block_on() is safe to call from them."
+    },
+    {
+      "decision": "process_sqlite_parallel stays as a sequential loop (not JoinSet) since SQLite writes are inherently serial",
+      "rationale": "Already sequential — parse_and_write_sqlite just needs to become async"
+    },
+    {
+      "decision": "Watch loop recv_timeout: wrap with tokio::task::block_in_place, trigger fns become async and use .await",
+      "rationale": "recv_timeout is blocking, block_in_place signals to tokio to schedule other tasks while blocked"
     }
   ],
   "uncommitted_files": [
-    "Cargo.lock", "Cargo.toml", "src/lib.rs", "src/main.rs", "src/scanner.rs",
+    "src/scanner.rs",
+    "src/stats/runner.rs",
+    "src/cli/run/processor.rs",
+    "src/cli/run/sequential.rs",
+    "Cargo.lock", "Cargo.toml", "src/lib.rs", "src/main.rs",
     "src/error.rs", "src/cli/run/collector.rs", "src/cli/run/parallel.rs",
-    "src/cli/run/prescan.rs", "src/cli/run/processor.rs", "src/cli/run/sqlite_parallel.rs",
+    "src/cli/run/prescan.rs", "src/cli/run/sqlite_parallel.rs",
     "src/cli/run/tests.rs", "src/cli/watch/tests.rs", "src/exporter/csv/tests.rs",
     "src/exporter/sqlite/tests.rs", "src/pipeline/tests.rs",
     "benches/bench_csv.rs", "benches/bench_parser.rs",
     "tests/integration.rs", "tests/watch_incremental.rs"
   ],
-  "next_action": "Remove 'pub(crate) mod async_rt;' from src/lib.rs and 'mod async_rt;' from src/main.rs. Then work through tasks 5-15.",
-  "context_notes": "Mid-migration. Bridge layer (async_rt.rs) deleted this session but 6 files still reference crate::async_rt::parse_file_sync — code won't compile. Full async chain: handle_run, route_processing, run_sequential, run_file_loop, run_csv_parallel, run_sqlite_parallel, merge_trxid_prescan, scan_for_trxids_by_transaction_filters, run_stats, scan_files_into_accumulator all need async fn."
+  "next_action": "Open sequential.rs, change run_file_loop to async fn, add .await to the process_log_file call. Then proceed with sqlite_parallel.rs (task 10).",
+  "context_notes": "Mid-migration. Previous session deleted async_rt.rs and cleaned lib.rs/main.rs. This session completed scanner.rs, stats/runner.rs, processor.rs, and partially sequential.rs. Remaining files with crate::async_rt::parse_file_sync errors: src/cli/run/parallel.rs (2 occurrences), src/cli/run/prescan.rs (1 occurrence), src/cli/run/sqlite_parallel.rs (1 occurrence). Strategy for parallel.rs: keep rayon ThreadPool but wrap in block_in_place, and inside rayon closure use handle.block_on() to call AsyncLogParser. Strategy for watch handler: change run_watch_loop to async fn, use block_in_place for the recv_timeout call, then .await the handle_event call."
 }

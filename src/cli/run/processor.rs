@@ -2,7 +2,7 @@ use crate::error::{ErrorStats, Result};
 use crate::exporter::ExporterManager;
 use crate::pipeline::Pipeline;
 use crate::pipeline::normalizer::ParamBuffer;
-use dm_database_parser_sqllog::Sqllog;
+use dm_database_parser_sqllog::{AsyncLogParser, Sqllog};
 use indicatif::ProgressBar;
 use log::info;
 use std::sync::Arc;
@@ -187,7 +187,7 @@ fn tick_progress(
 /// `remaining`: 最多再导出多少条记录（跨文件的剩余配额），`None` 表示不限制。
 /// `reset_pb`: 是否在文件开始时重置进度条计数；并行模式传 `false`，避免多线程互相重置。
 #[rustfmt::skip]
-pub(super) fn process_log_file(
+pub(super) async fn process_log_file(
     file_path: &str, file_index: usize, total_files: usize,
     exporter_manager: &mut ExporterManager, pipeline: &Pipeline,
     show_progress: bool, remaining: Option<usize>, interrupted: &Arc<AtomicBool>,
@@ -202,13 +202,15 @@ pub(super) fn process_log_file(
         .map_or_else(|| file_path.to_string(), |n| n.to_string_lossy().into_owned());
     setup_progress_bar(pb, reset_pb, show_progress, file_index, total_files, &file_name);
     let file_path_buf = std::path::Path::new(file_path);
-    let records = crate::async_rt::parse_file_sync(file_path_buf).map_err(|e| {
-        crate::error::Error::Parser(crate::error::ParserError::InvalidPath {
-            path: file_path_buf.to_path_buf(),
-            reason: format!("{e}"),
-            line_number: None,
-        })
-    })?;
+    let records = match AsyncLogParser::new(file_path_buf).parse().await {
+        Ok(r) => r,
+        Err(e) => {
+            log::warn!("parse failed for '{}': {e}", file_path_buf.display());
+            let mut file_stats = ErrorStats::default();
+            file_stats.add_parse_error();
+            return Ok((0, file_stats));
+        }
+    };
     let (mut records_in_file, mut file_stats) = (0usize, ErrorStats::default());
     let mut total_processed = 0usize;
     'outer: for record in records {

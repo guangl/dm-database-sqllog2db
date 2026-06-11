@@ -12,7 +12,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 /// 返回 `(per_file_counts, run_stats)`。
 #[allow(clippy::too_many_arguments)]
 #[allow(clippy::fn_params_excessive_bools)]
-pub(super) fn run_sequential(
+pub(super) async fn run_sequential(
     log_files: &[PathBuf],
     final_cfg: &Config,
     pipeline: &crate::pipeline::Pipeline,
