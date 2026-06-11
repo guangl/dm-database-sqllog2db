@@ -141,6 +141,16 @@ fn parse_and_write_csv(
 }
 
 // IO-01: 日志文件由 dm-database-parser-sqllog 通过 fs::read() 一次性全量读取（单次 syscall），无 BufReader，满足 IO-01（D-01）。
+//
+// SAFETY: 此函数必须在 multi_thread tokio runtime 内调用。
+// `tokio::task::block_in_place` 在 current_thread runtime 下会 panic（"Cannot call
+// `blocking_` unless the thread is already in a thread pool"）。当前主入口使用
+// `#[tokio::main]`（默认 multi_thread），但嵌入测试或 benchmark 若改用 current_thread
+// runtime，此处将以不明显的 panic 失败。
+//
+// 并发 IO 上限由 `jobs` 参数控制：rayon 线程池大小 == jobs，所有线程同时发起
+// `handle.block_on(parse())`，峰值内存约为 jobs × 单文件大小；调用方应确保
+// jobs 不超过可接受的并发 IO 数量。
 #[allow(clippy::too_many_arguments)]
 fn run_parallel_tasks(
     log_files: &[PathBuf],
