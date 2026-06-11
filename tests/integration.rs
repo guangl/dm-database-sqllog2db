@@ -1631,7 +1631,7 @@ fn write_stats_test_log(path: &std::path::Path, count: usize) {
     for idx in 0..count {
         writeln!(
             buf,
-            "2025-01-15 10:30:{:02}.001 (EP[0] sess:0x{idx:04x} user:U trxid:{idx} stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT * FROM table_{idx} WHERE id={idx}. EXECTIME: {exec}(ms) ROWCOUNT: 1(rows) EXEC_ID: {idx}.",
+            "2025-01-15 10:30:{:02}.001 (EP[0] sess:0x{idx:04x} user:U trxid:{idx} stmt:0x1 appname:A ip:10.0.0.1) [ORA] : SELECT * FROM table_{idx} WHERE id={idx}. EXECTIME: {exec}(ms) ROWCOUNT: 1(rows) EXEC_ID: {idx}.",
             idx % 60,
             exec = (idx * 11) % 500 + 1,
         ).unwrap();
@@ -1819,7 +1819,7 @@ fn test_stats_zero_elapsed_records_included() {
     // 写入 exectime = 0 的记录
     std::fs::write(
         &log_file,
-        "2025-01-15 10:30:28.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT zero FROM t. EXECTIME: 0(ms) ROWCOUNT: 0(rows) EXEC_ID: 0.\n",
+        "2025-01-15 10:30:28.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [ORA] : SELECT zero FROM t. EXECTIME: 0(ms) ROWCOUNT: 0(rows) EXEC_ID: 0.\n",
     ).unwrap();
 
     let cfg_path = make_stats_csv_config(dir.path(), &log_file);
@@ -1853,7 +1853,7 @@ fn make_stats_config_with_section(
     let input_log = dir.join("input.log");
     std::fs::write(
         &input_log,
-        "2025-01-15 10:30:28.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT id FROM t WHERE id=1. EXECTIME: 5(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.\n",
+        "2025-01-15 10:30:28.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [ORA] : SELECT id FROM t WHERE id=1. EXECTIME: 5(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.\n",
     )
     .unwrap();
     use std::fmt::Write as _;
@@ -2059,9 +2059,9 @@ fn test_stats_from_to_filters_to_single_day() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_file = dir.path().join("input.log");
     let lines = [
-        "2024-01-14 10:00:00.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT * FROM t WHERE id=1. EXECTIME: 10(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.",
-        "2024-01-15 10:00:00.001 (EP[0] sess:0x0002 user:U trxid:2 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT * FROM t WHERE id=2. EXECTIME: 20(ms) ROWCOUNT: 1(rows) EXEC_ID: 2.",
-        "2024-01-16 10:00:00.001 (EP[0] sess:0x0003 user:U trxid:3 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT * FROM t WHERE id=3. EXECTIME: 30(ms) ROWCOUNT: 1(rows) EXEC_ID: 3.",
+        "2024-01-14 10:00:00.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [ORA] : SELECT * FROM t WHERE id=1. EXECTIME: 10(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.",
+        "2024-01-15 10:00:00.001 (EP[0] sess:0x0002 user:U trxid:2 stmt:0x1 appname:A ip:10.0.0.1) [ORA] : SELECT * FROM t WHERE id=2. EXECTIME: 20(ms) ROWCOUNT: 1(rows) EXEC_ID: 2.",
+        "2024-01-16 10:00:00.001 (EP[0] sess:0x0003 user:U trxid:3 stmt:0x1 appname:A ip:10.0.0.1) [ORA] : SELECT * FROM t WHERE id=3. EXECTIME: 30(ms) ROWCOUNT: 1(rows) EXEC_ID: 3.",
     ];
     std::fs::write(&log_file, lines.join("\n") + "\n").unwrap();
     let cfg_path = make_stats_csv_config(dir.path(), &log_file);
@@ -2098,8 +2098,8 @@ fn test_stats_no_from_to_filters_nothing() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_file = dir.path().join("input.log");
     let lines = [
-        "2024-01-14 10:00:00.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT * FROM t WHERE id=1. EXECTIME: 10(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.",
-        "2024-01-16 10:00:00.001 (EP[0] sess:0x0002 user:U trxid:2 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT * FROM t WHERE id=2. EXECTIME: 20(ms) ROWCOUNT: 1(rows) EXEC_ID: 2.",
+        "2024-01-14 10:00:00.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [ORA] : SELECT * FROM t WHERE id=1. EXECTIME: 10(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.",
+        "2024-01-16 10:00:00.001 (EP[0] sess:0x0002 user:U trxid:2 stmt:0x1 appname:A ip:10.0.0.1) [ORA] : SELECT * FROM t WHERE id=2. EXECTIME: 20(ms) ROWCOUNT: 1(rows) EXEC_ID: 2.",
     ];
     std::fs::write(&log_file, lines.join("\n") + "\n").unwrap();
     let cfg_path = make_stats_csv_config(dir.path(), &log_file);

@@ -85,7 +85,12 @@ impl StatsAccumulator {
     }
 
     /// 处理单条日志记录，同时更新慢 SQL 堆与高频 SQL 映射。
+    ///
+    /// 只处理 `[ORA]` 标签的记录（Oracle 兼容模式 SQL）；其他标签跳过。
     pub fn update(&mut self, record: &dm_database_parser_sqllog::Sqllog) {
+        if record.tag.as_deref() != Some("ORA") {
+            return;
+        }
         if !self.in_range(&record.ts) {
             return;
         }
@@ -205,6 +210,7 @@ mod tests {
             sql: sql.to_string(),
             exectime,
             ts: ts.to_string(),
+            tag: Some("ORA".to_string()),
             ..Sqllog::default()
         }
     }
@@ -371,6 +377,30 @@ mod tests {
         assert_eq!(slow[0].elapsed_ms, 50);
         assert_eq!(slow[1].elapsed_ms, 40);
         assert_eq!(slow[2].elapsed_ms, 30);
+    }
+
+    #[test]
+    fn test_non_ora_records_are_skipped() {
+        let mut acc = StatsAccumulator::new(10, None, None);
+        // 无 tag 的记录应被跳过
+        acc.update(&Sqllog {
+            sql: "SELECT 1".to_string(),
+            exectime: 10.0,
+            ts: "2025-01-01".to_string(),
+            tag: None,
+            ..Sqllog::default()
+        });
+        // SEL tag 的记录也应被跳过
+        acc.update(&Sqllog {
+            sql: "SELECT 2".to_string(),
+            exectime: 20.0,
+            ts: "2025-01-02".to_string(),
+            tag: Some("SEL".to_string()),
+            ..Sqllog::default()
+        });
+        let (slow, freq) = acc.into_results();
+        assert_eq!(slow.len(), 0, "non-ORA records should be skipped");
+        assert_eq!(freq.len(), 0, "non-ORA records should be skipped");
     }
 
     #[test]

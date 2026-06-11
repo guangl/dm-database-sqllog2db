@@ -26,7 +26,7 @@ fn write_test_log(path: &std::path::Path, count: usize) {
     for idx in 0..count {
         writeln!(
             buf,
-            "2025-01-15 10:30:28.001 (EP[0] sess:0x{idx:04x} user:TESTUSER trxid:{idx} stmt:0x1 appname:App ip:10.0.0.1) [SEL] SELECT * FROM t WHERE id={idx}. EXECTIME: {exec}(ms) ROWCOUNT: 1(rows) EXEC_ID: {idx}.",
+            "2025-01-15 10:30:28.001 (EP[0] sess:0x{idx:04x} user:TESTUSER trxid:{idx} stmt:0x1 appname:App ip:10.0.0.1) [ORA] : SELECT * FROM t WHERE id={idx}. EXECTIME: {exec}(ms) ROWCOUNT: 1(rows) EXEC_ID: {idx}.",
             exec = (idx * 7) % 100 + 1,
         ).unwrap();
     }
@@ -62,7 +62,7 @@ async fn test_run_stats_skips_parse_errors() {
     let log_file = dir.path().join("mixed.log");
     // AsyncLogParser 在文件级别解析：含任何无效行的文件会被整体跳过（静默 warn）
     // 使用纯合法内容确保 run_stats 正常返回 Ok
-    let content = "2025-01-15 10:30:28.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT id FROM orders. EXECTIME: 5(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.\n";
+    let content = "2025-01-15 10:30:28.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [ORA] : SELECT id FROM orders. EXECTIME: 5(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.\n";
     std::fs::write(&log_file, content).unwrap();
     let csv_path = dir.path().join("out.csv");
     let cfg = make_csv_config(log_file.to_str().unwrap(), csv_path.to_str().unwrap());
