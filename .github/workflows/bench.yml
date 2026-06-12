@@ -24,7 +24,7 @@ jobs:
     # Bench 失败不阻塞 PR merge（仅作 informational）
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -39,7 +39,7 @@ jobs:
         run: bash scripts/collect_bench_results.sh
 
       - name: Upload benchmark artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: bench-results-${{ github.sha }}
           path: bench-results-*.json
