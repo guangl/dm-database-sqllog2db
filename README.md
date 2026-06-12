@@ -191,6 +191,14 @@ overwrite = true
 
 ## 版本亮点
 
+### v1.20.0 — 性能全面提升（2026-06-11）
+
+- **SQLite batch INSERT**：multi-row `INSERT INTO t VALUES (...),(...),...`，缓冲 64 条一次 flush，benchmark 量化提升
+- **tokio 异步解析**：全解析路径迁移 `dm-database-parser-sqllog` async API，`block_in_place` 保持并行性能
+- **热路径零分配**：normalizer ParamBuffer 二级化，DML 查询从 `String::clone` 改为 `&str` 零分配查询
+- **冷启动优化**：`--version` 2.1ms（较 v1.9 ~3ms 降 0.7ms），criterion baseline 存档支持版本间回归对比
+- **重复代码消除**：`record_iter::iterate_records` 共享模块净消除 ~80 行并行路径重复代码
+
 ### v1.16.0 — watch 持续监听、SQL 统计分析与全面体验升级（2026-06-07）
 
 - **`watch` 子命令**：持续监听目录，新增/追加 `.log` 文件时自动增量处理，支持 CSV/SQLite 双格式，Ctrl+C 退出码 130
