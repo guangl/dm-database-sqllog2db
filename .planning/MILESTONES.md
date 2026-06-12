@@ -1,5 +1,33 @@
 # Milestones: sqllog2db
 
+## v1.20 — 性能全面提升
+
+**Shipped:** 2026-06-11  
+**Phases:** 72–76 | **Plans:** 9 | **Commits:** 87  
+**Duration:** 2026-06-08 → 2026-06-11 (~4 days)  
+**Code changes:** 167 files, +8,708 / -853 lines
+
+### Delivered
+
+系统性性能优化：hyperfine + criterion 基准体系建立（冷启动 `--version` 2.1ms，v1.20 baseline 存档）、SQLite multi-row batch INSERT（缓冲 64 条 flush，benchmark 量化提升）、normalizer 热路径 ParamBuffer 二级化（DML 查询零分配 &str 查询）、CSV line_buf 初始容量 4096 字节预热、parallel/sqlite_parallel 重复迭代循环提取为 `record_iter::iterate_records` 共享模块（净消除 ~80 行重复代码）、全解析路径迁移至 `dm-database-parser-sqllog` async API + tokio 运行时（3.8MB release，503 tests 全绿）。
+
+### Key Accomplishments
+
+1. **hyperfine 冷启动基线建立（BENCH-01）** — `--version` 2.1ms、`validate` 2.2ms，较 v1.9 降 ~0.7ms，Phase 72 段落写入 BENCHMARKS.md
+2. **criterion v1.20 baseline 存档（BENCH-02）** — `CRITERION_HOME=benches/baselines cargo bench -- --save-baseline v1.20`，4 个 benchmark group 基线完成
+3. **SQLite multi-row batch INSERT（SQLITE-01/02）** — `row_buffer` + `flush_batch` + `sql_cache`，batch size 64，`bench_sqlite_multi_row_insert` group 量化写入 BENCHMARKS.md
+4. **ParamBuffer 二级化零分配热路径（MEM-01）** — 扁平 tuple key 重构为二级 HashMap，DML 查询改用 `Borrow<str>` 零分配 `&str` 查询
+5. **record_iter 共享模块提取（STRUCT-04）** — `parallel.rs` 与 `sqlite_parallel.rs` 重复迭代循环提取为 `record_iter.rs::iterate_records`，净消除 ~80 行重复代码
+6. **tokio 异步解析路径迁移（ASYNC-01）** — `#[tokio::main]` + `AsyncLogParser` 全路径迁移，503 tests 全绿，3.8MB release，clippy 零警告
+
+### Archives
+
+- `.planning/milestones/v1.20-ROADMAP.md` — 完整 Phase 细节
+- `.planning/milestones/v1.20-REQUIREMENTS.md` — 需求归档（8/8 complete）
+- `.planning/milestones/v1.20-MILESTONE-AUDIT.md` — 里程碑审计报告（status: tech_debt，无关键阻断）
+
+---
+
 ## v1.19 — watch完善与文档对齐
 
 **Shipped:** 2026-06-07  

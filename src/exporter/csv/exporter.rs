@@ -43,7 +43,8 @@ impl CsvExporter {
             writer: None,
             stats: ExportStats::new(),
             itoa_buf: itoa::Buffer::new(),
-            line_buf: Vec::with_capacity(2048),
+            // 典型 DaMeng SQL + 字段开销约 1–4KB；writer.rs 的动态 reserve 兜底更长 SQL
+            line_buf: Vec::with_capacity(4096),
             normalize: true,
             field_mask: crate::pipeline::FieldMask::ALL,
             ordered_indices: (0..crate::pipeline::FIELD_NAMES.len()).collect(),

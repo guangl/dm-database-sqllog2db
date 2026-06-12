@@ -53,6 +53,7 @@ pub struct ParseErrorRecord {
 
 /// 将原始字符串安全截断到前 120 个字符（UTF-8 字符边界安全）。
 #[must_use]
+#[allow(dead_code)]
 pub fn truncate_to_120_chars(raw: &str) -> String {
     let end = raw
         .char_indices()
@@ -63,6 +64,7 @@ pub fn truncate_to_120_chars(raw: &str) -> String {
 
 /// 根据原始内容启发式分类解析错误类型。
 #[must_use]
+#[allow(dead_code)]
 pub fn classify_error_kind(raw: &str) -> ErrorKind {
     if raw.contains('\u{FFFD}') {
         ErrorKind::EncodingError
@@ -102,6 +104,7 @@ impl ErrorStats {
         self.parse_errors += 1;
     }
 
+    #[allow(dead_code)]
     pub fn add_parse_error_with_kind(&mut self, kind: ErrorKind) {
         self.add_parse_error();
         *self.by_type.entry(kind).or_insert(0) += 1;

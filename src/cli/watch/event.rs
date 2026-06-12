@@ -15,7 +15,7 @@ use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 
 /// 处理单个 notify 事件：按 `EventKind` 路由到 `trigger_full_file` 或 `trigger_incremental`。
-pub(super) fn handle_event(
+pub(super) async fn handle_event(
     event: &notify::Event,
     cfg: &Config,
     quiet: bool,
@@ -41,9 +41,9 @@ pub(super) fn handle_event(
             continue;
         }
         if is_create {
-            trigger_full_file(path, cfg, quiet, verbose, interrupted, state, pb);
+            trigger_full_file(path, cfg, quiet, verbose, interrupted, state, pb).await;
         } else {
-            trigger_incremental(path, cfg, quiet, verbose, interrupted, state, pb);
+            trigger_incremental(path, cfg, quiet, verbose, interrupted, state, pb).await;
         }
     }
 }

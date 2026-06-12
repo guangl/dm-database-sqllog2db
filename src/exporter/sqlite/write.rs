@@ -1,15 +1,14 @@
 use super::super::{f32_ms_to_i64, strip_ip_prefix};
-use crate::pipeline::FieldMask;
 use dm_database_parser_sqllog::Sqllog;
+use rusqlite::types::Value;
 
-/// 热路径：使用 `Sqllog` 直接字段插入（parser 库已物化所有字段）。
-pub(super) fn do_insert_preparsed(
-    stmt: &mut rusqlite::CachedStatement<'_>,
+/// 将 `Sqllog` 记录转换为 `Vec<Value>`，按 `ordered_indices` 投影字段。
+/// 用于 `row_buffer` 缓冲路径（全量与投影统一路径）。
+pub(super) fn sqllog_to_values(
     sqllog: &Sqllog,
     normalized_sql: Option<&str>,
-    field_mask: FieldMask,
     ordered_indices: &[usize],
-) -> std::result::Result<(), rusqlite::Error> {
+) -> Vec<Value> {
     let (exec_time_ms, row_count, exec_id) =
         if sqllog.exec_id != 0 || sqllog.exectime > 0.0 || sqllog.rowcount != 0 {
             (
@@ -21,28 +20,6 @@ pub(super) fn do_insert_preparsed(
             (None, None, None)
         };
 
-    if field_mask == FieldMask::ALL {
-        stmt.execute(rusqlite::params![
-            sqllog.ts.as_str(),
-            sqllog.ep,
-            sqllog.sess_id.as_str(),
-            sqllog.thrd_id.as_str(),
-            sqllog.username.as_str(),
-            sqllog.trxid.as_str(),
-            sqllog.statement.as_str(),
-            sqllog.appname.as_str(),
-            strip_ip_prefix(&sqllog.client_ip),
-            sqllog.tag.as_deref(),
-            sqllog.sql.as_str(),
-            exec_time_ms,
-            row_count,
-            exec_id,
-            normalized_sql
-        ])?;
-        return Ok(());
-    }
-
-    use rusqlite::types::Value;
     let all: [Value; 15] = [
         Value::Text(sqllog.ts.clone()),
         Value::Integer(i64::from(sqllog.ep)),
@@ -63,7 +40,5 @@ pub(super) fn do_insert_preparsed(
         exec_id.map_or(Value::Null, Value::Integer),
         normalized_sql.map_or(Value::Null, |s| Value::Text(s.to_string())),
     ];
-    let selected: Vec<&Value> = ordered_indices.iter().map(|&i| &all[i]).collect();
-    stmt.execute(rusqlite::params_from_iter(selected))?;
-    Ok(())
+    ordered_indices.iter().map(|&i| all[i].clone()).collect()
 }

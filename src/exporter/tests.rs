@@ -121,6 +121,7 @@ fn test_from_config_sqlite_path() {
                 overwrite: true,
                 append: false,
                 batch_size: 10_000,
+                multi_row_batch_size: 64,
             }),
         },
         sqllog: SqllogConfig {

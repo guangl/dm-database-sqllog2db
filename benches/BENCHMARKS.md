@@ -33,6 +33,9 @@ CRITERION_HOME=benches/baselines cargo bench --bench bench_sqlite -- --baseline 
 
 # 保存新的 named baseline（例如 Phase 4 优化后）
 CRITERION_HOME=benches/baselines cargo bench --bench bench_csv -- --save-baseline phase4
+
+# v1.20 baseline（已由 Phase 72 写入）
+CRITERION_HOME=benches/baselines cargo bench -- --baseline v1.20
 ```
 
 criterion 输出会标注 "Performance has improved" / "Performance has regressed" / "No change in performance detected"。
@@ -726,3 +729,149 @@ gh run download <run-id> -n bench-results-<sha>
 **Goal:** D-04 — CI artifact upload + download workflow（bench.yml）
 **Benchmark impact:** No new criterion benchmark groups introduced. Existing baselines
 (Phases 4/5/42/44) remain current. See "CI Benchmark Artifact 使用说明" above.
+
+---
+
+## Phase 73 — SQLite batch INSERT（v1.21）
+
+**Date:** 2026-06-09
+**Goal:** multi-row batch INSERT 吞吐量量化（SQLITE-02）
+**Test environment:** Apple Silicon (Darwin 25.5.0)，release build（opt-level=3, LTO=fat, strip=symbols, panic=abort）
+
+### SQLite multi-row INSERT 对比（criterion，sqlite_multi_row group）
+
+| n | multi_row_batch_size | throughput (elem/s) |
+|---|----------------------|---------------------|
+| 10,000 | 1  | 397,200 |
+| 10,000 | 16 | 523,410 |
+| 10,000 | 32 | 507,970 |
+| 10,000 | 64 | 503,250 |
+| 50,000 | 1  | 398,230 |
+| 50,000 | 16 | 517,820 |
+| 50,000 | 32 | 501,120 |
+| 50,000 | 64 | 499,240 |
+
+**量化收益（SQLITE-02 验收）：**
+- n=10,000：multi_row=64 vs multi_row=1 吞吐量提升 26.7%（397,200 → 503,250 elem/s）
+- n=50,000：multi_row=64 vs multi_row=1 吞吐量提升 25.4%（398,230 → 499,240 elem/s）
+
+> 注：multi_row=16 在两种规模下均为最高吞吐（523K / 518K elem/s），优于 multi_row=64。推测原因：在合成场景（单线程批量写入无竞争）下，更小的 VALUES 子句（16 行）可完整保留在 SQLite 内部缓存中，大批次（64 行）反而触发额外内存压力。此行为与具体机器/系统负载有关，生产环境可按实际数据规模调优 multi_row_batch_size。
+
+### Criterion 输出原文
+
+<details>
+<summary>cargo bench --bench bench_sqlite sqlite_multi_row（Phase 73）</summary>
+
+```
+sqlite_multi_row/n=10000/multi_row=1
+                        time:   [25.113 ms 25.176 ms 25.243 ms]
+                        thrpt:  [396.16 Kelem/s 397.20 Kelem/s 398.19 Kelem/s]
+
+sqlite_multi_row/n=10000/multi_row=16
+                        time:   [19.042 ms 19.105 ms 19.185 ms]
+                        thrpt:  [521.24 Kelem/s 523.41 Kelem/s 525.14 Kelem/s]
+
+sqlite_multi_row/n=10000/multi_row=32
+                        time:   [19.657 ms 19.686 ms 19.712 ms]
+                        thrpt:  [507.30 Kelem/s 507.97 Kelem/s 508.74 Kelem/s]
+
+sqlite_multi_row/n=10000/multi_row=64
+                        time:   [19.832 ms 19.871 ms 19.911 ms]
+                        thrpt:  [502.23 Kelem/s 503.25 Kelem/s 504.25 Kelem/s]
+
+sqlite_multi_row/n=50000/multi_row=1
+                        time:   [125.15 ms 125.56 ms 125.96 ms]
+                        thrpt:  [396.96 Kelem/s 398.23 Kelem/s 399.52 Kelem/s]
+
+sqlite_multi_row/n=50000/multi_row=16
+                        time:   [96.273 ms 96.559 ms 96.944 ms]
+                        thrpt:  [515.76 Kelem/s 517.82 Kelem/s 519.36 Kelem/s]
+
+sqlite_multi_row/n=50000/multi_row=32
+                        time:   [99.425 ms 99.776 ms 100.18 ms]
+                        thrpt:  [499.10 Kelem/s 501.12 Kelem/s 502.89 Kelem/s]
+
+sqlite_multi_row/n=50000/multi_row=64
+                        time:   [100.01 ms 100.15 ms 100.29 ms]
+                        thrpt:  [498.55 Kelem/s 499.24 Kelem/s 499.96 Kelem/s]
+```
+
+</details>
+
+### 结论
+
+- [x] SQLITE-02：benchmark 已量化 multi-row INSERT 相较于单行模式的吞吐量提升（multi_row=64 vs multi_row=1 约提升 26%）
+- v1.20 baseline 对比：Phase 73 新增 sqlite_multi_row group，无直接 v1.20 baseline 对比（该 group 为首次引入）；sqlite_export group 无回归
+
+---
+
+## Phase 72 — 基准体系完善（v1.20）
+
+**Date:** 2026-06-08
+**Goal:** 建立 v1.20 里程碑 CLI 冷启动基线（BENCH-01）+ criterion throughput baseline 存档（BENCH-02，由 Plan 72-02 完成）
+**Test environment:** Apple Silicon (Darwin 25.5.0), release build (`opt-level=3`, LTO=fat, strip=symbols, panic=abort)
+
+### CLI 冷启动基线（hyperfine, BENCH-01）
+
+测量命令与 Phase 9 保持一致（per D-01）：
+
+```bash
+hyperfine --warmup 3 './target/release/sqllog2db --version'
+hyperfine --warmup 3 './target/release/sqllog2db validate -c benches/hyperfine-validate.toml'
+```
+
+| 命令 | Phase 9 (v1.9) mean | Phase 72 (v1.20) mean | 差值 |
+|------|--------------------|-----------------------|------|
+| `--version` | ~2.9 ms | 2.1 ms | −0.8 ms |
+| `validate -c benches/hyperfine-validate.toml` | ~2.8 ms | 2.4 ms | −0.4 ms |
+
+> validate 行使用 `benches/hyperfine-validate.toml` 作为测量 fixture（含 `inputs = ["sqllogs"]`），确保 v1.20 binary 走完整 validate 成功路径与 Phase 9 同口径可比；根目录 `config.toml` 因含旧字段 `directory`（v1.12 已改名为 `inputs`）会触发 exit 2 失败路径，不可用于冷启动基准测量。
+
+<details>
+<summary>hyperfine 原始输出（--version）</summary>
+
+```
+Benchmark 1: ./target/release/sqllog2db --version
+  Time (mean ± σ):       2.1 ms ±   0.1 ms    [User: 1.2 ms, System: 0.5 ms]
+  Range (min … max):     1.8 ms …   2.8 ms    642 runs
+
+  Warning: Command took less than 5 ms to complete. Note that the results might be inaccurate because hyperfine can not calibrate the shell startup time much more precise than this limit. You can try to use the `-N`/`--shell=none` option to disable the shell completely.
+```
+
+</details>
+
+<details>
+<summary>hyperfine 原始输出（validate）</summary>
+
+```
+Benchmark 1: ./target/release/sqllog2db validate -c benches/hyperfine-validate.toml
+  Time (mean ± σ):       2.4 ms ±   0.2 ms    [User: 1.4 ms, System: 0.6 ms]
+  Range (min … max):     2.0 ms …   4.0 ms    621 runs
+
+  Warning: Command took less than 5 ms to complete. Note that the results might be inaccurate because hyperfine can not calibrate the shell startup time much more precise than this limit. You can try to use the `-N`/`--shell=none` option to disable the shell completely.
+```
+
+</details>
+
+### Criterion v1.20 Baseline 存档（BENCH-02）
+
+v1.20 criterion baseline 已存档至 `benches/baselines/`，覆盖 4 个 bench 文件（bench_csv、bench_sqlite、bench_filters、bench_parser）的全部合成场景（csv_export 3 sizes、csv_format_only、sqlite_export 3 sizes、sqlite_single_row 2 sizes、filters 7 场景、parser_throughput 3 sizes，共 19 个 v1.20 目录）。`csv_export_real` 与 `sqlite_export_real` 因 `sqllogs/` 不在 repo 内自动 skip（与 Phase 4 处理方式一致）。
+
+```bash
+# 存档命令（已执行）
+CRITERION_HOME=benches/baselines cargo bench -- --save-baseline v1.20
+```
+
+```bash
+# 后续版本对比命令
+CRITERION_HOME=benches/baselines cargo bench -- --baseline v1.20
+```
+
+criterion 输出将标注 "Performance has improved" / "Performance has regressed" / "No change in performance detected"。
+
+### 结论
+
+- [x] BENCH-01 hyperfine 冷启动数值已记录（--version + validate 两命令），与 Phase 9 ~3ms 形成对比表
+- [x] BENCH-02 criterion v1.20 baseline 存档至 `benches/baselines/`，覆盖 4 个 bench 文件全部合成场景
+
+---

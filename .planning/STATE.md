@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.19-complete
-milestone_name: watch完善与文档对齐
-status: milestone_complete
-last_updated: "2026-06-07T21:30:00.000Z"
-last_activity: 2026-06-07 -- v1.19 milestone archived
+milestone: v1.20
+milestone_name: 性能全面提升
+status: archived
+last_updated: "2026-06-12T00:00:00.000Z"
+last_activity: 2026-06-12 -- v1.20 milestone archived, ready for next milestone
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 16
-  completed_plans: 16
+  total_phases: 5
+  completed_phases: 5
+  total_plans: 9
+  completed_plans: 9
   percent: 100
 ---
 
@@ -17,35 +17,29 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-07 after v1.19)
+See: .planning/PROJECT.md (updated 2026-06-12 after v1.20 milestone)
 
 **Core value:** 用户能够精确指定"导出哪些记录的哪些字段"——过滤逻辑清晰可配置，输出结果完全可控
-**Current focus:** 里程碑 v1.19 已完成。运行 `/gsd:new-milestone` 开始下一里程碑。
+**Current focus:** Planning next milestone
 
-## Milestone: v1.19 watch完善与文档对齐 — COMPLETE
+## Current Position
 
-**Shipped:** 2026-06-07  
-**Phases:** 1–3, 71 | **Plans:** 16 | **Commits:** 96
+Phase: v1.20 archived
+Status: Milestone archived — ready for `/gsd:new-milestone`
+Last activity: 2026-06-12 -- v1.20 milestone archived
 
-| Phase | 名称 | Status |
-|-------|------|--------|
-| 1 | watch 功能完善 | ✅ Complete (2026-06-06) |
-| 2 | 测试覆盖率与 FSEvents | ✅ Complete (2026-06-07) |
-| 3 | 文档与验证对齐 | ✅ Complete (2026-06-07) |
-| 71 | mod.rs 重构 | ✅ Complete (2026-06-07) |
+## Accumulated Context
 
-## Performance Metrics
+### Key Decisions
 
-- Tests: ~909 total (all passing, 2 ignored)
-- Line coverage: 92.06% (target: ≥92% — MET)
-- Build: LTO fat + strip + panic=abort
+- 流式单线程架构保持不变（核心约束）
+- 不引入重量级依赖（精简原则不变）
+- tokio block_in_place 包裹 rayon + BufWriter（v1.20 异步迁移后保持并行性能）
 
-## Archives
+### Pending Todos
 
-- `.planning/milestones/v1.19-ROADMAP.md` — 完整 Phase 细节
-- `.planning/milestones/v1.19-REQUIREMENTS.md` — 需求归档（8/8 complete）
-- `.planning/milestones/v1.19-phases/` — Phase 目录归档（01-watch, 02-fsevents, 03-doc-align, 71-mod-rs-mod-rs-pub-use）
+(none)
 
-## Operator Next Steps
+### Known Blockers
 
-- Run `/gsd:new-milestone` to plan the next milestone
+(none)

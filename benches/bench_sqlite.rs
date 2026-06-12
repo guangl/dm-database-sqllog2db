@@ -17,7 +17,12 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
-fn make_config(sqllog_dir: &Path, bench_dir: &Path, batch_size: usize) -> Config {
+fn make_config(
+    sqllog_dir: &Path,
+    bench_dir: &Path,
+    batch_size: usize,
+    multi_row_batch_size: usize,
+) -> Config {
     // Write to a real file — SQLite needs actual block device storage.
     // `overwrite=true` drops+recreates the table on each `handle_run` call,
     // giving a clean slate every benchmark iteration.
@@ -37,10 +42,12 @@ table_name = "sqllogs"
 overwrite = true
 append = false
 batch_size = {batch_size}
+multi_row_batch_size = {multi_row_batch_size}
 "#,
         sqllog = sqllog_dir.to_string_lossy().replace('\\', "/"),
         dir = bench_dir.to_string_lossy().replace('\\', "/"),
         batch_size = batch_size,
+        multi_row_batch_size = multi_row_batch_size,
     );
     toml::from_str(&toml).unwrap()
 }
@@ -56,12 +63,21 @@ fn bench_sqlite_export(c: &mut Criterion) {
 
     for &n in &[1_000usize, 10_000, 50_000] {
         fs::write(sqllog_dir.join("bench.log"), bench_common::synthetic_log(n)).unwrap();
-        let cfg = make_config(&sqllog_dir, &bench_dir, 10_000);
+        let cfg = make_config(&sqllog_dir, &bench_dir, 10_000, 64);
 
         group.throughput(Throughput::Elements(n as u64));
         group.bench_with_input(BenchmarkId::from_parameter(n), &cfg, |b, cfg| {
             b.iter(|| {
-                handle_run(cfg, true, false, &Arc::new(AtomicBool::new(false)), None).unwrap();
+                tokio::runtime::Runtime::new()
+                    .unwrap()
+                    .block_on(handle_run(
+                        cfg,
+                        true,
+                        false,
+                        &Arc::new(AtomicBool::new(false)),
+                        None,
+                    ))
+                    .unwrap();
             });
         });
     }
@@ -79,7 +95,7 @@ fn bench_sqlite_real_file(c: &mut Criterion) {
     // 独立 bench_dir，避免与 synthetic bench_sqlite 的 bench.db 冲突
     let bench_dir = bench_common::bench_target_dir("bench_sqlite_real");
     fs::create_dir_all(&bench_dir).unwrap();
-    let cfg = make_config(&real_dir, &bench_dir, 10_000);
+    let cfg = make_config(&real_dir, &bench_dir, 10_000, 64);
 
     let mut group = c.benchmark_group("sqlite_export_real");
     // 真实文件 + SQLite 双重慢，尽量减少采样次数（criterion 最小值为 10）
@@ -88,7 +104,16 @@ fn bench_sqlite_real_file(c: &mut Criterion) {
     // 记录数未预扫描，省略 Throughput::Elements，仅记录绝对时间
     group.bench_function("real_file", |b| {
         b.iter(|| {
-            handle_run(&cfg, true, false, &Arc::new(AtomicBool::new(false)), None).unwrap();
+            tokio::runtime::Runtime::new()
+                .unwrap()
+                .block_on(handle_run(
+                    &cfg,
+                    true,
+                    false,
+                    &Arc::new(AtomicBool::new(false)),
+                    None,
+                ))
+                .unwrap();
         });
     });
     group.finish();
@@ -106,14 +131,60 @@ fn bench_sqlite_single_row(c: &mut Criterion) {
     for &n in &[1_000usize, 10_000] {
         fs::write(sqllog_dir.join("bench.log"), bench_common::synthetic_log(n)).unwrap();
         // batch_size=1 触发每条 INSERT 独立 BEGIN/COMMIT（单行提交对照组）
-        let cfg = make_config(&sqllog_dir, &bench_dir, 1);
+        let cfg = make_config(&sqllog_dir, &bench_dir, 1, 64);
 
         group.throughput(Throughput::Elements(n as u64));
         group.bench_with_input(BenchmarkId::from_parameter(n), &cfg, |b, cfg| {
             b.iter(|| {
-                handle_run(cfg, true, false, &Arc::new(AtomicBool::new(false)), None).unwrap();
+                tokio::runtime::Runtime::new()
+                    .unwrap()
+                    .block_on(handle_run(
+                        cfg,
+                        true,
+                        false,
+                        &Arc::new(AtomicBool::new(false)),
+                        None,
+                    ))
+                    .unwrap();
             });
         });
+    }
+
+    group.finish();
+}
+
+fn bench_sqlite_multi_row_insert(c: &mut Criterion) {
+    let bench_dir = bench_common::bench_target_dir("bench_sqlite_multi_row");
+    let sqllog_dir = bench_dir.join("sqllogs");
+    fs::create_dir_all(&sqllog_dir).unwrap();
+
+    let mut group = c.benchmark_group("sqlite_multi_row");
+    group.sample_size(20);
+
+    for &n in &[10_000usize, 50_000] {
+        fs::write(sqllog_dir.join("bench.log"), bench_common::synthetic_log(n)).unwrap();
+        for &multi_row_size in &[1usize, 16, 32, 64] {
+            let cfg = make_config(&sqllog_dir, &bench_dir, 10_000, multi_row_size);
+            group.throughput(Throughput::Elements(n as u64));
+            group.bench_with_input(
+                BenchmarkId::new(format!("n={n}"), format!("multi_row={multi_row_size}")),
+                &cfg,
+                |b, cfg| {
+                    b.iter(|| {
+                        tokio::runtime::Runtime::new()
+                            .unwrap()
+                            .block_on(handle_run(
+                                cfg,
+                                true,
+                                false,
+                                &Arc::new(AtomicBool::new(false)),
+                                None,
+                            ))
+                            .unwrap();
+                    });
+                },
+            );
+        }
     }
 
     group.finish();
@@ -123,6 +194,7 @@ criterion_group!(
     benches,
     bench_sqlite_export,
     bench_sqlite_single_row,
+    bench_sqlite_multi_row_insert,
     bench_sqlite_real_file
 );
 criterion_main!(benches);

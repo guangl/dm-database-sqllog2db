@@ -1,7 +1,7 @@
 use crate::config::Config;
 use crate::error::{Error, Result};
 use crate::pipeline::filters::{IndicatorFilters, SqlFilters};
-use dm_database_parser_sqllog::{Filter, FilterBuilder, LogParserBuilder};
+use dm_database_parser_sqllog::{AsyncLogParser, Filter, FilterBuilder};
 
 // ===== Pre-scan: 指标/SQL 过滤器构建 =====
 
@@ -52,27 +52,41 @@ pub(super) fn build_sql_exclude_filters(sf: &SqlFilters) -> Vec<Filter> {
 ///
 /// 文件内部使用 `par_iter()` 并行处理各行，无共享可变状态，
 /// 可被上层跨文件的 `par_iter()` 安全调用（两级 rayon 嵌套并行）。
-pub(super) fn scan_log_file_for_matches(file_path: &str, cfg: &Config) -> Vec<String> {
+/// `handle` 为调用方在进入 rayon 前捕获的 tokio Handle，用于在非 tokio 线程上驱动异步解析。
+pub(super) fn scan_log_file_for_matches(
+    file_path: &str,
+    cfg: &Config,
+    handle: &tokio::runtime::Handle,
+) -> Vec<String> {
     use rayon::prelude::*;
 
-    let parser = match LogParserBuilder::new(file_path).build() {
-        Ok(p) => p,
-        Err(e) => {
-            log::warn!("Pre-scan: failed to open '{file_path}': {e}");
-            return Vec::new();
-        }
-    };
     let filters = match &cfg.filter {
         Some(f) if f.has_transaction_filters() => f,
         _ => return Vec::new(),
+    };
+
+    // block_in_place is required here because this function may be called either:
+    // (a) directly from a tokio async context (e.g. tests) — block_in_place yields
+    //     the tokio worker thread before block_on drives the async parser; or
+    // (b) from within the outer block_in_place in scan_for_trxids_by_transaction_filters
+    //     via a rayon thread — on a rayon thread block_in_place is a no-op, so
+    //     block_on is safe without double-blocking.
+    // In case (b) the rayon thread is not a tokio worker, so there is no nested
+    // runtime drive; the outer block_in_place only surrenders the *tokio* thread.
+    let records = match tokio::task::block_in_place(|| {
+        handle.block_on(AsyncLogParser::new(std::path::Path::new(file_path)).parse())
+    }) {
+        Ok(r) => r,
+        Err(e) => {
+            log::warn!("Pre-scan: failed to parse '{file_path}': {e}");
+            return Vec::new();
+        }
     };
 
     let indicator_filters = build_indicator_filters(&filters.indicators);
     let sql_include_filters = build_sql_include_filters(&filters.sql);
     let sql_exclude_filters = build_sql_exclude_filters(&filters.sql);
     let has_sql_filters = filters.sql.has_filters();
-
-    let records: Vec<_> = parser.iter().filter_map(std::result::Result::ok).collect();
     let trxids: std::collections::HashSet<String> = records
         .par_iter()
         .filter_map(|record| {
@@ -113,26 +127,29 @@ pub(super) fn scan_for_trxids_by_transaction_filters(
         log_files.len()
     );
 
+    let handle = tokio::runtime::Handle::current();
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(jobs)
         .build()
         .map_err(|e| Error::Io(std::io::Error::other(format!("rayon thread pool: {e}"))))?;
 
-    let matched: std::collections::HashSet<String> = pool.install(|| {
-        log_files
-            .par_iter()
-            .flat_map(|file| {
-                if let Some(path) = file.to_str() {
-                    scan_log_file_for_matches(path, cfg)
-                } else {
-                    log::warn!(
-                        "Pre-scan: skipping file with non-UTF8 path: {}",
-                        file.display()
-                    );
-                    Vec::new()
-                }
-            })
-            .collect()
+    let matched: std::collections::HashSet<String> = tokio::task::block_in_place(|| {
+        pool.install(|| {
+            log_files
+                .par_iter()
+                .flat_map(|file| {
+                    if let Some(path) = file.to_str() {
+                        scan_log_file_for_matches(path, cfg, &handle)
+                    } else {
+                        log::warn!(
+                            "Pre-scan: skipping file with non-UTF8 path: {}",
+                            file.display()
+                        );
+                        Vec::new()
+                    }
+                })
+                .collect()
+        })
     });
 
     Ok(matched.into_iter().collect())

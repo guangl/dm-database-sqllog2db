@@ -2,6 +2,7 @@
 
 ## Milestones
 
+- ✅ **v1.20 性能全面提升** — Phases 72–76 (shipped 2026-06-11)
 - ✅ **v1.19 watch完善与文档对齐** — Phases 1–3, 71 (shipped 2026-06-07)
 - ✅ **v1.18 用户体验全面升级** — Phases 67–70 (shipped 2026-06-06)
 - ✅ **v1.17 多文件并行提速** — Phases 64–66.1 (shipped 2026-06-04)
@@ -236,6 +237,19 @@ Full details: `.planning/milestones/v1.18-ROADMAP.md`
 - [x] **Phase 71: mod.rs 重构** — 10 个 mod.rs 拆分为命名子模块，mod.rs 仅保留 pub use 导入 (completed 2026-06-07)
 
 Full details: `.planning/milestones/v1.19-ROADMAP.md`
+
+</details>
+
+<details>
+<summary>✅ v1.20 性能全面提升 (Phases 72–76) — shipped 2026-06-11</summary>
+
+- [x] **Phase 72: 基准体系完善** — hyperfine 冷启动测量 + criterion baseline 存档（BENCH-01, BENCH-02） (completed 2026-06-08)
+- [x] **Phase 73: SQLite batch INSERT** — multi-row 批量插入实现 + benchmark 量化提升（SQLITE-01, SQLITE-02） (completed 2026-06-09)
+- [x] **Phase 74: 内存与分配优化** — normalizer Arc key + CSV line_buf 预热（MEM-01, MEM-02） (completed 2026-06-09)
+- [x] **Phase 75: 并行路径公共逻辑提取** — parallel.rs 与 sqlite_parallel.rs 共享模块（STRUCT-04） (completed 2026-06-11)
+- [x] **Phase 76: 异步解析路径迁移** — 切换为 dm-database-parser-sqllog async API，添加 tokio（ASYNC-01） (completed 2026-06-11)
+
+Full details: `.planning/milestones/v1.20-ROADMAP.md`
 
 </details>
 
@@ -851,7 +865,16 @@ Full details: `.planning/milestones/v1.19-ROADMAP.md`
 | DOC-04      | 3     |
 | DOC-05      | 3     |
 
-**91/91 requirements mapped — coverage: 100%**
+| BENCH-01    | 72    |
+| BENCH-02    | 72    |
+| SQLITE-01   | 73    |
+| SQLITE-02   | 73    |
+| MEM-01      | 74    |
+| MEM-02      | 74    |
+| STRUCT-04   | 75    |
+| ASYNC-01    | 76    |
+
+**99/99 requirements mapped — coverage: 100%**
 
 ## Progress
 
@@ -899,6 +922,11 @@ Full details: `.planning/milestones/v1.19-ROADMAP.md`
 | 2. 测试覆盖率与 FSEvents | v1.19 | Complete | 2026-06-07 |
 | 3. 文档与验证对齐 | v1.19 | Complete | 2026-06-07 |
 | 71. mod.rs 重构 | v1.19 | Complete | 2026-06-07 |
+| 72. 基准体系完善 | v1.20 | 3/3 | Complete    | 2026-06-08 |
+| 73. SQLite batch INSERT | v1.20 | 2/2 | Complete    | 2026-06-09 |
+| 74. 内存与分配优化 | v1.20 | 2/2 | Complete    | 2026-06-09 |
+| 75. 并行路径公共逻辑提取 | v1.20 | 1/1 | Complete    | 2026-06-11 |
+| 76. 异步解析路径迁移 | v1.20 | 1/1 | Complete   | 2026-06-11 |
 
 ### Phase 71: mod.rs 重构 — 拆分子模块，mod.rs 仅保留 pub use 导入
 
@@ -923,5 +951,8 @@ Full details: `.planning/milestones/v1.19-ROADMAP.md`
 - [x] 71-10-PLAN.md — src/cli/watch/mod.rs (998 行) 拆为 handler/state/watcher/event/trigger_full/trigger_incremental/dirs/status/append/debounce/tests（Wave 3）
 
 ---
+
+*Phase 72–76 details archived to `.planning/milestones/v1.20-ROADMAP.md`*
 *Created: 2026-05-21 for milestone v1.10*
-*Updated: 2026-06-06 — milestone watch完善与文档对齐 started (Phases 1–3)*
+*Updated: 2026-06-08 — milestone v1.20 性能全面提升 roadmap expanded to Phases 72–76 (8 requirements)*
+*Updated: 2026-06-12 — milestone v1.20 archived, Phase 72–76 details moved to milestones/v1.20-ROADMAP.md*

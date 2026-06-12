@@ -25,7 +25,11 @@ fn test_sqlite_basic_export() {
     let parser = LogParserBuilder::new(logfile.to_str().unwrap())
         .build()
         .unwrap();
-    let records: Vec<_> = parser.iter().filter_map(std::result::Result::ok).collect();
+    let records: Vec<_> = parser
+        .iter()
+        .unwrap()
+        .filter_map(std::result::Result::ok)
+        .collect();
 
     {
         let mut exporter = SqliteExporter::new(
@@ -59,7 +63,11 @@ fn test_sqlite_overwrite_drops_existing_table() {
     let parser = LogParserBuilder::new(logfile.to_str().unwrap())
         .build()
         .unwrap();
-    let records: Vec<_> = parser.iter().filter_map(std::result::Result::ok).collect();
+    let records: Vec<_> = parser
+        .iter()
+        .unwrap()
+        .filter_map(std::result::Result::ok)
+        .collect();
 
     // First run: insert 3 rows
     {
@@ -99,7 +107,11 @@ fn test_sqlite_with_normalized() {
     let parser = LogParserBuilder::new(logfile.to_str().unwrap())
         .build()
         .unwrap();
-    let records: Vec<_> = parser.iter().filter_map(std::result::Result::ok).collect();
+    let records: Vec<_> = parser
+        .iter()
+        .unwrap()
+        .filter_map(std::result::Result::ok)
+        .collect();
     let normalized: Vec<Option<String>> = records
         .iter()
         .map(|_| Some("SELECT * FROM t WHERE id=?".into()))
@@ -133,12 +145,17 @@ fn test_sqlite_from_config() {
         overwrite: true,
         append: false,
         batch_size: 42_000,
+        multi_row_batch_size: 32,
     };
     let mut exporter = SqliteExporter::from_config(&cfg);
     // 验证 from_config 正确映射 batch_size 字段（默认值是 10_000，这里用 42_000 区分）
     assert_eq!(
         exporter.batch_size, cfg.batch_size,
         "from_config must map batch_size correctly"
+    );
+    assert_eq!(
+        exporter.multi_row_batch_size, cfg.multi_row_batch_size,
+        "from_config must map multi_row_batch_size correctly"
     );
     exporter.initialize().unwrap();
     exporter.finalize().unwrap();
@@ -155,7 +172,11 @@ fn test_sqlite_export_method() {
     let parser = LogParserBuilder::new(logfile.to_str().unwrap())
         .build()
         .unwrap();
-    let records: Vec<_> = parser.iter().filter_map(std::result::Result::ok).collect();
+    let records: Vec<_> = parser
+        .iter()
+        .unwrap()
+        .filter_map(std::result::Result::ok)
+        .collect();
 
     {
         let mut exporter =
@@ -185,7 +206,11 @@ fn test_sqlite_export_one_preparsed() {
     let parser = LogParserBuilder::new(logfile.to_str().unwrap())
         .build()
         .unwrap();
-    let records: Vec<_> = parser.iter().filter_map(std::result::Result::ok).collect();
+    let records: Vec<_> = parser
+        .iter()
+        .unwrap()
+        .filter_map(std::result::Result::ok)
+        .collect();
 
     {
         let mut exporter =
@@ -214,7 +239,11 @@ fn test_sqlite_stats_snapshot() {
     let parser = LogParserBuilder::new(logfile.to_str().unwrap())
         .build()
         .unwrap();
-    let records: Vec<_> = parser.iter().filter_map(std::result::Result::ok).collect();
+    let records: Vec<_> = parser
+        .iter()
+        .unwrap()
+        .filter_map(std::result::Result::ok)
+        .collect();
 
     let mut exporter =
         SqliteExporter::new(dbfile.to_string_lossy().into(), "tbl".into(), true, false);
@@ -222,9 +251,13 @@ fn test_sqlite_stats_snapshot() {
     for r in &records {
         exporter.export(r).unwrap();
     }
-    let snap = exporter.stats_snapshot().unwrap();
-    assert_eq!(snap.exported, 4);
+    // 4 条记录未满 batch_size（64），尚在缓冲区中，未写入 DB，exported 应为 0
+    let snap_before = exporter.stats_snapshot().unwrap();
+    assert_eq!(snap_before.exported, 0, "flush 前 exported 应为 0");
     exporter.finalize().unwrap();
+    // finalize() 触发 flush，记录写入 DB 后才计入 exported
+    let snap_after = exporter.stats_snapshot().unwrap();
+    assert_eq!(snap_after.exported, 4);
 }
 
 #[test]
@@ -282,7 +315,7 @@ fn test_sqlite_field_order() {
         let parser = LogParserBuilder::new(log.to_str().unwrap())
             .build()
             .unwrap();
-        for record in parser.iter().flatten() {
+        for record in parser.iter().unwrap().flatten() {
             exporter.export(&record).unwrap();
         }
         exporter.finalize().unwrap();
@@ -309,7 +342,11 @@ fn test_sqlite_append_mode() {
     let parser = LogParserBuilder::new(logfile.to_str().unwrap())
         .build()
         .unwrap();
-    let records: Vec<_> = parser.iter().filter_map(std::result::Result::ok).collect();
+    let records: Vec<_> = parser
+        .iter()
+        .unwrap()
+        .filter_map(std::result::Result::ok)
+        .collect();
 
     // First run: create table with 3 rows
     {
@@ -410,7 +447,11 @@ fn test_sqlite_initialize_clears_existing_table_via_delete() {
     let parser = LogParserBuilder::new(logfile.to_str().unwrap())
         .build()
         .unwrap();
-    let records: Vec<_> = parser.iter().filter_map(std::result::Result::ok).collect();
+    let records: Vec<_> = parser
+        .iter()
+        .unwrap()
+        .filter_map(std::result::Result::ok)
+        .collect();
 
     // 第一次 run：写入 4 条
     {
@@ -463,7 +504,11 @@ fn test_sqlite_batch_commit() {
     let parser = LogParserBuilder::new(logfile.to_str().unwrap())
         .build()
         .unwrap();
-    let records: Vec<_> = parser.iter().filter_map(std::result::Result::ok).collect();
+    let records: Vec<_> = parser
+        .iter()
+        .unwrap()
+        .filter_map(std::result::Result::ok)
+        .collect();
 
     {
         let mut exporter =
@@ -512,7 +557,7 @@ fn test_sqlite_export_without_initialize_returns_err() {
     let parser = LogParserBuilder::new(logfile.to_str().unwrap())
         .build()
         .unwrap();
-    for record in parser.iter().flatten() {
+    for record in parser.iter().unwrap().flatten() {
         let result = exporter.export(&record);
         assert!(result.is_err(), "未调用 initialize() 时 export 应返回 Err");
         let err_msg = result.unwrap_err().to_string();
@@ -545,7 +590,7 @@ fn test_sqlite_export_one_normalized_without_initialize_returns_err() {
     let parser = LogParserBuilder::new(logfile.to_str().unwrap())
         .build()
         .unwrap();
-    for record in parser.iter().flatten() {
+    for record in parser.iter().unwrap().flatten() {
         let result = exporter.export_one_normalized(&record, Some("SELECT 1"));
         assert!(
             result.is_err(),
@@ -616,7 +661,11 @@ fn test_sqlite_projection_subset_export() {
     let parser = LogParserBuilder::new(logfile.to_str().unwrap())
         .build()
         .unwrap();
-    let records: Vec<_> = parser.iter().filter_map(std::result::Result::ok).collect();
+    let records: Vec<_> = parser
+        .iter()
+        .unwrap()
+        .filter_map(std::result::Result::ok)
+        .collect();
 
     {
         let mut exporter = SqliteExporter::new(
@@ -653,4 +702,211 @@ fn test_sqlite_projection_subset_export() {
         )
         .unwrap();
     assert_eq!(col_count, 3, "投影后表应有 3 列，实际: {col_count}");
+}
+
+// ---- multi-row batch INSERT 正确性测试（73-01 Task 2）----
+
+fn parse_records(logfile: &std::path::Path) -> Vec<dm_database_parser_sqllog::Sqllog> {
+    LogParserBuilder::new(logfile.to_str().unwrap())
+        .build()
+        .unwrap()
+        .iter()
+        .unwrap()
+        .filter_map(std::result::Result::ok)
+        .collect()
+}
+
+fn count_rows_in_db(dbfile: &std::path::Path, table: &str) -> i64 {
+    let conn = rusqlite::Connection::open(dbfile).unwrap();
+    conn.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get(0))
+        .unwrap()
+}
+
+#[test]
+fn test_sqlite_multi_row_basic() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let logfile = dir.path().join("t.log");
+    let dbfile = dir.path().join("out.db");
+    write_test_log(&logfile, 100);
+    let records = parse_records(&logfile);
+
+    {
+        let mut exporter =
+            SqliteExporter::new(dbfile.to_string_lossy().into(), "tbl".into(), true, false);
+        exporter.multi_row_batch_size = 64;
+        exporter.initialize().unwrap();
+        for r in &records {
+            exporter.export_one_normalized(r, None).unwrap();
+        }
+        exporter.finalize().unwrap();
+    }
+
+    assert_eq!(count_rows_in_db(&dbfile, "tbl"), 100);
+}
+
+#[test]
+fn test_sqlite_multi_row_partial_tail() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let logfile = dir.path().join("t.log");
+    let dbfile = dir.path().join("out.db");
+    write_test_log(&logfile, 65);
+    let records = parse_records(&logfile);
+
+    {
+        let mut exporter =
+            SqliteExporter::new(dbfile.to_string_lossy().into(), "tbl".into(), true, false);
+        exporter.multi_row_batch_size = 64;
+        exporter.initialize().unwrap();
+        for r in &records {
+            exporter.export_one_normalized(r, None).unwrap();
+        }
+        exporter.finalize().unwrap();
+    }
+
+    assert_eq!(
+        count_rows_in_db(&dbfile, "tbl"),
+        65,
+        "finalize 前 flush 应刷尾部 1 条"
+    );
+}
+
+#[test]
+fn test_sqlite_multi_row_empty_input() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let dbfile = dir.path().join("out.db");
+
+    {
+        let mut exporter =
+            SqliteExporter::new(dbfile.to_string_lossy().into(), "tbl".into(), true, false);
+        exporter.multi_row_batch_size = 64;
+        exporter.initialize().unwrap();
+        exporter.finalize().unwrap();
+    }
+
+    assert_eq!(count_rows_in_db(&dbfile, "tbl"), 0);
+}
+
+#[test]
+fn test_sqlite_multi_row_batch1_equals_single() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let logfile = dir.path().join("t.log");
+    let dbfile = dir.path().join("out.db");
+    write_test_log(&logfile, 5);
+    let records = parse_records(&logfile);
+
+    {
+        let mut exporter =
+            SqliteExporter::new(dbfile.to_string_lossy().into(), "tbl".into(), true, false);
+        exporter.multi_row_batch_size = 1;
+        exporter.initialize().unwrap();
+        for r in &records {
+            exporter.export_one_normalized(r, None).unwrap();
+        }
+        exporter.finalize().unwrap();
+    }
+
+    assert_eq!(
+        count_rows_in_db(&dbfile, "tbl"),
+        5,
+        "batch_size=1 应等价于改造前单行模式"
+    );
+}
+
+#[test]
+fn test_sqlite_multi_row_projection_equivalence() {
+    use crate::pipeline::FieldMask;
+
+    let dir = tempfile::TempDir::new().unwrap();
+    let logfile = dir.path().join("t.log");
+    let dbfile_full = dir.path().join("full.db");
+    let dbfile_proj = dir.path().join("proj.db");
+    write_test_log(&logfile, 5);
+    let records = parse_records(&logfile);
+
+    // 全量路径
+    {
+        let mut exporter = SqliteExporter::new(
+            dbfile_full.to_string_lossy().into(),
+            "tbl".into(),
+            true,
+            false,
+        );
+        exporter.multi_row_batch_size = 4;
+        exporter.initialize().unwrap();
+        for r in &records {
+            exporter.export_one_normalized(r, None).unwrap();
+        }
+        exporter.finalize().unwrap();
+    }
+
+    // 投影路径：ts(0)/username(4)/sql(10)
+    {
+        let mut exporter = SqliteExporter::new(
+            dbfile_proj.to_string_lossy().into(),
+            "tbl".into(),
+            true,
+            false,
+        );
+        exporter.multi_row_batch_size = 4;
+        exporter.normalize = false;
+        exporter.field_mask =
+            FieldMask::from_names(&["ts".to_string(), "username".to_string(), "sql".to_string()])
+                .unwrap();
+        exporter.ordered_indices = vec![0, 4, 10];
+        exporter.initialize().unwrap();
+        for r in &records {
+            exporter.export_one_normalized(r, None).unwrap();
+        }
+        exporter.finalize().unwrap();
+    }
+
+    let conn_full = rusqlite::Connection::open(&dbfile_full).unwrap();
+    let conn_proj = rusqlite::Connection::open(&dbfile_proj).unwrap();
+
+    for i in 0..5i64 {
+        let (ts_full, username_full, sql_full): (String, String, String) = conn_full
+            .query_row(
+                "SELECT ts, username, sql FROM tbl ORDER BY rowid LIMIT 1 OFFSET ?1",
+                [i],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .unwrap();
+        let (ts_proj, username_proj, sql_proj): (String, String, String) = conn_proj
+            .query_row(
+                "SELECT ts, username, sql FROM tbl ORDER BY rowid LIMIT 1 OFFSET ?1",
+                [i],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(ts_full, ts_proj, "row {i}: ts mismatch");
+        assert_eq!(username_full, username_proj, "row {i}: username mismatch");
+        assert_eq!(sql_full, sql_proj, "row {i}: sql mismatch");
+    }
+}
+
+#[test]
+fn test_sqlite_multi_row_batch_commit_interaction() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let logfile = dir.path().join("t.log");
+    let dbfile = dir.path().join("out.db");
+    write_test_log(&logfile, 10);
+    let records = parse_records(&logfile);
+
+    {
+        let mut exporter =
+            SqliteExporter::new(dbfile.to_string_lossy().into(), "tbl".into(), true, false);
+        exporter.batch_size = 2;
+        exporter.multi_row_batch_size = 4;
+        exporter.initialize().unwrap();
+        for r in &records {
+            exporter.export_one_normalized(r, None).unwrap();
+        }
+        exporter.finalize().unwrap();
+    }
+
+    assert_eq!(
+        count_rows_in_db(&dbfile, "tbl"),
+        10,
+        "batch_size=2 + multi_row_batch_size=4 交互，10 条记录应全部持久化"
+    );
 }

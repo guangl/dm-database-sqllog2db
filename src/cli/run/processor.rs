@@ -1,11 +1,8 @@
-use crate::error::{
-    ErrorStats, ParseErrorRecord, Result, classify_error_kind, truncate_to_120_chars,
-};
+use crate::error::{ErrorStats, Result};
 use crate::exporter::ExporterManager;
 use crate::pipeline::Pipeline;
 use crate::pipeline::normalizer::ParamBuffer;
-use dm_database_parser_sqllog::ParseError;
-use dm_database_parser_sqllog::Sqllog;
+use dm_database_parser_sqllog::{AsyncLogParser, Sqllog};
 use indicatif::ProgressBar;
 use log::info;
 use std::sync::Arc;
@@ -190,7 +187,7 @@ fn tick_progress(
 /// `remaining`: 最多再导出多少条记录（跨文件的剩余配额），`None` 表示不限制。
 /// `reset_pb`: 是否在文件开始时重置进度条计数；并行模式传 `false`，避免多线程互相重置。
 #[rustfmt::skip]
-pub(super) fn process_log_file(
+pub(super) async fn process_log_file(
     file_path: &str, file_index: usize, total_files: usize,
     exporter_manager: &mut ExporterManager, pipeline: &Pipeline,
     show_progress: bool, remaining: Option<usize>, interrupted: &Arc<AtomicBool>,
@@ -204,52 +201,38 @@ pub(super) fn process_log_file(
     let file_name = std::path::Path::new(file_path).file_name()
         .map_or_else(|| file_path.to_string(), |n| n.to_string_lossy().into_owned());
     setup_progress_bar(pb, reset_pb, show_progress, file_index, total_files, &file_name);
-    let parser = crate::scanner::build_parser(std::path::Path::new(file_path))?;
-    let (mut records_in_file, mut errors_in_file, mut file_stats) =
-        (0usize, 0usize, ErrorStats::default());
+    let file_path_buf = std::path::Path::new(file_path);
+    let records = match AsyncLogParser::new(file_path_buf).parse().await {
+        Ok(r) => r,
+        Err(e) => {
+            log::warn!("parse failed for '{}': {e}", file_path_buf.display());
+            let mut file_stats = ErrorStats::default();
+            file_stats.add_parse_error();
+            return Ok((0, file_stats));
+        }
+    };
+    let (mut records_in_file, mut file_stats) = (0usize, ErrorStats::default());
     let mut total_processed = 0usize;
-    'outer: for result in parser.iter() {
-        match result {
-            Ok(record) => {
-                let passes = pipeline.is_empty() || pipeline.run_with_meta(&record);
-                let needs_processing = passes || (do_normalize && record.tag.is_none());
-                if !needs_processing { continue; }
-                let action = normalize_and_export(
-                    &record, exporter_manager, include_pm, do_normalize,
-                    params_buffer, placeholder_override, ns_scratch,
-                    remaining, &mut records_in_file, &mut file_stats, file_path, passes,
-                );
-                total_processed = total_processed.wrapping_add(1);
-                match action {
-                    ExportAction::BreakQuota | ExportAction::BreakFatal => break 'outer,
-                    ExportAction::Continue if passes && tick_progress(pb, records_in_file, file_start, &file_name, interrupted) => break 'outer,
-                    // 过滤掉的记录也以相同节奏（每 1024 条）检查中断，与并行路径保持一致
-                    ExportAction::Continue if !passes
-                        && total_processed.trailing_zeros() >= 10
-                        && interrupted.load(Ordering::Acquire) => break 'outer,
-                    ExportAction::Continue => {}
-                }
-            }
-            Err(e) => {
-                errors_in_file += 1;
-                let (line_number, raw_ref) = match &e {
-                    ParseError::InvalidFormat { raw, line_number } => (*line_number, raw.as_str()),
-                    _ => (0u64, ""),
-                };
-                let kind = classify_error_kind(raw_ref);
-                file_stats.add_parse_error_with_kind(kind);
-                if file_stats.parse_error_records.len() < 10_000 {
-                    file_stats.parse_error_records.push(ParseErrorRecord {
-                        line_number,
-                        raw_truncated: truncate_to_120_chars(raw_ref),
-                        kind,
-                    });
-                }
-                log::warn!("{file_path} | {e:?}");
-            }
+    'outer: for record in records {
+        let passes = pipeline.is_empty() || pipeline.run_with_meta(&record);
+        let needs_processing = passes || (do_normalize && record.tag.is_none());
+        if !needs_processing { continue; }
+        let action = normalize_and_export(
+            &record, exporter_manager, include_pm, do_normalize,
+            params_buffer, placeholder_override, ns_scratch,
+            remaining, &mut records_in_file, &mut file_stats, file_path, passes,
+        );
+        total_processed = total_processed.wrapping_add(1);
+        match action {
+            ExportAction::BreakQuota | ExportAction::BreakFatal => break 'outer,
+            ExportAction::Continue if passes && tick_progress(pb, records_in_file, file_start, &file_name, interrupted) => break 'outer,
+            ExportAction::Continue if !passes
+                && total_processed.trailing_zeros() >= 10
+                && interrupted.load(Ordering::Acquire) => break 'outer,
+            ExportAction::Continue => {}
         }
     }
     let elapsed = file_start.elapsed().as_secs_f64();
-    log_file_result(pb, show_progress, file_path, file_index, total_files, records_in_file, errors_in_file, elapsed);
+    log_file_result(pb, show_progress, file_path, file_index, total_files, records_in_file, file_stats.total_errors, elapsed);
     Ok((records_in_file, file_stats))
 }

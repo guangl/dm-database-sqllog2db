@@ -26,46 +26,46 @@ fn make_test_config_with_log() -> (Config, tempfile::TempDir) {
     (cfg, dir)
 }
 
-#[test]
-fn test_handle_stats_top_default_passes() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_handle_stats_top_default_passes() {
     let (cfg, _dir) = make_test_config_with_log();
-    let result = handle_stats(&cfg, Some(20), None, None);
+    let result = handle_stats(&cfg, Some(20), None, None).await;
     assert!(result.is_ok(), "top=20 should succeed, got: {result:?}");
 }
 
-#[test]
-fn test_handle_stats_top_nonzero_passes() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_handle_stats_top_nonzero_passes() {
     let (cfg, _dir) = make_test_config_with_log();
-    let result = handle_stats(&cfg, Some(5), None, None);
+    let result = handle_stats(&cfg, Some(5), None, None).await;
     assert!(result.is_ok(), "top=5 should succeed, got: {result:?}");
 }
 
-#[test]
-fn test_handle_stats_cli_none_config_none_falls_back_to_20() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_handle_stats_cli_none_config_none_falls_back_to_20() {
     let (cfg, _dir) = make_test_config_with_log();
-    let result = handle_stats(&cfg, None, None, None);
+    let result = handle_stats(&cfg, None, None, None).await;
     assert!(
         result.is_ok(),
         "default top=20 fallback should succeed, got: {result:?}"
     );
 }
 
-#[test]
-fn test_handle_stats_cli_top_overrides_config_top() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_handle_stats_cli_top_overrides_config_top() {
     let (mut cfg, _dir) = make_test_config_with_log();
     cfg.stats.top = Some(10);
-    let result = handle_stats(&cfg, Some(5), None, None);
+    let result = handle_stats(&cfg, Some(5), None, None).await;
     assert!(
         result.is_ok(),
         "CLI top=5 should override config top=10, got: {result:?}"
     );
 }
 
-#[test]
-fn test_handle_stats_config_top_used_when_cli_none() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_handle_stats_config_top_used_when_cli_none() {
     let (mut cfg, _dir) = make_test_config_with_log();
     cfg.stats.top = Some(7);
-    let result = handle_stats(&cfg, None, None, None);
+    let result = handle_stats(&cfg, None, None, None).await;
     assert!(
         result.is_ok(),
         "config top=7 should be used when CLI=None, got: {result:?}"

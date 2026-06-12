@@ -1,12 +1,10 @@
 use crate::error::{Error, ErrorStats, Result};
 use crate::exporter::{CsvExporter, ExporterManager};
 use crate::pipeline::{FieldMask, Pipeline};
-use dm_database_parser_sqllog::Sqllog;
+use dm_database_parser_sqllog::AsyncLogParser;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-
-use super::collector;
 
 /// 每个并行任务的返回值：`Some((orig_path, temp_path, count, file_stats))` 或 `None`（跳过/中断）。
 type TaskResult = Option<(PathBuf, PathBuf, usize, ErrorStats)>;
@@ -63,13 +61,16 @@ pub(super) fn concat_csv_parts(
     }
 
     use std::io::Write as _;
-    // 先 flush 确保所有数据已落盘，再删除临时文件；flush 失败时保留临时文件便于诊断
-    writer.flush()?;
+    // flush 结果延后传播：无论成功与否都先清理临时文件，避免 flush 失败时留下磁盘残留。
+    // 显式 drop writer 确保文件句柄在 remove 前关闭（Windows 不允许删除已打开的文件）。
+    let flush_result = writer.flush();
+    drop(writer);
     for p in parts_to_remove {
         if let Err(e) = std::fs::remove_file(p) {
             log::warn!("failed to remove temp part {}: {e}", p.display());
         }
     }
+    flush_result?;
     Ok(())
 }
 
@@ -95,17 +96,19 @@ fn setup_parts_dir(output_path: &Path) -> Result<PathBuf> {
     }
 }
 
-/// 将单文件收集到的记录 Vec 写入临时 CSV 文件。
-///
-/// 返回实际写入的记录数（等于 `rows.len()`）。
-fn write_records_to_csv(
-    rows: Vec<(Sqllog, Option<String>)>,
+#[allow(clippy::too_many_arguments)]
+fn parse_and_write_csv(
+    file: &Path,
     temp_path: &Path,
-    include_performance_metrics: bool,
+    pipeline: &Pipeline,
     do_normalize: bool,
+    placeholder_override: Option<bool>,
     field_mask: FieldMask,
     ordered_indices: &[usize],
-) -> Result<usize> {
+    include_performance_metrics: bool,
+    interrupted: &Arc<AtomicBool>,
+    handle: &tokio::runtime::Handle,
+) -> Result<(usize, ErrorStats)> {
     let mut exporter = CsvExporter::new(temp_path);
     exporter.normalize = do_normalize;
     exporter.field_mask = field_mask;
@@ -114,22 +117,43 @@ fn write_records_to_csv(
     let mut em = ExporterManager::from_csv(exporter);
     em.initialize()?;
     let include_pm = em.csv_include_performance_metrics();
-    let count = rows.len();
-    for (record, normalized) in rows {
-        em.export_one_preparsed(&record, include_pm, normalized.as_deref())?;
-    }
+
+    let records = match handle.block_on(AsyncLogParser::new(file).parse()) {
+        Ok(r) => r,
+        Err(e) => {
+            log::warn!("parse failed for '{}': {e}", file.display());
+            let mut file_stats = ErrorStats::default();
+            file_stats.add_parse_error();
+            return Ok((0, file_stats));
+        }
+    };
+
+    let mut file_stats = ErrorStats::default();
+    let count = super::record_iter::iterate_records(
+        records,
+        pipeline,
+        do_normalize,
+        placeholder_override,
+        interrupted,
+        &mut file_stats,
+        |record, normalized| em.export_one_preparsed(record, include_pm, normalized),
+    )?;
+
     em.finalize()?;
-    Ok(count)
+    Ok((count, file_stats))
 }
 
-/// 并行解析所有文件并将每个文件记录写入独立临时 CSV。
-///
-/// # 内存注意
-/// 按 D-11，CSV 并行路径先通过 `collector::collect_log_file` 将单文件所有过滤后记录
-/// 收集到 `Vec<(Sqllog, Option<String>)>`，再写入临时 CSV。单文件内存占用约
-/// `records × (sizeof(Sqllog) + Option<String>)` 字节；超大文件场景可在后续
-/// `ParallelRunConfig` 重构时切换回流式写入。
 // IO-01: 日志文件由 dm-database-parser-sqllog 通过 fs::read() 一次性全量读取（单次 syscall），无 BufReader，满足 IO-01（D-01）。
+//
+// SAFETY: 此函数必须在 multi_thread tokio runtime 内调用。
+// `tokio::task::block_in_place` 在 current_thread runtime 下会 panic（"Cannot call
+// `blocking_` unless the thread is already in a thread pool"）。当前主入口使用
+// `#[tokio::main]`（默认 multi_thread），但嵌入测试或 benchmark 若改用 current_thread
+// runtime，此处将以不明显的 panic 失败。
+//
+// 并发 IO 上限由 `jobs` 参数控制：rayon 线程池大小 == jobs，所有线程同时发起
+// `handle.block_on(parse())`，峰值内存约为 jobs × 单文件大小；调用方应确保
+// jobs 不超过可接受的并发 IO 数量。
 #[allow(clippy::too_many_arguments)]
 fn run_parallel_tasks(
     log_files: &[PathBuf],
@@ -145,38 +169,38 @@ fn run_parallel_tasks(
     verbose: bool,
 ) -> Result<Vec<Result<TaskResult>>> {
     use rayon::prelude::*;
+    let handle = tokio::runtime::Handle::current();
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(jobs)
         .build()
         .map_err(|e| Error::Io(std::io::Error::other(e)))?;
-    let results: Vec<Result<TaskResult>> = pool.install(|| {
-        log_files
-            .par_iter()
-            .enumerate()
-            .map(|(idx, file)| {
-                if interrupted.load(Ordering::Acquire) {
-                    return Ok(None);
-                }
-                verbose.then(|| eprintln!("Processing: {}", file.display()));
-                let temp_path = parts_dir.join(format!("{idx:08}.csv"));
-                let (rows, file_stats) = collector::collect_log_file(
-                    file,
-                    pipeline,
-                    do_normalize,
-                    placeholder_override,
-                    interrupted,
-                )?;
-                let count = write_records_to_csv(
-                    rows,
-                    &temp_path,
-                    csv_include_performance_metrics,
-                    do_normalize,
-                    field_mask,
-                    ordered_indices,
-                )?;
-                Ok(Some((file.clone(), temp_path, count, file_stats)))
-            })
-            .collect()
+    let results: Vec<Result<TaskResult>> = tokio::task::block_in_place(|| {
+        pool.install(|| {
+            log_files
+                .par_iter()
+                .enumerate()
+                .map(|(idx, file)| {
+                    if interrupted.load(Ordering::Acquire) {
+                        return Ok(None);
+                    }
+                    verbose.then(|| eprintln!("Processing: {}", file.display()));
+                    let temp_path = parts_dir.join(format!("{idx:08}.csv"));
+                    let (count, file_stats) = parse_and_write_csv(
+                        file,
+                        &temp_path,
+                        pipeline,
+                        do_normalize,
+                        placeholder_override,
+                        field_mask,
+                        ordered_indices,
+                        csv_include_performance_metrics,
+                        interrupted,
+                        &handle,
+                    )?;
+                    Ok(Some((file.clone(), temp_path, count, file_stats)))
+                })
+                .collect()
+        })
     });
     Ok(results)
 }

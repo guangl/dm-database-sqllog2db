@@ -1,5 +1,10 @@
 # sqllog2db
 
+## Current State: v1.20 已交付 ✅
+
+**Shipped:** 2026-06-11  
+**Version:** v1.20 性能全面提升（Phases 72–76）
+
 ## What This Is
 
 解析达梦（DaMeng）数据库 SQL 日志文件，流式导出到 CSV 或 SQLite 的命令行工具。支持可配置的过滤管道和字段投影，让用户精确控制"导出哪些记录的哪些字段"。支持 stdin 管道输入、实时进度显示与错误诊断、交互式配置向导（`init --interactive`）、以及 `watch` 子命令持续监听目录并增量插入新记录。
@@ -8,19 +13,14 @@
 
 用户能够精确指定"导出哪些记录的哪些字段"——过滤逻辑清晰可配置，输出结果完全可控。
 
-## Current State: v1.19 已交付
-
-**Shipped:** 2026-06-07  
-**Version:** v1.19 watch完善与文档对齐（Phases 1–3, 71）
-
-**已交付功能：**
-- watch CSV 增量追加（WATCH-07）：`force_append_for_watch_trigger` 统一注入，多次触发行数正确累计
-- error log 追加写入模式（WATCH-08）：`write_error_log` OpenOptions 双分支，历史错误不丢失
-- watch Ctrl+C 退出码 130（WATCH-09）：signal-aware 退出路径，与 run 命令一致
-- 行覆盖率 92.06%（QUAL-02）：collector.rs + filter_processor.rs 新增单元测试
-- VALIDATION.md 正式落地（QUAL-01）：Phase 67/68/69/70 全部以 `status: complete` 建档
-- README 补充 watch/init --interactive/quiet+verbose（DOC-04），--help 示例完善（DOC-05）
-- Phase 71 mod.rs 重构：10 个 mod.rs 拆分为 >30 个命名子模块，代码结构大幅改善
+**已交付功能（v1.20）：**
+- hyperfine 冷启动基线（BENCH-01）：`--version` 2.1ms，`validate` 2.2ms，较 v1.9 降 ~0.7ms
+- criterion v1.20 baseline 存档（BENCH-02）：`benches/baselines/` 4 个 group baseline 可对比
+- SQLite multi-row batch INSERT（SQLITE-01/02）：`row_buffer + flush_batch + sql_cache`，batch size 64，benchmark 量化
+- ParamBuffer 二级化零分配（MEM-01）：热路径 DML 查询改用 `&str` 零分配查询
+- CSV line_buf 预热（MEM-02）：`Vec::with_capacity(4096)` 减少 Vec grow
+- record_iter 共享模块（STRUCT-04）：`parallel.rs` + `sqlite_parallel.rs` 净消除 ~80 行重复代码
+- tokio 异步迁移（ASYNC-01）：`#[tokio::main]` + `AsyncLogParser` 全路径，3.8MB release，503 tests 全绿
 
 ## Previous: v1.18 已交付
 
@@ -161,6 +161,16 @@
 - ✓ watch/validate `--help` 各 ≥2 示例（DOC-05）— v1.19（Phase 3）
 - ✓ 10 个 mod.rs 拆分为命名子模块（watch/mod.rs 998 行拆为 11 个子文件）— v1.19（Phase 71）
 
+### Recently Validated in v1.20
+
+- ✓ hyperfine 冷启动基线（BENCH-01）：`--version` 2.1ms，较 v1.9 ~3ms 下降 ~0.7ms — v1.20（Phase 72）
+- ✓ criterion v1.20 baseline 存档（BENCH-02）：`benches/baselines/` 4 group baseline — v1.20（Phase 72）
+- ✓ SQLite multi-row batch INSERT（SQLITE-01/02）：`row_buffer + flush_batch + sql_cache`，batch size 64 — v1.20（Phase 73）
+- ✓ ParamBuffer 二级化零分配热路径（MEM-01）：DML 查询改用 `&str` 零分配查询 — v1.20（Phase 74）
+- ✓ CSV line_buf 初始容量 4096 字节预热（MEM-02）— v1.20（Phase 74）
+- ✓ record_iter 共享模块提取（STRUCT-04）：净消除 ~80 行重复代码 — v1.20（Phase 75）
+- ✓ tokio 异步解析路径迁移（ASYNC-01）：`#[tokio::main]` + `AsyncLogParser` 全路径，3.8MB release — v1.20（Phase 76）
+
 ### Recently Validated in v1.18
 
 - ✓ `[N/M]` 文件计数器进度条 + ETA + records/sec — v1.18（Phase 67）
@@ -192,12 +202,15 @@
 ## Context
 
 - Rust 项目，单线程流式处理，16MB BufWriter 写入
-- 依赖精简（无 reqwest/rustls/self_update 等重依赖，新增 indicatif + notify）
-- 当前代码量：~13,819+ 行 Rust（src + tests），Phase 71 拆分后文件数大幅增加但总行数相近
-- 性能基线：~5.2M records/sec（合成 CSV），~1.55M records/sec（1.1GB 真实文件）
-- 测试覆盖：909 个测试（lib + integration + jemalloc + bench），全部通过，2 个 ignore（macOS FSEvents 限制）
-- 行覆盖率 92.06%（v1.19），函数覆盖率 ~89%
-- mod.rs 结构：10 个 mod.rs 已拆分为命名子模块（v1.19 Phase 71），代码结构清晰
+- 依赖：indicatif + notify + tokio（新增，v1.20 异步迁移）；无 reqwest/rustls/self_update 等重依赖
+- 当前代码量：~14,000+ 行 Rust（src + tests），Phase 71 模块化拆分后文件数大幅增加
+- 性能基线：~5.2M records/sec（合成 CSV），~1.55M records/sec（1.1GB 真实文件），冷启动 2.1ms（v1.20）
+- SQLite 导出：multi-row batch INSERT（batch size 64），吞吐量较单行模式有量化提升
+- 测试覆盖：503 tests（lib + integration，含 watch/jemalloc），全部通过，2 个 ignore（macOS FSEvents 限制）
+- 行覆盖率 92.06%（v1.19 基线），函数覆盖率 ~89%
+- mod.rs 结构：10 个 mod.rs 已拆分为命名子模块（v1.19 Phase 71）
+- record_iter 共享模块：parallel/sqlite_parallel 重复迭代循环已提取（STRUCT-04，Phase 75）
+- 全解析路径：AsyncLogParser + tokio 运行时（ASYNC-01，Phase 76），3.8MB release 二进制
 - assert_cmd / predicates dev-dependencies，e2e CLI 测试覆盖齐全
 - GitHub Actions CI/CD workflow 全面修复，Cross.toml aarch64-linux 跨编译支持（SHA256 固定）
 
@@ -241,6 +254,11 @@
 | force_append_for_watch_trigger 辅助函数 | 统一注入 CSV append + error_log append，消除 trigger_full/incremental 重复 | ✓ Good (v1.19) |
 | macOS FSEvents #[ignore] 保留 + 文档化 | 保留测试意图可见性；mock 注入方案引入新依赖且与 notify 深度耦合 | ✓ Good (v1.19) |
 | Phase 71 mod.rs 拆分（pub(super) + #[allow]） | WatchLoopState 升级 pub(super) 允许兄弟模块访问；集成测试 pub use 加 #[allow(unused_imports)] | ✓ Good (v1.19) |
+| hyperfine 冷启动基线建立（BENCHMARKS.md Phase 72 段落） | `--version` 2.1ms vs v1.9 ~3ms，validate 2.2ms | ✓ Good (v1.20) |
+| SQLite multi_row_batch_size 默认 64，范围 [1,64] | SQLITE_LIMIT_VARIABLE_NUMBER 防护上限 | ✓ Good (v1.20) |
+| ParamBuffer 二级 HashMap（非 Arc<str> key） | 二级化更符合现有查询模式，零分配路径更自然 | ✓ Good (v1.20) |
+| record_iter::iterate_records 接受 FnMut 闭包 | 允许 CSV/SQLite 路径差异化写出而无需泛型约束爆炸 | ✓ Good (v1.20) |
+| tokio block_in_place 包裹 rayon + BufWriter | 避免 tokio 线程饥饿，异步迁移后保持并行性能 | ✓ Good (v1.20) |
 
 ## Evolution
 
@@ -253,4 +271,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-07 after v1.19 milestone — watch完善与文档对齐（Phases 1–3, 71）*
+*Last updated: 2026-06-12 after v1.20 milestone 性能全面提升*

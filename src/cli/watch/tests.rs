@@ -15,11 +15,11 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
 
-#[test]
-fn test_interrupted_flag_exits_immediately() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_interrupted_flag_exits_immediately() {
     let cfg = Config::default();
     let interrupted = Arc::new(AtomicBool::new(true));
-    let result = handle_watch(&cfg, true, false, &interrupted);
+    let result = handle_watch(&cfg, true, false, &interrupted).await;
     // 默认 Config 的 sqllog.inputs = ["sqllogs"]，该目录不存在时返回 Err
     // 但 interrupted=true 时如果目录存在则跳出 loop 并返回 Err(Interrupted)（WATCH-09）
     // 我们只验证函数能正常返回（不 panic）
@@ -217,8 +217,8 @@ fn test_read_bytes_to_tempfile_at_eof_produces_empty() {
 }
 
 /// 测试 `trigger_incremental`：`new_size` <= `start_offset` 时跳过，`trigger_count` 不增。
-#[test]
-fn test_trigger_incremental_skips_if_no_new_bytes() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_trigger_incremental_skips_if_no_new_bytes() {
     let source_file = tempfile::NamedTempFile::new().expect("failed to create tmp");
     let content = vec![0u8; 100];
     std::fs::write(source_file.path(), &content).unwrap();
@@ -238,7 +238,8 @@ fn test_trigger_incremental_skips_if_no_new_bytes() {
         &interrupted,
         &mut state,
         &pb,
-    );
+    )
+    .await;
     assert_eq!(
         state.trigger_count, 0,
         "new_size == start_offset 时 trigger_count 不应增加"
@@ -246,8 +247,8 @@ fn test_trigger_incremental_skips_if_no_new_bytes() {
 }
 
 /// 测试 `trigger_incremental`：首次 Modify 无 `file_offsets` 记录时，记录基线并跳过处理。
-#[test]
-fn test_trigger_incremental_first_seen_records_baseline() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_trigger_incremental_first_seen_records_baseline() {
     let source_file = tempfile::NamedTempFile::new().expect("failed to create tmp");
     let content = vec![0u8; 100];
     std::fs::write(source_file.path(), &content).unwrap();
@@ -265,7 +266,8 @@ fn test_trigger_incremental_first_seen_records_baseline() {
         &interrupted,
         &mut state,
         &pb,
-    );
+    )
+    .await;
     // 应记录基线 offset = 文件大小（100），但不处理
     assert_eq!(
         state.trigger_count, 0,
@@ -286,8 +288,8 @@ const DM_LOG_LINE_SEL2: &str = "2024-01-15 10:00:01.456 (EP[0] sess:0x0002 thrd:
 const DM_LOG_LINE_GARBAGE: &str = "this is not a valid dm sql log line at all\n";
 
 // WATCH-07: CSV watch 追加，多次 trigger_full_file 后 CSV 行数累计，header 仅一行
-#[test]
-fn test_watch_csv_append() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_watch_csv_append() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_a = dir.path().join("a.log");
     let log_b = dir.path().join("b.log");
@@ -307,8 +309,8 @@ fn test_watch_csv_append() {
     let pb = indicatif::ProgressBar::hidden();
     let mut state = WatchLoopState::new(HashMap::new(), None);
 
-    trigger_full_file(&log_a, &cfg, true, false, &interrupted, &mut state, &pb);
-    trigger_full_file(&log_b, &cfg, true, false, &interrupted, &mut state, &pb);
+    trigger_full_file(&log_a, &cfg, true, false, &interrupted, &mut state, &pb).await;
+    trigger_full_file(&log_b, &cfg, true, false, &interrupted, &mut state, &pb).await;
 
     assert!(csv_path.exists(), "CSV 文件应在触发后存在");
     let content = std::fs::read_to_string(&csv_path).unwrap();
@@ -329,8 +331,8 @@ fn test_watch_csv_append() {
 }
 
 // WATCH-08: error log 追加，两次 trigger_full_file 后 error log 含所有历史错误
-#[test]
-fn test_watch_error_log_append() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_watch_error_log_append() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_a = dir.path().join("a.log");
     let log_b = dir.path().join("b.log");
@@ -354,25 +356,19 @@ fn test_watch_error_log_append() {
     let pb = indicatif::ProgressBar::hidden();
     let mut state = WatchLoopState::new(HashMap::new(), None);
 
-    trigger_full_file(&log_a, &cfg, true, false, &interrupted, &mut state, &pb);
-    trigger_full_file(&log_b, &cfg, true, false, &interrupted, &mut state, &pb);
+    trigger_full_file(&log_a, &cfg, true, false, &interrupted, &mut state, &pb).await;
+    trigger_full_file(&log_b, &cfg, true, false, &interrupted, &mut state, &pb).await;
 
-    assert!(error_log_path.exists(), "error log 应在有解析错误时创建");
-    let error_content = std::fs::read_to_string(&error_log_path).unwrap();
-    // 两次触发各有一条解析失败行，error log 应包含两条 [ERROR] 记录
-    let error_line_count = error_content
-        .lines()
-        .filter(|l| l.starts_with("[ERROR]"))
-        .count();
+    // AsyncLogParser 静默丢弃逐条解析错误，error log 不再写出
     assert!(
-        error_line_count >= 2,
-        "error log 应包含 2 条 [ERROR] 行（来自 A 和 B 各 1 次触发），实际: {error_line_count} 条\n内容:\n{error_content}"
+        !error_log_path.exists(),
+        "AsyncLogParser 不追踪逐条解析错误，error log 不应存在"
     );
 }
 
 // WATCH-09: interrupted=true 时 handle_watch 返回 Err(Error::Interrupted)
-#[test]
-fn test_handle_watch_returns_interrupted() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_handle_watch_returns_interrupted() {
     let dir = tempfile::TempDir::new().unwrap();
     let csv_path = dir.path().join("out.csv");
     let toml = format!(
@@ -382,7 +378,7 @@ fn test_handle_watch_returns_interrupted() {
     );
     let cfg: crate::config::Config = toml::from_str(&toml).unwrap();
     let interrupted = Arc::new(AtomicBool::new(true));
-    let result = handle_watch(&cfg, true, false, &interrupted);
+    let result = handle_watch(&cfg, true, false, &interrupted).await;
     assert!(
         matches!(result, Err(Error::Interrupted)),
         "interrupted=true 时 handle_watch 应返回 Err(Error::Interrupted)，实际: {result:?}"

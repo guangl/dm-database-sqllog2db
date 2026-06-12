@@ -1,5 +1,6 @@
 //! Run 子命令：主编排在 orchestrator.rs，各阶段子模块独立成文件。
 
+#[cfg(test)]
 mod collector;
 mod error_log;
 mod filter_processor;
@@ -8,6 +9,7 @@ mod orchestrator;
 mod parallel;
 mod prescan;
 mod processor;
+mod record_iter;
 mod sequential;
 mod sqlite_parallel;
 mod summary;

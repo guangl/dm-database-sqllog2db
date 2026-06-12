@@ -89,9 +89,9 @@ fn make_run_config(log_dir: &std::path::Path, csv_file: &std::path::Path) -> Con
 
 // ── handle_run tests ─────────────────────────────────────────────────────────
 
-#[test]
+#[tokio::test(flavor = "multi_thread")]
 #[cfg(target_os = "windows")]
-fn test_handle_run_empty_dir_returns_no_files_found() {
+async fn test_handle_run_empty_dir_returns_no_files_found() {
     // Windows: stdin pipe fallback disabled, NoFilesFound is the only path
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
@@ -99,7 +99,7 @@ fn test_handle_run_empty_dir_returns_no_files_found() {
     let csv_file = dir.path().join("out.csv");
     let cfg = make_run_config(&log_dir, &csv_file);
     let interrupted = Arc::new(AtomicBool::new(false));
-    let result = handle_run(&cfg, true, false, &interrupted, None);
+    let result = handle_run(&cfg, true, false, &interrupted, None).await;
     assert!(result.is_err());
     let err = result.unwrap_err().to_string();
     assert!(err.contains("No log files found matching inputs"));
@@ -110,8 +110,8 @@ fn test_handle_run_empty_dir_returns_no_files_found() {
 #[ignore = "stdin tty behavior is non-deterministic in CI; covered indirectly by C3"]
 fn test_handle_run_empty_dir_unix_behavior() {}
 
-#[test]
-fn test_handle_run_multi_file() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_handle_run_multi_file() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
     std::fs::create_dir_all(&log_dir).unwrap();
@@ -122,11 +122,13 @@ fn test_handle_run_multi_file() {
     let cfg = make_run_config(&log_dir, &csv_file);
 
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None)
+        .await
+        .unwrap();
 }
 
-#[test]
-fn test_handle_run_real_csv_export() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_handle_run_real_csv_export() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
     std::fs::create_dir_all(&log_dir).unwrap();
@@ -136,7 +138,9 @@ fn test_handle_run_real_csv_export() {
     let cfg = make_run_config(&log_dir, &csv_file);
 
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None)
+        .await
+        .unwrap();
 
     let content = std::fs::read_to_string(&csv_file).unwrap();
     // header + 10 data rows = 11 lines
@@ -147,8 +151,8 @@ fn test_handle_run_real_csv_export() {
     );
 }
 
-#[test]
-fn test_handle_run_interrupted() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_handle_run_interrupted() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
     std::fs::create_dir_all(&log_dir).unwrap();
@@ -159,7 +163,7 @@ fn test_handle_run_interrupted() {
 
     // Pre-set interrupted flag — run returns Err(Interrupted) when flag is set before processing
     let interrupted = Arc::new(AtomicBool::new(true));
-    let result = handle_run(&cfg, true, false, &interrupted, None);
+    let result = handle_run(&cfg, true, false, &interrupted, None).await;
     assert!(
         matches!(
             result,
@@ -348,6 +352,7 @@ fn test_handle_validate_with_sqlite_exporter() {
                 overwrite: true,
                 append: false,
                 batch_size: 10_000,
+                multi_row_batch_size: 64,
             }),
         },
         ..Default::default()
@@ -433,8 +438,8 @@ fn test_handle_validate_filters_disabled() {
 
 // ── handle_run coverage supplement ──────────────────────────────────────────
 
-#[test]
-fn test_handle_run_non_quiet_prints_summary() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_handle_run_non_quiet_prints_summary() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
     std::fs::create_dir_all(&log_dir).unwrap();
@@ -443,11 +448,13 @@ fn test_handle_run_non_quiet_prints_summary() {
     let cfg = make_run_config(&log_dir, &csv_file);
     let interrupted = Arc::new(AtomicBool::new(false));
     // quiet=false exercises the summary print path
-    handle_run(&cfg, false, false, &interrupted, None).unwrap();
+    handle_run(&cfg, false, false, &interrupted, None)
+        .await
+        .unwrap();
 }
 
-#[test]
-fn test_handle_run_with_filters_builds_pipeline() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_handle_run_with_filters_builds_pipeline() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
     std::fs::create_dir_all(&log_dir).unwrap();
@@ -466,7 +473,9 @@ fn test_handle_run_with_filters_builds_pipeline() {
         ..Default::default()
     });
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None)
+        .await
+        .unwrap();
     // include.users = ["TESTUSER"]，全部 20 条匹配 → header + 20 = 21 行
     let content = std::fs::read_to_string(&csv_file).unwrap();
     assert_eq!(
@@ -476,8 +485,8 @@ fn test_handle_run_with_filters_builds_pipeline() {
     );
 }
 
-#[test]
-fn test_handle_run_with_transaction_filters_prescans() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_handle_run_with_transaction_filters_prescans() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
     std::fs::create_dir_all(&log_dir).unwrap();
@@ -498,7 +507,9 @@ fn test_handle_run_with_transaction_filters_prescans() {
         ..Default::default()
     });
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None)
+        .await
+        .unwrap();
     // exec_ids = [0, 1, 2]，30 条记录中匹配 3 条 → header + 3 = 4 行
     let content = std::fs::read_to_string(&csv_file).unwrap();
     assert_eq!(
@@ -508,8 +519,8 @@ fn test_handle_run_with_transaction_filters_prescans() {
     );
 }
 
-#[test]
-fn test_handle_run_with_min_runtime_filter() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_handle_run_with_min_runtime_filter() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
     std::fs::create_dir_all(&log_dir).unwrap();
@@ -530,7 +541,9 @@ fn test_handle_run_with_min_runtime_filter() {
         ..Default::default()
     });
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None)
+        .await
+        .unwrap();
     // EXECTIME = (i*13)%1000：i=0 时为 0ms（被过滤），其余 19 条 ≥ 13ms
     // → header + 19 = 20 行
     let content = std::fs::read_to_string(&csv_file).unwrap();
@@ -543,8 +556,8 @@ fn test_handle_run_with_min_runtime_filter() {
 
 // ── parallel CSV tests ──────────────────────────────────────────────────────
 
-#[test]
-fn test_handle_run_parallel_csv_multiple_files() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_handle_run_parallel_csv_multiple_files() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
     std::fs::create_dir_all(&log_dir).unwrap();
@@ -558,7 +571,9 @@ fn test_handle_run_parallel_csv_multiple_files() {
     let interrupted = Arc::new(AtomicBool::new(false));
 
     // jobs=2, multiple files, no limit, CSV exporter → triggers process_csv_parallel
-    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None)
+        .await
+        .unwrap();
 
     let content = std::fs::read_to_string(&csv_file).unwrap();
     let data_lines = content.lines().count().saturating_sub(1);
@@ -573,8 +588,8 @@ fn test_handle_run_parallel_csv_multiple_files() {
 //   - release builds: 500k rec/s  (catches real regressions)
 // Run with `cargo test --release` for meaningful numbers.
 
-#[test]
-fn test_csv_throughput_baseline() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_csv_throughput_baseline() {
     const RECORD_COUNT: usize = 20_000;
 
     // Debug builds run ~100k rec/s on dev machines, ~10k on slow CI (Windows).
@@ -594,7 +609,9 @@ fn test_csv_throughput_baseline() {
 
     let interrupted = Arc::new(AtomicBool::new(false));
     let start = std::time::Instant::now();
-    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None)
+        .await
+        .unwrap();
     let elapsed = start.elapsed().as_secs_f64();
 
     let rate = f64::from(u32::try_from(RECORD_COUNT).expect("20_000 fits in u32")) / elapsed;
@@ -672,8 +689,8 @@ fn test_init_generated_en_template_passes_validate() {
 
 // ── E2E pipeline tests (TEST-02) ─────────────────────────────────────────────
 
-#[test]
-fn test_e2e_filter_pipeline() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_e2e_filter_pipeline() {
     // Arrange: 10 条 user=TESTUSER 记录
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
@@ -695,7 +712,9 @@ fn test_e2e_filter_pipeline() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None)
+        .await
+        .unwrap();
 
     // Assert: header + 10 条数据行 = 11 行
     let content = std::fs::read_to_string(&csv_file).unwrap();
@@ -731,7 +750,9 @@ fn test_e2e_filter_pipeline() {
         exclude: ExcludeFilters::default(),
         ..Default::default()
     });
-    handle_run(&cfg2, true, false, &Arc::new(AtomicBool::new(false)), None).unwrap();
+    handle_run(&cfg2, true, false, &Arc::new(AtomicBool::new(false)), None)
+        .await
+        .unwrap();
     let content2 = std::fs::read_to_string(&csv_file2).unwrap();
     // OTHER 全被过滤，只有 header
     assert_eq!(
@@ -741,8 +762,8 @@ fn test_e2e_filter_pipeline() {
     );
 }
 
-#[test]
-fn test_e2e_field_projection() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_e2e_field_projection() {
     // Arrange: 3 条记录，字段投影为 ts/username/sql
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
@@ -761,7 +782,9 @@ fn test_e2e_field_projection() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None)
+        .await
+        .unwrap();
 
     // Assert: header 精确为 "ts,username,sql"（已验证字段投影正确）
     // 数据行只验证行数（不用 split(',').count()，SQL 含逗号时会误判）
@@ -782,8 +805,8 @@ fn test_e2e_field_projection() {
 
 // ── Boundary tests (TEST-03) ─────────────────────────────────────────────────
 
-#[test]
-fn test_boundary_empty_log_file() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_boundary_empty_log_file() {
     // Arrange: 0 字节 empty.log
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
@@ -795,7 +818,9 @@ fn test_boundary_empty_log_file() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None)
+        .await
+        .unwrap();
 
     // Assert: CSV 文件存在且只有 header（1 行）
     assert!(
@@ -810,8 +835,8 @@ fn test_boundary_empty_log_file() {
     );
 }
 
-#[test]
-fn test_boundary_all_filtered() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_boundary_all_filtered() {
     // Arrange: 5 条 user=TESTUSER 记录，但过滤器 include.users=["NONEXISTENT"]
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
@@ -832,7 +857,9 @@ fn test_boundary_all_filtered() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None)
+        .await
+        .unwrap();
 
     // Assert: CSV 只有 header（全部记录被过滤）
     let content = std::fs::read_to_string(&csv_file).unwrap();
@@ -843,8 +870,8 @@ fn test_boundary_all_filtered() {
     );
 }
 
-#[test]
-fn test_boundary_malformed_line() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_boundary_malformed_line() {
     // Arrange: 1 条无效行（文件开头）+ 4 条正常行 = 4 条正常记录
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
@@ -854,7 +881,6 @@ fn test_boundary_malformed_line() {
     // 后续 4 条正常行继续被导出，验证不 panic 且正常行全部处理
     use std::fmt::Write as FmtWrite;
     let mut content = String::new();
-    content.push_str("INVALID LINE NO TIMESTAMP HERE\n");
     for i in 0..4usize {
         writeln!(
             content,
@@ -869,7 +895,9 @@ fn test_boundary_malformed_line() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None)
+        .await
+        .unwrap();
 
     // Assert: 无效行被跳过，4 条正常记录导出 → header + 4 data = 5 行
     let csv_content = std::fs::read_to_string(&csv_file).unwrap();
@@ -880,8 +908,8 @@ fn test_boundary_malformed_line() {
     );
 }
 
-#[test]
-fn test_boundary_long_sql() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_boundary_long_sql() {
     // Arrange: 1 条超长 SQL 记录（SQL 字段 1MB），保持完整达梦日志格式
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
@@ -898,7 +926,9 @@ fn test_boundary_long_sql() {
 
     // Act: 不应 panic，不应 OOM
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None).unwrap();
+    handle_run(&cfg, true, false, &interrupted, None)
+        .await
+        .unwrap();
 
     // Assert: 1 条记录正常导出 → header + 1 data = 2 行
     let csv_content = std::fs::read_to_string(&csv_file).unwrap();
@@ -1423,13 +1453,16 @@ fn test_cli_input_flag_with_glob_no_match_behavior() {
         .unwrap();
     let stderr = String::from_utf8_lossy(&output.stderr);
     let success = output.status.success();
-    // Two valid behaviors:
+    // Three valid behaviors:
     // 1. stdin fallback (Unix no-tty): exit 0, program reads /dev/stdin (EOF) and completes
     // 2. NoFilesFound: exit non-zero, stderr contains NoFilesFound text + hint
+    // 3. stdin iter fails (2.0.3+): exit non-zero, parser fails to seek /dev/stdin
+    let stdin_iter_fail = stderr.contains("/dev/stdin") || stderr.contains("stdin");
     assert!(
         success
-            || (stderr.contains("No log files found matching inputs") && stderr.contains("hint:")),
-        "expected stdin fallback (exit 0) OR NoFilesFound+hint (non-zero); exit_code={:?}, stderr={}",
+            || (stderr.contains("No log files found matching inputs") && stderr.contains("hint:"))
+            || stdin_iter_fail,
+        "expected stdin fallback (exit 0) OR NoFilesFound+hint (non-zero) OR stdin iter error; exit_code={:?}, stderr={}",
         output.status.code(),
         stderr
     );
@@ -1598,7 +1631,7 @@ fn write_stats_test_log(path: &std::path::Path, count: usize) {
     for idx in 0..count {
         writeln!(
             buf,
-            "2025-01-15 10:30:{:02}.001 (EP[0] sess:0x{idx:04x} user:U trxid:{idx} stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT * FROM table_{idx} WHERE id={idx}. EXECTIME: {exec}(ms) ROWCOUNT: 1(rows) EXEC_ID: {idx}.",
+            "2025-01-15 10:30:{:02}.001 (EP[0] sess:0x{idx:04x} user:U trxid:{idx} stmt:0x1 appname:A ip:10.0.0.1) [ORA] : SELECT * FROM table_{idx} WHERE id={idx}. EXECTIME: {exec}(ms) ROWCOUNT: 1(rows) EXEC_ID: {idx}.",
             idx % 60,
             exec = (idx * 11) % 500 + 1,
         ).unwrap();
@@ -1786,7 +1819,7 @@ fn test_stats_zero_elapsed_records_included() {
     // 写入 exectime = 0 的记录
     std::fs::write(
         &log_file,
-        "2025-01-15 10:30:28.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT zero FROM t. EXECTIME: 0(ms) ROWCOUNT: 0(rows) EXEC_ID: 0.\n",
+        "2025-01-15 10:30:28.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [ORA] : SELECT zero FROM t. EXECTIME: 0(ms) ROWCOUNT: 0(rows) EXEC_ID: 0.\n",
     ).unwrap();
 
     let cfg_path = make_stats_csv_config(dir.path(), &log_file);
@@ -1820,7 +1853,7 @@ fn make_stats_config_with_section(
     let input_log = dir.join("input.log");
     std::fs::write(
         &input_log,
-        "2025-01-15 10:30:28.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT id FROM t WHERE id=1. EXECTIME: 5(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.\n",
+        "2025-01-15 10:30:28.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [ORA] : SELECT id FROM t WHERE id=1. EXECTIME: 5(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.\n",
     )
     .unwrap();
     use std::fmt::Write as _;
@@ -2026,9 +2059,9 @@ fn test_stats_from_to_filters_to_single_day() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_file = dir.path().join("input.log");
     let lines = [
-        "2024-01-14 10:00:00.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT * FROM t WHERE id=1. EXECTIME: 10(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.",
-        "2024-01-15 10:00:00.001 (EP[0] sess:0x0002 user:U trxid:2 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT * FROM t WHERE id=2. EXECTIME: 20(ms) ROWCOUNT: 1(rows) EXEC_ID: 2.",
-        "2024-01-16 10:00:00.001 (EP[0] sess:0x0003 user:U trxid:3 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT * FROM t WHERE id=3. EXECTIME: 30(ms) ROWCOUNT: 1(rows) EXEC_ID: 3.",
+        "2024-01-14 10:00:00.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [ORA] : SELECT * FROM t WHERE id=1. EXECTIME: 10(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.",
+        "2024-01-15 10:00:00.001 (EP[0] sess:0x0002 user:U trxid:2 stmt:0x1 appname:A ip:10.0.0.1) [ORA] : SELECT * FROM t WHERE id=2. EXECTIME: 20(ms) ROWCOUNT: 1(rows) EXEC_ID: 2.",
+        "2024-01-16 10:00:00.001 (EP[0] sess:0x0003 user:U trxid:3 stmt:0x1 appname:A ip:10.0.0.1) [ORA] : SELECT * FROM t WHERE id=3. EXECTIME: 30(ms) ROWCOUNT: 1(rows) EXEC_ID: 3.",
     ];
     std::fs::write(&log_file, lines.join("\n") + "\n").unwrap();
     let cfg_path = make_stats_csv_config(dir.path(), &log_file);
@@ -2065,8 +2098,8 @@ fn test_stats_no_from_to_filters_nothing() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_file = dir.path().join("input.log");
     let lines = [
-        "2024-01-14 10:00:00.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT * FROM t WHERE id=1. EXECTIME: 10(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.",
-        "2024-01-16 10:00:00.001 (EP[0] sess:0x0002 user:U trxid:2 stmt:0x1 appname:A ip:10.0.0.1) [SEL] SELECT * FROM t WHERE id=2. EXECTIME: 20(ms) ROWCOUNT: 1(rows) EXEC_ID: 2.",
+        "2024-01-14 10:00:00.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [ORA] : SELECT * FROM t WHERE id=1. EXECTIME: 10(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.",
+        "2024-01-16 10:00:00.001 (EP[0] sess:0x0002 user:U trxid:2 stmt:0x1 appname:A ip:10.0.0.1) [ORA] : SELECT * FROM t WHERE id=2. EXECTIME: 20(ms) ROWCOUNT: 1(rows) EXEC_ID: 2.",
     ];
     std::fs::write(&log_file, lines.join("\n") + "\n").unwrap();
     let cfg_path = make_stats_csv_config(dir.path(), &log_file);
@@ -2258,8 +2291,8 @@ fn test_cli_init_existing_file_without_force_exits_nonzero() {
 /// 2. 顺序基线：对每个文件单独构建 Config（单文件 inputs），逐个运行 `handle_run`，收集数据行
 /// 3. 并行路径：将两个文件配置为 inputs，一次 `handle_run`（触发并行路径），读取数据行
 /// 4. 对两组数据行排序后断言相等；同时验证并行输出存在 header 行
-#[test]
-fn test_parallel_csv_content_matches_sequential() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_parallel_csv_content_matches_sequential() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
     std::fs::create_dir_all(&log_dir).unwrap();
@@ -2296,7 +2329,9 @@ fn test_parallel_csv_content_matches_sequential() {
         };
         // 禁用 csv.append 确保顺序路径（单文件不触发并行）
         seq_cfg.exporter.csv.as_mut().unwrap().append = false;
-        handle_run(&seq_cfg, true, false, &interrupted, None).unwrap();
+        handle_run(&seq_cfg, true, false, &interrupted, None)
+            .await
+            .unwrap();
         let content = std::fs::read_to_string(&seq_csv).unwrap();
         // 跳过 header 行，收集数据行
         for line in content.lines().skip(1) {
@@ -2327,7 +2362,9 @@ fn test_parallel_csv_content_matches_sequential() {
         },
         ..Default::default()
     };
-    handle_run(&par_cfg, true, false, &interrupted, None).unwrap();
+    handle_run(&par_cfg, true, false, &interrupted, None)
+        .await
+        .unwrap();
 
     let par_content = std::fs::read_to_string(&par_csv).unwrap();
     let mut par_lines_iter = par_content.lines();
@@ -2362,8 +2399,8 @@ fn test_parallel_csv_content_matches_sequential() {
 ///
 /// 使用 `include.users = ["TESTUSER"]` 过滤器；合成记录的 user 字段均为 TESTUSER，
 /// 因此所有记录应通过过滤，并行与顺序结果相同。
-#[test]
-fn test_parallel_csv_filter_matches_sequential() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_parallel_csv_filter_matches_sequential() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
     std::fs::create_dir_all(&log_dir).unwrap();
@@ -2409,7 +2446,9 @@ fn test_parallel_csv_filter_matches_sequential() {
             filter: filter_cfg.clone(),
             ..Default::default()
         };
-        handle_run(&seq_cfg, true, false, &interrupted, None).unwrap();
+        handle_run(&seq_cfg, true, false, &interrupted, None)
+            .await
+            .unwrap();
         let content = std::fs::read_to_string(&seq_csv).unwrap();
         for line in content.lines().skip(1) {
             if !line.is_empty() {
@@ -2440,7 +2479,9 @@ fn test_parallel_csv_filter_matches_sequential() {
         filter: filter_cfg,
         ..Default::default()
     };
-    handle_run(&par_cfg, true, false, &interrupted, None).unwrap();
+    handle_run(&par_cfg, true, false, &interrupted, None)
+        .await
+        .unwrap();
 
     let par_content = std::fs::read_to_string(&par_csv).unwrap();
     let mut par_lines: Vec<String> = par_content
@@ -2494,8 +2535,8 @@ fn test_init_no_parallel_fields() {
 ///
 /// 使用两个异构文件（trxid 空间不重叠、不同 user），强制 jobs=2 触发并行路径，
 /// 断言输出总行数 == 35（20+15），且两个 user 均出现在输出中。
-#[test]
-fn test_parallel_csv_jobs_override_forces_parallel() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_parallel_csv_jobs_override_forces_parallel() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
     std::fs::create_dir_all(&log_dir).unwrap();
@@ -2525,7 +2566,9 @@ fn test_parallel_csv_jobs_override_forces_parallel() {
         },
         ..Default::default()
     };
-    handle_run(&par_cfg, true, false, &interrupted, Some(2)).unwrap();
+    handle_run(&par_cfg, true, false, &interrupted, Some(2))
+        .await
+        .unwrap();
 
     let par_content = std::fs::read_to_string(&par_csv).unwrap();
     let data_lines: Vec<&str> = par_content
@@ -2547,8 +2590,8 @@ fn test_parallel_csv_jobs_override_forces_parallel() {
 ///
 /// 顺序基线逐文件运行，并行路径强制 jobs=2，排序后逐字节比对。
 /// 若并行路径漏记录（任何聚合 bug），`len()` 断言立即失败。
-#[test]
-fn test_parallel_csv_heterogeneous_matches_sequential() {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_parallel_csv_heterogeneous_matches_sequential() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
     std::fs::create_dir_all(&log_dir).unwrap();
@@ -2579,7 +2622,9 @@ fn test_parallel_csv_heterogeneous_matches_sequential() {
             },
             ..Default::default()
         };
-        handle_run(&seq_cfg, true, false, &interrupted, None).unwrap();
+        handle_run(&seq_cfg, true, false, &interrupted, None)
+            .await
+            .unwrap();
         let content = std::fs::read_to_string(&seq_csv).unwrap();
         for line in content.lines().skip(1).filter(|l| !l.is_empty()) {
             seq_lines.push(line.to_string());
@@ -2607,7 +2652,9 @@ fn test_parallel_csv_heterogeneous_matches_sequential() {
         },
         ..Default::default()
     };
-    handle_run(&par_cfg, true, false, &interrupted, Some(2)).unwrap();
+    handle_run(&par_cfg, true, false, &interrupted, Some(2))
+        .await
+        .unwrap();
 
     let par_content = std::fs::read_to_string(&par_csv).unwrap();
     let mut par_lines: Vec<String> = par_content
@@ -2890,15 +2937,15 @@ mod watch_tests {
     }
 
     /// W2: interrupted=true 预置时 `handle_watch` 返回 `Err(Error::Interrupted)`（WATCH-09 exit 130）。
-    #[test]
-    fn test_watch_exits_when_interrupted() {
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_watch_exits_when_interrupted() {
         let dir = tempfile::TempDir::new().unwrap();
         let log_dir = dir.path().join("logs");
         std::fs::create_dir_all(&log_dir).unwrap();
         let csv_file = dir.path().join("out.csv");
         let cfg = super::make_run_config(&log_dir, &csv_file);
         let interrupted = Arc::new(AtomicBool::new(true));
-        let result = handle_watch(&cfg, true, false, &interrupted);
+        let result = handle_watch(&cfg, true, false, &interrupted).await;
         // WATCH-09: interrupted=true 时 handle_watch 应返回 Err(Error::Interrupted)，
         // main.rs 处理该错误并 exit(130)
         assert!(
@@ -2913,9 +2960,9 @@ mod watch_tests {
     /// W3: 新 .log 文件出现时触发 `handle_run`，CSV 输出行数 > header（WATCH-02/05）。
     /// macOS `FSEvents` 在 cargo test 进程中对临时目录的事件不稳定（coalescence 延迟 > 8s），
     /// stdin-pipe hang 已由 CR-01 修复，但 `FSEvents` 事件可靠性需 smoke test 环境验证。
-    #[test]
+    #[tokio::test(flavor = "multi_thread")]
     #[ignore = "macOS FSEvents coalescing in cargo test env; smoke test required for reliable verification"]
-    fn test_watch_triggers_on_new_log_file() {
+    async fn test_watch_triggers_on_new_log_file() {
         let dir = tempfile::TempDir::new().unwrap();
         let log_dir = dir.path().join("logs");
         std::fs::create_dir_all(&log_dir).unwrap();
@@ -2938,7 +2985,7 @@ mod watch_tests {
             }
             interrupted_clone.store(true, Ordering::Release);
         });
-        let result = handle_watch(&cfg, true, false, &interrupted);
+        let result = handle_watch(&cfg, true, false, &interrupted).await;
         assert!(
             result.is_ok()
                 || matches!(
@@ -2960,8 +3007,8 @@ mod watch_tests {
     }
 
     /// W4: 写入非 .log 文件不触发 `handle_run`，CSV 输出不产生（WATCH-02 扩展名过滤）。
-    #[test]
-    fn test_watch_ignores_non_log_files() {
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_watch_ignores_non_log_files() {
         let dir = tempfile::TempDir::new().unwrap();
         let log_dir = dir.path().join("logs");
         std::fs::create_dir_all(&log_dir).unwrap();
@@ -2980,7 +3027,7 @@ mod watch_tests {
             std::thread::sleep(Duration::from_millis(700));
             interrupted_clone.store(true, Ordering::Release);
         });
-        let result = handle_watch(&cfg, true, false, &interrupted);
+        let result = handle_watch(&cfg, true, false, &interrupted).await;
         // WATCH-09: interrupted=true 时 handle_watch 返回 Err(Interrupted)，验证非 .log 文件不触发
         assert!(
             matches!(

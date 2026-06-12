@@ -13,7 +13,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 /// 对内容追加的 `.log` 文件执行增量处理，仅读取 `[start_offset, new_size)` 字节（per D-01/D-02）。
-pub fn trigger_incremental(
+pub async fn trigger_incremental(
     path: &Path,
     cfg: &Config,
     quiet: bool,
@@ -53,7 +53,8 @@ pub fn trigger_incremental(
         interrupted,
         state,
         pb,
-    );
+    )
+    .await;
 }
 
 /// 返回增量处理的 `start_offset`；`None` 表示应跳过（首次见到或无新字节）。
@@ -118,7 +119,7 @@ pub(super) fn read_bytes_to_tempfile(
 /// 使用临时文件路径调用 `handle_run`，更新 state，并持久化新 offset（per D-07/D-09）。
 // tmp_file 按值传入确保函数返回时 NamedTempFile 自动删除临时文件
 #[allow(clippy::needless_pass_by_value)]
-fn run_incremental_handle_run(
+async fn run_incremental_handle_run(
     original_path: &Path,
     canonical_path: &Path,
     tmp_file: tempfile::NamedTempFile,
@@ -131,7 +132,7 @@ fn run_incremental_handle_run(
     pb: &ProgressBar,
 ) {
     let tmp_cfg = build_incremental_cfg(cfg, &tmp_file);
-    match crate::cli::run::handle_run(&tmp_cfg, quiet, verbose, interrupted, None) {
+    match crate::cli::run::handle_run(&tmp_cfg, quiet, verbose, interrupted, None).await {
         Ok(file_stats) => {
             state.total_stats.merge(&file_stats);
             let last_elapsed = state.last_trigger_at.map(|t| t.elapsed());

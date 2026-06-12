@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.20.0] - 2026-06-11
+
+### Added
+
+- **SQLite multi-row batch INSERT**：SQLite 导出路径缓冲 64 条记录后一次执行 `INSERT INTO t VALUES (...),(...),...`，减少逐行调用开销；`multi_row_batch_size` 可配置（[1, 64]），BENCHMARKS.md 含量化对比（SQLITE-01/02，Phase 73）
+- **tokio 异步解析路径**：全解析路径迁移至 `dm-database-parser-sqllog` async API，`#[tokio::main]` + `AsyncLogParser`，`block_in_place` 包裹 rayon/BufWriter 阻塞段，3.8MB release 二进制（ASYNC-01，Phase 76）
+
+### Changed
+
+- **ParamBuffer 二级化**：normalizer 热路径 HashMap key 从扁平 tuple 改为二级 HashMap，DML 查询路径使用 `Borrow<str>` 零分配 `&str` 查询，消除每条记录的 `String::clone`（MEM-01，Phase 74）
+- **CSV line_buf 初始容量预热**：`CsvExporter::new()` 中 `line_buf` 初始容量由 2048 调整为 4096 字节，减少处理典型 SQL 记录时的 Vec grow（MEM-02，Phase 74）
+- **record_iter 共享模块**：`parallel.rs` 与 `sqlite_parallel.rs` 重复迭代循环提取为 `src/cli/run/record_iter.rs::iterate_records`（FnMut 闭包注入差异写出），净消除 ~80 行重复代码（STRUCT-04，Phase 75）
+
+### Performance
+
+- **hyperfine 冷启动基线**：`--version` 2.1ms、`validate` 2.2ms，较 v1.9 (~3ms) 降约 0.7ms（BENCH-01，Phase 72）
+- **criterion v1.20 baseline 存档**：`benches/baselines/` 目录含 4 个 benchmark group 的 v1.20 baseline，`cargo bench -- --baseline v1.20` 可加载版本间对比（BENCH-02，Phase 72）
+
 ## [1.16.0] - 2026-06-07
 
 ### Added

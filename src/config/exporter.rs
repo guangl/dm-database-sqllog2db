@@ -67,6 +67,15 @@ impl CsvExporterConfig {
                 reason: "CSV output file path cannot be empty".to_string(),
             }));
         }
+        if !self.append && !self.overwrite {
+            return Err(Error::Config(ConfigError::InvalidValue {
+                field: "exporter.csv".to_string(),
+                value: "overwrite=false, append=false".to_string(),
+                reason: "at least one of overwrite or append must be true; \
+                    both false would silently truncate an existing file"
+                    .to_string(),
+            }));
+        }
         Ok(())
     }
 }
@@ -82,6 +91,8 @@ pub struct SqliteExporterConfig {
     pub append: bool,
     #[serde(default = "default_batch_size")]
     pub batch_size: usize,
+    #[serde(default = "default_multi_row_batch_size")]
+    pub multi_row_batch_size: usize,
 }
 
 fn default_table_name() -> String {
@@ -92,6 +103,10 @@ fn default_batch_size() -> usize {
     10_000
 }
 
+fn default_multi_row_batch_size() -> usize {
+    64
+}
+
 impl Default for SqliteExporterConfig {
     fn default() -> Self {
         Self {
@@ -100,6 +115,7 @@ impl Default for SqliteExporterConfig {
             overwrite: true,
             append: false,
             batch_size: 10_000,
+            multi_row_batch_size: 64,
         }
     }
 }
@@ -143,10 +159,74 @@ impl SqliteExporterConfig {
             }
             .into());
         }
+        if self.multi_row_batch_size == 0 || self.multi_row_batch_size > 64 {
+            return Err(ConfigError::InvalidValue {
+                field: "exporter.sqlite.multi_row_batch_size".to_string(),
+                value: self.multi_row_batch_size.to_string(),
+                reason:
+                    "multi_row_batch_size must be between 1 and 64 (15 cols × 64 = 960 < SQLITE_LIMIT_VARIABLE_NUMBER 999)"
+                        .to_string(),
+            }
+            .into());
+        }
         Ok(())
     }
 }
 
 fn default_true() -> bool {
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn base_cfg() -> SqliteExporterConfig {
+        SqliteExporterConfig {
+            database_url: "test.db".to_string(),
+            table_name: "t".to_string(),
+            overwrite: true,
+            append: false,
+            batch_size: 1000,
+            multi_row_batch_size: 64,
+        }
+    }
+
+    #[test]
+    fn test_default_multi_row_batch_size() {
+        assert_eq!(SqliteExporterConfig::default().multi_row_batch_size, 64);
+    }
+
+    #[test]
+    fn test_validate_rejects_zero() {
+        let mut cfg = base_cfg();
+        cfg.multi_row_batch_size = 0;
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(
+            err.contains("exporter.sqlite.multi_row_batch_size"),
+            "error should mention field name, got: {err}"
+        );
+    }
+
+    #[test]
+    fn test_validate_rejects_over_64() {
+        let mut cfg = base_cfg();
+        cfg.multi_row_batch_size = 65;
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(
+            err.contains("exporter.sqlite.multi_row_batch_size"),
+            "error should mention field name, got: {err}"
+        );
+    }
+
+    #[test]
+    fn test_validate_accepts_boundaries() {
+        let mut cfg = base_cfg();
+        cfg.multi_row_batch_size = 1;
+        cfg.validate()
+            .expect("multi_row_batch_size = 1 should be valid");
+        cfg.multi_row_batch_size = 64;
+        cfg.validate()
+            .expect("multi_row_batch_size = 64 should be valid");
+    }
 }
