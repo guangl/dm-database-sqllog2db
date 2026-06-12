@@ -4,6 +4,52 @@
 
 ---
 
+## Milestone: v1.20 — 性能全面提升
+
+**Shipped:** 2026-06-11  
+**Phases:** 5 (72–76) | **Plans:** 9 | **Duration:** ~4 days | **Commits:** 87
+
+### What Was Built
+
+- hyperfine 冷启动基线建立（Phase 72）：`--version` 2.1ms、`validate` 2.2ms，Phase 72 段落写入 BENCHMARKS.md，benches/hyperfine-validate.toml 配置文件
+- criterion v1.20 baseline 存档（Phase 72）：`CRITERION_HOME=benches/baselines cargo bench -- --save-baseline v1.20`，4 个 group baseline 文件完成
+- SQLite multi-row batch INSERT（Phase 73）：`SqliteExporterConfig.multi_row_batch_size`（默认 64）、`row_buffer` + `flush_batch` + `sql_cache` 实现，`build_multi_row_insert_sql` SQL builder，benchmark 量化写入 BENCHMARKS.md
+- ParamBuffer 二级化（Phase 74）：扁平 tuple key 重构为二级 HashMap，DML 查询路径改用 `Borrow<str>` 零分配 `&str` 查询（MEM-01）；`CsvExporter::new()` `Vec::with_capacity(4096)` 预热（MEM-02）
+- record_iter 共享模块（Phase 75）：`parallel.rs` + `sqlite_parallel.rs` 重复迭代循环提取为 `record_iter.rs::iterate_records`，净消除 ~80 行重复代码
+- tokio 异步迁移（Phase 76）：`#[tokio::main]` + `AsyncLogParser` 全解析路径迁移，503 tests 全绿，3.8MB release，clippy 零警告
+
+### What Worked
+
+- **Code Review 串联修复**：Phase 73/74/75/76 均通过 REVIEW.md → fix commit 循环修复发现的 bug（WR/IN/CR 类问题），4 个 phase 合计修复 ~15 处问题，没有带着已知 bug 进入下一个 phase
+- **Phase 75 FnMut 闭包设计**：`iterate_records` 接受 FnMut 闭包而非泛型 trait，允许 CSV/SQLite 路径各自注入差异化写出逻辑，无需泛型约束爆炸
+- **block_in_place 模式**：tokio 迁移后 rayon + BufWriter 阻塞操作用 `block_in_place` 包裹，避免 tokio 线程饥饿，性能无退化
+- **Phase 73 完整 TDD**：`build_multi_row_insert_sql` 函数有独立单元测试（含边界：0 行、projection 模式），batch flush 有 drain 模式保证最后一批不满 N 条时正确处理
+
+### What Was Inefficient
+
+- **REQUIREMENTS.md checkbox 延迟更新**（再次出现）：7/8 需求实现后未及时勾选，里程碑审计时发现为文档技术债务，在 complete-milestone 流程中统一修复
+- **Phase 73 Plans TBD**：ROADMAP.md Phase 73 段落 Plans 字段写的 "TBD"（阶段性记录习惯），归档时从 SUMMARY 重建了 plan 列表
+- **5 个 VALIDATION.md 停留在 draft**：v1.20 全部 VALIDATION.md 未升级为 complete 状态，形成文档技术债务，VERIFICATION.md 弥补了实际验证缺口
+
+### Patterns Established
+
+- `block_in_place` 包裹 rayon + blocking I/O 是 tokio 异步路径的标准做法
+- Code Review REVIEW.md → fix commit 循环已成为每个 phase 的标准收尾步骤
+- `multi_row_batch_size` 配置字段范围限制（[1, 64]）防止 SQLITE_LIMIT_VARIABLE_NUMBER 溢出是 SQLite batch 的安全守卫模式
+
+### Key Lessons
+
+- **REQUIREMENTS.md 应在 phase 完成时同步勾选**（同 v1.19 教训重复）：此问题已在三个里程碑中连续出现，建议在 plan 执行阶段将勾选作为验收步骤之一
+- **Phase 75 的 include_pm 硬编码是已知技术债务**：sqlite_parallel.rs 的 `include_pm: true` 硬编码与 CSV 路径动态读取不对称，Phase 75 SUMMARY 有记录，下个里程碑如需修复应作为独立 phase
+- **VALIDATION.md draft 不阻断交付**：VERIFICATION.md 提供了等效的代码级验证，draft VALIDATION.md 是文档标记问题而非交付缺口
+
+### Cost Observations
+
+- Sessions: ~4 working sessions
+- Notable: Phase 73 Code Review 发现最多 bug（4 处），其中 WR-01（record_success() 位置）是逻辑正确性问题，Code Review 流程有效捕获
+
+---
+
 ## Milestone: v1.19 — watch完善与文档对齐
 
 **Shipped:** 2026-06-07
