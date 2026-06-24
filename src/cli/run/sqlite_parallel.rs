@@ -1,12 +1,12 @@
 use crate::error::{ErrorStats, Result};
 use crate::exporter::ExporterManager;
 use crate::pipeline::{FieldMask, Pipeline};
-use dm_database_parser_sqllog::AsyncLogParser;
+use crate::streaming::open_log_file;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-async fn parse_and_write_sqlite(
+fn parse_and_write_sqlite(
     file: &std::path::Path,
     em: &mut ExporterManager,
     pipeline: &Pipeline,
@@ -14,8 +14,8 @@ async fn parse_and_write_sqlite(
     placeholder_override: Option<bool>,
     interrupted: &Arc<AtomicBool>,
 ) -> Result<(usize, ErrorStats)> {
-    let records = match AsyncLogParser::new(file).parse().await {
-        Ok(r) => r,
+    let records = match open_log_file(file) {
+        Ok(it) => it,
         Err(e) => {
             log::warn!("parse failed for '{}': {e}", file.display());
             let mut file_stats = ErrorStats::default();
@@ -49,7 +49,7 @@ async fn parse_and_write_sqlite(
 ///   `field_mask` 与 `from_config` 内部逻辑出现分歧，`SQLite` 路径将以 config 为准，请确保
 ///   两者保持一致。
 #[allow(clippy::too_many_arguments)]
-pub(super) async fn process_sqlite_parallel(
+pub(super) fn process_sqlite_parallel(
     log_files: &[PathBuf],
     cfg: &crate::config::Config,
     pipeline: &Pipeline,
@@ -78,8 +78,7 @@ pub(super) async fn process_sqlite_parallel(
             do_normalize,
             placeholder_override,
             interrupted,
-        )
-        .await?;
+        )?;
         merged_stats.merge(&file_stats);
         per_file_counts.push((file.clone(), count));
     }

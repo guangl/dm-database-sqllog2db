@@ -3,23 +3,25 @@
 use crate::error::{ErrorStats, Result};
 use crate::pipeline::Pipeline;
 use crate::pipeline::normalizer::ParamBuffer;
-use dm_database_parser_sqllog::Sqllog;
+use dm_database_parser_sqllog::{ParseError, Sqllog};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-/// 迭代已解析的记录列表，对每条记录执行过滤、归一化，并通过 `on_pass` 回调写出通过过滤的记录。
+/// 迭代流式解析出的记录，对每条记录执行过滤、归一化，并通过 `on_pass` 回调写出通过过滤的记录。
 ///
-/// - `records`：已解析的日志记录列表
+/// - `records`：流式记录迭代器（[`crate::streaming::open_log_file`]），逐条产出
+///   `Result<Sqllog, ParseError>`；单条记录解析失败会被跳过并计入 `file_stats`，不影响同文件
+///   其余记录的处理（与旧的 `AsyncLogParser::parse()` 整文件 all-or-nothing 语义不同）。
 /// - `pipeline`：过滤与处理管道
 /// - `do_normalize`：是否启用 SQL 归一化
 /// - `placeholder_override`：参数占位符覆盖配置
 /// - `interrupted`：中断信号（Ctrl+C）
-/// - `file_stats`：文件级错误统计，函数内累加 `filtered_out`
+/// - `file_stats`：文件级错误统计，函数内累加 `filtered_out` 与逐条解析错误
 /// - `on_pass`：通过过滤时的写出回调，接收 `(&Sqllog, Option<&str>)`（记录与归一化 SQL）
 ///
 /// 返回成功写出的记录数。
-pub(super) fn iterate_records<F>(
-    records: Vec<Sqllog>,
+pub(super) fn iterate_records<I, F>(
+    records: I,
     pipeline: &Pipeline,
     do_normalize: bool,
     placeholder_override: Option<bool>,
@@ -28,16 +30,25 @@ pub(super) fn iterate_records<F>(
     mut on_pass: F,
 ) -> Result<usize>
 where
+    I: IntoIterator<Item = std::result::Result<Sqllog, ParseError>>,
     F: FnMut(&Sqllog, Option<&str>) -> Result<()>,
 {
     let mut params_buf = ParamBuffer::default();
     let mut ns_scratch: Vec<u8> = Vec::with_capacity(4096);
     let mut count = 0usize;
 
-    for record in records {
+    for result in records {
         if interrupted.load(Ordering::Acquire) {
             break;
         }
+        let record = match result {
+            Ok(r) => r,
+            Err(e) => {
+                log::warn!("skipping malformed record: {e}");
+                file_stats.add_parse_error();
+                continue;
+            }
+        };
 
         let passes = pipeline.is_empty() || pipeline.run_with_meta(&record);
         let needs_processing = passes || (do_normalize && record.tag.is_none());

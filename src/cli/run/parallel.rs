@@ -1,7 +1,7 @@
 use crate::error::{Error, ErrorStats, Result};
 use crate::exporter::{CsvExporter, ExporterManager};
 use crate::pipeline::{FieldMask, Pipeline};
-use dm_database_parser_sqllog::AsyncLogParser;
+use crate::streaming::open_log_file;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -107,7 +107,6 @@ fn parse_and_write_csv(
     ordered_indices: &[usize],
     include_performance_metrics: bool,
     interrupted: &Arc<AtomicBool>,
-    handle: &tokio::runtime::Handle,
 ) -> Result<(usize, ErrorStats)> {
     let mut exporter = CsvExporter::new(temp_path);
     exporter.normalize = do_normalize;
@@ -118,8 +117,8 @@ fn parse_and_write_csv(
     em.initialize()?;
     let include_pm = em.csv_include_performance_metrics();
 
-    let records = match handle.block_on(AsyncLogParser::new(file).parse()) {
-        Ok(r) => r,
+    let records = match open_log_file(file) {
+        Ok(it) => it,
         Err(e) => {
             log::warn!("parse failed for '{}': {e}", file.display());
             let mut file_stats = ErrorStats::default();
@@ -143,17 +142,15 @@ fn parse_and_write_csv(
     Ok((count, file_stats))
 }
 
-// IO-01: 日志文件由 dm-database-parser-sqllog 通过 fs::read() 一次性全量读取（单次 syscall），无 BufReader，满足 IO-01（D-01）。
+// 日志文件通过 `LogIterator`（dm-database-parser-sqllog 流式 API）逐行读取并解析，
+// 内存占用与文件大小无关，不再是 jobs × 单文件大小（旧实现一次性 `.parse()` 整文件到
+// `Vec<Sqllog>` 才有此问题，见 `cli::run::memory_budget` 模块注释）。
 //
-// SAFETY: 此函数必须在 multi_thread tokio runtime 内调用。
-// `tokio::task::block_in_place` 在 current_thread runtime 下会 panic（"Cannot call
+// SAFETY: `tokio::task::block_in_place` 在 current_thread runtime 下会 panic（"Cannot call
 // `blocking_` unless the thread is already in a thread pool"）。当前主入口使用
 // `#[tokio::main]`（默认 multi_thread），但嵌入测试或 benchmark 若改用 current_thread
-// runtime，此处将以不明显的 panic 失败。
-//
-// 并发 IO 上限由 `jobs` 参数控制：rayon 线程池大小 == jobs，所有线程同时发起
-// `handle.block_on(parse())`，峰值内存约为 jobs × 单文件大小；调用方应确保
-// jobs 不超过可接受的并发 IO 数量。
+// runtime，此处将以不明显的 panic 失败。block_in_place 仅用于在执行 CPU 密集的 rayon
+// 任务期间让出 tokio worker 线程，解析本身是纯同步调用，不再需要驱动任何 async 运行时。
 #[allow(clippy::too_many_arguments)]
 fn run_parallel_tasks(
     log_files: &[PathBuf],
@@ -169,7 +166,6 @@ fn run_parallel_tasks(
     verbose: bool,
 ) -> Result<Vec<Result<TaskResult>>> {
     use rayon::prelude::*;
-    let handle = tokio::runtime::Handle::current();
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(jobs)
         .build()
@@ -195,7 +191,6 @@ fn run_parallel_tasks(
                         ordered_indices,
                         csv_include_performance_metrics,
                         interrupted,
-                        &handle,
                     )?;
                     Ok(Some((file.clone(), temp_path, count, file_stats)))
                 })
