@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.20.1] - 2026-06-24
+
+### Changed
+
+- **流式解析迁移**：全部解析调用点（parallel/sqlite_parallel/顺序处理/事务过滤预扫描/collector/stats scanner）由 `AsyncLogParser::parse()`（一次性整文件读入 `Vec<Sqllog>`）切换为 `dm-database-parser-sqllog` 的流式 `LogParserBuilder::build()?.iter()?`；实测 175MB 单文件并行解析峰值 RSS 由文件大小量级降至约 120MB，4×175MB 多文件并行峰值约 72MB（STREAM-01）
+- **单文件切块并行**：新增 `chunk.rs`，未启用参数替换/事务级过滤时，将单个大文件按行边界切分为临时分片复用现有多文件 rayon 管线，获得文件内并行解析收益（CHUNK-01）
+- **多文件内存预算节流**：新增 `memory_budget.rs`，按文件大小估算并动态降低并行 `jobs`，为多文件并行场景设置内存上限防御（MEM-BUDGET-01）
+
+### Fixed
+
+- **逐记录错误隔离**：单条记录解析失败仅跳过该记录并计入错误统计，不再导致同文件其余正常记录被整体丢弃（旧 `AsyncLogParser::parse()` 在任意一条记录失败时返回整文件 0 条记录）
+- **stdin 管道编码探测崩溃**：显式向 `LogParserBuilder` 传入 `FileEncodingHint::Auto`，避免默认的 seek 探测在管道（`/dev/stdin`）上触发 `Illegal seek` 失败
+
 ## [1.20.0] - 2026-06-11
 
 ### Added
