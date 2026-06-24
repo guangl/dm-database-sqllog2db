@@ -666,8 +666,7 @@ async fn test_collector_invalid_path_returns_error() {
         false,
         None,
         &interrupted,
-    )
-    .await;
+    );
     assert!(result.is_err(), "不存在路径应返回 Err，实际: {result:?}");
     assert!(
         matches!(
@@ -693,17 +692,18 @@ async fn test_collector_parse_error_accumulation() {
     let interrupted = Arc::new(AtomicBool::new(false));
     let (rows, stats) =
         collector::collect_log_file(&log_path, &pipeline, false, None, &interrupted)
-            .await
             .expect("collect_log_file 应不返回 Err");
     assert!(
         rows.is_empty(),
         "全部非法行应不产生记录，实际 rows.len()={}",
         rows.len()
     );
-    // AsyncLogParser 静默丢弃逐条解析错误，parse_errors 恒为 0
+    // 流式迭代器逐条产出 Result：两行非法文本因缺少有效时间戳起始行被归并为一个解析失败的
+    // 记录块，计入一次 parse_errors（与旧的整文件丢弃语义不同，好记录不会被坏记录连带丢弃）。
     assert_eq!(
-        stats.parse_errors, 0,
-        "AsyncLogParser 不追踪逐条解析错误，parse_errors 应为 0"
+        stats.parse_errors, 1,
+        "非法记录块应计入 parse_errors，实际: {}",
+        stats.parse_errors
     );
 }
 
@@ -728,7 +728,6 @@ async fn test_collector_not_needed_filtering() {
     let interrupted = Arc::new(AtomicBool::new(false));
     let (rows, _parse_errors) =
         collector::collect_log_file(&log_path, &pipeline, false, None, &interrupted)
-            .await
             .expect("collect_log_file 应 Ok");
     assert!(
         rows.is_empty(),
@@ -759,7 +758,6 @@ async fn test_collector_filtered_params_normalize() {
     // do_normalize=true 使被过滤的 PARAMS 行仍走 compute_normalized 分支
     let (rows, _parse_errors) =
         collector::collect_log_file(&log_path, &pipeline, true, None, &interrupted)
-            .await
             .expect("collect_log_file 应 Ok");
     assert!(
         rows.is_empty(),
@@ -784,7 +782,6 @@ async fn test_collector_interrupted_returns_empty() {
     interrupted.store(true, Ordering::Release);
     let (rows, _stats) =
         collector::collect_log_file(&log_path, &pipeline, false, None, &interrupted)
-            .await
             .expect("collect_log_file 应 Ok");
     assert!(
         rows.is_empty(),
@@ -920,9 +917,7 @@ async fn test_min_row_count_zero_matches_all_records() {
         ..Config::default()
     };
 
-    let handle = tokio::runtime::Handle::current();
-    let matched =
-        super::prescan::scan_log_file_for_matches(logfile.to_str().unwrap(), &cfg, &handle);
+    let matched = super::prescan::scan_log_file_for_matches(logfile.to_str().unwrap(), &cfg);
     assert_eq!(
         matched.len(),
         3,

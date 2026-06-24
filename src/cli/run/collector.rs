@@ -1,32 +1,27 @@
 use crate::error::{Error, ErrorStats, ParserError, Result};
 use crate::pipeline::Pipeline;
 use crate::pipeline::normalizer::ParamBuffer;
-use dm_database_parser_sqllog::{AsyncError, AsyncLogParser, ParseError, Sqllog};
+use crate::streaming::open_log_file;
+use dm_database_parser_sqllog::Sqllog;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 /// 线程内解析单个日志文件，收集记录为 Vec，不写出到任何存储。
-pub(super) async fn collect_log_file(
+pub(super) fn collect_log_file(
     file: &Path,
     pipeline: &Pipeline,
     do_normalize: bool,
     placeholder_override: Option<bool>,
     interrupted: &Arc<AtomicBool>,
 ) -> Result<(Vec<(Sqllog, Option<String>)>, ErrorStats)> {
-    // Parse the file, distinguishing IO / not-found errors from line-level parse errors.
+    // Parse the file, distinguishing IO / not-found errors (file-level, propagated as Err)
+    // from per-record parse errors (logged + skipped, file processing continues).
     // We do not pre-check file.exists() to avoid the TOCTOU race where the file could
     // disappear between the check and the open — instead we inspect the error variant.
-    let records = match AsyncLogParser::new(file).parse().await {
-        Ok(r) => r,
-        Err(AsyncError::Parse(ParseError::InvalidFormat { .. })) => {
-            // Line-level parse failure is non-fatal; treat as an empty file.
-            log::warn!("collect_log_file: parse error in '{}'", file.display());
-            return Ok((Vec::new(), ErrorStats::default()));
-        }
+    let records = match open_log_file(file) {
+        Ok(it) => it,
         Err(e) => {
-            // IO errors, FileNotFound, Panic — propagate as Err so the caller
-            // can distinguish "file missing or inaccessible" from parse failures.
             return Err(Error::Parser(ParserError::InvalidPath {
                 path: file.to_path_buf(),
                 reason: e.to_string(),
@@ -40,10 +35,21 @@ pub(super) async fn collect_log_file(
     let mut rows: Vec<(Sqllog, Option<String>)> = Vec::new();
     let mut file_stats = ErrorStats::default();
 
-    for record in records {
+    for result in records {
         if interrupted.load(Ordering::Acquire) {
             break;
         }
+        let record = match result {
+            Ok(r) => r,
+            Err(e) => {
+                log::warn!(
+                    "collect_log_file: skipping malformed record in '{}': {e}",
+                    file.display()
+                );
+                file_stats.add_parse_error();
+                continue;
+            }
+        };
         process_record(
             record,
             pipeline,

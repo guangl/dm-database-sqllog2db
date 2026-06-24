@@ -1,10 +1,12 @@
 //! Run 子命令：主编排在 orchestrator.rs，各阶段子模块独立成文件。
 
+mod chunk;
 #[cfg(test)]
 mod collector;
 mod error_log;
 mod filter_processor;
 mod input;
+mod memory_budget;
 mod orchestrator;
 mod parallel;
 mod prescan;

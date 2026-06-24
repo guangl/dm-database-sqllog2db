@@ -1,7 +1,8 @@
 use crate::config::Config;
 use crate::error::{Error, Result};
 use crate::pipeline::filters::{IndicatorFilters, SqlFilters};
-use dm_database_parser_sqllog::{AsyncLogParser, Filter, FilterBuilder};
+use crate::streaming::open_log_file;
+use dm_database_parser_sqllog::{Filter, FilterBuilder};
 
 // ===== Pre-scan: 指标/SQL 过滤器构建 =====
 
@@ -50,33 +51,16 @@ pub(super) fn build_sql_exclude_filters(sf: &SqlFilters) -> Vec<Filter> {
 
 /// 扫描单个日志文件，返回满足事务级过滤条件的去重 `trxid` 列表。
 ///
-/// 文件内部使用 `par_iter()` 并行处理各行，无共享可变状态，
-/// 可被上层跨文件的 `par_iter()` 安全调用（两级 rayon 嵌套并行）。
-/// `handle` 为调用方在进入 rayon 前捕获的 tokio Handle，用于在非 tokio 线程上驱动异步解析。
-pub(super) fn scan_log_file_for_matches(
-    file_path: &str,
-    cfg: &Config,
-    handle: &tokio::runtime::Handle,
-) -> Vec<String> {
-    use rayon::prelude::*;
-
+/// 通过流式迭代器逐条处理记录（内存占用与文件大小无关），单条记录解析失败时跳过并记录警告，
+/// 不影响同文件其余记录的扫描。可被上层跨文件的 `par_iter()` 安全调用（文件级并行）。
+pub(super) fn scan_log_file_for_matches(file_path: &str, cfg: &Config) -> Vec<String> {
     let filters = match &cfg.filter {
         Some(f) if f.has_transaction_filters() => f,
         _ => return Vec::new(),
     };
 
-    // block_in_place is required here because this function may be called either:
-    // (a) directly from a tokio async context (e.g. tests) — block_in_place yields
-    //     the tokio worker thread before block_on drives the async parser; or
-    // (b) from within the outer block_in_place in scan_for_trxids_by_transaction_filters
-    //     via a rayon thread — on a rayon thread block_in_place is a no-op, so
-    //     block_on is safe without double-blocking.
-    // In case (b) the rayon thread is not a tokio worker, so there is no nested
-    // runtime drive; the outer block_in_place only surrenders the *tokio* thread.
-    let records = match tokio::task::block_in_place(|| {
-        handle.block_on(AsyncLogParser::new(std::path::Path::new(file_path)).parse())
-    }) {
-        Ok(r) => r,
+    let records = match open_log_file(std::path::Path::new(file_path)) {
+        Ok(it) => it,
         Err(e) => {
             log::warn!("Pre-scan: failed to parse '{file_path}': {e}");
             return Vec::new();
@@ -87,33 +71,36 @@ pub(super) fn scan_log_file_for_matches(
     let sql_include_filters = build_sql_include_filters(&filters.sql);
     let sql_exclude_filters = build_sql_exclude_filters(&filters.sql);
     let has_sql_filters = filters.sql.has_filters();
-    let trxids: std::collections::HashSet<String> = records
-        .par_iter()
-        .filter_map(|record| {
-            let indicator_match = !indicator_filters.is_empty()
-                && indicator_filters.iter().any(|f| f.matches(record));
-
-            // SQL match is an independent path — not subordinate to indicator match.
-            // Both filter types evaluate independently; trxid is collected if either matches.
-            let sql_match = has_sql_filters && {
-                let include_ok = sql_include_filters.is_empty()
-                    || sql_include_filters.iter().any(|f| f.matches(record));
-                let exclude_ok = sql_exclude_filters.is_empty()
-                    || !sql_exclude_filters.iter().any(|f| f.matches(record));
-                include_ok && exclude_ok
-            };
-
-            if indicator_match || sql_match {
-                Some(record.trxid.clone())
-            } else {
-                None
+    let mut trxids: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for result in records {
+        let record = match result {
+            Ok(r) => r,
+            Err(e) => {
+                log::warn!("Pre-scan: skipping malformed record in '{file_path}': {e}");
+                continue;
             }
-        })
-        .collect();
+        };
+        let indicator_match =
+            !indicator_filters.is_empty() && indicator_filters.iter().any(|f| f.matches(&record));
+
+        // SQL match is an independent path — not subordinate to indicator match.
+        // Both filter types evaluate independently; trxid is collected if either matches.
+        let sql_match = has_sql_filters && {
+            let include_ok = sql_include_filters.is_empty()
+                || sql_include_filters.iter().any(|f| f.matches(&record));
+            let exclude_ok = sql_exclude_filters.is_empty()
+                || !sql_exclude_filters.iter().any(|f| f.matches(&record));
+            include_ok && exclude_ok
+        };
+
+        if indicator_match || sql_match {
+            trxids.insert(record.trxid.clone());
+        }
+    }
     trxids.into_iter().collect()
 }
 
-// ===== Pre-scan: 跨文件编排（两级 rayon 嵌套并行）=====
+// ===== Pre-scan: 跨文件编排（文件级 rayon 并行）=====
 
 pub(super) fn scan_for_trxids_by_transaction_filters(
     log_files: &[std::path::PathBuf],
@@ -127,7 +114,6 @@ pub(super) fn scan_for_trxids_by_transaction_filters(
         log_files.len()
     );
 
-    let handle = tokio::runtime::Handle::current();
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(jobs)
         .build()
@@ -139,7 +125,7 @@ pub(super) fn scan_for_trxids_by_transaction_filters(
                 .par_iter()
                 .flat_map(|file| {
                     if let Some(path) = file.to_str() {
-                        scan_log_file_for_matches(path, cfg, &handle)
+                        scan_log_file_for_matches(path, cfg)
                     } else {
                         log::warn!(
                             "Pre-scan: skipping file with non-UTF8 path: {}",

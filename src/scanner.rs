@@ -1,13 +1,14 @@
 use crate::error::{ErrorStats, Result};
-use dm_database_parser_sqllog::AsyncLogParser;
+use crate::streaming::open_log_file;
 use std::path::PathBuf;
 
 /// 扫描一组日志文件，对每条成功解析的记录调用 `on_record` 回调。
 ///
-/// 使用 `AsyncLogParser`，文件级解析失败静默 warn 并跳过该文件（0 条记录）。
-/// 注意：`AsyncLogParser::parse()` 将整个文件一次性读入内存后再返回记录列表，
-/// 内存占用与文件大小成正比（非流式），大文件（如 1.1GB）时内存压力较大。
-/// 其他 IO 错误返回 `Err`，终止整个扫描。
+/// 通过流式迭代器逐条读取，内存占用与文件大小无关。文件级打开失败（不存在/无权限）静默
+/// warn 并跳过该文件；单条记录解析失败同样静默 warn 并跳过，不影响同文件其余记录。
+// 保持 `async fn` 签名以维持调用链（`run_stats` 等公开 API）不变；流式解析改为纯同步后
+// 函数体内已无 `.await`，但调用方仍以 `.await` 形式调用，属于有意保留的公开接口稳定性权衡。
+#[allow(clippy::unused_async)]
 pub(crate) async fn scan_files<F>(
     log_files: &[PathBuf],
     on_record: &mut F,
@@ -19,8 +20,8 @@ where
     for (idx, file_path) in log_files.iter().enumerate() {
         log::info!("scanner: scanning {}", file_path.display());
 
-        let records = match AsyncLogParser::new(file_path).parse().await {
-            Ok(r) => r,
+        let records = match open_log_file(file_path) {
+            Ok(it) => it,
             Err(e) => {
                 let remaining = log_files.len() - idx - 1;
                 log::warn!(
@@ -34,8 +35,17 @@ where
             }
         };
 
-        for record in &records {
-            on_record(record);
+        for result in records {
+            match result {
+                Ok(record) => on_record(&record),
+                Err(e) => {
+                    log::warn!(
+                        "scanner: skipping malformed record in '{}': {e}",
+                        file_path.display()
+                    );
+                    stats.add_parse_error();
+                }
+            }
         }
     }
     Ok(())

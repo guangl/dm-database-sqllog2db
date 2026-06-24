@@ -1,6 +1,8 @@
+use super::chunk::{should_split, split_file_into_chunks};
 use super::error_log::write_error_log;
 use super::filter_processor::build_pipeline;
 use super::input::{make_progress_bar, merge_trxid_prescan, resolve_input_files};
+use super::memory_budget::{DEFAULT_MEMORY_BUDGET_BYTES, effective_jobs_for_memory_budget};
 use super::parallel::process_csv_parallel;
 use super::sequential::run_sequential;
 use super::sqlite_parallel::process_sqlite_parallel;
@@ -59,9 +61,10 @@ fn run_csv_parallel(
     verbose: bool,
     interrupted: &Arc<AtomicBool>,
 ) -> ProcessResult {
+    let jobs = effective_jobs_for_memory_budget(log_files, jobs, DEFAULT_MEMORY_BUDGET_BYTES);
     if verbose {
         eprintln!(
-            "Processing {} files in parallel ({} jobs)",
+            "Processing {} files in parallel ({} jobs, memory-budget capped)",
             log_files.len(),
             jobs
         );
@@ -82,7 +85,7 @@ fn run_csv_parallel(
     Ok((files, skipped, stats))
 }
 
-async fn run_sqlite_parallel(
+fn run_sqlite_parallel(
     ctx: &RunContext<'_>,
     log_files: &[PathBuf],
     jobs: usize,
@@ -107,9 +110,90 @@ async fn run_sqlite_parallel(
         ctx.placeholder_override,
         ctx.field_mask,
         &ctx.ordered_indices,
-    )
-    .await?;
+    )?;
     Ok((files, skipped, stats))
+}
+
+/// 单文件切块路径的前置条件（不含文件大小判断，供 `handle_run` 提前算出 `use_parallel`/进度条策略）。
+///
+/// 安全前提：未启用参数替换（PARAMS 缓存跨记录依赖）且未配置事务级过滤器
+/// （`indicators`/`sql`，事务边界判定依赖完整文件预扫描）。条件不满足时返回 `false`，
+/// 调用方退回常规（单文件顺序）路径。
+fn chunked_single_file_eligible(
+    ctx: &RunContext<'_>,
+    log_files: &[PathBuf],
+    jobs: usize,
+    is_stdin_pipe: bool,
+) -> bool {
+    if jobs <= 1 || log_files.len() != 1 || is_stdin_pipe || ctx.do_normalize {
+        return false;
+    }
+    if ctx.cfg.exporter.csv.is_none() {
+        return false;
+    }
+    let has_transaction_filters = ctx
+        .cfg
+        .filter
+        .as_ref()
+        .is_some_and(crate::pipeline::FiltersFeature::has_transaction_filters);
+    !has_transaction_filters
+}
+
+fn try_chunked_single_file_csv(
+    ctx: &RunContext<'_>,
+    log_files: &[PathBuf],
+    jobs: usize,
+    is_stdin_pipe: bool,
+    verbose: bool,
+    interrupted: &Arc<AtomicBool>,
+) -> Option<ProcessResult> {
+    if !chunked_single_file_eligible(ctx, log_files, jobs, is_stdin_pipe) {
+        return None;
+    }
+    let file = &log_files[0];
+    let size = should_split(file, jobs)?;
+    let chunks = match split_file_into_chunks(file, jobs, size) {
+        Ok(c) => c,
+        Err(e) => {
+            log::warn!(
+                "Failed to split '{}' into chunks for parallel parsing, \
+                 falling back to sequential processing: {e}",
+                file.display()
+            );
+            return None;
+        }
+    };
+    if chunks.paths.len() <= 1 {
+        return None;
+    }
+    if verbose {
+        eprintln!(
+            "Splitting '{}' into {} chunks for parallel parsing",
+            file.display(),
+            chunks.paths.len()
+        );
+    }
+    info!(
+        "Parsing and exporting SQL logs (single-file chunked parallel, {} chunks)...",
+        chunks.paths.len()
+    );
+    let chunk_jobs = jobs.min(chunks.paths.len());
+    let result = process_csv_parallel(
+        &chunks.paths,
+        ctx.cfg,
+        &ctx.pipeline,
+        chunk_jobs,
+        interrupted,
+        ctx.do_normalize,
+        ctx.placeholder_override,
+        ctx.field_mask,
+        &ctx.ordered_indices,
+        verbose,
+    );
+    Some(result.map(|(files, skipped, stats)| {
+        let total: usize = files.iter().map(|(_, c)| *c).sum();
+        (vec![(file.clone(), total)], skipped, stats)
+    }))
 }
 
 async fn route_processing(
@@ -122,6 +206,11 @@ async fn route_processing(
     pb: Option<&ProgressBar>,
     interrupted: &Arc<AtomicBool>,
 ) -> ProcessResult {
+    if let Some(result) =
+        try_chunked_single_file_csv(ctx, log_files, jobs, is_stdin_pipe, verbose, interrupted)
+    {
+        return result;
+    }
     let multi_file = jobs > 1 && log_files.len() > 1 && !is_stdin_pipe;
     if multi_file && ctx.cfg.exporter.csv.is_some() {
         // NOTE: run_csv_parallel is a synchronous blocking function (it uses block_in_place
@@ -134,7 +223,7 @@ async fn route_processing(
         return run_csv_parallel(ctx, log_files, jobs, verbose, interrupted);
     }
     if multi_file && ctx.cfg.exporter.sqlite.is_some() {
-        return run_sqlite_parallel(ctx, log_files, jobs, verbose, interrupted).await;
+        return run_sqlite_parallel(ctx, log_files, jobs, verbose, interrupted);
     }
     let (files, stats) = run_sequential(
         log_files,
@@ -196,11 +285,19 @@ pub async fn handle_run(
     let (log_files, is_stdin_pipe) = resolve_input_files(cfg)?;
     let jobs = jobs_override
         .unwrap_or_else(|| std::thread::available_parallelism().map_or(1, std::num::NonZero::get));
-    let merged = merge_trxid_prescan(cfg, &log_files, jobs, is_stdin_pipe, quiet)?;
+    let prescan_jobs =
+        effective_jobs_for_memory_budget(&log_files, jobs, DEFAULT_MEMORY_BUDGET_BYTES);
+    let merged = merge_trxid_prescan(cfg, &log_files, prescan_jobs, is_stdin_pipe, quiet)?;
     let final_cfg: &Config = merged.as_ref().unwrap_or(cfg);
     let ctx = build_run_context(final_cfg);
-    let use_parallel = (jobs > 1 && log_files.len() > 1 && !is_stdin_pipe)
-        && (final_cfg.exporter.csv.is_some() || final_cfg.exporter.sqlite.is_some());
+    let will_chunk_single_file =
+        chunked_single_file_eligible(&ctx, &log_files, jobs, is_stdin_pipe)
+            && log_files
+                .first()
+                .is_some_and(|f| should_split(f, jobs).is_some());
+    let use_parallel = will_chunk_single_file
+        || ((jobs > 1 && log_files.len() > 1 && !is_stdin_pipe)
+            && (final_cfg.exporter.csv.is_some() || final_cfg.exporter.sqlite.is_some()));
     let show_progress = !quiet && !verbose && !use_parallel;
     let pb = make_progress_bar(show_progress, log_files.len());
     let (processed_files, skipped_files, stats) = route_processing(

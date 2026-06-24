@@ -2,7 +2,8 @@ use crate::error::{ErrorStats, Result};
 use crate::exporter::ExporterManager;
 use crate::pipeline::Pipeline;
 use crate::pipeline::normalizer::ParamBuffer;
-use dm_database_parser_sqllog::{AsyncLogParser, Sqllog};
+use crate::streaming::open_log_file;
+use dm_database_parser_sqllog::Sqllog;
 use indicatif::ProgressBar;
 use log::info;
 use std::sync::Arc;
@@ -202,8 +203,8 @@ pub(super) async fn process_log_file(
         .map_or_else(|| file_path.to_string(), |n| n.to_string_lossy().into_owned());
     setup_progress_bar(pb, reset_pb, show_progress, file_index, total_files, &file_name);
     let file_path_buf = std::path::Path::new(file_path);
-    let records = match AsyncLogParser::new(file_path_buf).parse().await {
-        Ok(r) => r,
+    let records = match open_log_file(file_path_buf) {
+        Ok(it) => it,
         Err(e) => {
             log::warn!("parse failed for '{}': {e}", file_path_buf.display());
             let mut file_stats = ErrorStats::default();
@@ -213,7 +214,15 @@ pub(super) async fn process_log_file(
     };
     let (mut records_in_file, mut file_stats) = (0usize, ErrorStats::default());
     let mut total_processed = 0usize;
-    'outer: for record in records {
+    'outer: for result in records {
+        let record = match result {
+            Ok(r) => r,
+            Err(e) => {
+                log::warn!("skipping malformed record in '{file_path}': {e}");
+                file_stats.add_parse_error();
+                continue;
+            }
+        };
         let passes = pipeline.is_empty() || pipeline.run_with_meta(&record);
         let needs_processing = passes || (do_normalize && record.tag.is_none());
         if !needs_processing { continue; }

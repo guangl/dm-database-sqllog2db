@@ -8,6 +8,7 @@ mod pipeline;
 mod preflight;
 mod scanner;
 mod stats;
+mod streaming;
 
 use config::Config;
 use error::{Error, ErrorStats, Result};
