@@ -45,6 +45,11 @@ pub struct CsvExporterConfig {
     /// 关闭时跳过 `parse_performance_metrics()`，CSV 省略 `exectime/rowcount/exec_id` 三列。
     #[serde(default = "default_true")]
     pub include_performance_metrics: bool,
+    /// 可选：每文件最大行数，达到后自动切分到新文件（如 `sqllog_1.csv`, `sqllog_2.csv`）。
+    /// 默认不设置（单文件输出）。设为 0 或不配置表示不切分。
+    /// 切分模式下仅支持 overwrite = true。
+    #[serde(default)]
+    pub max_rows_per_file: Option<usize>,
 }
 
 impl Default for CsvExporterConfig {
@@ -54,6 +59,7 @@ impl Default for CsvExporterConfig {
             overwrite: true,
             append: false,
             include_performance_metrics: true,
+            max_rows_per_file: None,
         }
     }
 }
@@ -75,6 +81,23 @@ impl CsvExporterConfig {
                     both false would silently truncate an existing file"
                     .to_string(),
             }));
+        }
+        if let Some(max_rows) = self.max_rows_per_file {
+            if max_rows == 0 {
+                return Err(Error::Config(ConfigError::InvalidValue {
+                    field: "exporter.csv.max_rows_per_file".to_string(),
+                    value: "0".to_string(),
+                    reason: "max_rows_per_file must be greater than 0, or omit the field entirely".to_string(),
+                }));
+            }
+            if self.append {
+                return Err(Error::Config(ConfigError::InvalidValue {
+                    field: "exporter.csv.max_rows_per_file".to_string(),
+                    value: self.max_rows_per_file.as_ref().map_or_else(String::new, ToString::to_string),
+                    reason: "max_rows_per_file requires overwrite=true; append mode is not supported with file splitting"
+                        .to_string(),
+                }));
+            }
         }
         Ok(())
     }

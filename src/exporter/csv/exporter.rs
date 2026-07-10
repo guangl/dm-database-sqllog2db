@@ -23,6 +23,12 @@ pub struct CsvExporter {
     pub(crate) field_mask: crate::pipeline::FieldMask,
     pub(crate) ordered_indices: Vec<usize>,
     pub(crate) include_performance_metrics: bool,
+    /// 每文件最大行数。`None` = 单文件输出（原行为）。
+    pub(super) max_rows_per_file: Option<usize>,
+    /// 当前拆分文件已写入行数。
+    pub(super) rows_in_file: usize,
+    /// 当前拆分文件序号（0 = 未启用拆分，1+ = 拆分文件编号）。
+    pub(super) file_index: usize,
 }
 
 impl std::fmt::Debug for CsvExporter {
@@ -30,6 +36,8 @@ impl std::fmt::Debug for CsvExporter {
         f.debug_struct("CsvExporter")
             .field("path", &self.path)
             .field("stats", &self.stats)
+            .field("max_rows_per_file", &self.max_rows_per_file)
+            .field("file_index", &self.file_index)
             .finish_non_exhaustive()
     }
 }
@@ -49,6 +57,9 @@ impl CsvExporter {
             field_mask: crate::pipeline::FieldMask::ALL,
             ordered_indices: (0..crate::pipeline::FIELD_NAMES.len()).collect(),
             include_performance_metrics: true,
+            max_rows_per_file: None,
+            rows_in_file: 0,
+            file_index: 0,
         }
     }
 
@@ -61,7 +72,45 @@ impl CsvExporter {
             e.write_mode = WriteMode::Truncate;
         }
         e.include_performance_metrics = config.include_performance_metrics;
+        e.max_rows_per_file = config.max_rows_per_file;
         e
+    }
+
+    /// 返回当前文件在磁盘上的完整路径。
+    pub(super) fn current_file_path(&self) -> PathBuf {
+        self.file_path_for_index(self.file_index)
+    }
+
+    /// 根据文件序号计算路径：
+    /// - `index == 0` → 返回 `self.path`（单文件模式或未启用拆分时的路径）
+    /// - `index >= 1` → 返回 `{parent}/{stem}_{index}.{ext}`
+    fn file_path_for_index(&self, file_index: usize) -> PathBuf {
+        if file_index == 0 || self.max_rows_per_file.is_none() {
+            return self.path.clone();
+        }
+        let parent = self.path.parent().map_or_else(|| PathBuf::from("."), Path::to_path_buf);
+        let stem = self.path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("sqllog");
+        let ext = self.path
+            .extension()
+            .and_then(|s| s.to_str())
+            .unwrap_or("csv");
+        parent.join(format!("{stem}_{file_index}.{ext}"))
+    }
+
+    /// overwrite 模式下清理上一次运行遗留的拆分文件。
+    pub(super) fn remove_stale_split_files(&self) {
+        let mut idx = 1;
+        loop {
+            let path = self.file_path_for_index(idx);
+            if !path.exists() {
+                break;
+            }
+            let _ = std::fs::remove_file(&path);
+            idx += 1;
+        }
     }
 
     pub(super) fn build_header(&self) -> Vec<u8> {

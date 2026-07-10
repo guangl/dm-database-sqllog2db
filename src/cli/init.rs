@@ -436,6 +436,9 @@ enable = false
 # overwrite = true
 # Append to existing CSV file instead of overwriting (true/false)
 # append = false
+# Max rows per CSV file before splitting into sqllog_1.csv, sqllog_2.csv, ...
+# (unset or 0 = single file, split mode requires overwrite = true)
+# max_rows_per_file = 1000000
 
 # Option 2: SQLite database export
 [exporter.sqlite]
