@@ -43,6 +43,7 @@ impl Exporter for CsvExporter {
     }
 
     fn export(&mut self, sqllog: &Sqllog) -> Result<()> {
+        self.maybe_rotate()?;
         let path = self.current_file_path();
         let writer = writer_ref(&mut self.writer, &path)?;
         write_record_preparsed(
@@ -59,11 +60,11 @@ impl Exporter for CsvExporter {
         )?;
         self.stats.record_success();
         self.rows_in_file += 1;
-        self.maybe_rotate()?;
         Ok(())
     }
 
     fn export_one_normalized(&mut self, sqllog: &Sqllog, normalized: Option<&str>) -> Result<()> {
+        self.maybe_rotate()?;
         let path = self.current_file_path();
         let writer = writer_ref(&mut self.writer, &path)?;
         write_record_preparsed(
@@ -80,7 +81,6 @@ impl Exporter for CsvExporter {
         )?;
         self.stats.record_success();
         self.rows_in_file += 1;
-        self.maybe_rotate()?;
         Ok(())
     }
 
@@ -90,6 +90,7 @@ impl Exporter for CsvExporter {
         include_pm: bool,
         normalized: Option<&str>,
     ) -> Result<()> {
+        self.maybe_rotate()?;
         let path = self.current_file_path();
         let writer = writer_ref(&mut self.writer, &path)?;
         write_record_preparsed(
@@ -106,7 +107,6 @@ impl Exporter for CsvExporter {
         )?;
         self.stats.record_success();
         self.rows_in_file += 1;
-        self.maybe_rotate()?;
         Ok(())
     }
 
@@ -139,9 +139,13 @@ impl Drop for CsvExporter {
 // ── 文件拆分辅助方法 ──────────────────────────────────────────────────────────
 
 impl CsvExporter {
-    /// 检查当前文件是否已写满，若是则滚动到下一个文件。
+    /// 在写入下一条记录**之前**调用：若当前文件已写满 `max_rows_per_file`，
+    /// 则滚动到新文件。惰性轮转——只有确实还有记录要写时才创建新文件，
+    /// 避免记录数恰为 `max_rows_per_file` 整数倍时末尾产生仅含表头的空文件。
     fn maybe_rotate(&mut self) -> Result<()> {
-        let Some(max_rows) = self.max_rows_per_file else { return Ok(()); };
+        let Some(max_rows) = self.max_rows_per_file else {
+            return Ok(());
+        };
         if self.rows_in_file < max_rows {
             return Ok(());
         }

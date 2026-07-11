@@ -87,14 +87,16 @@ impl CsvExporterConfig {
                 return Err(Error::Config(ConfigError::InvalidValue {
                     field: "exporter.csv.max_rows_per_file".to_string(),
                     value: "0".to_string(),
-                    reason: "max_rows_per_file must be greater than 0, or omit the field entirely".to_string(),
+                    reason: "max_rows_per_file must be greater than 0, or omit the field entirely"
+                        .to_string(),
                 }));
             }
-            if self.append {
+            if self.append || !self.overwrite {
                 return Err(Error::Config(ConfigError::InvalidValue {
                     field: "exporter.csv.max_rows_per_file".to_string(),
-                    value: self.max_rows_per_file.as_ref().map_or_else(String::new, ToString::to_string),
-                    reason: "max_rows_per_file requires overwrite=true; append mode is not supported with file splitting"
+                    value: max_rows.to_string(),
+                    reason: "max_rows_per_file requires overwrite=true and append=false; \
+                        append mode is not supported with file splitting"
                         .to_string(),
                 }));
             }

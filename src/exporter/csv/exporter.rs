@@ -81,6 +81,27 @@ impl CsvExporter {
         self.file_path_for_index(self.file_index)
     }
 
+    /// 拆解输出路径为 `(父目录, 文件名主干, 扩展名)`，供拆分文件命名/清理复用。
+    fn split_path_parts(&self) -> (PathBuf, String, String) {
+        let parent = self
+            .path
+            .parent()
+            .map_or_else(|| PathBuf::from("."), Path::to_path_buf);
+        let stem = self
+            .path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("sqllog")
+            .to_string();
+        let ext = self
+            .path
+            .extension()
+            .and_then(|s| s.to_str())
+            .unwrap_or("csv")
+            .to_string();
+        (parent, stem, ext)
+    }
+
     /// 根据文件序号计算路径：
     /// - `index == 0` → 返回 `self.path`（单文件模式或未启用拆分时的路径）
     /// - `index >= 1` → 返回 `{parent}/{stem}_{index}.{ext}`
@@ -88,28 +109,35 @@ impl CsvExporter {
         if file_index == 0 || self.max_rows_per_file.is_none() {
             return self.path.clone();
         }
-        let parent = self.path.parent().map_or_else(|| PathBuf::from("."), Path::to_path_buf);
-        let stem = self.path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("sqllog");
-        let ext = self.path
-            .extension()
-            .and_then(|s| s.to_str())
-            .unwrap_or("csv");
+        let (parent, stem, ext) = self.split_path_parts();
         parent.join(format!("{stem}_{file_index}.{ext}"))
     }
 
     /// overwrite 模式下清理上一次运行遗留的拆分文件。
+    ///
+    /// 扫描父目录并删除所有形如 `{stem}_{数字}.{ext}` 的文件，不依赖序号连续，
+    /// 因此上一轮留下的编号空洞（如缺 `_3` 但有 `_4`）也能被完全清理。
     pub(super) fn remove_stale_split_files(&self) {
-        let mut idx = 1;
-        loop {
-            let path = self.file_path_for_index(idx);
-            if !path.exists() {
-                break;
+        let (parent, stem, ext) = self.split_path_parts();
+        let prefix = format!("{stem}_");
+        let suffix = format!(".{ext}");
+        let Ok(entries) = std::fs::read_dir(&parent) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let Some(name) = name.to_str() else { continue };
+            // 仅匹配 `{stem}_<纯数字>.{ext}`：主文件 `{stem}.{ext}`（无下划线段）
+            // 与用户自有的 `{stem}_final.{ext}` 等非数字后缀都不会被误删。
+            let Some(mid) = name
+                .strip_prefix(&prefix)
+                .and_then(|s| s.strip_suffix(&suffix))
+            else {
+                continue;
+            };
+            if !mid.is_empty() && mid.bytes().all(|b| b.is_ascii_digit()) {
+                let _ = std::fs::remove_file(entry.path());
             }
-            let _ = std::fs::remove_file(&path);
-            idx += 1;
         }
     }
 
