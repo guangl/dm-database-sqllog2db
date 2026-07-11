@@ -19,7 +19,7 @@ use std::sync::mpsc::RecvTimeoutError;
 use std::time::{Duration, Instant};
 
 /// Watch 子命令主入口：初始化 notify watcher，进入 watch loop，Ctrl+C 后打印摘要。
-pub async fn handle_watch(
+pub async fn run(
     cfg: &Config,
     quiet: bool,
     verbose: bool,

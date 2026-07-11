@@ -2,7 +2,7 @@
 
 use super::debounce::should_trigger;
 use super::dirs::collect_watch_dirs;
-use super::handler::handle_watch;
+use super::handler::run as handle_watch;
 use super::state::{DEBOUNCE_WINDOW, WatchLoopState};
 use super::status::{format_elapsed_hms, render_active_status};
 use super::trigger_full::trigger_full_file;

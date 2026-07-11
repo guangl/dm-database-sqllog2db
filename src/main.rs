@@ -10,6 +10,7 @@ mod preflight;
 mod scanner;
 mod stats;
 mod streaming;
+mod watch;
 
 use config::Config;
 use error::{Error, ErrorStats, Result};
@@ -222,7 +223,7 @@ async fn run() -> Result<Option<(ErrorStats, bool)>> {
             })
             .ok();
 
-            cli::watch::handle_watch(&cfg, cli.quiet, cli.verbose, &interrupted).await?;
+            watch::run(&cfg, cli.quiet, cli.verbose, &interrupted).await?;
             Ok(None)
         }
         None => {

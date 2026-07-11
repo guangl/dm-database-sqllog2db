@@ -9,3 +9,4 @@ pub mod pipeline;
 pub(crate) mod scanner;
 pub mod stats;
 pub(crate) mod streaming;
+pub mod watch;

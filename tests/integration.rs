@@ -2899,7 +2899,7 @@ fn test_cli_init_interactive_force_overwrites_existing() {
 // ── watch subcommand tests ─────────────────────────────────────────────────────
 
 mod watch_tests {
-    use dm_database_sqllog2db::cli::watch::handle_watch;
+    use dm_database_sqllog2db::watch::run as handle_watch;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::Duration;
