@@ -168,11 +168,15 @@ inputs = ["sqllogs"]
 enable = true
 
 [filter.include]
+# 语句类型，匹配日志方括号标签（取不带方括号的值，如 [SEL] -> "SEL"）
 statements = ["INS", "UPD", "DEL"]
-min_runtime_ms = 100
 
 [filter.exclude]
 users = ["SYSDBA", "MONITOR"]
+
+# 指标过滤器为事务级，须放在 [filter.indicators] 下（放在 include 下会被忽略）
+[filter.indicators]
+min_runtime_ms = 100
 
 [exporter.csv]
 file = "output/filtered.csv"
