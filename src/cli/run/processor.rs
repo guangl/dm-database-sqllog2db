@@ -187,6 +187,11 @@ fn tick_progress(
 ///
 /// `remaining`: 最多再导出多少条记录（跨文件的剩余配额），`None` 表示不限制。
 /// `reset_pb`: 是否在文件开始时重置进度条计数；并行模式传 `false`，避免多线程互相重置。
+// 保持 `async fn` 签名以维持 run 子命令的异步调用链（`run_sequential` → `run_file_loop`）不变；
+// 切换到流式解析后函数体内已无 `.await`。当前 clippy 之所以未报 `unused_async`，仅因
+// `sequential.rs` 通过 `use` 导入本函数——该抑制并不可靠（换 clippy 版本、或改为全限定路径
+// 调用即会触发 `-D warnings` 失败）。故显式加 allow，与 `scanner::scan_files` 的处理保持一致。
+#[allow(clippy::unused_async)]
 #[rustfmt::skip]
 pub(super) async fn process_log_file(
     file_path: &str, file_index: usize, total_files: usize,
