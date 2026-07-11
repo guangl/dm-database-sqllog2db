@@ -132,7 +132,7 @@ async fn run_incremental_handle_run(
     pb: &ProgressBar,
 ) {
     let tmp_cfg = build_incremental_cfg(cfg, &tmp_file);
-    match crate::cli::run::handle_run(&tmp_cfg, quiet, verbose, interrupted, None).await {
+    match crate::engine::run(&tmp_cfg, quiet, verbose, interrupted, None).await {
         Ok(file_stats) => {
             state.total_stats.merge(&file_stats);
             let last_elapsed = state.last_trigger_at.map(|t| t.elapsed());

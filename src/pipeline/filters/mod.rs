@@ -2,12 +2,15 @@
 
 mod feature_ops;
 mod indicator_ops;
+mod processor;
 mod serde_helpers;
 mod sql_ops;
 pub mod types;
 
 #[cfg(test)]
 mod tests;
+
+pub(crate) use processor::build_pipeline;
 
 #[cfg(test)]
 pub(crate) use serde_helpers::TrxidSet;

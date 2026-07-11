@@ -1,5 +1,6 @@
 mod cli;
 mod config;
+mod engine;
 mod error;
 mod exporter;
 mod logging;
@@ -176,8 +177,7 @@ async fn run() -> Result<Option<(ErrorStats, bool)>> {
             })
             .ok();
 
-            let stats =
-                cli::run::handle_run(&cfg, cli.quiet, cli.verbose, &interrupted, None).await?;
+            let stats = engine::run(&cfg, cli.quiet, cli.verbose, &interrupted, None).await?;
             Ok(Some((stats, cli.quiet)))
         }
         Some(cli::opts::Commands::Validate { config }) => {

@@ -3,7 +3,7 @@ use crate::pipeline::{FiltersFeature, LogProcessor, Pipeline};
 use dm_database_parser_sqllog::{Filter, FilterBuilder, Sqllog};
 use std::collections::HashSet;
 
-pub(super) fn build_pipeline(cfg: &Config) -> Pipeline {
+pub(crate) fn build_pipeline(cfg: &Config) -> Pipeline {
     let mut pipeline = Pipeline::new();
     if let Some(f) = cfg.filter.as_ref() {
         if f.enable && (f.include.has_filters() || f.exclude.has_filters()) {

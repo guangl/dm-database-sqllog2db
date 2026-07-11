@@ -34,7 +34,7 @@ pub async fn trigger_full_file(
     // WATCH-07 (D-01): 全量触发也强制 CSV 追加，避免每次触发覆盖既有数据
     // WATCH-08 (D-05): error log 追加模式，保留 watch 进程历史错误
     force_append_for_watch_trigger(&mut tmp_cfg);
-    match crate::cli::run::handle_run(&tmp_cfg, quiet, verbose, interrupted, None).await {
+    match crate::engine::run(&tmp_cfg, quiet, verbose, interrupted, None).await {
         Ok(file_stats) => {
             state.total_stats.merge(&file_stats);
             let last_elapsed = state.last_trigger_at.map(|t| t.elapsed());

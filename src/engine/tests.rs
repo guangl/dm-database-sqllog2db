@@ -1,5 +1,5 @@
 use super::collector;
-use super::orchestrator::handle_run;
+use super::run::run as handle_run;
 use crate::config::Config;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;

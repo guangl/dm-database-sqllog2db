@@ -1,6 +1,6 @@
 use super::chunk::{should_split, split_file_into_chunks};
 use super::error_log::write_error_log;
-use super::filter_processor::build_pipeline;
+use crate::pipeline::filters::build_pipeline;
 use super::input::{make_progress_bar, merge_trxid_prescan, resolve_input_files};
 use super::memory_budget::{DEFAULT_MEMORY_BUDGET_BYTES, effective_jobs_for_memory_budget};
 use super::parallel::process_csv_parallel;
@@ -273,7 +273,7 @@ fn finalize_run(
 /// 主编排函数：解析日志文件并导出到配置的导出器。
 /// 并行路径：CSV + 多文件 + jobs > 1；顺序路径：其他情况。
 /// `jobs_override` 为测试钩子，生产代码传 None 保持 `available_parallelism` 原行为。
-pub async fn handle_run(
+pub async fn run(
     cfg: &Config,
     quiet: bool,
     verbose: bool,
