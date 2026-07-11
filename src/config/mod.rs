@@ -5,6 +5,7 @@ pub mod exporter;
 pub mod logging;
 mod root;
 pub mod sqllog;
+pub(crate) mod template;
 mod validate;
 
 #[cfg(test)]
