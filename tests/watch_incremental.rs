@@ -301,6 +301,7 @@ fn build_csv_config(log_path: &std::path::Path, csv_path: &std::path::Path) -> C
                 overwrite: true,
                 append: false,
                 include_performance_metrics: true,
+                max_rows_per_file: None,
             }),
             sqlite: None,
         },
