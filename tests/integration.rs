@@ -208,7 +208,7 @@ fn test_handle_init_force_overwrites_existing() {
 }
 
 #[test]
-fn test_handle_init_en_template() {
+fn test_handle_init_zh_template() {
     let dir = tempfile::TempDir::new().unwrap();
     let config_path = dir.path().join("config.toml");
     handle_init(config_path.to_str().unwrap(), false).unwrap();
@@ -218,16 +218,12 @@ fn test_handle_init_en_template() {
         "init template should contain [sqllog] section"
     );
     assert!(
-        content.contains("SQL log path"),
-        "init template should contain 'SQL log path' comment"
+        content.contains("SQL 日志路径列表"),
+        "init template should contain 'SQL 日志路径列表' comment"
     );
     assert!(
-        content.contains("log path"),
-        "init template should contain 'log path' (English only)"
-    );
-    assert!(
-        !content.contains("日志路径"),
-        "init template must not contain Chinese text"
+        content.contains("日志级别"),
+        "init template should contain '日志级别' comment"
     );
 }
 
@@ -240,11 +236,11 @@ fn test_init_template_has_csv_append_comment() {
     handle_init(config_path.to_str().unwrap(), false).unwrap();
     let content = std::fs::read_to_string(&config_path).unwrap();
     assert!(
-        content.contains("Append to existing CSV file instead of overwriting"),
+        content.contains("追加到已有 CSV 文件而非覆盖"),
         "init template should contain csv append comment"
     );
     assert!(
-        content.contains("CSV output file path"),
+        content.contains("CSV 输出文件路径"),
         "init template should contain csv file comment"
     );
 }
@@ -256,23 +252,23 @@ fn test_init_template_has_sqlite_field_comments() {
     handle_init(config_path.to_str().unwrap(), false).unwrap();
     let content = std::fs::read_to_string(&config_path).unwrap();
     assert!(
-        content.contains("SQLite database file path"),
+        content.contains("SQLite 数据库文件路径"),
         "init template should contain sqlite database_url comment"
     );
     assert!(
-        content.contains("Table name to write records into"),
+        content.contains("写入记录的表名"),
         "init template should contain sqlite table_name comment"
     );
     assert!(
-        content.contains("ASCII identifiers only"),
+        content.contains("ASCII 标识符"),
         "init template should contain ASCII identifiers note"
     );
     assert!(
-        content.contains("Drop and recreate the table"),
+        content.contains("写入前删除并重建该表"),
         "init template should contain sqlite overwrite comment"
     );
     assert!(
-        content.contains("Append rows to existing table"),
+        content.contains("追加行到已有表而非覆盖"),
         "init template should contain sqlite append comment"
     );
 }
@@ -284,51 +280,56 @@ fn test_init_template_has_filter_inline_comments() {
     handle_init(config_path.to_str().unwrap(), false).unwrap();
     let content = std::fs::read_to_string(&config_path).unwrap();
     assert!(
-        content.contains("Exact-match list of usernames to include"),
+        content.contains("精确匹配：要保留的用户名列表"),
         "filter.include must have users inline comment"
     );
     assert!(
-        content.contains("Exact-match list of client IP addresses to include"),
+        content.contains("精确匹配：要保留的客户端 IP 列表"),
         "filter.include must have ips inline comment"
     );
     assert!(
-        content.contains("Exact-match list of session IDs (hex strings) to include"),
+        content.contains("精确匹配：要保留的会话 ID 列表（十六进制字符串）"),
         "filter.include must have sessions inline comment"
     );
+    // 语句类型匹配日志方括号标签（statements/tags 同义）
     assert!(
-        content.contains("Exact-match list of usernames to exclude"),
+        content.contains("语句类型（INS/UPD/DEL/SEL/SET/OTH/ORA），匹配日志方括号标签"),
+        "filter must document statements matching the log tag"
+    );
+    assert!(
+        content.contains("与 statements 同义"),
+        "tags inline comment must note it is a synonym of statements"
+    );
+    assert!(
+        content.contains("精确匹配：要排除的用户名列表"),
         "filter.exclude must have users inline comment"
     );
     assert!(
-        content.contains("Exact-match list of client IP addresses to exclude"),
+        content.contains("精确匹配：要排除的客户端 IP 列表"),
         "filter.exclude must have ips inline comment"
     );
     assert!(
-        content.contains("Exact-match list of session IDs (hex strings) to exclude"),
+        content.contains("精确匹配：要排除的会话 ID 列表（十六进制字符串）"),
         "filter.exclude must have sessions inline comment"
     );
     assert!(
-        content.contains(
-            "Transaction-level: retain whole transaction if any record's exec_id matches"
-        ),
+        content.contains("事务级：任一记录的 exec_id 命中则保留整笔事务"),
         "filter.indicators must have exec_ids inline comment"
     );
     assert!(
-        content.contains("Transaction-level: retain whole transaction if any statement's runtime (ms) >= threshold"),
+        content.contains("事务级：任一语句执行时长（毫秒）≥ 阈值则保留整笔事务"),
         "filter.indicators must have min_runtime_ms inline comment"
     );
     assert!(
-        content.contains(
-            "Transaction-level: retain whole transaction if any statement's row_count >= threshold"
-        ),
+        content.contains("事务级：任一语句影响行数 ≥ 阈值则保留整笔事务"),
         "filter.indicators must have min_row_count inline comment"
     );
     assert!(
-        content.contains("Transaction-level: retain whole transaction if any SQL text contains any substring listed"),
+        content.contains("事务级：任一 SQL 文本包含所列任一子串则保留整笔事务"),
         "filter.sql must have includes inline comment"
     );
     assert!(
-        content.contains("Transaction-level: drop whole transaction if any SQL text contains any substring listed"),
+        content.contains("事务级：任一 SQL 文本包含所列任一子串则丢弃整笔事务"),
         "filter.sql must have excludes inline comment"
     );
 }

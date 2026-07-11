@@ -1,78 +1,89 @@
-# SQL 日志导出工具默认配置文件 (请根据需要修改)
+# sqllog2db 默认配置文件（请按需修改）
 
 [sqllog]
-# SQL 日志目录或文件路径
-directory = "sqllogs"
-
-[error]
-# 解析错误日志输出路径（纯文本行: file | error | raw | line）
-file = "export/errors.log"
+# SQL 日志路径列表：可为目录、单个文件或 glob 模式（例如 "./logs/2025-*.log"）
+# 支持配置多个条目。
+inputs = ["sqllogs"]
 
 [logging]
-# 应用日志输出目录或文件路径 (当前版本要求为"文件路径"，例如 logs/sqllog2db.log)
-# 如果仅设置为目录（如 "logs"），请确保后续代码逻辑能够自动生成文件；否则请填写完整文件路径
+# 应用日志文件路径
 file = "logs/sqllog2db.log"
-# 日志级别: trace | debug | info | warn | error
+# 日志级别：trace | debug | info | warn | error
 level = "info"
-# 日志保留天数 (1-365) - 用于滚动文件最大保留数量
+# 日志保留天数（1-365）
 retention_days = 7
 
-[features.replace_parameters]
-# 是否在导出结果中写入 normalized_sql 列（将 SQL 字面量替换为占位符 ?）
-enable = true
-
-[features.filters]
-# 是否启用过滤器
+[replace_parameters]
+# 是否在导出结果中写入 normalized_sql 列（默认：true）。
+# 对 INS/DEL/UPD/ORA 记录，会将参数值回填到 SQL 占位符中。
 enable = false
 
-# --- 元数据过滤器 (Record-level: 满足任一条件即保留该条记录) ---
-# 过滤指定的事务 ID
-# trxids = ["257809109", "257809110"]
-# 过滤指定的客户端 IP (支持模糊匹配)
-# client_ips = ["127.0.0.1", "192.168"]
-# 过滤指定的用户名 (支持模糊匹配)
-# usernames = ["SYSDBA"]
-# 过滤时间范围 (格式：2023-01-01 00:00:00)
-# start_ts = "2023-01-01 00:00:00"
-# end_ts = "2023-01-01 23:59:59"
-# 过滤指定的会话 ID (支持模糊匹配)
-# sess_ids = ["0x7f41435437a8"]
-# 过滤指定的线程 ID (支持模糊匹配)
-# thrd_ids = ["2188515"]
-# 过滤指定的语句类型 (支持模糊匹配)
-# statements = ["INS", "UPD", "DEL"]
-# 过滤指定的应用名称 (支持模糊匹配)
-# appnames = ["DMSQL"]
+[filter]
+# 是否启用过滤管道
+enable = true
 
-# --- 指标过滤器 (Transaction-level: 满足条件则保留包含该语句的整个事务 - 需要预扫描) ---
-[features.filters.indicators]
-# 过滤指定的执行 ID (保留整个事务)
-# exec_ids = [257809109, 257809110]
-# 过滤最小执行时长 (毫秒)
-# min_runtime_ms = 1000
-# 过滤最小影响行数
-# min_row_count = 100
+# --- 包含过滤器（记录级，AND 语义：每个已配置字段都必须匹配） ---
+# 元数据字段使用精确字符串匹配。
+[filter.include]
+# users      = ["SYSDBA"]                       # 精确匹配：要保留的用户名列表
+# ips        = ["127.0.0.1", "192.168.1.100"]   # 精确匹配：要保留的客户端 IP 列表
+# sessions   = ["0x7f41435437a8"]               # 精确匹配：要保留的会话 ID 列表（十六进制字符串）
+# threads    = ["2188515"]                      # 精确匹配：要保留的线程 ID 列表
+# statements = ["INS", "UPD", "DEL"]            # 语句类型（INS/UPD/DEL/SEL/SET/OTH/ORA），匹配日志方括号标签
+# apps       = ["DMSQL"]                        # 精确匹配：要保留的应用名列表
+# tags       = ["SEL", "INS"]                   # 日志标签，不带方括号（与 statements 同义；日志中的 [SEL] 取值 "SEL"）
+# start_ts   = "2023-01-01 00:00:00"            # 记录时间戳的闭区间下界（格式：YYYY-MM-DD HH:MM:SS）
+# end_ts     = "2023-01-01 23:59:59"            # 记录时间戳的闭区间上界（格式：YYYY-MM-DD HH:MM:SS）
+# trxids     = ["257809109", "257809110"]       # 精确匹配：要保留的事务 ID 列表
 
-# --- SQL 过滤器 (Transaction-level: 满足模式则保留整个事务 - 需要预扫描) ---
-[features.filters.sql]
-# 包含模式列表 (SQL 包含任一模式则匹配)
-# include_patterns = ["FROM USER_TABLES", "DELETE FROM"]
-# 排除模式列表 (SQL 包含任一模式则剔除)
-# exclude_patterns = ["SELECT 1", "DUAL"]
+# --- 排除过滤器（记录级，OR 否决：任意一项匹配即丢弃该记录） ---
+# 元数据字段使用精确字符串匹配。
+[filter.exclude]
+# users      = ["guest", "anon"]                # 精确匹配：要排除的用户名列表
+# ips        = ["10.0.0.1", "172.16.0.1"]       # 精确匹配：要排除的客户端 IP 列表
+# sessions   = ["0x0000000000000000"]           # 精确匹配：要排除的会话 ID 列表（十六进制字符串）
+# threads    = ["0"]                            # 精确匹配：要排除的线程 ID 列表
+# statements = ["ORA"]                          # 语句类型（INS/UPD/DEL/SEL/SET/OTH/ORA），匹配日志方括号标签
+# apps       = ["monitor", "health"]            # 精确匹配：要排除的应用名列表
+tags       = ["ORA"]                            # 日志标签，不带方括号（与 statements 同义；日志中的 [ORA] 取值 "ORA"）
+
+# --- 指标过滤器（事务级：命中即保留整笔事务，需要预扫描） ---
+[filter.indicators]
+# exec_ids = [257809109, 257809110]   # 事务级：任一记录的 exec_id 命中则保留整笔事务
+# min_runtime_ms = 1000               # 事务级：任一语句执行时长（毫秒）≥ 阈值则保留整笔事务
+# min_row_count = 100                 # 事务级：任一语句影响行数 ≥ 阈值则保留整笔事务
+
+# --- SQL 内容过滤器（事务级：命中即保留整笔事务，需要预扫描） ---
+[filter.sql]
+# includes = ["FROM USER_TABLES", "DELETE FROM"]   # 事务级：任一 SQL 文本包含所列任一子串则保留整笔事务
+# excludes = ["SELECT 1", "DUAL"]                  # 事务级：任一 SQL 文本包含所列任一子串则丢弃整笔事务
+
+# --- stats 子命令的时间范围过滤（可选） ---
+[stats]
+# from = "2024-01-01"   # 时间范围起点。格式："YYYY-MM-DD" 或 "YYYY-MM-DD HH:MM:SS"
+# to   = "2024-01-31"   # 时间范围终点。格式同 from。
+# top  = 20             # 默认 top-N 数量。命令行 --top 会覆盖此值。
+# 命令行参数 --from / --to / --top 会覆盖以上配置。命令行与配置均未提供时，stats 不做时间过滤（top 默认为 20）。
 
 # ===================== 导出器配置 =====================
-# 只能配置一个导出器
-# 同时配置多个时，按优先级使用：csv > jsonl > sqlite
+# 同一时刻只能启用一个导出器。优先级：csv > sqlite
 
-# 方案 1: csv 导出（默认）
-# [exporter.csv]
-# file = "outputs/sqllog.csv"
-# overwrite = true
-# append = false
-
-# 方案 2: SQLite 数据库导出
-[exporter.sqlite]
-database_url = "export/sqllog2db.db"
-table_name = "sqllog_records"
+# 方案 1：CSV 导出（默认）
+[exporter.csv]
+# CSV 输出文件路径
+file = "outputs/sqllog.csv"
+# 写入前删除并重建文件（true/false）
 overwrite = true
+# 追加到已有 CSV 文件而非覆盖（true/false）
 append = false
+
+# 方案 2：SQLite 数据库导出
+# [exporter.sqlite]
+# SQLite 数据库文件路径
+# database_url = "export/sqllog2db.db"
+# 写入记录的表名（仅限 ASCII 标识符：[A-Za-z_][A-Za-z0-9_]*）
+# table_name = "sqllog_records"
+# 写入前删除并重建该表（true/false）
+# overwrite = true
+# 追加行到已有表而非覆盖（true/false）
+# append = false
