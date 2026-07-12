@@ -1,5 +1,5 @@
-use super::processor::process_log_file;
 use crate::config::Config;
+use crate::engine::record::process_log_file;
 use crate::error::{Error, ErrorStats, Result};
 use crate::exporter::ExporterManager;
 use indicatif::ProgressBar;
@@ -12,7 +12,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 /// 返回 `(per_file_counts, run_stats)`。
 #[allow(clippy::too_many_arguments)]
 #[allow(clippy::fn_params_excessive_bools)]
-pub(super) async fn run_sequential(
+pub(crate) async fn run_sequential(
     log_files: &[PathBuf],
     final_cfg: &Config,
     pipeline: &crate::pipeline::Pipeline,

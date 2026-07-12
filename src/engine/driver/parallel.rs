@@ -12,7 +12,7 @@ type TaskResult = Option<(PathBuf, PathBuf, usize, ErrorStats)>;
 /// 将 N 个已处理的临时 CSV 文件按顺序拼接到最终输出路径。
 /// 第一个文件保留 header；后续文件跳过第一行。
 /// `append_to_existing`=true 时所有文件都跳过 header（目标文件已有 header）。
-pub(super) fn concat_csv_parts(
+fn concat_csv_parts(
     parts: &[(PathBuf, usize)],
     output_path: &Path,
     overwrite: bool,
@@ -128,7 +128,7 @@ fn parse_and_write_csv(
     };
 
     let mut file_stats = ErrorStats::default();
-    let count = super::record_iter::iterate_records(
+    let count = crate::engine::record::iterate_records(
         records,
         pipeline,
         do_normalize,
@@ -144,7 +144,7 @@ fn parse_and_write_csv(
 
 // 日志文件通过 `LogIterator`（dm-database-parser-sqllog 流式 API）逐行读取并解析，
 // 内存占用与文件大小无关，不再是 jobs × 单文件大小（旧实现一次性 `.parse()` 整文件到
-// `Vec<Sqllog>` 才有此问题，见 `cli::run::memory_budget` 模块注释）。
+// `Vec<Sqllog>` 才有此问题，见 `engine::prepare` 内存预算注释）。
 //
 // SAFETY: `tokio::task::block_in_place` 在 current_thread runtime 下会 panic（"Cannot call
 // `blocking_` unless the thread is already in a thread pool"）。当前主入口使用
@@ -236,7 +236,7 @@ fn collect_parallel_results(
 
 /// 拼接并行生成的 CSV parts 到最终输出文件，并清理临时目录。
 ///
-/// 返回 `(per_file_counts, skipped, parallel_stats)` 供 `handle_run` 消费。
+/// 返回 `(per_file_counts, skipped, parallel_stats)` 供 `engine::run` 消费。
 fn finalize_concat(
     parts_info: Vec<(PathBuf, PathBuf, usize)>,
     output_path: &Path,
@@ -280,7 +280,7 @@ fn finalize_concat(
 /// 适用条件：CSV 导出 + 多文件 + jobs > 1 + 无 limit。
 /// 注意：每个 rayon 任务开始时若 verbose=true 输出 "Processing: {path}"（D-02）。
 #[allow(clippy::too_many_arguments)]
-pub(super) fn process_csv_parallel(
+pub(crate) fn process_csv_parallel(
     log_files: &[PathBuf],
     cfg: &crate::config::Config,
     pipeline: &Pipeline,

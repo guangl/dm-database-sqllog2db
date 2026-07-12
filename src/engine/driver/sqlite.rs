@@ -25,7 +25,7 @@ fn parse_and_write_sqlite(
     };
 
     let mut file_stats = ErrorStats::default();
-    let count = super::record_iter::iterate_records(
+    let count = crate::engine::record::iterate_records(
         records,
         pipeline,
         do_normalize,
@@ -49,7 +49,7 @@ fn parse_and_write_sqlite(
 ///   `field_mask` 与 `from_config` 内部逻辑出现分歧，`SQLite` 路径将以 config 为准，请确保
 ///   两者保持一致。
 #[allow(clippy::too_many_arguments)]
-pub(super) fn process_sqlite_parallel(
+pub(crate) fn process_sqlite_parallel(
     log_files: &[PathBuf],
     cfg: &crate::config::Config,
     pipeline: &Pipeline,

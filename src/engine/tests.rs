@@ -1,4 +1,3 @@
-use super::collector;
 use super::run::run as handle_run;
 use crate::config::Config;
 use std::sync::Arc;
@@ -284,7 +283,7 @@ async fn test_sqlite_parallel_matches_sequential() {
 // records_in_file 保持为 0。
 #[test]
 fn test_normalize_and_export_filtered_params_updates_buffer() {
-    use super::processor::{ExportAction, normalize_and_export};
+    use super::record::{ExportAction, normalize_and_export};
     use crate::error::ErrorStats;
     use crate::exporter::CsvExporter;
     use crate::exporter::ExporterManager;
@@ -364,7 +363,7 @@ fn test_normalize_and_export_filtered_params_updates_buffer() {
 // 函数应返回 ExportAction::BreakQuota，records_in_file 保持为 0（不导出）。
 #[test]
 fn test_normalize_and_export_quota_hit_returns_break_quota() {
-    use super::processor::{ExportAction, normalize_and_export};
+    use super::record::{ExportAction, normalize_and_export};
     use crate::error::ErrorStats;
     use crate::exporter::CsvExporter;
     use crate::exporter::ExporterManager;
@@ -435,7 +434,7 @@ fn test_normalize_and_export_quota_hit_returns_break_quota() {
 /// `pb.length() == Some(3)`，`pb.position() == 0`，模板设置不 panic。
 #[test]
 fn test_progress_bar_template() {
-    let pb = super::input::make_progress_bar(true, 3);
+    let pb = super::prepare::make_progress_bar(true, 3);
     assert!(pb.is_some(), "show_progress=true 应返回 Some(ProgressBar)");
     let pb = pb.unwrap();
     assert_eq!(
@@ -458,7 +457,7 @@ fn test_progress_bar_template() {
 /// 验证 `make_progress_bar(false, 3)` 返回 `None`。
 #[test]
 fn test_progress_bar_disabled() {
-    let pb = super::input::make_progress_bar(false, 3);
+    let pb = super::prepare::make_progress_bar(false, 3);
     assert!(
         pb.is_none(),
         "show_progress=false 应返回 None，实际返回了 Some"
@@ -532,7 +531,7 @@ fn test_hint_output() {
         "by_type[EncodingError] 应为 3"
     );
     // 调用 print_run_summary 确认不 panic
-    super::summary::print_run_summary(false, false, false, 0.1, &[], 0, 0, &stats);
+    super::report::print_run_summary(false, false, false, 0.1, &[], 0, 0, &stats);
 }
 
 // WATCH-08: run 路径仍为覆盖写（append_error_log=false 默认值防回归）
@@ -567,7 +566,7 @@ fn test_write_error_log_run_still_truncates() {
         ..ErrorStats::default()
     };
 
-    super::error_log::write_error_log(&cfg, &stats);
+    super::report::write_error_log(&cfg, &stats);
 
     let content = std::fs::read_to_string(&tmp_path).expect("failed to read error log");
     assert!(
@@ -608,7 +607,7 @@ fn test_write_error_log_watch_appends() {
         ..ErrorStats::default()
     };
 
-    super::error_log::write_error_log(&cfg, &stats);
+    super::report::write_error_log(&cfg, &stats);
 
     let content = std::fs::read_to_string(&path).expect("failed to read error log");
     assert!(
@@ -638,7 +637,7 @@ fn test_run_summary() {
         ..Default::default()
     };
     // 调用 print_run_summary 确认不 panic
-    super::summary::print_run_summary(false, false, false, 1.5, &[], 10, 0, &stats);
+    super::report::print_run_summary(false, false, false, 1.5, &[], 10, 0, &stats);
 }
 // ── Group 1-4: collector.rs 全分支单元测试 ──────────────────────────────────
 
@@ -798,7 +797,7 @@ fn test_build_indicator_filters_min_row_count_zero() {
         min_row_count: Some(0),
         ..IndicatorFilters::default()
     };
-    let filters = super::prescan::build_indicator_filters(&indicators);
+    let filters = super::prepare::build_indicator_filters(&indicators);
     assert_eq!(
         filters.len(),
         1,
@@ -813,7 +812,7 @@ fn test_build_indicator_filters_min_row_count_positive() {
         min_row_count: Some(5),
         ..IndicatorFilters::default()
     };
-    let filters = super::prescan::build_indicator_filters(&indicators);
+    let filters = super::prepare::build_indicator_filters(&indicators);
     assert_eq!(
         filters.len(),
         1,
@@ -825,7 +824,7 @@ fn test_build_indicator_filters_min_row_count_positive() {
 fn test_build_indicator_filters_empty_returns_empty() {
     use crate::pipeline::filters::IndicatorFilters;
     let indicators = IndicatorFilters::default();
-    let filters = super::prescan::build_indicator_filters(&indicators);
+    let filters = super::prepare::build_indicator_filters(&indicators);
     assert_eq!(filters.len(), 0, "所有字段均为 None 时应返回空 Vec<Filter>");
 }
 
@@ -840,7 +839,7 @@ fn test_build_sql_exclude_filters_multiple_returns_correct_count() {
         ]),
         includes: None,
     };
-    let filters = super::prescan::build_sql_exclude_filters(&sf);
+    let filters = super::prepare::build_sql_exclude_filters(&sf);
     assert_eq!(
         filters.len(),
         3,
@@ -852,7 +851,7 @@ fn test_build_sql_exclude_filters_multiple_returns_correct_count() {
 fn test_build_sql_exclude_filters_none_returns_empty() {
     use crate::pipeline::filters::SqlFilters;
     let sf = SqlFilters::default();
-    let filters = super::prescan::build_sql_exclude_filters(&sf);
+    let filters = super::prepare::build_sql_exclude_filters(&sf);
     assert_eq!(
         filters.len(),
         0,
@@ -867,7 +866,7 @@ fn test_build_sql_include_filters_multiple() {
         includes: Some(vec!["SELECT".into(), "UPDATE".into()]),
         excludes: None,
     };
-    let filters = super::prescan::build_sql_include_filters(&sf);
+    let filters = super::prepare::build_sql_include_filters(&sf);
     assert_eq!(filters.len(), 2, "2 个 include 模式应构建 2 个 Filter");
 }
 
@@ -879,7 +878,7 @@ fn test_build_indicator_filters_exec_ids_multiple() {
         exec_ids: Some(HashSet::from([1_i64, 2, 42])),
         ..IndicatorFilters::default()
     };
-    let filters = super::prescan::build_indicator_filters(&indicators);
+    let filters = super::prepare::build_indicator_filters(&indicators);
     assert_eq!(
         filters.len(),
         3,
@@ -917,7 +916,7 @@ async fn test_min_row_count_zero_matches_all_records() {
         ..Config::default()
     };
 
-    let matched = super::prescan::scan_log_file_for_matches(logfile.to_str().unwrap(), &cfg);
+    let matched = super::prepare::scan_log_file_for_matches(logfile.to_str().unwrap(), &cfg);
     assert_eq!(
         matched.len(),
         3,
@@ -962,11 +961,124 @@ async fn test_scan_for_trxids_by_transaction_filters_dedup_across_files() {
     };
 
     let mut matched =
-        super::prescan::scan_for_trxids_by_transaction_filters(&[file1, file2], &cfg, 2).unwrap();
+        super::prepare::scan_for_trxids_by_transaction_filters(&[file1, file2], &cfg, 2).unwrap();
     matched.sort();
     assert_eq!(
         matched,
         vec!["0".to_string(), "1".to_string(), "2".to_string()],
         "跨文件应返回去重后的 trxid 列表，实际: {matched:?}"
     );
+}
+
+// ── 测试助手：线程内解析单文件并收集记录为 Vec（原 collector.rs，仅测试使用）──
+
+mod collector {
+    use crate::error::{Error, ErrorStats, ParserError, Result};
+    use crate::pipeline::Pipeline;
+    use crate::pipeline::normalizer::ParamBuffer;
+    use crate::streaming::open_log_file;
+    use dm_database_parser_sqllog::Sqllog;
+    use std::path::Path;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    /// 线程内解析单个日志文件，收集记录为 Vec，不写出到任何存储。
+    pub(super) fn collect_log_file(
+        file: &Path,
+        pipeline: &Pipeline,
+        do_normalize: bool,
+        placeholder_override: Option<bool>,
+        interrupted: &Arc<AtomicBool>,
+    ) -> Result<(Vec<(Sqllog, Option<String>)>, ErrorStats)> {
+        // Parse the file, distinguishing IO / not-found errors (file-level, propagated as Err)
+        // from per-record parse errors (logged + skipped, file processing continues).
+        // We do not pre-check file.exists() to avoid the TOCTOU race where the file could
+        // disappear between the check and the open — instead we inspect the error variant.
+        let records = match open_log_file(file) {
+            Ok(it) => it,
+            Err(e) => {
+                return Err(Error::Parser(ParserError::InvalidPath {
+                    path: file.to_path_buf(),
+                    reason: e.to_string(),
+                    line_number: None,
+                }));
+            }
+        };
+
+        let mut params_buf = ParamBuffer::default();
+        let mut ns_scratch = Vec::with_capacity(4096);
+        let mut rows: Vec<(Sqllog, Option<String>)> = Vec::new();
+        let mut file_stats = ErrorStats::default();
+
+        for result in records {
+            if interrupted.load(Ordering::Acquire) {
+                break;
+            }
+            let record = match result {
+                Ok(r) => r,
+                Err(e) => {
+                    log::warn!(
+                        "collect_log_file: skipping malformed record in '{}': {e}",
+                        file.display()
+                    );
+                    file_stats.add_parse_error();
+                    continue;
+                }
+            };
+            process_record(
+                record,
+                pipeline,
+                do_normalize,
+                placeholder_override,
+                &mut params_buf,
+                &mut ns_scratch,
+                &mut rows,
+                &mut file_stats,
+            );
+        }
+        Ok((rows, file_stats))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn process_record(
+        record: Sqllog,
+        pipeline: &Pipeline,
+        do_normalize: bool,
+        placeholder_override: Option<bool>,
+        params_buf: &mut ParamBuffer,
+        ns_scratch: &mut Vec<u8>,
+        rows: &mut Vec<(Sqllog, Option<String>)>,
+        file_stats: &mut ErrorStats,
+    ) {
+        let passes = pipeline.is_empty() || pipeline.run_with_meta(&record);
+        let needs_processing = passes || (do_normalize && record.tag.is_none());
+        if !needs_processing {
+            file_stats.filtered_out += 1;
+            return;
+        }
+        if passes {
+            let normalized = if do_normalize && (!params_buf.is_empty() || record.tag.is_none()) {
+                crate::pipeline::compute_normalized(
+                    &record,
+                    &record.sql,
+                    params_buf,
+                    placeholder_override,
+                    ns_scratch,
+                )
+                .map(str::to_owned)
+            } else {
+                None
+            };
+            rows.push((record, normalized));
+        } else {
+            file_stats.filtered_out += 1;
+            let _ = crate::pipeline::compute_normalized(
+                &record,
+                &record.sql,
+                params_buf,
+                placeholder_override,
+                ns_scratch,
+            );
+        }
+    }
 }

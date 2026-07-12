@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 const MIN_CHUNK_SPLIT_SIZE: u64 = 64 * 1024 * 1024;
 
 /// 切块产生的临时分片文件；`Drop` 时自动清理临时目录。
-pub(super) struct FileChunks {
+pub(crate) struct FileChunks {
     pub paths: Vec<PathBuf>,
     dir: PathBuf,
 }
@@ -30,7 +30,7 @@ impl Drop for FileChunks {
 }
 
 /// 判断文件是否足够大、值得切块；返回文件大小供 [`split_file_into_chunks`] 复用。
-pub(super) fn should_split(file: &Path, jobs: usize) -> Option<u64> {
+pub(crate) fn should_split(file: &Path, jobs: usize) -> Option<u64> {
     if jobs <= 1 {
         return None;
     }
@@ -43,7 +43,7 @@ pub(super) fn should_split(file: &Path, jobs: usize) -> Option<u64> {
 
 /// 将 `file` 按行边界切分为最多 `jobs` 个临时分片，每片大小约为 `size / jobs`。
 /// 最后一片吸收所有剩余行（包括因取整产生的余数）。
-pub(super) fn split_file_into_chunks(file: &Path, jobs: usize, size: u64) -> Result<FileChunks> {
+pub(crate) fn split_file_into_chunks(file: &Path, jobs: usize, size: u64) -> Result<FileChunks> {
     let stem = file.file_stem().unwrap_or_default().to_string_lossy();
     let dir_name = format!(".{stem}_chunks_{}", std::process::id());
     let preferred = file

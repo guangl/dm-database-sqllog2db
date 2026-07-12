@@ -1,22 +1,16 @@
 //! Run 引擎：解析日志文件 → pipeline 过滤/归一化 → 导出的完整处理管线。
 //!
-//! 主入口 [`run`]（原 `cli::run::handle_run`）负责编排；解析/并行/顺序/切块等各阶段
-//! 拆分为独立子模块。`cli::run` 命令层已溶解至此——命令级 arg 处理保留在 `main.rs`。
+//! 主入口 [`run`]（在 `run.rs`）负责编排，按阶段分四个子模块：
+//! - `prepare` — 输入文件解析、事务过滤器预扫描、内存预算并发控制
+//! - `driver` — 并行（CSV/SQLite）、顺序、单文件切块四条执行路径
+//! - `record` — 驱动路径共享的记录级"过滤 → 归一化 → 写出"循环
+//! - `report` — 运行摘要与解析错误日志写出
 
-mod chunk;
-#[cfg(test)]
-mod collector;
-mod error_log;
-mod input;
-mod memory_budget;
-mod parallel;
-mod prescan;
-mod processor;
-mod record_iter;
+mod driver;
+mod prepare;
+mod record;
+mod report;
 mod run;
-mod sequential;
-mod sqlite_parallel;
-mod summary;
 
 #[cfg(test)]
 mod tests;
