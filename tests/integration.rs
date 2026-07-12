@@ -2912,6 +2912,7 @@ mod watch_tests {
 
     /// W1: `watch --help` 包含配置文件说明和使用示例（WATCH-01 可发现性）。
     #[test]
+    #[ignore = "watch CLI 暂时下线（cli/opts.rs 中 Watch variant 已注释）；恢复后移除此 ignore"]
     fn test_watch_help_lists_subcommand() {
         use assert_cmd::Command;
         let output = Command::cargo_bin("sqllog2db")

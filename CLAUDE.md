@@ -46,7 +46,7 @@ Input .log files (sqllogs/)
 - **`engine/driver/`** — the four execution paths: `parallel.rs` (multi-file CSV, rayon), `sqlite.rs` (SQLite, serial writes), `sequential.rs` (streaming), `chunk.rs` (single-file split); parse errors logged via `log::warn!`
 - **`engine/prepare.rs`** — input resolution + two-phase pre-scan (collects transaction IDs for filter pre-population) + memory-budget job capping
 - **`engine/record.rs`** — record-level filter → normalize → export loop shared by all driver paths
-- **`watch/`** — top-level watch domain: notify watcher, watch loop, incremental/full triggers, offset persistence (`watch::run`)
+- **`watch/`** — top-level watch domain: notify watcher, watch loop, incremental/full triggers, offset persistence (`watch::run`). The `watch` CLI subcommand is temporarily disabled (commented out in `cli/opts.rs` + `main.rs`); the lib module and its tests still compile
 - **`exporter/mod.rs`** — `Exporter` trait + `ExporterManager` factory; only one exporter is active per run (priority: CSV > SQLite)
 - **`exporter/csv/writer.rs`** — CSV field serialization; `has_metrics` condition includes `rowcount != 0` to avoid silent data loss
 - **`pipeline/mod.rs`** — `LogProcessor` trait + `Pipeline`; `pipeline.is_empty()` enables a zero-overhead fast path when no filters are configured

@@ -10,7 +10,9 @@ mod preflight;
 mod scanner;
 mod stats;
 mod streaming;
-mod watch;
+// watch 子命令暂时下线（见 cli/opts.rs 注释）；binary 不编译 watch 模块，
+// lib target（lib.rs）仍保留编译与测试。
+// mod watch;
 
 use config::Config;
 use error::{Error, ErrorStats, Result};
@@ -133,11 +135,7 @@ async fn run() -> Result<Option<(ErrorStats, bool)>> {
 
     let needs_simple_logging = !matches!(
         &cli.command,
-        Some(
-            cli::opts::Commands::Run { .. }
-                | cli::opts::Commands::Stats { .. }
-                | cli::opts::Commands::Watch { .. }
-        )
+        Some(cli::opts::Commands::Run { .. } | cli::opts::Commands::Stats { .. })
     );
     if needs_simple_logging {
         init_simple_logging(cli.quiet);
@@ -203,29 +201,30 @@ async fn run() -> Result<Option<(ErrorStats, bool)>> {
             cli::stats::handle_stats(&cfg, *top, from.clone(), to.clone()).await?;
             Ok(None)
         }
-        Some(cli::opts::Commands::Watch { config }) => {
-            let mut cfg = load_config(config)?;
-            cfg.validate()?;
-            apply_verbosity_to_config(&mut cfg, cli.verbose, cli.quiet);
-            logging::init_logging(&cfg.logging, false)?;
-            info!("Application started (watch mode)");
-            info!("Configuration validation passed");
-
-            let pf = preflight::check(&cfg);
-            if pf.print_and_check() {
-                std::process::exit(EXIT_FATAL);
-            }
-
-            let interrupted = Arc::new(AtomicBool::new(false));
-            let interrupted_flag = Arc::clone(&interrupted);
-            ctrlc::set_handler(move || {
-                interrupted_flag.store(true, Ordering::Release);
-            })
-            .ok();
-
-            watch::run(&cfg, cli.quiet, cli.verbose, &interrupted).await?;
-            Ok(None)
-        }
+        // watch 子命令暂时下线（见 cli/opts.rs 注释）。恢复时取消注释并还原顶部 `mod watch;`。
+        // Some(cli::opts::Commands::Watch { config }) => {
+        //     let mut cfg = load_config(config)?;
+        //     cfg.validate()?;
+        //     apply_verbosity_to_config(&mut cfg, cli.verbose, cli.quiet);
+        //     logging::init_logging(&cfg.logging, false)?;
+        //     info!("Application started (watch mode)");
+        //     info!("Configuration validation passed");
+        //
+        //     let pf = preflight::check(&cfg);
+        //     if pf.print_and_check() {
+        //         std::process::exit(EXIT_FATAL);
+        //     }
+        //
+        //     let interrupted = Arc::new(AtomicBool::new(false));
+        //     let interrupted_flag = Arc::clone(&interrupted);
+        //     ctrlc::set_handler(move || {
+        //         interrupted_flag.store(true, Ordering::Release);
+        //     })
+        //     .ok();
+        //
+        //     watch::run(&cfg, cli.quiet, cli.verbose, &interrupted).await?;
+        //     Ok(None)
+        // }
         None => {
             cli::opts::Cli::command().print_help().ok();
             std::process::exit(0);
