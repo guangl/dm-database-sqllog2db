@@ -60,6 +60,13 @@ missing_debug_implementations = "warn"
 all = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
 cargo = { level = "warn", priority = -1 }
+# 唯一保留的 allow：multiple_crate_versions 检查的是依赖图（外部 crate），不是本仓库代码。
+# 剩余冲突全部在依赖自身子树内，无法从本仓库 Cargo.toml 修复：
+#   - hashbrown 0.16/0.17：rusqlite 内部（sqlite-wasm-rs + hashlink）
+#   - windows-sys 0.60/0.61：notify 落后于其余生态
+#   - bitflags 1.x/2.x：rusqlite 的 sqlite-wasm-rs 在 wasm/WASI target 的子树
+# 待上游收敛后即可移除本行。cargo 组其余 lint 仍生效。
+multiple_crate_versions = "allow"
 
 [profile.release]
 opt-level = 3
