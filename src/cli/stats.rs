@@ -20,6 +20,10 @@ fn merge_stats_options(
 /// Merges CLI args with config values using priority: CLI > config > default.
 /// `top` defaults to 20 when neither CLI nor config provides a value.
 /// `cfg` must already have verbosity applied before calling this function.
+///
+/// # Errors
+///
+/// 时间范围格式非法、未找到任何日志文件、未配置导出器或统计结果写出失败时返回错误。
 pub fn handle_stats(
     cfg: &Config,
     top: Option<u32>,

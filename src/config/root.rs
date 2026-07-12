@@ -33,6 +33,11 @@ pub struct Config {
 }
 
 impl Config {
+    /// 从 TOML 文件加载配置。
+    ///
+    /// # Errors
+    ///
+    /// 文件不存在、读取失败或 TOML 反序列化失败时返回错误。
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let path = path.as_ref();
         let content = std::fs::read_to_string(path).map_err(|e| {

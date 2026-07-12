@@ -6,6 +6,10 @@ use std::io::{BufRead, Write};
 use std::path::Path;
 
 /// 生成默认配置文件
+///
+/// # Errors
+///
+/// 目标文件已存在且未指定 `--force`、父目录创建失败或文件写入失败时返回错误。
 pub fn handle_init(output_path: &str, force: bool) -> Result<()> {
     let path = Path::new(output_path);
     let content = CONFIG_TEMPLATE_EN;
@@ -169,6 +173,11 @@ fn build_sqlite_answers(
     })
 }
 
+/// 运行交互式向导，逐项读取用户输入并返回答案集合。
+///
+/// # Errors
+///
+/// 从 `reader` 读取或向 `writer` 写入提示失败（IO 错误）时返回错误。
 pub fn run_wizard(reader: &mut impl BufRead, writer: &mut impl Write) -> Result<WizardAnswers> {
     let mut buf = String::new();
     let inputs = prompt_line(
@@ -239,6 +248,10 @@ fn apply_wizard_answers_to_template(answers: &WizardAnswers) -> String {
 }
 
 /// 交互式配置向导入口
+///
+/// # Errors
+///
+/// 目标文件已存在且未指定 `--force`、向导交互 IO 失败或配置文件写入失败时返回错误。
 pub fn handle_init_interactive(output_path: &str, force: bool) -> Result<()> {
     // Early-exit check: do not run the wizard if the file already exists and --force is not set.
     let path = std::path::Path::new(output_path);

@@ -12,6 +12,11 @@ impl ExporterConfig {
         self.csv.is_some() || self.sqlite.is_some()
     }
 
+    /// 校验导出器配置组合。
+    ///
+    /// # Errors
+    ///
+    /// 未配置任何导出器，或已配置导出器的字段校验失败时返回错误。
     pub fn validate(&self) -> Result<()> {
         if !self.has_any() {
             return Err(Error::Config(ConfigError::NoExporters));
@@ -65,6 +70,11 @@ impl Default for CsvExporterConfig {
 }
 
 impl CsvExporterConfig {
+    /// 校验 CSV 导出器配置。
+    ///
+    /// # Errors
+    ///
+    /// 输出文件路径为空白，或其他字段值非法时返回错误。
     pub fn validate(&self) -> Result<()> {
         if self.file.trim().is_empty() {
             return Err(Error::Config(ConfigError::InvalidValue {
@@ -144,6 +154,11 @@ impl Default for SqliteExporterConfig {
 }
 
 impl SqliteExporterConfig {
+    /// 校验 `SQLite` 导出器配置。
+    ///
+    /// # Errors
+    ///
+    /// 数据库路径为空白或表名不符合标识符规则时返回错误。
     pub fn validate(&self) -> Result<()> {
         if self.database_url.trim().is_empty() {
             return Err(Error::Config(ConfigError::InvalidValue {

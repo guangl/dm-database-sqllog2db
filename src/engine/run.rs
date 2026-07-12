@@ -274,6 +274,11 @@ fn finalize_run(
 /// 主编排函数：解析日志文件并导出到配置的导出器。
 /// 并行路径：CSV + 多文件 + jobs > 1；顺序路径：其他情况。
 /// `jobs_override` 为测试钩子，生产代码传 None 保持 `available_parallelism` 原行为。
+///
+/// # Errors
+///
+/// 未找到任何输入文件、导出器初始化/写出发生致命错误，或运行期间收到中断信号
+/// （返回 [`Error::Interrupted`]）时返回错误。
 pub async fn run(
     cfg: &Config,
     quiet: bool,

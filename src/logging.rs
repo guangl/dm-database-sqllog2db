@@ -109,6 +109,10 @@ impl log::Log for SimpleLogger {
 ///
 /// `log_to_stdout`: 是否同时向 stdout 输出日志。进度条模式下应传 `false`，
 /// 避免日志输出干扰进度条渲染。
+///
+/// # Errors
+///
+/// 日志级别字符串非法，或日志目录/文件创建失败时返回错误。
 pub fn init_logging(config: &LoggingConfig, log_to_stdout: bool) -> Result<()> {
     // 解析日志级别
     let level = parse_log_level(&config.level)?;

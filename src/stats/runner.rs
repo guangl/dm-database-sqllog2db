@@ -7,6 +7,10 @@ use crate::error::{Error, ErrorStats, ParserError, Result};
 /// 执行统计分析：流式扫描日志文件，聚合慢 SQL 与高频 SQL，写入 CSV 或 `SQLite` 输出。
 ///
 /// `top_n` 必须 ≥ 1（由 Phase 51 的 CLI 层保证）。
+///
+/// # Errors
+///
+/// 时间范围非法、未找到任何日志文件、未配置导出器或结果写出失败时返回错误。
 pub fn run_stats(cfg: &Config, top_n: u32) -> Result<()> {
     debug_assert!(top_n >= 1, "top_n must be >= 1 (Phase 51 CLI validation)");
     stats_config::validate_stats_time_range(&cfg.stats)?;

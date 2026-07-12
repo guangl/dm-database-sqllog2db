@@ -23,6 +23,11 @@ impl Default for SqllogConfig {
 }
 
 impl SqllogConfig {
+    /// 校验输入配置。
+    ///
+    /// # Errors
+    ///
+    /// 使用了已废弃的 `path` 字段或 `inputs` 含空白项时返回错误。
     pub fn validate(&self) -> Result<()> {
         if let Some(ref deprecated_val) = self.path_deprecated {
             let raw = deprecated_val.to_string();

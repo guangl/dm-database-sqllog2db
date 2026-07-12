@@ -58,6 +58,11 @@ pub(super) fn collect_watch_dirs(inputs: &[String]) -> Vec<PathBuf> {
 }
 
 /// Watch 主入口：初始化 notify watcher，进入 watch loop，Ctrl+C 后打印摘要。
+///
+/// # Errors
+///
+/// 无可监听目录、notify watcher 创建/订阅失败，或收到中断信号
+/// （返回 [`Error::Interrupted`]）时返回错误。
 pub async fn run(
     cfg: &Config,
     quiet: bool,
