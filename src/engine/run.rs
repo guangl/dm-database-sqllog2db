@@ -6,10 +6,10 @@ use super::prepare::{
     DEFAULT_MEMORY_BUDGET_BYTES, effective_jobs_for_memory_budget, make_progress_bar,
     merge_trxid_prescan, resolve_input_files,
 };
-use super::report::{print_run_summary, write_error_log};
-use crate::pipeline::filters::build_pipeline;
+use super::report::{RunSummary, print_run_summary, write_error_log};
 use crate::config::Config;
 use crate::error::{Error, ErrorStats, Result};
+use crate::pipeline::filters::build_pipeline;
 use crate::pipeline::{FIELD_NAMES, FieldMask, NormalizeConfig, OutputConfig, Pipeline};
 use indicatif::ProgressBar;
 use log::info;
@@ -18,14 +18,30 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
-struct RunContext<'a> {
-    cfg: &'a Config,
-    pipeline: Pipeline,
-    field_mask: FieldMask,
-    ordered_indices: Vec<usize>,
-    do_normalize: bool,
-    placeholder_override: Option<bool>,
+/// 运行上下文：配置、pipeline 与归一化/投影选项，贯穿所有执行路径。
+pub(super) struct RunContext<'a> {
+    pub(super) cfg: &'a Config,
+    pub(super) pipeline: Pipeline,
+    pub(super) field_mask: FieldMask,
+    pub(super) ordered_indices: Vec<usize>,
+    pub(super) do_normalize: bool,
+    pub(super) placeholder_override: Option<bool>,
 }
+
+/// 终端展示环境：安静/详细模式与可选进度条（`show_progress ≡ pb.is_some()`）。
+pub(super) struct Console<'a> {
+    pub(super) quiet: bool,
+    pub(super) verbose: bool,
+    pub(super) pb: Option<&'a ProgressBar>,
+}
+
+/// 已处理文件及各自的记录数（顺序与输入文件一致）。
+pub(super) type FileCounts = Vec<(PathBuf, usize)>;
+
+/// 执行路径的统一产出：`(per-file counts, 跳过文件数, 错误统计)`。
+pub(super) type ProcessOutcome = (FileCounts, usize, ErrorStats);
+
+type ProcessResult = Result<ProcessOutcome>;
 
 fn build_run_context(cfg: &Config) -> RunContext<'_> {
     let pipeline = build_pipeline(cfg);
@@ -53,8 +69,6 @@ fn build_run_context(cfg: &Config) -> RunContext<'_> {
     }
 }
 
-type ProcessResult = Result<(Vec<(PathBuf, usize)>, usize, ErrorStats)>;
-
 fn run_csv_parallel(
     ctx: &RunContext<'_>,
     log_files: &[PathBuf],
@@ -71,19 +85,7 @@ fn run_csv_parallel(
         );
     }
     info!("Parsing and exporting SQL logs (parallel, {jobs} jobs)...");
-    let (files, skipped, stats) = process_csv_parallel(
-        log_files,
-        ctx.cfg,
-        &ctx.pipeline,
-        jobs,
-        interrupted,
-        ctx.do_normalize,
-        ctx.placeholder_override,
-        ctx.field_mask,
-        &ctx.ordered_indices,
-        verbose,
-    )?;
-    Ok((files, skipped, stats))
+    process_csv_parallel(ctx, log_files, jobs, verbose, interrupted)
 }
 
 fn run_sqlite_parallel(
@@ -101,21 +103,10 @@ fn run_sqlite_parallel(
         );
     }
     info!("Parsing and exporting SQL logs (SQLite parallel, {jobs} jobs)...");
-    let (files, skipped, stats) = process_sqlite_parallel(
-        log_files,
-        ctx.cfg,
-        &ctx.pipeline,
-        jobs,
-        interrupted,
-        ctx.do_normalize,
-        ctx.placeholder_override,
-        ctx.field_mask,
-        &ctx.ordered_indices,
-    )?;
-    Ok((files, skipped, stats))
+    process_sqlite_parallel(ctx, log_files, interrupted)
 }
 
-/// 单文件切块路径的前置条件（不含文件大小判断，供 `handle_run` 提前算出 `use_parallel`/进度条策略）。
+/// 单文件切块路径的前置条件（不含文件大小判断，供 `run` 提前算出 `use_parallel`/进度条策略）。
 ///
 /// 安全前提：未启用参数替换（PARAMS 缓存跨记录依赖）且未配置事务级过滤器
 /// （`indicators`/`sql`，事务边界判定依赖完整文件预扫描）。条件不满足时返回 `false`，
@@ -179,18 +170,7 @@ fn try_chunked_single_file_csv(
         chunks.paths.len()
     );
     let chunk_jobs = jobs.min(chunks.paths.len());
-    let result = process_csv_parallel(
-        &chunks.paths,
-        ctx.cfg,
-        &ctx.pipeline,
-        chunk_jobs,
-        interrupted,
-        ctx.do_normalize,
-        ctx.placeholder_override,
-        ctx.field_mask,
-        &ctx.ordered_indices,
-        verbose,
-    );
+    let result = process_csv_parallel(ctx, &chunks.paths, chunk_jobs, verbose, interrupted);
     Some(result.map(|(files, skipped, stats)| {
         let total: usize = files.iter().map(|(_, c)| *c).sum();
         (vec![(file.clone(), total)], skipped, stats)
@@ -202,14 +182,17 @@ async fn route_processing(
     log_files: &[PathBuf],
     jobs: usize,
     is_stdin_pipe: bool,
-    verbose: bool,
-    quiet: bool,
-    pb: Option<&ProgressBar>,
+    console: &Console<'_>,
     interrupted: &Arc<AtomicBool>,
 ) -> ProcessResult {
-    if let Some(result) =
-        try_chunked_single_file_csv(ctx, log_files, jobs, is_stdin_pipe, verbose, interrupted)
-    {
+    if let Some(result) = try_chunked_single_file_csv(
+        ctx,
+        log_files,
+        jobs,
+        is_stdin_pipe,
+        console.verbose,
+        interrupted,
+    ) {
         return result;
     }
     let multi_file = jobs > 1 && log_files.len() > 1 && !is_stdin_pipe;
@@ -219,56 +202,15 @@ async fn route_processing(
         // spawn_blocking, but RunContext holds borrowed references (&Config, &Pipeline) that
         // are not 'static and cannot be moved into a spawn_blocking closure without
         // restructuring the call chain. The current call blocks the async task for the
-        // duration of the parallel CSV export. This is acceptable because handle_run is the
+        // duration of the parallel CSV export. This is acceptable because engine::run is the
         // top-level orchestrator and no other async tasks depend on its progress.
-        return run_csv_parallel(ctx, log_files, jobs, verbose, interrupted);
+        return run_csv_parallel(ctx, log_files, jobs, console.verbose, interrupted);
     }
     if multi_file && ctx.cfg.exporter.sqlite.is_some() {
-        return run_sqlite_parallel(ctx, log_files, jobs, verbose, interrupted);
+        return run_sqlite_parallel(ctx, log_files, jobs, console.verbose, interrupted);
     }
-    let (files, stats) = run_sequential(
-        log_files,
-        ctx.cfg,
-        &ctx.pipeline,
-        ctx.do_normalize,
-        ctx.placeholder_override,
-        verbose,
-        quiet,
-        pb.is_some(),
-        pb,
-        interrupted,
-    )
-    .await?;
+    let (files, stats) = run_sequential(ctx, log_files, console, interrupted).await?;
     Ok((files, 0, stats))
-}
-
-fn finalize_run(
-    cfg: &Config,
-    run_stats: &mut ErrorStats,
-    processed_files: &[(PathBuf, usize)],
-    skipped_files: usize,
-    pb: Option<&ProgressBar>,
-    use_parallel: bool,
-    quiet: bool,
-    verbose: bool,
-    elapsed: f64,
-) {
-    let total_records: usize = processed_files.iter().map(|(_, c)| *c).sum();
-    run_stats.records_exported = total_records;
-    if let Some(pb) = pb {
-        pb.finish_and_clear();
-    }
-    print_run_summary(
-        quiet,
-        verbose,
-        use_parallel,
-        elapsed,
-        processed_files,
-        total_records,
-        skipped_files,
-        run_stats,
-    );
-    write_error_log(cfg, run_stats);
 }
 
 /// 主编排函数：解析日志文件并导出到配置的导出器。
@@ -306,29 +248,32 @@ pub async fn run(
             && (final_cfg.exporter.csv.is_some() || final_cfg.exporter.sqlite.is_some()));
     let show_progress = !quiet && !verbose && !use_parallel;
     let pb = make_progress_bar(show_progress, log_files.len());
-    let (processed_files, skipped_files, stats) = route_processing(
-        &ctx,
-        &log_files,
-        jobs,
-        is_stdin_pipe,
-        verbose,
+    let console = Console {
         quiet,
-        pb.as_ref(),
-        interrupted,
-    )
-    .await?;
+        verbose,
+        pb: pb.as_ref(),
+    };
+    let (processed_files, skipped_files, stats) =
+        route_processing(&ctx, &log_files, jobs, is_stdin_pipe, &console, interrupted).await?;
     run_stats.merge(&stats);
-    finalize_run(
-        final_cfg,
-        &mut run_stats,
-        &processed_files,
-        skipped_files,
-        pb.as_ref(),
-        use_parallel,
+    let total_records: usize = processed_files.iter().map(|(_, c)| *c).sum();
+    run_stats.records_exported = total_records;
+    if let Some(pb) = &pb {
+        pb.finish_and_clear();
+    }
+    print_run_summary(
         quiet,
         verbose,
-        total_start.elapsed().as_secs_f64(),
+        &RunSummary {
+            use_parallel,
+            elapsed: total_start.elapsed().as_secs_f64(),
+            processed_files: &processed_files,
+            total_records,
+            skipped_files,
+        },
+        &run_stats,
     );
+    write_error_log(final_cfg, &run_stats);
     if interrupted.load(Ordering::Acquire) {
         return Err(Error::Interrupted);
     }

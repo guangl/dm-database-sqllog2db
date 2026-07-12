@@ -3,7 +3,7 @@
 use super::events::{create_watcher, handle_event};
 use super::offsets;
 use super::state::{
-    STATUS_REFRESH_INTERVAL, WatchLoopState, build_progress_bar, print_final_summary,
+    STATUS_REFRESH_INTERVAL, WatchLoopState, WatchRun, build_progress_bar, print_final_summary,
     refresh_active_status,
 };
 use crate::config::Config;
@@ -89,17 +89,14 @@ pub async fn run(
         HashMap::new()
     };
     let mut state = WatchLoopState::new(init_offsets, sqlite_db_url);
-    run_watch_loop(
-        &rx,
+    let env = WatchRun {
         cfg,
         quiet,
         verbose,
         interrupted,
-        &watch_dirs,
-        &pb,
-        &mut state,
-    )
-    .await;
+        pb: &pb,
+    };
+    run_watch_loop(&env, &rx, &watch_dirs, &mut state).await;
     pb.finish_and_clear();
     print_final_summary(
         &start,
@@ -116,13 +113,9 @@ pub async fn run(
 
 /// Watch 主循环：接收 notify 事件并分发，在 Timeout 分支节流刷新状态行。
 async fn run_watch_loop(
+    env: &WatchRun<'_>,
     rx: &Receiver<notify::Result<notify::Event>>,
-    cfg: &Config,
-    quiet: bool,
-    verbose: bool,
-    interrupted: &Arc<AtomicBool>,
     watch_dirs: &[PathBuf],
-    pb: &ProgressBar,
     state: &mut WatchLoopState,
 ) {
     loop {
@@ -134,11 +127,11 @@ async fn run_watch_loop(
             tokio::task::block_in_place(|| rx.recv_timeout(Duration::from_millis(100)));
         match recv_result {
             Ok(Ok(event)) => {
-                handle_event(&event, cfg, quiet, verbose, interrupted, state, pb).await;
+                handle_event(env, &event, state).await;
             }
             Ok(Err(e)) => warn!("notify error: {e}"),
             Err(RecvTimeoutError::Timeout) => maybe_refresh_status(
-                pb,
+                env.pb,
                 watch_dirs,
                 state.trigger_count,
                 state.total_stats.records_exported,
@@ -147,7 +140,7 @@ async fn run_watch_loop(
             ),
             Err(RecvTimeoutError::Disconnected) => break,
         }
-        if interrupted.load(Ordering::Acquire) {
+        if env.interrupted.load(Ordering::Acquire) {
             break;
         }
     }

@@ -2,7 +2,7 @@
 //! 以及两条路径共享的 Config 追加模式注入与状态行更新。
 
 use super::offsets;
-use super::state::{WatchLoopState, render_active_status};
+use super::state::{WatchLoopState, WatchRun, render_active_status};
 use crate::config::Config;
 use indicatif::ProgressBar;
 use log::warn;
@@ -144,19 +144,14 @@ pub async fn trigger_incremental(
         warn!("watch: read_bytes_to_tempfile error for {}", path.display());
         return;
     };
-    run_incremental(
-        path,
-        &canonical_path,
-        tmp_file,
-        new_size,
+    let env = WatchRun {
         cfg,
         quiet,
         verbose,
         interrupted,
-        state,
         pb,
-    )
-    .await;
+    };
+    run_incremental(&env, state, path, &canonical_path, tmp_file, new_size).await;
 }
 
 /// 返回增量处理的 `start_offset`；`None` 表示应跳过（首次见到或无新字节）。
@@ -221,19 +216,15 @@ pub(super) fn read_bytes_to_tempfile(
 /// 使用临时文件路径调用 `engine::run`，更新 state，并持久化新 offset（per D-07/D-09）。
 // tmp_file 按值传入确保函数返回时 NamedTempFile 自动删除临时文件
 async fn run_incremental(
+    env: &WatchRun<'_>,
+    state: &mut WatchLoopState,
     original_path: &Path,
     canonical_path: &Path,
     tmp_file: tempfile::NamedTempFile,
     new_size: u64,
-    cfg: &Config,
-    quiet: bool,
-    verbose: bool,
-    interrupted: &Arc<AtomicBool>,
-    state: &mut WatchLoopState,
-    pb: &ProgressBar,
 ) {
-    let tmp_cfg = build_incremental_cfg(cfg, &tmp_file);
-    match crate::engine::run(&tmp_cfg, quiet, verbose, interrupted, None).await {
+    let tmp_cfg = build_incremental_cfg(env.cfg, &tmp_file);
+    match crate::engine::run(&tmp_cfg, env.quiet, env.verbose, env.interrupted, None).await {
         Ok(file_stats) => {
             state.total_stats.merge(&file_stats);
             let last_elapsed = state.last_trigger_at.map(|t| t.elapsed());
@@ -246,9 +237,9 @@ async fn run_incremental(
             if let Some(ref database_url) = state.sqlite_db_url {
                 offsets::save_offset(database_url, canonical_path, new_size);
             }
-            update_status_bar(original_path, state, pb, last_elapsed);
+            update_status_bar(original_path, state, env.pb, last_elapsed);
         }
-        Err(crate::error::Error::Interrupted) => interrupted.store(true, Ordering::Release),
+        Err(crate::error::Error::Interrupted) => env.interrupted.store(true, Ordering::Release),
         Err(e) => warn!("watch trigger error (incremental): {e}"),
     }
 }

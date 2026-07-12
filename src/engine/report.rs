@@ -4,17 +4,29 @@ use crate::error::ErrorStats;
 use std::io::Write;
 use std::path::PathBuf;
 
+/// 运行结果摘要数据（供 [`print_run_summary`] 渲染）。
+pub(super) struct RunSummary<'a> {
+    pub(super) use_parallel: bool,
+    pub(super) elapsed: f64,
+    pub(super) processed_files: &'a [(PathBuf, usize)],
+    pub(super) total_records: usize,
+    pub(super) skipped_files: usize,
+}
+
 /// 输出运行摘要（文件数、记录数、耗时、错误统计）。`quiet` 为 true 时不输出任何内容。
 pub(super) fn print_run_summary(
     quiet: bool,
     verbose: bool,
-    use_parallel: bool,
-    elapsed: f64,
-    processed_files: &[(PathBuf, usize)],
-    total_records: usize,
-    skipped_files: usize,
+    summary: &RunSummary<'_>,
     run_stats: &ErrorStats,
 ) {
+    let RunSummary {
+        use_parallel,
+        elapsed,
+        processed_files,
+        total_records,
+        skipped_files,
+    } = *summary;
     if !quiet {
         let mode_label = if use_parallel { " [parallel]" } else { "" };
         let skip_label = if skipped_files > 0 {

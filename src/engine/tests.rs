@@ -3,6 +3,18 @@ use crate::config::Config;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
+/// 构造一个用于记录级单元测试的 `RunContext`：空 pipeline、全字段掩码。
+fn make_test_ctx(cfg: &Config, do_normalize: bool) -> super::run::RunContext<'_> {
+    super::run::RunContext {
+        cfg,
+        pipeline: crate::pipeline::Pipeline::new(),
+        field_mask: crate::pipeline::FieldMask::ALL,
+        ordered_indices: (0..crate::pipeline::FIELD_NAMES.len()).collect(),
+        do_normalize,
+        placeholder_override: None,
+    }
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn test_include_performance_metrics_false_csv_excludes_pm_columns() {
     let dir = tempfile::TempDir::new().unwrap();
@@ -317,21 +329,27 @@ fn test_normalize_and_export_filtered_params_updates_buffer() {
 
     let mut params_buffer: ParamBuffer = ParamBuffer::new();
     let mut ns_scratch: Vec<u8> = Vec::new();
-    let mut records_in_file: usize = 0;
-    let mut file_stats = ErrorStats::default();
 
+    // do_normalize=true：PARAMS buf 应被更新
+    let cfg = Config::default();
+    let ctx = make_test_ctx(&cfg, true);
+    let env = super::record::ExportEnv {
+        ctx: &ctx,
+        include_pm: true,
+        file_path: "test_file.log",
+    };
+    let mut state = super::record::LoopState {
+        params_buffer: &mut params_buffer,
+        ns_scratch: &mut ns_scratch,
+        records_in_file: 0,
+        file_stats: ErrorStats::default(),
+    };
     let action = normalize_and_export(
+        &env,
         &record,
         &mut manager,
-        true, // include_pm
-        true, // do_normalize: PARAMS buf 应被更新
-        &mut params_buffer,
-        None, // placeholder_override
-        &mut ns_scratch,
-        None, // remaining (no quota)
-        &mut records_in_file,
-        &mut file_stats,
-        "test_file.log",
+        &mut state,
+        None,  // remaining (no quota)
         false, // passes=false → 不导出
     );
 
@@ -342,8 +360,9 @@ fn test_normalize_and_export_filtered_params_updates_buffer() {
     );
     // 不应有任何记录被导出
     assert_eq!(
-        records_in_file, 0,
-        "passes=false 时 records_in_file 应保持为 0，实际为 {records_in_file}"
+        state.records_in_file, 0,
+        "passes=false 时 records_in_file 应保持为 0，实际为 {}",
+        state.records_in_file
     );
     // params_buffer 应已被更新（PARAMS 记录已解析入缓冲区）
     assert!(
@@ -396,23 +415,28 @@ fn test_normalize_and_export_quota_hit_returns_break_quota() {
 
     let mut params_buffer: ParamBuffer = ParamBuffer::new();
     let mut ns_scratch: Vec<u8> = Vec::new();
-    let mut records_in_file: usize = 0;
-    let mut file_stats = ErrorStats::default();
 
+    let cfg = Config::default();
+    let ctx = make_test_ctx(&cfg, false);
+    let env = super::record::ExportEnv {
+        ctx: &ctx,
+        include_pm: true,
+        file_path: "test_file.log",
+    };
+    let mut state = super::record::LoopState {
+        params_buffer: &mut params_buffer,
+        ns_scratch: &mut ns_scratch,
+        records_in_file: 0,
+        file_stats: ErrorStats::default(),
+    };
     // remaining=Some(0) 表示配额已耗尽（records_in_file=0 >= remaining=0）
     let action = normalize_and_export(
+        &env,
         &record,
         &mut manager,
-        true,  // include_pm
-        false, // do_normalize
-        &mut params_buffer,
-        None,
-        &mut ns_scratch,
+        &mut state,
         Some(0), // remaining=0 → 配额已耗尽
-        &mut records_in_file,
-        &mut file_stats,
-        "test_file.log",
-        true, // passes=true → 否则直接 Continue
+        true,    // passes=true → 否则直接 Continue
     );
 
     // 必须返回 BreakQuota
@@ -423,8 +447,9 @@ fn test_normalize_and_export_quota_hit_returns_break_quota() {
     );
     // 不应有任何记录被导出
     assert_eq!(
-        records_in_file, 0,
-        "BreakQuota 路径下 records_in_file 应保持为 0，实际为 {records_in_file}"
+        state.records_in_file, 0,
+        "BreakQuota 路径下 records_in_file 应保持为 0，实际为 {}",
+        state.records_in_file
     );
 }
 
@@ -531,7 +556,18 @@ fn test_hint_output() {
         "by_type[EncodingError] 应为 3"
     );
     // 调用 print_run_summary 确认不 panic
-    super::report::print_run_summary(false, false, false, 0.1, &[], 0, 0, &stats);
+    super::report::print_run_summary(
+        false,
+        false,
+        &super::report::RunSummary {
+            use_parallel: false,
+            elapsed: 0.1,
+            processed_files: &[],
+            total_records: 0,
+            skipped_files: 0,
+        },
+        &stats,
+    );
 }
 
 // WATCH-08: run 路径仍为覆盖写（append_error_log=false 默认值防回归）
@@ -637,7 +673,18 @@ fn test_run_summary() {
         ..Default::default()
     };
     // 调用 print_run_summary 确认不 panic
-    super::report::print_run_summary(false, false, false, 1.5, &[], 10, 0, &stats);
+    super::report::print_run_summary(
+        false,
+        false,
+        &super::report::RunSummary {
+            use_parallel: false,
+            elapsed: 1.5,
+            processed_files: &[],
+            total_records: 10,
+            skipped_files: 0,
+        },
+        &stats,
+    );
 }
 // ── Group 1-4: collector.rs 全分支单元测试 ──────────────────────────────────
 
@@ -982,6 +1029,18 @@ mod collector {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
 
+    /// 收集到的记录与其可选归一化 SQL。
+    type CollectedRows = Vec<(Sqllog, Option<String>)>;
+
+    /// 收集过程中的可变状态（scratch 缓冲 + 结果 + 统计）。
+    #[derive(Default)]
+    struct CollectState {
+        params_buf: ParamBuffer,
+        ns_scratch: Vec<u8>,
+        rows: CollectedRows,
+        file_stats: ErrorStats,
+    }
+
     /// 线程内解析单个日志文件，收集记录为 Vec，不写出到任何存储。
     pub(super) fn collect_log_file(
         file: &Path,
@@ -989,7 +1048,7 @@ mod collector {
         do_normalize: bool,
         placeholder_override: Option<bool>,
         interrupted: &Arc<AtomicBool>,
-    ) -> Result<(Vec<(Sqllog, Option<String>)>, ErrorStats)> {
+    ) -> Result<(CollectedRows, ErrorStats)> {
         // Parse the file, distinguishing IO / not-found errors (file-level, propagated as Err)
         // from per-record parse errors (logged + skipped, file processing continues).
         // We do not pre-check file.exists() to avoid the TOCTOU race where the file could
@@ -1005,11 +1064,7 @@ mod collector {
             }
         };
 
-        let mut params_buf = ParamBuffer::default();
-        let mut ns_scratch = Vec::with_capacity(4096);
-        let mut rows: Vec<(Sqllog, Option<String>)> = Vec::new();
-        let mut file_stats = ErrorStats::default();
-
+        let mut state = CollectState::default();
         for result in records {
             if interrupted.load(Ordering::Acquire) {
                 break;
@@ -1021,62 +1076,51 @@ mod collector {
                         "collect_log_file: skipping malformed record in '{}': {e}",
                         file.display()
                     );
-                    file_stats.add_parse_error();
+                    state.file_stats.add_parse_error();
                     continue;
                 }
             };
-            process_record(
-                record,
-                pipeline,
-                do_normalize,
-                placeholder_override,
-                &mut params_buf,
-                &mut ns_scratch,
-                &mut rows,
-                &mut file_stats,
-            );
+            process_record(&mut state, record, pipeline, do_normalize, placeholder_override);
         }
-        Ok((rows, file_stats))
+        Ok((state.rows, state.file_stats))
     }
 
     fn process_record(
+        state: &mut CollectState,
         record: Sqllog,
         pipeline: &Pipeline,
         do_normalize: bool,
         placeholder_override: Option<bool>,
-        params_buf: &mut ParamBuffer,
-        ns_scratch: &mut Vec<u8>,
-        rows: &mut Vec<(Sqllog, Option<String>)>,
-        file_stats: &mut ErrorStats,
     ) {
         let passes = pipeline.is_empty() || pipeline.run_with_meta(&record);
         let needs_processing = passes || (do_normalize && record.tag.is_none());
         if !needs_processing {
-            file_stats.filtered_out += 1;
+            state.file_stats.filtered_out += 1;
             return;
         }
         if passes {
-            let normalized = if do_normalize && (!params_buf.is_empty() || record.tag.is_none()) {
-                crate::pipeline::compute_normalized(
-                    &record,
-                    &record.sql,
-                    params_buf,
-                    placeholder_override,
-                    ns_scratch,
-                )
-                .map(str::to_owned)
-            } else {
-                None
-            };
-            rows.push((record, normalized));
+            let normalized =
+                if do_normalize && (!state.params_buf.is_empty() || record.tag.is_none()) {
+                    crate::pipeline::compute_normalized(
+                        &record,
+                        &record.sql,
+                        &mut state.params_buf,
+                        placeholder_override,
+                        &mut state.ns_scratch,
+                    )
+                    .map(str::to_owned)
+                } else {
+                    None
+                };
+            state.rows.push((record, normalized));
         } else {
-            file_stats.filtered_out += 1;
+            state.file_stats.filtered_out += 1;
             let _ = crate::pipeline::compute_normalized(
                 &record,
                 &record.sql,
-                params_buf,
+                &mut state.params_buf,
                 placeholder_override,
-                ns_scratch,
+                &mut state.ns_scratch,
             );
         }
     }

@@ -1,10 +1,13 @@
+use crate::engine::run::{ProcessOutcome, RunContext};
 use crate::error::{Error, ErrorStats, Result};
 use crate::exporter::{CsvExporter, ExporterManager};
-use crate::pipeline::{FieldMask, Pipeline};
 use crate::streaming::open_log_file;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+
+/// 单个已完成任务的产出：`(原文件路径, 临时 part 路径, 记录数)`。
+type PartInfo = (PathBuf, PathBuf, usize);
 
 /// 每个并行任务的返回值：`Some((orig_path, temp_path, count, file_stats))` 或 `None`（跳过/中断）。
 type TaskResult = Option<(PathBuf, PathBuf, usize, ErrorStats)>;
@@ -97,20 +100,16 @@ fn setup_parts_dir(output_path: &Path) -> Result<PathBuf> {
 }
 
 fn parse_and_write_csv(
+    ctx: &RunContext<'_>,
     file: &Path,
     temp_path: &Path,
-    pipeline: &Pipeline,
-    do_normalize: bool,
-    placeholder_override: Option<bool>,
-    field_mask: FieldMask,
-    ordered_indices: &[usize],
     include_performance_metrics: bool,
     interrupted: &Arc<AtomicBool>,
 ) -> Result<(usize, ErrorStats)> {
     let mut exporter = CsvExporter::new(temp_path);
-    exporter.normalize = do_normalize;
-    exporter.field_mask = field_mask;
-    exporter.ordered_indices = ordered_indices.to_vec();
+    exporter.normalize = ctx.do_normalize;
+    exporter.field_mask = ctx.field_mask;
+    exporter.ordered_indices.clone_from(&ctx.ordered_indices);
     exporter.include_performance_metrics = include_performance_metrics;
     let mut em = ExporterManager::from_csv(exporter);
     em.initialize()?;
@@ -129,9 +128,9 @@ fn parse_and_write_csv(
     let mut file_stats = ErrorStats::default();
     let count = crate::engine::record::iterate_records(
         records,
-        pipeline,
-        do_normalize,
-        placeholder_override,
+        &ctx.pipeline,
+        ctx.do_normalize,
+        ctx.placeholder_override,
         interrupted,
         &mut file_stats,
         |record, normalized| em.export_one_preparsed(record, include_pm, normalized),
@@ -151,17 +150,13 @@ fn parse_and_write_csv(
 // runtime，此处将以不明显的 panic 失败。block_in_place 仅用于在执行 CPU 密集的 rayon
 // 任务期间让出 tokio worker 线程，解析本身是纯同步调用，不再需要驱动任何 async 运行时。
 fn run_parallel_tasks(
+    ctx: &RunContext<'_>,
     log_files: &[PathBuf],
     csv_include_performance_metrics: bool,
-    pipeline: &Pipeline,
     jobs: usize,
-    interrupted: &Arc<AtomicBool>,
-    do_normalize: bool,
-    placeholder_override: Option<bool>,
-    field_mask: FieldMask,
-    ordered_indices: &[usize],
     parts_dir: &Path,
     verbose: bool,
+    interrupted: &Arc<AtomicBool>,
 ) -> Result<Vec<Result<TaskResult>>> {
     use rayon::prelude::*;
     let pool = rayon::ThreadPoolBuilder::new()
@@ -180,13 +175,9 @@ fn run_parallel_tasks(
                     verbose.then(|| eprintln!("Processing: {}", file.display()));
                     let temp_path = parts_dir.join(format!("{idx:08}.csv"));
                     let (count, file_stats) = parse_and_write_csv(
+                        ctx,
                         file,
                         &temp_path,
-                        pipeline,
-                        do_normalize,
-                        placeholder_override,
-                        field_mask,
-                        ordered_indices,
                         csv_include_performance_metrics,
                         interrupted,
                     )?;
@@ -203,8 +194,8 @@ fn run_parallel_tasks(
 /// 若任何任务失败，清理已生成的临时 part 文件并返回首个错误（`parts_dir` 目录本身由调用方清理）。
 fn collect_parallel_results(
     results: Vec<Result<TaskResult>>,
-) -> Result<(Vec<(PathBuf, PathBuf, usize)>, ErrorStats, usize)> {
-    let mut parts_info: Vec<(PathBuf, PathBuf, usize)> = Vec::with_capacity(results.len());
+) -> Result<(Vec<PartInfo>, ErrorStats, usize)> {
+    let mut parts_info: Vec<PartInfo> = Vec::with_capacity(results.len());
     let mut parallel_stats = ErrorStats::default();
     let mut first_err: Option<Error> = None;
     let mut skipped = 0usize;
@@ -236,14 +227,14 @@ fn collect_parallel_results(
 ///
 /// 返回 `(per_file_counts, skipped, parallel_stats)` 供 `engine::run` 消费。
 fn finalize_concat(
-    parts_info: Vec<(PathBuf, PathBuf, usize)>,
+    parts_info: Vec<PartInfo>,
     output_path: &Path,
     overwrite: bool,
     append_to_existing: bool,
     parts_dir: &Path,
     skipped: usize,
     parallel_stats: ErrorStats,
-) -> Result<(Vec<(PathBuf, usize)>, usize, ErrorStats)> {
+) -> Result<ProcessOutcome> {
     let parts_for_concat: Vec<(PathBuf, usize)> = parts_info
         .iter()
         .map(|(_, temp, count)| (temp.clone(), *count))
@@ -278,18 +269,13 @@ fn finalize_concat(
 /// 适用条件：CSV 导出 + 多文件 + jobs > 1 + 无 limit。
 /// 注意：每个 rayon 任务开始时若 verbose=true 输出 "Processing: {path}"（D-02）。
 pub(crate) fn process_csv_parallel(
+    ctx: &RunContext<'_>,
     log_files: &[PathBuf],
-    cfg: &crate::config::Config,
-    pipeline: &Pipeline,
     jobs: usize,
-    interrupted: &Arc<AtomicBool>,
-    do_normalize: bool,
-    placeholder_override: Option<bool>,
-    field_mask: FieldMask,
-    ordered_indices: &[usize],
     verbose: bool,
-) -> Result<(Vec<(PathBuf, usize)>, usize, ErrorStats)> {
-    let csv_cfg = cfg.exporter.csv.as_ref().ok_or_else(|| {
+    interrupted: &Arc<AtomicBool>,
+) -> Result<ProcessOutcome> {
+    let csv_cfg = ctx.cfg.exporter.csv.as_ref().ok_or_else(|| {
         Error::Export(crate::error::ExportError::WriteFailed {
             path: std::path::PathBuf::from("<csv>"),
             reason: "parallel CSV path requires CSV exporter to be configured".into(),
@@ -299,17 +285,13 @@ pub(crate) fn process_csv_parallel(
     let append_to_existing = csv_cfg.append && output_path.exists();
     let parts_dir = setup_parts_dir(output_path)?;
     let results = run_parallel_tasks(
+        ctx,
         log_files,
         csv_cfg.include_performance_metrics,
-        pipeline,
         jobs,
-        interrupted,
-        do_normalize,
-        placeholder_override,
-        field_mask,
-        ordered_indices,
         &parts_dir,
         verbose,
+        interrupted,
     )?;
     let (parts_info, parallel_stats, skipped) = match collect_parallel_results(results) {
         Ok(v) => v,

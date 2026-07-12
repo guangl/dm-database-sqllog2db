@@ -1,19 +1,15 @@
 //! Watch 事件源与路由：notify watcher 创建、事件分发（Create → 全量 / Modify → 增量）、
 //! 以及同路径事件的防抖抑制。
 
-use super::state::{DEBOUNCE_WINDOW, WatchLoopState};
+use super::state::{DEBOUNCE_WINDOW, WatchLoopState, WatchRun};
 use super::trigger::{trigger_full_file, trigger_incremental};
-use crate::config::Config;
 use crate::error::{Error, Result};
-use indicatif::ProgressBar;
 use notify::{
     Config as NotifyConfig, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
     event::{DataChange, ModifyKind},
 };
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant};
 
@@ -41,13 +37,9 @@ pub(super) fn create_watcher(
 
 /// 处理单个 notify 事件：按 `EventKind` 路由到 `trigger_full_file` 或 `trigger_incremental`。
 pub(super) async fn handle_event(
+    env: &WatchRun<'_>,
     event: &notify::Event,
-    cfg: &Config,
-    quiet: bool,
-    verbose: bool,
-    interrupted: &Arc<AtomicBool>,
     state: &mut WatchLoopState,
-    pb: &ProgressBar,
 ) {
     let is_create = matches!(event.kind, EventKind::Create(_));
     let is_content_modify = matches!(
@@ -66,9 +58,19 @@ pub(super) async fn handle_event(
             continue;
         }
         if is_create {
-            trigger_full_file(path, cfg, quiet, verbose, interrupted, state, pb).await;
+            trigger_full_file(path, env.cfg, env.quiet, env.verbose, env.interrupted, state, env.pb)
+                .await;
         } else {
-            trigger_incremental(path, cfg, quiet, verbose, interrupted, state, pb).await;
+            trigger_incremental(
+                path,
+                env.cfg,
+                env.quiet,
+                env.verbose,
+                env.interrupted,
+                state,
+                env.pb,
+            )
+            .await;
         }
     }
 }

@@ -1,10 +1,23 @@
 //! Watch 主循环运行时状态（`WatchLoopState`）、节流/防抖常量，以及状态行构建与刷新。
 
+use crate::config::Config;
 use crate::error::ErrorStats;
 use indicatif::{HumanDuration, ProgressBar, ProgressDrawTarget, ProgressStyle};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
+
+/// 一轮 watch 运行的只读环境：配置、输出模式、中断信号与状态行句柄。
+/// 贯穿事件分发与全量/增量触发，替代逐个透传的 `cfg/quiet/verbose/interrupted/pb`。
+pub(super) struct WatchRun<'a> {
+    pub(super) cfg: &'a Config,
+    pub(super) quiet: bool,
+    pub(super) verbose: bool,
+    pub(super) interrupted: &'a Arc<AtomicBool>,
+    pub(super) pb: &'a ProgressBar,
+}
 
 /// macOS `FSEvents` 与 Linux inotify 同一写操作会先发 `Create(File)` 再发
 /// `Modify(Data(Content))` 两个事件。500ms 窗口内同路径第二个事件被丢弃，

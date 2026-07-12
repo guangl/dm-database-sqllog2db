@@ -177,6 +177,14 @@ fn write_selected_fields(
     }
 }
 
+/// CSV 行布局：字段投影与归一化/性能指标开关（每次写入的常量配置）。
+pub(in crate::exporter::csv) struct CsvLayout<'a> {
+    pub(in crate::exporter::csv) normalize: bool,
+    pub(in crate::exporter::csv) field_mask: crate::pipeline::FieldMask,
+    pub(in crate::exporter::csv) ordered_indices: &'a [usize],
+    pub(in crate::exporter::csv) include_performance_metrics: bool,
+}
+
 /// 热路径：使用已解析的 `Sqllog` 直接格式化并写入。
 #[inline]
 pub(in crate::exporter::csv) fn write_record_preparsed(
@@ -185,14 +193,11 @@ pub(in crate::exporter::csv) fn write_record_preparsed(
     sqllog: &Sqllog,
     writer: &mut BufWriter<File>,
     path: &Path,
-    normalize: bool,
     normalized_sql: Option<&str>,
-    field_mask: crate::pipeline::FieldMask,
-    ordered_indices: &[usize],
-    include_performance_metrics: bool,
+    layout: &CsvLayout<'_>,
 ) -> Result<()> {
     line_buf.clear();
-    let ns_len = if normalize {
+    let ns_len = if layout.normalize {
         normalized_sql.map_or(0, str::len)
     } else {
         0
@@ -201,24 +206,24 @@ pub(in crate::exporter::csv) fn write_record_preparsed(
     if line_buf.capacity() < needed {
         line_buf.reserve(needed - line_buf.len());
     }
-    if field_mask == crate::pipeline::FieldMask::ALL {
+    if layout.field_mask == crate::pipeline::FieldMask::ALL {
         write_all_fields(
             itoa_buf,
             line_buf,
             sqllog,
-            normalize,
+            layout.normalize,
             normalized_sql,
-            include_performance_metrics,
+            layout.include_performance_metrics,
         );
     } else {
         write_selected_fields(
             itoa_buf,
             line_buf,
             sqllog,
-            normalize,
+            layout.normalize,
             normalized_sql,
-            ordered_indices,
-            include_performance_metrics,
+            layout.ordered_indices,
+            layout.include_performance_metrics,
         );
     }
     line_buf.push(b'\n');

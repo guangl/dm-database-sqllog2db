@@ -1,6 +1,6 @@
 use super::super::{ExportStats, Exporter};
 use super::exporter::{CsvExporter, WriteMode, open_for_write, writer_ref};
-use super::writer::write_record_preparsed;
+use super::writer::{CsvLayout, write_record_preparsed};
 use crate::error::{Error, ExportError, Result};
 use dm_database_parser_sqllog::Sqllog;
 use std::io::{BufWriter, Write};
@@ -51,11 +51,13 @@ impl Exporter for CsvExporter {
             sqllog,
             writer,
             &path,
-            self.normalize,
             None,
-            self.field_mask,
-            &self.ordered_indices,
-            self.include_performance_metrics,
+            &CsvLayout {
+                normalize: self.normalize,
+                field_mask: self.field_mask,
+                ordered_indices: &self.ordered_indices,
+                include_performance_metrics: self.include_performance_metrics,
+            },
         )?;
         self.stats.record_success();
         self.rows_in_file += 1;
@@ -72,11 +74,13 @@ impl Exporter for CsvExporter {
             sqllog,
             writer,
             &path,
-            self.normalize,
             normalized,
-            self.field_mask,
-            &self.ordered_indices,
-            self.include_performance_metrics,
+            &CsvLayout {
+                normalize: self.normalize,
+                field_mask: self.field_mask,
+                ordered_indices: &self.ordered_indices,
+                include_performance_metrics: self.include_performance_metrics,
+            },
         )?;
         self.stats.record_success();
         self.rows_in_file += 1;
@@ -98,11 +102,13 @@ impl Exporter for CsvExporter {
             sqllog,
             writer,
             &path,
-            self.normalize,
             normalized,
-            self.field_mask,
-            &self.ordered_indices,
-            include_pm,
+            &CsvLayout {
+                normalize: self.normalize,
+                field_mask: self.field_mask,
+                ordered_indices: &self.ordered_indices,
+                include_performance_metrics: include_pm,
+            },
         )?;
         self.stats.record_success();
         self.rows_in_file += 1;

@@ -5,6 +5,7 @@
 //! - [`iterate_records`]：并行路径（`driver::parallel` / `driver::sqlite`）共享的
 //!   记录迭代 + 过滤 + 归一化 + 写出回调函数（STRUCT-04）。
 
+use crate::engine::run::RunContext;
 use crate::error::{ErrorStats, Result};
 use crate::exporter::ExporterManager;
 use crate::pipeline::Pipeline;
@@ -17,6 +18,35 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
+/// [`process_log_file`] 的入参打包：运行上下文 + 单文件的定位/进度信息。
+pub(super) struct ProcessArgs<'a> {
+    pub(super) ctx: &'a RunContext<'a>,
+    pub(super) file_path: &'a str,
+    pub(super) file_index: usize,
+    pub(super) total_files: usize,
+    pub(super) show_progress: bool,
+    /// 最多再导出多少条记录（跨文件的剩余配额），`None` 表示不限制。
+    pub(super) remaining: Option<usize>,
+    /// 是否在文件开始时重置进度条计数；并行模式传 `false`，避免多线程互相重置。
+    pub(super) reset_pb: bool,
+    pub(super) pb: Option<&'a ProgressBar>,
+}
+
+/// 单条记录导出的只读环境：运行上下文、性能指标开关、文件路径（用于日志）。
+pub(super) struct ExportEnv<'a> {
+    pub(super) ctx: &'a RunContext<'a>,
+    pub(super) include_pm: bool,
+    pub(super) file_path: &'a str,
+}
+
+/// 记录循环中被反复读写的可变状态（scratch 缓冲 + 计数 + 统计）。
+pub(super) struct LoopState<'a> {
+    pub(super) params_buffer: &'a mut ParamBuffer,
+    pub(super) ns_scratch: &'a mut Vec<u8>,
+    pub(super) records_in_file: usize,
+    pub(super) file_stats: ErrorStats,
+}
+
 /// 控制主循环对单条记录的导出结果响应。
 pub(super) enum ExportAction {
     /// 正常导出（或被过滤后 `params_buffer` 已更新），继续处理下一条。
@@ -28,20 +58,13 @@ pub(super) enum ExportAction {
 }
 
 /// 被过滤的 PARAMS 记录仅更新 `params_buffer`，不导出。
-///
-/// 在 `normalize_and_export` 的 `!passes` 路径调用，封装 `compute_normalized` 调用。
-fn update_params_buffer_only(
-    record: &Sqllog,
-    params_buffer: &mut ParamBuffer,
-    placeholder_override: Option<bool>,
-    ns_scratch: &mut Vec<u8>,
-) {
+fn update_params_buffer_only(record: &Sqllog, state: &mut LoopState<'_>, placeholder: Option<bool>) {
     let _ = crate::pipeline::compute_normalized(
         record,
         &record.sql,
-        params_buffer,
-        placeholder_override,
-        ns_scratch,
+        state.params_buffer,
+        placeholder,
+        state.ns_scratch,
     );
 }
 
@@ -50,56 +73,53 @@ fn update_params_buffer_only(
 /// `passes`：调用方已判断该记录是否通过过滤器。
 /// 仅在 `passes==false && do_normalize && record.tag.is_none()` 时更新 `params_buffer`（不导出）。
 pub(super) fn normalize_and_export(
+    env: &ExportEnv<'_>,
     record: &Sqllog,
     exporter_manager: &mut ExporterManager,
-    include_pm: bool,
-    do_normalize: bool,
-    params_buffer: &mut ParamBuffer,
-    placeholder_override: Option<bool>,
-    ns_scratch: &mut Vec<u8>,
+    state: &mut LoopState<'_>,
     remaining: Option<usize>,
-    records_in_file: &mut usize,
-    file_stats: &mut ErrorStats,
-    file_path: &str,
     passes: bool,
 ) -> ExportAction {
+    let do_normalize = env.ctx.do_normalize;
+    let placeholder = env.ctx.placeholder_override;
     if !passes {
         if do_normalize && record.tag.is_none() {
-            update_params_buffer_only(record, params_buffer, placeholder_override, ns_scratch);
+            update_params_buffer_only(record, state, placeholder);
         }
-        file_stats.filtered_out += 1;
+        state.file_stats.filtered_out += 1;
         return ExportAction::Continue;
     }
-    let ns = if do_normalize && (!params_buffer.is_empty() || record.tag.is_none()) {
+    let ns = if do_normalize && (!state.params_buffer.is_empty() || record.tag.is_none()) {
         crate::pipeline::compute_normalized(
             record,
             &record.sql,
-            params_buffer,
-            placeholder_override,
-            ns_scratch,
+            state.params_buffer,
+            placeholder,
+            state.ns_scratch,
         )
     } else {
         None
     };
     if let Some(remaining) = remaining {
-        if *records_in_file >= remaining {
+        if state.records_in_file >= remaining {
             return ExportAction::BreakQuota;
         }
     }
-    let export_result = exporter_manager.export_one_preparsed(record, include_pm, ns);
+    let export_result = exporter_manager.export_one_preparsed(record, env.include_pm, ns);
+    let file_path = env.file_path;
     match export_result {
         Ok(()) => {
-            *records_in_file += 1;
+            state.records_in_file += 1;
             ExportAction::Continue
         }
         Err(ref e) if e.is_fatal() => {
-            file_stats.set_fatal(e.to_string());
+            state.file_stats.set_fatal(e.to_string());
             eprintln!("[{}] {file_path}: {e}", e.severity());
             log::warn!("{file_path} | fatal export error: {export_result:?}");
             ExportAction::BreakFatal
         }
         Err(ref e) => {
-            file_stats.add_export_error();
+            state.file_stats.add_export_error();
             eprintln!("[{}] {file_path}: {e}", e.severity());
             log::warn!("{file_path} | export error: {export_result:?}");
             ExportAction::Continue
@@ -127,30 +147,28 @@ fn setup_progress_bar(
 
 /// 文件处理结束时输出统计日志与进度条完成消息。
 fn log_file_result(
-    pb: Option<&ProgressBar>,
-    show_progress: bool,
-    file_path: &str,
-    file_index: usize,
-    total_files: usize,
+    args: &ProcessArgs<'_>,
     records_in_file: usize,
     errors_in_file: usize,
     elapsed: f64,
 ) {
+    let file_path = args.file_path;
     if errors_in_file > 0 {
         log::warn!("{file_path}: {errors_in_file} parse errors");
     }
     info!(
         "File {file_path}: {records_in_file} records, {errors_in_file} errors, total {elapsed:.2}s",
     );
-    if show_progress {
-        if let Some(pb) = pb {
+    if args.show_progress {
+        if let Some(pb) = args.pb {
             let errors_label = if errors_in_file > 0 {
                 format!(", {errors_in_file} errors")
             } else {
                 String::new()
             };
             pb.set_message(format!(
-                "✓ [{file_index}/{total_files}] {file_path} — {records_in_file}{errors_label}, {elapsed:.2}s",
+                "✓ [{}/{}] {file_path} — {records_in_file}{errors_label}, {elapsed:.2}s",
+                args.file_index, args.total_files,
             ));
             pb.inc(1);
         }
@@ -189,67 +207,94 @@ fn tick_progress(
     false
 }
 
-/// 处理单个日志文件，返回本文件实际导出的记录数。
-///
-/// `remaining`: 最多再导出多少条记录（跨文件的剩余配额），`None` 表示不限制。
-/// `reset_pb`: 是否在文件开始时重置进度条计数；并行模式传 `false`，避免多线程互相重置。
-#[rustfmt::skip]
+/// 处理单个日志文件，返回 `(实际导出记录数, 文件级错误统计)`。
 pub(super) async fn process_log_file(
-    file_path: &str, file_index: usize, total_files: usize,
-    exporter_manager: &mut ExporterManager, pipeline: &Pipeline,
-    show_progress: bool, remaining: Option<usize>, interrupted: &Arc<AtomicBool>,
-    do_normalize: bool, placeholder_override: Option<bool>,
-    params_buffer: &mut ParamBuffer, ns_scratch: &mut Vec<u8>,
-    reset_pb: bool, pb: Option<&ProgressBar>,
+    exporter_manager: &mut ExporterManager,
+    args: &ProcessArgs<'_>,
+    params_buffer: &mut ParamBuffer,
+    ns_scratch: &mut Vec<u8>,
+    interrupted: &Arc<AtomicBool>,
 ) -> Result<(usize, ErrorStats)> {
     params_buffer.clear();
-    let include_pm = exporter_manager.csv_include_performance_metrics();
+    let env = ExportEnv {
+        ctx: args.ctx,
+        include_pm: exporter_manager.csv_include_performance_metrics(),
+        file_path: args.file_path,
+    };
     let file_start = Instant::now();
-    let file_name = std::path::Path::new(file_path).file_name()
-        .map_or_else(|| file_path.to_string(), |n| n.to_string_lossy().into_owned());
-    setup_progress_bar(pb, reset_pb, show_progress, file_index, total_files, &file_name);
-    let file_path_buf = std::path::Path::new(file_path);
-    let records = match open_log_file(file_path_buf) {
+    let file_name = std::path::Path::new(args.file_path)
+        .file_name()
+        .map_or_else(|| args.file_path.to_string(), |n| n.to_string_lossy().into_owned());
+    setup_progress_bar(
+        args.pb,
+        args.reset_pb,
+        args.show_progress,
+        args.file_index,
+        args.total_files,
+        &file_name,
+    );
+    let records = match open_log_file(std::path::Path::new(args.file_path)) {
         Ok(it) => it,
         Err(e) => {
-            log::warn!("parse failed for '{}': {e}", file_path_buf.display());
+            log::warn!("parse failed for '{}': {e}", args.file_path);
             let mut file_stats = ErrorStats::default();
             file_stats.add_parse_error();
             return Ok((0, file_stats));
         }
     };
-    let (mut records_in_file, mut file_stats) = (0usize, ErrorStats::default());
+    let mut state = LoopState {
+        params_buffer,
+        ns_scratch,
+        records_in_file: 0,
+        file_stats: ErrorStats::default(),
+    };
+    let pipeline = &args.ctx.pipeline;
+    let do_normalize = args.ctx.do_normalize;
     let mut total_processed = 0usize;
     'outer: for result in records {
         let record = match result {
             Ok(r) => r,
             Err(e) => {
-                log::warn!("skipping malformed record in '{file_path}': {e}");
-                file_stats.add_parse_error();
+                log::warn!("skipping malformed record in '{}': {e}", args.file_path);
+                state.file_stats.add_parse_error();
                 continue;
             }
         };
         let passes = pipeline.is_empty() || pipeline.run_with_meta(&record);
         let needs_processing = passes || (do_normalize && record.tag.is_none());
-        if !needs_processing { continue; }
-        let action = normalize_and_export(
-            &record, exporter_manager, include_pm, do_normalize,
-            params_buffer, placeholder_override, ns_scratch,
-            remaining, &mut records_in_file, &mut file_stats, file_path, passes,
-        );
+        if !needs_processing {
+            continue;
+        }
+        let action =
+            normalize_and_export(&env, &record, exporter_manager, &mut state, args.remaining, passes);
         total_processed = total_processed.wrapping_add(1);
         match action {
             ExportAction::BreakQuota | ExportAction::BreakFatal => break 'outer,
-            ExportAction::Continue if passes && tick_progress(pb, records_in_file, file_start, &file_name, interrupted) => break 'outer,
-            ExportAction::Continue if !passes
-                && total_processed.trailing_zeros() >= 10
-                && interrupted.load(Ordering::Acquire) => break 'outer,
+            ExportAction::Continue
+                if passes
+                    && tick_progress(
+                        args.pb,
+                        state.records_in_file,
+                        file_start,
+                        &file_name,
+                        interrupted,
+                    ) =>
+            {
+                break 'outer;
+            }
+            ExportAction::Continue
+                if !passes
+                    && total_processed.trailing_zeros() >= 10
+                    && interrupted.load(Ordering::Acquire) =>
+            {
+                break 'outer;
+            }
             ExportAction::Continue => {}
         }
     }
     let elapsed = file_start.elapsed().as_secs_f64();
-    log_file_result(pb, show_progress, file_path, file_index, total_files, records_in_file, file_stats.total_errors, elapsed);
-    Ok((records_in_file, file_stats))
+    log_file_result(args, state.records_in_file, state.file_stats.total_errors, elapsed);
+    Ok((state.records_in_file, state.file_stats))
 }
 
 // ===== 并行路径共享的记录迭代（STRUCT-04）=====
