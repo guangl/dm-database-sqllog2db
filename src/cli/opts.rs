@@ -21,7 +21,7 @@ EXAMPLES:
     Validate a configuration file:
         sqllog2db validate -c config.toml"
 )]
-pub(crate) struct Cli {
+pub struct Cli {
     /// Show per-file processing details
     #[arg(
         short = 'v',
@@ -30,18 +30,18 @@ pub(crate) struct Cli {
         conflicts_with = "quiet",
         help = "Show per-file processing details on stderr."
     )]
-    pub(crate) verbose: bool,
+    pub verbose: bool,
 
     /// Suppress non-error output
     #[arg(short = 'q', long = "quiet", global = true, conflicts_with = "verbose")]
-    pub(crate) quiet: bool,
+    pub quiet: bool,
 
     #[command(subcommand)]
-    pub(crate) command: Option<Commands>,
+    pub command: Option<Commands>,
 }
 
 #[derive(Debug, Subcommand)]
-pub(crate) enum Commands {
+pub enum Commands {
     /// Run the log export task
     #[command(
         long_about = "Run the log export task. Parses DM database SQL log files and exports them to CSV or SQLite based on the configuration file.",

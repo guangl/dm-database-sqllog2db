@@ -8,7 +8,7 @@ use std::path::Path;
 /// 在 run 命令执行前检查基础条件。
 /// 返回所有警告/错误，调用方决定是否中止。
 #[must_use]
-pub(crate) fn check(cfg: &Config) -> PreflightResult {
+pub fn check(cfg: &Config) -> PreflightResult {
     let mut result = PreflightResult::default();
     for input in &cfg.sqllog.inputs {
         check_log_path(input, &mut result);
@@ -83,7 +83,7 @@ fn check_path_writable(file_path: &str, result: &mut PreflightResult) {
 }
 
 #[derive(Debug, Default)]
-pub(crate) struct PreflightResult {
+pub struct PreflightResult {
     pub(crate) errors: Vec<String>,
     pub(crate) warnings: Vec<String>,
 }
@@ -96,7 +96,7 @@ impl PreflightResult {
 
     /// 打印所有警告和错误，返回是否有致命错误。
     #[must_use]
-    pub(crate) fn print_and_check(&self) -> bool {
+    pub fn print_and_check(&self) -> bool {
         for warn in &self.warnings {
             eprintln!("Warning: {warn}");
         }

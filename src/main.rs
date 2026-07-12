@@ -1,21 +1,12 @@
-mod cli;
-mod config;
-mod engine;
-mod error;
-mod exporter;
-mod logging;
-mod parser;
-mod pipeline;
-mod preflight;
-mod scanner;
-mod stats;
-mod streaming;
-// watch 子命令暂时下线（见 cli/opts.rs 注释）；binary 不编译 watch 模块，
-// lib target（lib.rs）仍保留编译与测试。
-// mod watch;
-
-use config::Config;
-use error::{Error, ErrorStats, Result};
+// 二进制是薄壳：所有领域模块都编译在 lib 里，此处直接复用 lib crate，
+// 避免 `mod X;` 重复编译（并消除 bin 侧对 lib-only pub-use 的 unused_imports 噪声）。
+// watch 子命令暂时下线（见 cli/opts.rs 注释），故此处未引入 watch。
+use dm_database_sqllog2db::cli;
+use dm_database_sqllog2db::config::Config;
+use dm_database_sqllog2db::engine;
+use dm_database_sqllog2db::error::{self, Error, ErrorStats, Result};
+use dm_database_sqllog2db::logging;
+use dm_database_sqllog2db::preflight;
 use log::{info, warn};
 use std::path::Path;
 use std::sync::Arc;
