@@ -49,7 +49,6 @@ fn update_params_buffer_only(
 ///
 /// `passes`：调用方已判断该记录是否通过过滤器。
 /// 仅在 `passes==false && do_normalize && record.tag.is_none()` 时更新 `params_buffer`（不导出）。
-#[allow(clippy::too_many_arguments)]
 pub(super) fn normalize_and_export(
     record: &Sqllog,
     exporter_manager: &mut ExporterManager,
@@ -127,7 +126,6 @@ fn setup_progress_bar(
 }
 
 /// 文件处理结束时输出统计日志与进度条完成消息。
-#[allow(clippy::too_many_arguments)]
 fn log_file_result(
     pb: Option<&ProgressBar>,
     show_progress: bool,
@@ -174,8 +172,9 @@ fn tick_progress(
     if records_in_file.trailing_zeros() >= 10 {
         if let Some(pb) = pb {
             let elapsed = file_start.elapsed().as_secs_f64();
-            #[allow(clippy::cast_precision_loss)]
-            let rec_per_s = records_in_file as f64 / elapsed.max(1e-9);
+            // u32::MAX（约 42 亿条）以上速率显示饱和即可，f64::from 保证无损转换
+            let records = f64::from(u32::try_from(records_in_file).unwrap_or(u32::MAX));
+            let rec_per_s = records / elapsed.max(1e-9);
             let speed_label = if rec_per_s >= 10_000.0 {
                 format!("{:.0}k rec/s", rec_per_s / 1000.0)
             } else {

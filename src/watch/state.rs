@@ -58,7 +58,6 @@ impl WatchLoopState {
 
     /// 返回路径→字节偏移映射（用于集成测试验证 offset 持久化）。
     #[must_use]
-    #[allow(dead_code)]
     pub fn file_offsets(&self) -> &HashMap<PathBuf, u64> {
         &self.file_offsets
     }

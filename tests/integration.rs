@@ -407,7 +407,7 @@ fn test_handle_validate_with_filters_all_fields() {
             exclude: ExcludeFilters::default(),
             indicators: IndicatorFilters {
                 exec_ids: Some([42_i64].into_iter().collect()),
-                min_runtime_ms: Some(100),
+                min_runtime_ms: Some(100.0),
                 min_row_count: Some(10),
             },
             sql: SqlFilters {
@@ -535,7 +535,7 @@ async fn test_handle_run_with_min_runtime_filter() {
         exclude: ExcludeFilters::default(),
         indicators: dm_database_sqllog2db::pipeline::filters::IndicatorFilters {
             exec_ids: None,
-            min_runtime_ms: Some(1),
+            min_runtime_ms: Some(1.0),
             min_row_count: None,
         },
         ..Default::default()
@@ -872,6 +872,8 @@ async fn test_boundary_all_filtered() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_boundary_malformed_line() {
+    use std::fmt::Write as FmtWrite;
+
     // Arrange: 1 条无效行（文件开头）+ 4 条正常行 = 4 条正常记录
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
@@ -879,7 +881,6 @@ async fn test_boundary_malformed_line() {
 
     // 无效行放在文件开头：解析器会把它作为第一条记录处理 → 解析失败 → 跳过
     // 后续 4 条正常行继续被导出，验证不 panic 且正常行全部处理
-    use std::fmt::Write as FmtWrite;
     let mut content = String::new();
     for i in 0..4usize {
         writeln!(
@@ -1848,6 +1849,8 @@ fn make_stats_config_with_section(
     to: Option<&str>,
     top: Option<u32>,
 ) -> std::path::PathBuf {
+    use std::fmt::Write as _;
+
     let cfg_path = dir.join("stats_section_cfg.toml");
     let app_log_path = dir.join("test.log");
     let input_log = dir.join("input.log");
@@ -1856,7 +1859,6 @@ fn make_stats_config_with_section(
         "2025-01-15 10:30:28.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [ORA] : SELECT id FROM t WHERE id=1. EXECTIME: 5(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.\n",
     )
     .unwrap();
-    use std::fmt::Write as _;
     let mut stats_section = String::from("\n[stats]\n");
     if let Some(f) = from {
         let _ = writeln!(stats_section, "from = \"{f}\"");

@@ -7,7 +7,7 @@ use crate::error::{Error, ErrorStats, ParserError, Result};
 /// 执行统计分析：流式扫描日志文件，聚合慢 SQL 与高频 SQL，写入 CSV 或 `SQLite` 输出。
 ///
 /// `top_n` 必须 ≥ 1（由 Phase 51 的 CLI 层保证）。
-pub async fn run_stats(cfg: &Config, top_n: u32) -> Result<()> {
+pub fn run_stats(cfg: &Config, top_n: u32) -> Result<()> {
     debug_assert!(top_n >= 1, "top_n must be >= 1 (Phase 51 CLI validation)");
     stats_config::validate_stats_time_range(&cfg.stats)?;
     let log_files = crate::parser::SqllogParser::new(cfg.sqllog.inputs.clone()).log_files()?;
@@ -18,30 +18,28 @@ pub async fn run_stats(cfg: &Config, top_n: u32) -> Result<()> {
     }
     let mut accumulator =
         StatsAccumulator::new(top_n, cfg.stats.from.clone(), cfg.stats.to.clone());
-    scan_files_into_accumulator(&log_files, &mut accumulator).await?;
+    scan_files_into_accumulator(&log_files, &mut accumulator);
     let (slow_rows, frequent_rows) = accumulator.into_results();
     write_stats_output(cfg, &slow_rows, &frequent_rows)
 }
 
 /// 扫描全部日志文件，逐条喂给聚合器（解析失败计入 `ErrorStats` 不终止）。
-async fn scan_files_into_accumulator(
+fn scan_files_into_accumulator(
     log_files: &[std::path::PathBuf],
     accumulator: &mut StatsAccumulator,
-) -> Result<()> {
+) {
     let mut scan_stats = ErrorStats::default();
     crate::scanner::scan_files(
         log_files,
         &mut |record| accumulator.update(record),
         &mut scan_stats,
-    )
-    .await?;
+    );
     if scan_stats.has_errors() {
         log::warn!(
             "stats: {} parse error(s) encountered during scan",
             scan_stats.parse_errors
         );
     }
-    Ok(())
 }
 
 /// 按 CSV 优先策略，将结果写入输出目标（CSV 优先于 `SQLite`）。

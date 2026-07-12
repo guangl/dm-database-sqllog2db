@@ -48,7 +48,6 @@ fn parse_and_write_sqlite(
 ///   内部读取字段投影配置，与 CSV 路径通过显式参数传入不同。如果 orchestrator 独立计算的
 ///   `field_mask` 与 `from_config` 内部逻辑出现分歧，`SQLite` 路径将以 config 为准，请确保
 ///   两者保持一致。
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn process_sqlite_parallel(
     log_files: &[PathBuf],
     cfg: &crate::config::Config,

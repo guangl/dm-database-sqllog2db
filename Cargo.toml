@@ -48,9 +48,7 @@ glob = "0.3"
 indicatif = "0.18"
 rayon = "1.12"
 memchr = "2"
-rusqlite = { version = "0.40.1", features = [
-  "bundled",
-] }
+rusqlite = { version = "0.40.1", features = ["bundled"] }
 tempfile = "3.27.0"
 
 
@@ -62,14 +60,6 @@ missing_debug_implementations = "warn"
 all = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
 cargo = { level = "warn", priority = -1 }
-multiple_crate_versions = "allow"
-missing_errors_doc = "allow"
-module_name_repetitions = "allow"
-type_complexity = "allow"
-similar_names = "allow"
-too_many_arguments = "allow"
-too_many_lines = "allow"
-items_after_statements = "allow"
 
 [profile.release]
 opt-level = 3

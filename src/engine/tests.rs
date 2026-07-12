@@ -1039,7 +1039,6 @@ mod collector {
         Ok((rows, file_stats))
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn process_record(
         record: Sqllog,
         pipeline: &Pipeline,

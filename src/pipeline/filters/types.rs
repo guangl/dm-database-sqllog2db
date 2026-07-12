@@ -1,6 +1,6 @@
 use serde::{Deserialize, Deserializer};
 
-use super::serde_helpers::{TrxidSet, vec_to_hashset, vec_to_i64_hashset};
+use super::serde_helpers::{TrxidSet, non_negative_finite_ms, vec_to_hashset, vec_to_i64_hashset};
 
 /// 包含过滤器 (include 子表字段)
 #[derive(Debug, Deserialize, Clone, Default)]
@@ -227,7 +227,10 @@ pub struct IndicatorFilters {
     /// `.contains()` 从 O(n) 降为 O(1)。
     #[serde(default, deserialize_with = "vec_to_i64_hashset")]
     pub exec_ids: Option<std::collections::HashSet<i64>>,
-    pub min_runtime_ms: Option<u32>,
+    /// 运行时长阈值（毫秒）。f32 与解析记录的 `exec_time` 及
+    /// `FilterBuilder::exec_time_gte` 同型，避免整数→浮点的有损转换。
+    #[serde(default, deserialize_with = "non_negative_finite_ms")]
+    pub min_runtime_ms: Option<f32>,
     pub min_row_count: Option<u32>,
 }
 

@@ -19,6 +19,22 @@ where
     }))
 }
 
+/// 反序列化毫秒阈值：拒绝负数与非有限值（NaN/inf），在配置加载阶段即报错。
+pub(super) fn non_negative_finite_ms<'de, D>(deserializer: D) -> Result<Option<f32>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let v: Option<f32> = Option::deserialize(deserializer)?;
+    if let Some(ms) = v {
+        if !ms.is_finite() || ms < 0.0 {
+            return Err(serde::de::Error::custom(format!(
+                "min_runtime_ms must be a non-negative finite number, got {ms}"
+            )));
+        }
+    }
+    Ok(v)
+}
+
 pub(super) fn vec_to_i64_hashset<'de, D>(
     deserializer: D,
 ) -> Result<Option<std::collections::HashSet<i64>>, D::Error>

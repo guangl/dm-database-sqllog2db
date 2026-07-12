@@ -40,14 +40,9 @@ pub(super) fn load_offsets(database_url: &str) -> HashMap<PathBuf, u64> {
     pairs
         .filter_map(|result| {
             let (path_str, offset) = result.ok()?;
-            // 过滤负值，防止 i64 → u64 产生极大值（per T-70-02 / Pitfall 2）
-            // 已通过 offset >= 0 保证符号安全，allow cast_sign_loss
-            #[allow(clippy::cast_sign_loss)]
-            if offset >= 0 {
-                Some((PathBuf::from(path_str), offset as u64))
-            } else {
-                None
-            }
+            // try_from 拒绝负值，防止 i64 → u64 产生极大值（per T-70-02 / Pitfall 2）
+            let offset = u64::try_from(offset).ok()?;
+            Some((PathBuf::from(path_str), offset))
         })
         .collect()
 }
@@ -62,10 +57,8 @@ pub(super) fn save_offset(database_url: &str, path: &Path, offset: u64) {
             return;
         }
     };
-    // u64 文件大小范围内不会溢出 i64（文件最大 ~8EB，i64::MAX ~9.2EB）
-    // allow cast_possible_wrap：文件偏移不会超过 i64::MAX
-    #[allow(clippy::cast_possible_wrap)]
-    let byte_offset = offset as i64;
+    // u64 文件大小现实中不会溢出 i64（文件最大 ~8EB，i64::MAX ~9.2EB）；超出则饱和。
+    let byte_offset = i64::try_from(offset).unwrap_or(i64::MAX);
     if let Err(e) = connection.execute(
         "INSERT OR REPLACE INTO _watch_offsets (path, byte_offset) VALUES (?1, ?2)",
         params![path.to_string_lossy().as_ref(), byte_offset],

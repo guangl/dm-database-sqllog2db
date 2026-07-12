@@ -75,7 +75,6 @@ fn write_all_fields(
 }
 
 /// 自定义字段路径：按 `ordered_indices` 写入选定字段。
-#[allow(clippy::too_many_arguments)]
 #[inline]
 fn write_selected_fields(
     itoa_buf: &mut itoa::Buffer,
@@ -180,7 +179,6 @@ fn write_selected_fields(
 
 /// 热路径：使用已解析的 `Sqllog` 直接格式化并写入。
 #[inline]
-#[allow(clippy::too_many_arguments)]
 pub(in crate::exporter::csv) fn write_record_preparsed(
     itoa_buf: &mut itoa::Buffer,
     line_buf: &mut Vec<u8>,

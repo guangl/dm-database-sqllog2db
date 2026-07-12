@@ -106,8 +106,7 @@ pub(super) fn make_progress_bar(show_progress: bool, total_files: usize) -> Opti
 pub(super) fn build_indicator_filters(indicators: &IndicatorFilters) -> Vec<Filter> {
     let mut filters = Vec::new();
     if let Some(min_ms) = indicators.min_runtime_ms {
-        #[allow(clippy::cast_precision_loss)]
-        filters.push(FilterBuilder::new().exec_time_gte(min_ms as f32).build());
+        filters.push(FilterBuilder::new().exec_time_gte(min_ms).build());
     }
     if let Some(min_r) = indicators.min_row_count {
         // rowcount >= min_r: for u32, rowcount_gt(min_r - 1) works when min_r > 0

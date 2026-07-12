@@ -20,7 +20,7 @@ fn merge_stats_options(
 /// Merges CLI args with config values using priority: CLI > config > default.
 /// `top` defaults to 20 when neither CLI nor config provides a value.
 /// `cfg` must already have verbosity applied before calling this function.
-pub async fn handle_stats(
+pub fn handle_stats(
     cfg: &Config,
     top: Option<u32>,
     from: Option<String>,
@@ -39,7 +39,7 @@ pub async fn handle_stats(
         merged_cfg.stats.to
     );
 
-    crate::stats::run_stats(&merged_cfg, effective_top).await
+    crate::stats::run_stats(&merged_cfg, effective_top)
 }
 
 #[cfg(test)]
@@ -72,46 +72,46 @@ mod tests {
         (cfg, dir)
     }
 
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_handle_stats_top_default_passes() {
+    #[test]
+    fn test_handle_stats_top_default_passes() {
         let (cfg, _dir) = make_test_config_with_log();
-        let result = handle_stats(&cfg, Some(20), None, None).await;
+        let result = handle_stats(&cfg, Some(20), None, None);
         assert!(result.is_ok(), "top=20 should succeed, got: {result:?}");
     }
 
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_handle_stats_top_nonzero_passes() {
+    #[test]
+    fn test_handle_stats_top_nonzero_passes() {
         let (cfg, _dir) = make_test_config_with_log();
-        let result = handle_stats(&cfg, Some(5), None, None).await;
+        let result = handle_stats(&cfg, Some(5), None, None);
         assert!(result.is_ok(), "top=5 should succeed, got: {result:?}");
     }
 
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_handle_stats_cli_none_config_none_falls_back_to_20() {
+    #[test]
+    fn test_handle_stats_cli_none_config_none_falls_back_to_20() {
         let (cfg, _dir) = make_test_config_with_log();
-        let result = handle_stats(&cfg, None, None, None).await;
+        let result = handle_stats(&cfg, None, None, None);
         assert!(
             result.is_ok(),
             "default top=20 fallback should succeed, got: {result:?}"
         );
     }
 
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_handle_stats_cli_top_overrides_config_top() {
+    #[test]
+    fn test_handle_stats_cli_top_overrides_config_top() {
         let (mut cfg, _dir) = make_test_config_with_log();
         cfg.stats.top = Some(10);
-        let result = handle_stats(&cfg, Some(5), None, None).await;
+        let result = handle_stats(&cfg, Some(5), None, None);
         assert!(
             result.is_ok(),
             "CLI top=5 should override config top=10, got: {result:?}"
         );
     }
 
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_handle_stats_config_top_used_when_cli_none() {
+    #[test]
+    fn test_handle_stats_config_top_used_when_cli_none() {
         let (mut cfg, _dir) = make_test_config_with_log();
         cfg.stats.top = Some(7);
-        let result = handle_stats(&cfg, None, None, None).await;
+        let result = handle_stats(&cfg, None, None, None);
         assert!(
             result.is_ok(),
             "config top=7 should be used when CLI=None, got: {result:?}"

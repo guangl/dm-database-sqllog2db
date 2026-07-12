@@ -198,7 +198,7 @@ async fn run() -> Result<Option<(ErrorStats, bool)>> {
             cfg.validate()?;
             apply_verbosity_to_config(&mut cfg, cli.verbose, cli.quiet);
             logging::init_logging(&cfg.logging, false)?;
-            cli::stats::handle_stats(&cfg, *top, from.clone(), to.clone()).await?;
+            cli::stats::handle_stats(&cfg, *top, from.clone(), to.clone())?;
             Ok(None)
         }
         // watch 子命令暂时下线（见 cli/opts.rs 注释）。恢复时取消注释并还原顶部 `mod watch;`。

@@ -8,8 +8,6 @@ fn test_pipeline_empty() {
 
 #[test]
 fn test_pipeline_add() {
-    let mut p = Pipeline::new();
-
     #[derive(Debug)]
     struct AlwaysPass;
     impl LogProcessor for AlwaysPass {
@@ -18,6 +16,7 @@ fn test_pipeline_add() {
         }
     }
 
+    let mut p = Pipeline::new();
     p.add(Box::new(AlwaysPass));
     assert!(!p.is_empty());
 }

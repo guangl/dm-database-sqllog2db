@@ -13,5 +13,4 @@ mod tests;
 pub use runner::run_stats;
 
 // Public re-exports for lib API consumers; may be unused in the bin target.
-#[allow(unused_imports)]
 pub use config::StatsConfig;

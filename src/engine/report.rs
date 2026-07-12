@@ -5,7 +5,6 @@ use std::io::Write;
 use std::path::PathBuf;
 
 /// 输出运行摘要（文件数、记录数、耗时、错误统计）。`quiet` 为 true 时不输出任何内容。
-#[allow(clippy::fn_params_excessive_bools)]
 pub(super) fn print_run_summary(
     quiet: bool,
     verbose: bool,
@@ -57,15 +56,18 @@ pub(super) fn print_run_summary(
         }
         if run_stats.filtered_out > 0 {
             let total_read = total_records as u64 + run_stats.filtered_out;
-            #[allow(clippy::cast_precision_loss)]
-            let pct = if total_read > 0 {
-                run_stats.filtered_out as f64 / total_read as f64 * 100.0
-            } else {
-                0.0
-            };
+            // 整数千分数运算避免 u64 → f64 有损转换；显示一位小数百分比。
+            let permille = run_stats
+                .filtered_out
+                .saturating_mul(1000)
+                .checked_div(total_read)
+                .unwrap_or(0);
             eprintln!(
-                "  filtered: {} records ({pct:.1}% of {} total)",
-                run_stats.filtered_out, total_read
+                "  filtered: {} records ({}.{}% of {} total)",
+                run_stats.filtered_out,
+                permille / 10,
+                permille % 10,
+                total_read
             );
         }
         if run_stats

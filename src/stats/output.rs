@@ -187,13 +187,13 @@ mod tests {
     fn make_frequent_rows(count: usize) -> Vec<FrequentSqlRow> {
         (0..count)
             .map(|idx| {
-                let idx_u64 = idx as u64;
-                let idx_i64 = i64::try_from(idx).unwrap_or(0);
+                let count_seed = idx as u64;
+                let ms_seed = i64::try_from(idx).unwrap_or(0);
                 FrequentSqlRow {
                     normalized_sql: format!("SELECT * FROM t{idx}"),
-                    call_count: (idx_u64 + 1) * 5,
-                    avg_elapsed_ms: (idx_i64 + 1) * 2,
-                    max_elapsed_ms: (idx_i64 + 1) * 10,
+                    call_count: (count_seed + 1) * 5,
+                    avg_elapsed_ms: (ms_seed + 1) * 2,
+                    max_elapsed_ms: (ms_seed + 1) * 10,
                 }
             })
             .collect()

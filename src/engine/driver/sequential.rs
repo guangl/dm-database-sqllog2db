@@ -10,8 +10,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 /// 顺序导出路径：逐文件处理，维护 `ExporterManager` 生命周期。
 /// 返回 `(per_file_counts, run_stats)`。
-#[allow(clippy::too_many_arguments)]
-#[allow(clippy::fn_params_excessive_bools)]
 pub(crate) async fn run_sequential(
     log_files: &[PathBuf],
     final_cfg: &Config,
@@ -57,8 +55,6 @@ pub(crate) async fn run_sequential(
 
 /// 逐文件循环：为每个日志文件调用 `process_log_file`，fatal 时提前返回错误。
 /// 返回 `(per_file_counts, run_stats)`。
-#[allow(clippy::too_many_arguments)]
-#[allow(clippy::fn_params_excessive_bools)]
 async fn run_file_loop(
     log_files: &[PathBuf],
     exporter_manager: &mut ExporterManager,

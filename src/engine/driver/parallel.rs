@@ -20,6 +20,7 @@ fn concat_csv_parts(
 ) -> Result<()> {
     use std::fs::OpenOptions;
     use std::io::BufReader;
+    use std::io::Write as _;
 
     // 无任何 part 时不触碰输出文件，避免 overwrite=true 把已有数据清空。
     if parts.is_empty() {
@@ -60,7 +61,6 @@ fn concat_csv_parts(
         parts_to_remove.push(part_path.as_path());
     }
 
-    use std::io::Write as _;
     // flush 结果延后传播：无论成功与否都先清理临时文件，避免 flush 失败时留下磁盘残留。
     // 显式 drop writer 确保文件句柄在 remove 前关闭（Windows 不允许删除已打开的文件）。
     let flush_result = writer.flush();
@@ -96,7 +96,6 @@ fn setup_parts_dir(output_path: &Path) -> Result<PathBuf> {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 fn parse_and_write_csv(
     file: &Path,
     temp_path: &Path,
@@ -151,7 +150,6 @@ fn parse_and_write_csv(
 // `#[tokio::main]`（默认 multi_thread），但嵌入测试或 benchmark 若改用 current_thread
 // runtime，此处将以不明显的 panic 失败。block_in_place 仅用于在执行 CPU 密集的 rayon
 // 任务期间让出 tokio worker 线程，解析本身是纯同步调用，不再需要驱动任何 async 运行时。
-#[allow(clippy::too_many_arguments)]
 fn run_parallel_tasks(
     log_files: &[PathBuf],
     csv_include_performance_metrics: bool,
@@ -279,7 +277,6 @@ fn finalize_concat(
 /// 返回：`(已处理文件列表, 跳过文件数, 解析错误统计)`，已处理列表顺序与 `log_files` 一致。
 /// 适用条件：CSV 导出 + 多文件 + jobs > 1 + 无 limit。
 /// 注意：每个 rayon 任务开始时若 verbose=true 输出 "Processing: {path}"（D-02）。
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn process_csv_parallel(
     log_files: &[PathBuf],
     cfg: &crate::config::Config,

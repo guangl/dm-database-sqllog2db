@@ -220,8 +220,6 @@ pub(super) fn read_bytes_to_tempfile(
 
 /// 使用临时文件路径调用 `engine::run`，更新 state，并持久化新 offset（per D-07/D-09）。
 // tmp_file 按值传入确保函数返回时 NamedTempFile 自动删除临时文件
-#[allow(clippy::needless_pass_by_value)]
-#[allow(clippy::too_many_arguments)]
 async fn run_incremental(
     original_path: &Path,
     canonical_path: &Path,

@@ -20,7 +20,5 @@ pub use handler::run;
 
 // 以下 pub use 为集成测试（tests/watch_incremental.rs）提供公开 API，
 // binary 内部不直接引用，通过 allow 消除 unused_imports lint。
-#[allow(unused_imports)]
 pub use state::WatchLoopState;
-#[allow(unused_imports)]
 pub use trigger::{trigger_full_file, trigger_incremental};
