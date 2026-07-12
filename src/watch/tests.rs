@@ -1,12 +1,9 @@
 //! Watch 单元测试 + WATCH-07/08/09 集成测试（从 mod.rs 迁移）。
 
-use super::debounce::should_trigger;
-use super::dirs::collect_watch_dirs;
-use super::handler::run as handle_watch;
-use super::state::{DEBOUNCE_WINDOW, WatchLoopState};
-use super::status::{format_elapsed_hms, render_active_status};
-use super::trigger_full::trigger_full_file;
-use super::trigger_incremental::{read_bytes_to_tempfile, trigger_incremental};
+use super::events::should_trigger;
+use super::handler::{collect_watch_dirs, run as handle_watch};
+use super::state::{DEBOUNCE_WINDOW, WatchLoopState, format_elapsed_hms, render_active_status};
+use super::trigger::{read_bytes_to_tempfile, trigger_full_file, trigger_incremental};
 use crate::config::Config;
 use crate::error::Error;
 use std::collections::HashMap;

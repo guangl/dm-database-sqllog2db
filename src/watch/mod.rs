@@ -1,18 +1,17 @@
-//! Watch 领域模块：主入口 `run` 在 `handler.rs`，按 watch 流程职责分文件组织。
-//! 命令级 arg 处理保留在 `main.rs`；对外沿用 `dm_database_sqllog2db::watch::run`。
+//! Watch 领域模块：监听输入目录中 `.log` 文件的创建与追加，触发全量/增量导出。
+//! 主入口 [`run`]（在 `handler.rs`）；命令级 arg 处理保留在 `main.rs`。
+//!
+//! - `handler` — 入口与主循环（目录收集、watcher 启动、事件分发、摘要）
+//! - `events`  — notify watcher 创建、事件路由、防抖
+//! - `trigger` — 全量/增量两条触发路径与共享的追加模式注入
+//! - `state`   — 运行时状态（`WatchLoopState`）与状态行渲染
+//! - `offsets` — `_watch_offsets` 辅助表读写（增量 offset 持久化）
 
-pub(super) mod offsets;
-
-mod append;
-mod debounce;
-mod dirs;
-mod event;
+mod events;
 mod handler;
+mod offsets;
 mod state;
-mod status;
-mod trigger_full;
-mod trigger_incremental;
-mod watcher;
+mod trigger;
 
 #[cfg(test)]
 mod tests;
@@ -24,6 +23,4 @@ pub use handler::run;
 #[allow(unused_imports)]
 pub use state::WatchLoopState;
 #[allow(unused_imports)]
-pub use trigger_full::trigger_full_file;
-#[allow(unused_imports)]
-pub use trigger_incremental::trigger_incremental;
+pub use trigger::{trigger_full_file, trigger_incremental};

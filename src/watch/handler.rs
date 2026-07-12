@@ -1,24 +1,63 @@
-//! Watch 子命令主入口：初始化 watcher，进入 watch loop，Ctrl+C 后打印摘要。
+//! Watch 主入口：收集监听目录，初始化 watcher，进入 watch loop，Ctrl+C 后打印摘要。
 
-use super::dirs::collect_watch_dirs;
-use super::event::handle_event;
+use super::events::{create_watcher, handle_event};
 use super::offsets;
-use super::state::{STATUS_REFRESH_INTERVAL, WatchLoopState};
-use super::status::{build_progress_bar, print_final_summary, refresh_active_status};
-use super::watcher::create_watcher;
+use super::state::{
+    STATUS_REFRESH_INTERVAL, WatchLoopState, build_progress_bar, print_final_summary,
+    refresh_active_status,
+};
 use crate::config::Config;
 use crate::error::{Error, Result};
 use indicatif::ProgressBar;
 use log::warn;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::RecvTimeoutError;
 use std::time::{Duration, Instant};
 
-/// Watch 子命令主入口：初始化 notify watcher，进入 watch loop，Ctrl+C 后打印摘要。
+/// 从 cfg.sqllog.inputs 收集实际存在的监听目录，去重后返回。
+/// 路径经 canonicalize 处理以解决 macOS /var → /private/var 等符号链接问题。
+#[must_use]
+pub(super) fn collect_watch_dirs(inputs: &[String]) -> Vec<PathBuf> {
+    let mut dirs: Vec<PathBuf> = Vec::new();
+    let mut seen: std::collections::HashSet<PathBuf> = std::collections::HashSet::new();
+    for input_str in inputs {
+        let is_glob = input_str.contains('*') || input_str.contains('?') || input_str.contains('[');
+        if is_glob {
+            if let Some(ancestor) = Path::new(input_str).ancestors().find(|p| p.exists()) {
+                let dir = ancestor
+                    .canonicalize()
+                    .unwrap_or_else(|_| ancestor.to_path_buf());
+                if seen.insert(dir.clone()) {
+                    dirs.push(dir);
+                }
+            }
+        } else {
+            let path = Path::new(input_str);
+            if path.is_file() {
+                if let Some(parent) = path.parent() {
+                    let dir = parent
+                        .canonicalize()
+                        .unwrap_or_else(|_| parent.to_path_buf());
+                    if seen.insert(dir.clone()) {
+                        dirs.push(dir);
+                    }
+                }
+            } else if path.is_dir() {
+                let dir = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+                if seen.insert(dir.clone()) {
+                    dirs.push(dir);
+                }
+            }
+        }
+    }
+    dirs
+}
+
+/// Watch 主入口：初始化 notify watcher，进入 watch loop，Ctrl+C 后打印摘要。
 pub async fn run(
     cfg: &Config,
     quiet: bool,
