@@ -25,15 +25,15 @@ static LOG_LEVEL_MAP: LazyLock<HashMap<&'static str, LevelFilter>> = LazyLock::n
 /// Replaces an external datetime dependency with a pure-std implementation.
 /// Uses Howard Hinnant's civil-from-days algorithm to convert Unix seconds
 /// to year/month/day without any external crates.
-#[allow(clippy::cast_possible_wrap)]
 fn format_utc_timestamp() -> String {
     let secs = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs();
 
-    let days = (secs / 86400) as i64;
-    let rem = (secs % 86400) as i64;
+    // try_from 溢出仅在 Unix 秒数超过 i64::MAX（约 2.9×10^11 年）时发生；回退到 epoch 起点。
+    let days = i64::try_from(secs / 86400).unwrap_or(0);
+    let rem = i64::try_from(secs % 86400).unwrap_or(0);
 
     let hours = rem / 3600;
     let rem = rem % 3600;
@@ -61,10 +61,58 @@ fn format_utc_timestamp() -> String {
     buf
 }
 
+/// 自定义简单 Logger：写入文件，可选同时输出到 stdout。
+struct SimpleLogger {
+    level: LevelFilter,
+    file: Mutex<std::fs::File>,
+    log_to_stdout: bool,
+}
+
+impl log::Log for SimpleLogger {
+    fn enabled(&self, metadata: &Metadata) -> bool {
+        match self.level {
+            LevelFilter::Off => false,
+            LevelFilter::Error => metadata.level() == Level::Error,
+            LevelFilter::Warn => metadata.level() <= Level::Warn,
+            LevelFilter::Info => metadata.level() <= Level::Info,
+            LevelFilter::Debug => metadata.level() <= Level::Debug,
+            LevelFilter::Trace => true,
+        }
+    }
+
+    fn log(&self, record: &Record) {
+        if !self.enabled(record.metadata()) {
+            return;
+        }
+        let now = format_utc_timestamp();
+        let msg = format!(
+            "[{}][{}] {} - {}\n",
+            now,
+            record.level(),
+            record.target(),
+            record.args()
+        );
+        if self.log_to_stdout {
+            let _ = std::io::stdout().write_all(msg.as_bytes());
+        }
+
+        // 写到文件
+        if let Ok(mut f) = self.file.lock() {
+            let _ = f.write_all(msg.as_bytes());
+        }
+    }
+
+    fn flush(&self) {}
+}
+
 /// 初始化日志系统
 ///
 /// `log_to_stdout`: 是否同时向 stdout 输出日志。进度条模式下应传 `false`，
 /// 避免日志输出干扰进度条渲染。
+///
+/// # Errors
+///
+/// 日志级别字符串非法，或日志目录/文件创建失败时返回错误。
 pub fn init_logging(config: &LoggingConfig, log_to_stdout: bool) -> Result<()> {
     // 解析日志级别
     let level = parse_log_level(&config.level)?;
@@ -97,50 +145,6 @@ pub fn init_logging(config: &LoggingConfig, log_to_stdout: bool) -> Result<()> {
                 reason: e.to_string(),
             })
         })?;
-
-    // 自定义简单 Logger，写入文件，可选同时输出到 stdout
-    struct SimpleLogger {
-        level: LevelFilter,
-        file: Mutex<std::fs::File>,
-        log_to_stdout: bool,
-    }
-
-    impl log::Log for SimpleLogger {
-        fn enabled(&self, metadata: &Metadata) -> bool {
-            match self.level {
-                LevelFilter::Off => false,
-                LevelFilter::Error => metadata.level() == Level::Error,
-                LevelFilter::Warn => metadata.level() <= Level::Warn,
-                LevelFilter::Info => metadata.level() <= Level::Info,
-                LevelFilter::Debug => metadata.level() <= Level::Debug,
-                LevelFilter::Trace => true,
-            }
-        }
-
-        fn log(&self, record: &Record) {
-            if !self.enabled(record.metadata()) {
-                return;
-            }
-            let now = format_utc_timestamp();
-            let msg = format!(
-                "[{}][{}] {} - {}\n",
-                now,
-                record.level(),
-                record.target(),
-                record.args()
-            );
-            if self.log_to_stdout {
-                let _ = std::io::stdout().write_all(msg.as_bytes());
-            }
-
-            // 写到文件
-            if let Ok(mut f) = self.file.lock() {
-                let _ = f.write_all(msg.as_bytes());
-            }
-        }
-
-        fn flush(&self) {}
-    }
 
     let logger = SimpleLogger {
         level,

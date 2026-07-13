@@ -6,8 +6,8 @@
 mod bench_common;
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use dm_database_sqllog2db::cli::run::handle_run;
 use dm_database_sqllog2db::config::Config;
+use dm_database_sqllog2db::engine::run as handle_run;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;

@@ -2,6 +2,11 @@ use super::Config;
 use crate::error::{ConfigError, Error, Result};
 
 impl Config {
+    /// 校验整份配置（logging、exporter、sqllog、stats、output 各节）。
+    ///
+    /// # Errors
+    ///
+    /// 任一子配置节校验失败时返回该节的错误。
     pub fn validate(&self) -> Result<()> {
         self.logging.validate()?;
         self.exporter.validate()?;

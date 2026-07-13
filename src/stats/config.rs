@@ -14,6 +14,10 @@ pub struct StatsConfig {
 }
 
 /// 验证 `StatsConfig` 的 from/to 字段格式；供 `Config::validate` 和 `run_stats` 共用（IN-02）。
+///
+/// # Errors
+///
+/// from/to 不符合 `YYYY-MM-DD[ HH:MM:SS]` 格式，或 from 晚于 to 时返回错误。
 pub fn validate_stats_time_range(stats: &StatsConfig) -> crate::error::Result<()> {
     if let Some(from) = &stats.from {
         validate_time_str(from).map_err(|reason| {

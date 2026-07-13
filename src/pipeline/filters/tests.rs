@@ -40,7 +40,7 @@ fn test_has_filters_with_start_ts() {
 #[test]
 fn test_has_filters_with_indicator() {
     let mut f = make_feature(true);
-    f.indicators.min_runtime_ms = Some(1000);
+    f.indicators.min_runtime_ms = Some(1000.0);
     assert!(f.has_filters());
 }
 
@@ -48,7 +48,7 @@ fn test_has_filters_with_indicator() {
 #[test]
 fn test_has_transaction_filters_disabled() {
     let mut f = make_feature(false);
-    f.indicators.min_runtime_ms = Some(1000);
+    f.indicators.min_runtime_ms = Some(1000.0);
     assert!(!f.has_transaction_filters());
 }
 
@@ -62,7 +62,7 @@ fn test_has_transaction_filters_no_indicators() {
 #[test]
 fn test_has_transaction_filters_with_min_runtime() {
     let mut f = make_feature(true);
-    f.indicators.min_runtime_ms = Some(500);
+    f.indicators.min_runtime_ms = Some(500.0);
     assert!(f.has_transaction_filters());
 }
 
@@ -120,7 +120,7 @@ fn test_indicator_matches_exec_id() {
 fn test_indicator_matches_min_runtime() {
     let f = IndicatorFilters {
         exec_ids: None,
-        min_runtime_ms: Some(1000),
+        min_runtime_ms: Some(1000.0),
         min_row_count: None,
     };
     assert!(f.matches(0, 1000.0_f32, 0_u32));

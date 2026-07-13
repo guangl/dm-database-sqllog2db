@@ -26,6 +26,10 @@ impl FieldMask {
     pub const ALL: Self = Self(0x7FFF);
 
     /// 从字段名列表构建掩码，未知字段名返回错误消息
+    ///
+    /// # Errors
+    ///
+    /// 列表中包含未知字段名时返回含该字段名的错误消息。
     pub fn from_names(names: &[String]) -> std::result::Result<Self, String> {
         let mut mask = 0u16;
         for name in names {

@@ -51,30 +51,6 @@ pub struct ParseErrorRecord {
     pub kind: ErrorKind,
 }
 
-/// 将原始字符串安全截断到前 120 个字符（UTF-8 字符边界安全）。
-#[must_use]
-#[allow(dead_code)]
-pub fn truncate_to_120_chars(raw: &str) -> String {
-    let end = raw
-        .char_indices()
-        .nth(120)
-        .map_or(raw.len(), |(index, _)| index);
-    raw[..end].to_string()
-}
-
-/// 根据原始内容启发式分类解析错误类型。
-#[must_use]
-#[allow(dead_code)]
-pub fn classify_error_kind(raw: &str) -> ErrorKind {
-    if raw.contains('\u{FFFD}') {
-        ErrorKind::EncodingError
-    } else if raw.starts_with("(EP[") {
-        ErrorKind::FieldMissing
-    } else {
-        ErrorKind::ParseFailed
-    }
-}
-
 /// Accumulated error statistics for a processing run.
 #[derive(Debug, Default, Clone)]
 pub struct ErrorStats {
@@ -104,12 +80,6 @@ impl ErrorStats {
         self.parse_errors += 1;
     }
 
-    #[allow(dead_code)]
-    pub fn add_parse_error_with_kind(&mut self, kind: ErrorKind) {
-        self.add_parse_error();
-        *self.by_type.entry(kind).or_insert(0) += 1;
-    }
-
     pub fn add_export_error(&mut self) {
         self.total_errors += 1;
         self.export_errors += 1;
@@ -120,6 +90,7 @@ impl ErrorStats {
     }
 
     pub fn merge(&mut self, other: &ErrorStats) {
+        const MAX_RECORDS: usize = 10_000;
         self.total_errors += other.total_errors;
         self.parse_errors += other.parse_errors;
         self.export_errors += other.export_errors;
@@ -131,7 +102,6 @@ impl ErrorStats {
         }
         self.filtered_out += other.filtered_out;
         self.records_exported += other.records_exported;
-        const MAX_RECORDS: usize = 10_000;
         let remaining_cap = MAX_RECORDS.saturating_sub(self.parse_error_records.len());
         if remaining_cap > 0 {
             self.parse_error_records.extend(
@@ -740,56 +710,6 @@ mod tests {
             "CRITICAL",
             "ErrorSeverity::Critical should display as 'CRITICAL'"
         );
-    }
-
-    // ===== ErrorKind 分类 =====
-
-    #[test]
-    fn test_classify_error_kind() {
-        assert_eq!(
-            classify_error_kind("含\u{FFFD}字符"),
-            ErrorKind::EncodingError,
-            "含 replacement char 应分类为 EncodingError"
-        );
-        assert_eq!(
-            classify_error_kind("(EP[ 不完整"),
-            ErrorKind::FieldMissing,
-            "以 (EP[ 开头应分类为 FieldMissing"
-        );
-        assert_eq!(
-            classify_error_kind("普通乱码"),
-            ErrorKind::ParseFailed,
-            "其他情况应分类为 ParseFailed"
-        );
-    }
-
-    // ===== truncate_to_120_chars =====
-
-    #[test]
-    fn test_truncate_to_120_chars() {
-        // ASCII 长度 200 → 输出长度 120
-        let long_ascii = "a".repeat(200);
-        let truncated = truncate_to_120_chars(&long_ascii);
-        assert_eq!(truncated.len(), 120, "ASCII 200 字符应截断为 120 字节");
-
-        // "中" 重复 150 次（每字符 3 字节）→ 输出 char_count == 120 且 UTF-8 有效
-        let long_chinese = "中".repeat(150);
-        let truncated_chinese = truncate_to_120_chars(&long_chinese);
-        let char_count = truncated_chinese.chars().count();
-        assert_eq!(char_count, 120, "中文应截断为 120 字符");
-        assert!(
-            std::str::from_utf8(truncated_chinese.as_bytes()).is_ok(),
-            "截断后应为合法 UTF-8"
-        );
-
-        // 空串 → 空串
-        let empty = truncate_to_120_chars("");
-        assert!(empty.is_empty(), "空串截断后应为空串");
-
-        // 100 字符 → 原样返回
-        let short = "b".repeat(100);
-        let result = truncate_to_120_chars(&short);
-        assert_eq!(result, short, "100 字符不超过上限，应原样返回");
     }
 
     // ===== ErrorStats by_type merge =====

@@ -21,7 +21,7 @@ EXAMPLES:
     Validate a configuration file:
         sqllog2db validate -c config.toml"
 )]
-pub(crate) struct Cli {
+pub struct Cli {
     /// Show per-file processing details
     #[arg(
         short = 'v',
@@ -30,18 +30,18 @@ pub(crate) struct Cli {
         conflicts_with = "quiet",
         help = "Show per-file processing details on stderr."
     )]
-    pub(crate) verbose: bool,
+    pub verbose: bool,
 
     /// Suppress non-error output
     #[arg(short = 'q', long = "quiet", global = true, conflicts_with = "verbose")]
-    pub(crate) quiet: bool,
+    pub quiet: bool,
 
     #[command(subcommand)]
-    pub(crate) command: Option<Commands>,
+    pub command: Option<Commands>,
 }
 
 #[derive(Debug, Subcommand)]
-pub(crate) enum Commands {
+pub enum Commands {
     /// Run the log export task
     #[command(
         long_about = "Run the log export task. Parses DM database SQL log files and exports them to CSV or SQLite based on the configuration file.",
@@ -169,26 +169,30 @@ EXAMPLES:
         )]
         to: Option<String>,
     },
-    /// Watch directory for new .log files and process them automatically
-    #[command(
-        long_about = "Watch configured input directories for new .log files. Automatically triggers processing when new files appear. Press Ctrl+C to stop.",
-        after_help = "\
-EXAMPLES:
-    Watch and process new log files automatically:
-        sqllog2db watch -c config.toml
-
-    Watch in quiet mode (suitable for cron/background):
-        sqllog2db watch -c config.toml --quiet"
-    )]
-    Watch {
-        /// TOML configuration file path
-        #[arg(
-            short = 'c',
-            long = "config",
-            default_value = "config.toml",
-            env = "SQLLOG2DB_CONFIG",
-            help = "TOML configuration file path."
-        )]
-        config: String,
-    },
+    // watch 子命令暂时下线：当前只支持追加写出到文件，功能价值有限。
+    // 领域实现（src/watch/）与测试保留编译；恢复时取消下方注释并还原 main.rs 的
+    // `mod watch;` 与 Watch 分支即可。
+    //
+    // /// Watch directory for new .log files and process them automatically
+    // #[command(
+    //     long_about = "Watch configured input directories for new .log files. Automatically triggers processing when new files appear. Press Ctrl+C to stop.",
+    //     after_help = "\
+    // EXAMPLES:
+    //     Watch and process new log files automatically:
+    //         sqllog2db watch -c config.toml
+    //
+    //     Watch in quiet mode (suitable for cron/background):
+    //         sqllog2db watch -c config.toml --quiet"
+    // )]
+    // Watch {
+    //     /// TOML configuration file path
+    //     #[arg(
+    //         short = 'c',
+    //         long = "config",
+    //         default_value = "config.toml",
+    //         env = "SQLLOG2DB_CONFIG",
+    //         help = "TOML configuration file path."
+    //     )]
+    //     config: String,
+    // },
 }

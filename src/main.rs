@@ -1,17 +1,12 @@
-mod cli;
-mod config;
-mod error;
-mod exporter;
-mod logging;
-mod parser;
-mod pipeline;
-mod preflight;
-mod scanner;
-mod stats;
-mod streaming;
-
-use config::Config;
-use error::{Error, ErrorStats, Result};
+// 二进制是薄壳：所有领域模块都编译在 lib 里，此处直接复用 lib crate，
+// 避免 `mod X;` 重复编译（并消除 bin 侧对 lib-only pub-use 的 unused_imports 噪声）。
+// watch 子命令暂时下线（见 cli/opts.rs 注释），故此处未引入 watch。
+use dm_database_sqllog2db::cli;
+use dm_database_sqllog2db::config::Config;
+use dm_database_sqllog2db::engine;
+use dm_database_sqllog2db::error::{self, Error, ErrorStats, Result};
+use dm_database_sqllog2db::logging;
+use dm_database_sqllog2db::preflight;
 use log::{info, warn};
 use std::path::Path;
 use std::sync::Arc;
@@ -131,11 +126,7 @@ async fn run() -> Result<Option<(ErrorStats, bool)>> {
 
     let needs_simple_logging = !matches!(
         &cli.command,
-        Some(
-            cli::opts::Commands::Run { .. }
-                | cli::opts::Commands::Stats { .. }
-                | cli::opts::Commands::Watch { .. }
-        )
+        Some(cli::opts::Commands::Run { .. } | cli::opts::Commands::Stats { .. })
     );
     if needs_simple_logging {
         init_simple_logging(cli.quiet);
@@ -176,8 +167,7 @@ async fn run() -> Result<Option<(ErrorStats, bool)>> {
             })
             .ok();
 
-            let stats =
-                cli::run::handle_run(&cfg, cli.quiet, cli.verbose, &interrupted, None).await?;
+            let stats = engine::run(&cfg, cli.quiet, cli.verbose, &interrupted, None).await?;
             Ok(Some((stats, cli.quiet)))
         }
         Some(cli::opts::Commands::Validate { config }) => {
@@ -199,32 +189,33 @@ async fn run() -> Result<Option<(ErrorStats, bool)>> {
             cfg.validate()?;
             apply_verbosity_to_config(&mut cfg, cli.verbose, cli.quiet);
             logging::init_logging(&cfg.logging, false)?;
-            cli::stats::handle_stats(&cfg, *top, from.clone(), to.clone()).await?;
+            cli::stats::handle_stats(&cfg, *top, from.clone(), to.clone())?;
             Ok(None)
         }
-        Some(cli::opts::Commands::Watch { config }) => {
-            let mut cfg = load_config(config)?;
-            cfg.validate()?;
-            apply_verbosity_to_config(&mut cfg, cli.verbose, cli.quiet);
-            logging::init_logging(&cfg.logging, false)?;
-            info!("Application started (watch mode)");
-            info!("Configuration validation passed");
-
-            let pf = preflight::check(&cfg);
-            if pf.print_and_check() {
-                std::process::exit(EXIT_FATAL);
-            }
-
-            let interrupted = Arc::new(AtomicBool::new(false));
-            let interrupted_flag = Arc::clone(&interrupted);
-            ctrlc::set_handler(move || {
-                interrupted_flag.store(true, Ordering::Release);
-            })
-            .ok();
-
-            cli::watch::handle_watch(&cfg, cli.quiet, cli.verbose, &interrupted).await?;
-            Ok(None)
-        }
+        // watch 子命令暂时下线（见 cli/opts.rs 注释）。恢复时取消注释并还原顶部 `mod watch;`。
+        // Some(cli::opts::Commands::Watch { config }) => {
+        //     let mut cfg = load_config(config)?;
+        //     cfg.validate()?;
+        //     apply_verbosity_to_config(&mut cfg, cli.verbose, cli.quiet);
+        //     logging::init_logging(&cfg.logging, false)?;
+        //     info!("Application started (watch mode)");
+        //     info!("Configuration validation passed");
+        //
+        //     let pf = preflight::check(&cfg);
+        //     if pf.print_and_check() {
+        //         std::process::exit(EXIT_FATAL);
+        //     }
+        //
+        //     let interrupted = Arc::new(AtomicBool::new(false));
+        //     let interrupted_flag = Arc::clone(&interrupted);
+        //     ctrlc::set_handler(move || {
+        //         interrupted_flag.store(true, Ordering::Release);
+        //     })
+        //     .ok();
+        //
+        //     watch::run(&cfg, cli.quiet, cli.verbose, &interrupted).await?;
+        //     Ok(None)
+        // }
         None => {
             cli::opts::Cli::command().print_help().ok();
             std::process::exit(0);

@@ -33,31 +33,31 @@ fn write_test_log(path: &std::path::Path, count: usize) {
     std::fs::write(path, buf).unwrap();
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_run_stats_csv_mode_selected_when_only_csv_configured() {
+#[test]
+fn test_run_stats_csv_mode_selected_when_only_csv_configured() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_file = dir.path().join("test.log");
     write_test_log(&log_file, 3);
     let csv_path = dir.path().join("out").join("data.csv");
     let cfg = make_csv_config(log_file.to_str().unwrap(), csv_path.to_str().unwrap());
-    run_stats(&cfg, 10).await.unwrap();
+    run_stats(&cfg, 10).unwrap();
     assert!(dir.path().join("out").join("slow_sql.csv").exists());
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_run_stats_propagates_no_files_found() {
+#[test]
+fn test_run_stats_propagates_no_files_found() {
     let dir = tempfile::TempDir::new().unwrap();
     let csv_path = dir.path().join("out.csv");
     // 传入存在但为空目录（log_files 返回空列表触发 NoFilesFound）
     let empty_dir = dir.path().join("empty");
     std::fs::create_dir_all(&empty_dir).unwrap();
     let cfg = make_csv_config(empty_dir.to_str().unwrap(), csv_path.to_str().unwrap());
-    let result = run_stats(&cfg, 5).await;
+    let result = run_stats(&cfg, 5);
     assert!(result.is_err(), "empty input should return Err");
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_run_stats_skips_parse_errors() {
+#[test]
+fn test_run_stats_skips_parse_errors() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_file = dir.path().join("mixed.log");
     // AsyncLogParser 在文件级别解析：含任何无效行的文件会被整体跳过（静默 warn）
@@ -67,7 +67,7 @@ async fn test_run_stats_skips_parse_errors() {
     let csv_path = dir.path().join("out.csv");
     let cfg = make_csv_config(log_file.to_str().unwrap(), csv_path.to_str().unwrap());
     // 应返回 Ok
-    run_stats(&cfg, 5).await.unwrap();
+    run_stats(&cfg, 5).unwrap();
     let slow_csv = dir.path().join("slow_sql.csv");
     let slow_content = std::fs::read_to_string(slow_csv).unwrap();
     assert!(
@@ -76,13 +76,13 @@ async fn test_run_stats_skips_parse_errors() {
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_run_stats_rejects_invalid_from() {
+#[test]
+fn test_run_stats_rejects_invalid_from() {
     let dir = tempfile::TempDir::new().unwrap();
     let csv_path = dir.path().join("out.csv");
     let mut cfg = make_csv_config(dir.path().to_str().unwrap(), csv_path.to_str().unwrap());
     cfg.stats.from = Some("bad".to_string());
-    let result = run_stats(&cfg, 5).await;
+    let result = run_stats(&cfg, 5);
     assert!(result.is_err(), "invalid from should return Err");
     match result.unwrap_err() {
         Error::Config(ConfigError::InvalidValue { field, .. }) => {
@@ -92,13 +92,13 @@ async fn test_run_stats_rejects_invalid_from() {
     }
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_run_stats_rejects_invalid_to() {
+#[test]
+fn test_run_stats_rejects_invalid_to() {
     let dir = tempfile::TempDir::new().unwrap();
     let csv_path = dir.path().join("out.csv");
     let mut cfg = make_csv_config(dir.path().to_str().unwrap(), csv_path.to_str().unwrap());
     cfg.stats.to = Some("20240101".to_string());
-    let result = run_stats(&cfg, 5).await;
+    let result = run_stats(&cfg, 5);
     assert!(result.is_err(), "invalid to should return Err");
     match result.unwrap_err() {
         Error::Config(ConfigError::InvalidValue { field, .. }) => {

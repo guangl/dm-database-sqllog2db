@@ -36,6 +36,11 @@ impl Default for LoggingConfig {
 }
 
 impl LoggingConfig {
+    /// 校验日志配置。
+    ///
+    /// # Errors
+    ///
+    /// 日志文件路径为空白、日志级别不在合法集合内或 `retention_days` 越界时返回错误。
     pub fn validate(&self) -> Result<()> {
         if self.file.trim().is_empty() {
             return Err(Error::Config(ConfigError::InvalidValue {

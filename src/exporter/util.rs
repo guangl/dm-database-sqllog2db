@@ -18,12 +18,12 @@ pub(crate) fn strip_ip_prefix(ip: &str) -> &str {
 #[inline]
 #[must_use]
 pub(crate) fn f32_ms_to_i64(ms: f32) -> i64 {
+    const MAX_I64_F64: f64 = 9_223_372_036_854_775_807.0; // i64::MAX as f64
+    const MIN_I64_F64: f64 = -9_223_372_036_854_775_808.0; // i64::MIN as f64
+
     if !ms.is_finite() {
         return 0;
     }
-
-    const MAX_I64_F64: f64 = 9_223_372_036_854_775_807.0; // i64::MAX as f64
-    const MIN_I64_F64: f64 = -9_223_372_036_854_775_808.0; // i64::MIN as f64
 
     let ms_f64 = f64::from(ms);
     if ms_f64 > MAX_I64_F64 {
