@@ -48,7 +48,9 @@ fn build_include_groups(f: &FiltersFeature) -> Vec<Vec<Filter>> {
         build_or_group(f.include.ips.as_deref(), |fb, v| fb.client_ip_eq(v)),
         build_or_group(f.include.sessions.as_deref(), |fb, v| fb.sess_id_eq(v)),
         build_or_group(f.include.threads.as_deref(), |fb, v| fb.thrd_id_eq(v)),
-        build_or_group(f.include.statements.as_deref(), |fb, v| fb.statement_eq(v)),
+        // 语句类型 (INS/UPD/DEL/SEL/ORA...) 存于记录的 `tag` 字段，而非 `stmt` 句柄，
+        // 因此按类型过滤须匹配 tag。
+        build_or_group(f.include.statements.as_deref(), |fb, v| fb.tag_eq(v)),
         build_or_group(f.include.apps.as_deref(), |fb, v| fb.appname_eq(v)),
         build_or_group(f.include.tags.as_deref(), |fb, v| fb.tag_eq(v)),
     ]
@@ -60,7 +62,8 @@ fn build_exclude_groups(f: &FiltersFeature) -> Vec<Vec<Filter>> {
         build_or_group(f.exclude.ips.as_deref(), |fb, v| fb.client_ip_eq(v)),
         build_or_group(f.exclude.sessions.as_deref(), |fb, v| fb.sess_id_eq(v)),
         build_or_group(f.exclude.threads.as_deref(), |fb, v| fb.thrd_id_eq(v)),
-        build_or_group(f.exclude.statements.as_deref(), |fb, v| fb.statement_eq(v)),
+        // 见 build_include_groups：语句类型匹配 tag 字段。
+        build_or_group(f.exclude.statements.as_deref(), |fb, v| fb.tag_eq(v)),
         build_or_group(f.exclude.apps.as_deref(), |fb, v| fb.appname_eq(v)),
         build_or_group(f.exclude.tags.as_deref(), |fb, v| fb.tag_eq(v)),
     ]
@@ -332,15 +335,17 @@ mod tests {
 
     #[test]
     fn test_include_statement_filter() {
+        // 语句类型过滤匹配记录的 `tag` 字段（INS/UPD/DEL/SEL/ORA...），而非 `stmt` 句柄。
         let include = IncludeFilters {
-            statements: Some(vec!["st".into()]),
+            statements: Some(vec!["SEL".into()]),
             ..Default::default()
         };
         let proc = FilterProcessor::from_feature(&make_feature(include, ExcludeFilters::default()));
-        assert!(proc.process_with_meta(&make_record("u", "ip", "tx", None)));
-        let mut other = make_record("u", "ip", "tx", None);
-        other.statement = "other_stmt".to_string();
-        assert!(!proc.process_with_meta(&other));
+        assert!(proc.process_with_meta(&make_record("u", "ip", "tx", Some("SEL"))));
+        // tag 不匹配则拒绝
+        assert!(!proc.process_with_meta(&make_record("u", "ip", "tx", Some("INS"))));
+        // 无 tag 的记录（如 TRX: START）不匹配任何语句类型
+        assert!(!proc.process_with_meta(&make_record("u", "ip", "tx", None)));
     }
 
     #[test]

@@ -43,6 +43,18 @@ pub(super) type ProcessOutcome = (FileCounts, usize, ErrorStats);
 
 type ProcessResult = Result<ProcessOutcome>;
 
+/// CSV 拆分（`max_rows_per_file`）是否启用。
+///
+/// 拆分依赖 `CsvExporter` 的单实例状态按行数轮转文件，而并行路径会把每个文件
+/// 解析成独立临时 part 再 `concat` 成单一输出，无法保持全局行数边界。因此启用拆分时
+/// 必须走顺序流式路径（本就是常数内存），否则 `max_rows_per_file` 会被静默忽略。
+fn csv_splitting_enabled(cfg: &Config) -> bool {
+    cfg.exporter
+        .csv
+        .as_ref()
+        .is_some_and(|c| c.max_rows_per_file.is_some())
+}
+
 fn build_run_context(cfg: &Config) -> RunContext<'_> {
     let pipeline = build_pipeline(cfg);
     let field_mask = cfg
@@ -123,6 +135,10 @@ fn chunked_single_file_eligible(
     if ctx.cfg.exporter.csv.is_none() {
         return false;
     }
+    // 拆分依赖单实例的行数轮转，chunked 并行会 concat 成单文件，两者不兼容。
+    if csv_splitting_enabled(ctx.cfg) {
+        return false;
+    }
     let has_transaction_filters = ctx
         .cfg
         .filter
@@ -196,7 +212,10 @@ async fn route_processing(
         return result;
     }
     let multi_file = jobs > 1 && log_files.len() > 1 && !is_stdin_pipe;
-    if multi_file && ctx.cfg.exporter.csv.is_some() {
+    if multi_file && ctx.cfg.exporter.csv.is_some() && csv_splitting_enabled(ctx.cfg) {
+        // 并行 CSV 会 concat 成单文件，无法保持 max_rows_per_file 边界；回退顺序流式路径。
+        log::info!("max_rows_per_file is set; exporting sequentially to honor CSV file splitting");
+    } else if multi_file && ctx.cfg.exporter.csv.is_some() {
         // NOTE: run_csv_parallel is a synchronous blocking function (it uses block_in_place
         // internally) called directly from this async fn. Ideally this would be wrapped in
         // spawn_blocking, but RunContext holds borrowed references (&Config, &Pipeline) that
@@ -245,7 +264,8 @@ pub async fn run(
                 .is_some_and(|f| should_split(f, jobs).is_some());
     let use_parallel = will_chunk_single_file
         || ((jobs > 1 && log_files.len() > 1 && !is_stdin_pipe)
-            && (final_cfg.exporter.csv.is_some() || final_cfg.exporter.sqlite.is_some()));
+            && ((final_cfg.exporter.csv.is_some() && !csv_splitting_enabled(final_cfg))
+                || final_cfg.exporter.sqlite.is_some()));
     let show_progress = !quiet && !verbose && !use_parallel;
     let pb = make_progress_bar(show_progress, log_files.len());
     let console = Console {

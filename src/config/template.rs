@@ -2,190 +2,187 @@
 //!
 //! 由 `cli::init` 的向导按导出器类型选择并做占位符替换后写出。
 
-pub(crate) const CONFIG_TEMPLATE_EN: &str = r#"# sqllog2db default configuration file (edit as needed)
+pub(crate) const CONFIG_TEMPLATE_CSV: &str = r#"# sqllog2db 默认配置文件（请按需修改）
 
 [sqllog]
-# SQL log path list: directories, single files, or glob patterns (e.g. "./logs/2025-*.log")
-# Multiple entries are supported.
+# SQL 日志路径列表：可为目录、单个文件或 glob 模式（例如 "./logs/2025-*.log"）
+# 支持配置多个条目。
 inputs = ["sqllogs"]
 
 [logging]
-# Application log file path
+# 应用日志文件路径
 file = "logs/sqllog2db.log"
-# Log level: trace | debug | info | warn | error
+# 日志级别：trace | debug | info | warn | error
 level = "info"
-# Log retention in days (1-365)
+# 日志保留天数（1-365）
 retention_days = 7
 
 [replace_parameters]
-# Write a normalized_sql column in export output (default: true).
-# For INS/DEL/UPD/ORA records, parameter values are substituted into SQL placeholders.
+# 是否在导出结果中写入 normalized_sql 列（默认：true）。
+# 对 INS/DEL/UPD/ORA 记录，会将参数值回填到 SQL 占位符中。
 enable = true
 
 [filter]
-# Enable the filter pipeline
+# 是否启用过滤管道
 enable = false
 
-# --- Include filters (record-level, AND semantics: every configured field must match) ---
-# Metadata fields use exact string matching.
+# --- 包含过滤器（记录级，AND 语义：每个已配置字段都必须匹配） ---
+# 元数据字段使用精确字符串匹配。
 [filter.include]
-# users      = ["SYSDBA"]                       # Exact-match list of usernames to include
-# ips        = ["127.0.0.1", "192.168.1.100"]   # Exact-match list of client IP addresses to include
-# sessions   = ["0x7f41435437a8"]               # Exact-match list of session IDs (hex strings) to include
-# threads    = ["2188515"]                       # Exact-match list of thread IDs to include
-# statements = ["INS", "UPD", "DEL"]            # Statement types to include (INS/UPD/DEL/SEL/SET/OTH/ORA)
-# apps       = ["DMSQL"]                        # Exact-match list of application names to include
-# tags       = ["[SEL]"]                        # Exact-match list of record tags to include (e.g. [SEL], [INS])
-# start_ts   = "2023-01-01 00:00:00"            # Inclusive lower bound of record timestamp (format: YYYY-MM-DD HH:MM:SS)
-# end_ts     = "2023-01-01 23:59:59"            # Inclusive upper bound of record timestamp (format: YYYY-MM-DD HH:MM:SS)
-# trxids     = ["257809109", "257809110"]        # Exact-match list of transaction IDs to include
+# users      = ["SYSDBA"]                       # 精确匹配：要保留的用户名列表
+# ips        = ["127.0.0.1", "192.168.1.100"]   # 精确匹配：要保留的客户端 IP 列表
+# sessions   = ["0x7f41435437a8"]               # 精确匹配：要保留的会话 ID 列表（十六进制字符串）
+# threads    = ["2188515"]                      # 精确匹配：要保留的线程 ID 列表
+# statements = ["INS", "UPD", "DEL"]            # 语句类型（INS/UPD/DEL/SEL/SET/OTH/ORA），匹配日志方括号标签
+# apps       = ["DMSQL"]                        # 精确匹配：要保留的应用名列表
+# tags       = ["SEL", "INS"]                   # 日志标签，不带方括号（与 statements 同义；日志中的 [SEL] 取值 "SEL"）
+# start_ts   = "2023-01-01 00:00:00"            # 记录时间戳的闭区间下界（格式：YYYY-MM-DD HH:MM:SS）
+# end_ts     = "2023-01-01 23:59:59"            # 记录时间戳的闭区间上界（格式：YYYY-MM-DD HH:MM:SS）
+# trxids     = ["257809109", "257809110"]       # 精确匹配：要保留的事务 ID 列表
 
-# --- Exclude filters (record-level, OR-veto: any match drops the record) ---
-# Metadata fields use exact string matching.
+# --- 排除过滤器（记录级，OR 否决：任意一项匹配即丢弃该记录） ---
+# 元数据字段使用精确字符串匹配。
 [filter.exclude]
-# users      = ["guest", "anon"]                # Exact-match list of usernames to exclude
-# ips        = ["10.0.0.1", "172.16.0.1"]       # Exact-match list of client IP addresses to exclude
-# sessions   = ["0x0000000000000000"]           # Exact-match list of session IDs (hex strings) to exclude
-# threads    = ["0"]                            # Exact-match list of thread IDs to exclude
-# statements = ["SEL", "SET"]                   # Statement types to exclude (INS/UPD/DEL/SEL/SET/OTH/ORA)
-# apps       = ["monitor", "health"]            # Exact-match list of application names to exclude
-# tags       = ["[SET]", "[OTH]"]              # Exact-match list of record tags to exclude
+# users      = ["guest", "anon"]                # 精确匹配：要排除的用户名列表
+# ips        = ["10.0.0.1", "172.16.0.1"]       # 精确匹配：要排除的客户端 IP 列表
+# sessions   = ["0x0000000000000000"]           # 精确匹配：要排除的会话 ID 列表（十六进制字符串）
+# threads    = ["0"]                            # 精确匹配：要排除的线程 ID 列表
+# statements = ["SEL", "SET"]                   # 语句类型（INS/UPD/DEL/SEL/SET/OTH/ORA），匹配日志方括号标签
+# apps       = ["monitor", "health"]            # 精确匹配：要排除的应用名列表
+# tags       = ["SET", "OTH"]                   # 日志标签，不带方括号（与 statements 同义；日志中的 [SET] 取值 "SET"）
 
-# --- Indicator filters (transaction-level: match retains the whole transaction; requires pre-scan) ---
+# --- 指标过滤器（事务级：命中即保留整笔事务，需要预扫描） ---
 [filter.indicators]
-# exec_ids = [257809109, 257809110]   # Transaction-level: retain whole transaction if any record's exec_id matches
-# min_runtime_ms = 1000               # Transaction-level: retain whole transaction if any statement's runtime (ms) >= threshold
-# min_row_count = 100                 # Transaction-level: retain whole transaction if any statement's row_count >= threshold
+# exec_ids = [257809109, 257809110]   # 事务级：任一记录的 exec_id 命中则保留整笔事务
+# min_runtime_ms = 1000               # 事务级：任一语句执行时长（毫秒）≥ 阈值则保留整笔事务
+# min_row_count = 100                 # 事务级：任一语句影响行数 ≥ 阈值则保留整笔事务
 
-# --- SQL filters (transaction-level: match retains the whole transaction; requires pre-scan) ---
+# --- SQL 内容过滤器（事务级：命中即保留整笔事务，需要预扫描） ---
 [filter.sql]
-# includes = ["FROM USER_TABLES", "DELETE FROM"]   # Transaction-level: retain whole transaction if any SQL text contains any substring listed
-# excludes = ["SELECT 1", "DUAL"]                  # Transaction-level: drop whole transaction if any SQL text contains any substring listed
+# includes = ["FROM USER_TABLES", "DELETE FROM"]   # 事务级：任一 SQL 文本包含所列任一子串则保留整笔事务
+# excludes = ["SELECT 1", "DUAL"]                  # 事务级：任一 SQL 文本包含所列任一子串则丢弃整笔事务
 
-# --- Stats subcommand time-range filter (optional) ---
+# --- stats 子命令的时间范围过滤（可选） ---
 [stats]
-# from = "2024-01-01"   # Start of time range. Formats: "YYYY-MM-DD" or "YYYY-MM-DD HH:MM:SS"
-# to   = "2024-01-31"   # End of time range. Same formats as from.
-# top  = 20             # Default top-N. CLI --top overrides this value.
-# CLI args --from / --to / --top override the values above. When both CLI and config are absent, stats runs without time filtering (top defaults to 20).
+# from = "2024-01-01"   # 时间范围起点。格式："YYYY-MM-DD" 或 "YYYY-MM-DD HH:MM:SS"
+# to   = "2024-01-31"   # 时间范围终点。格式同 from。
+# top  = 20             # 默认 top-N 数量。命令行 --top 会覆盖此值。
+# 命令行参数 --from / --to / --top 会覆盖以上配置。命令行与配置均未提供时，stats 不做时间过滤（top 默认为 20）。
 
-# ===================== Exporter Configuration =====================
-# Only one exporter can be active at a time. Priority: csv > sqlite
+# ===================== 导出器配置 =====================
+# 同一时刻只能启用一个导出器。优先级：csv > sqlite
 
-# Option 1: CSV export (default)
+# 方案 1：CSV 导出（默认）
 [exporter.csv]
-# CSV output file path
+# CSV 输出文件路径
 file = "outputs/sqllog.csv"
-# Drop and recreate the file before writing (true/false)
+# 写入前删除并重建文件（true/false）
 overwrite = true
-# Append to existing CSV file instead of overwriting (true/false)
+# 追加到已有 CSV 文件而非覆盖（true/false）
 append = false
 
-# Option 2: SQLite database export
+# 方案 2：SQLite 数据库导出
 # [exporter.sqlite]
-# SQLite database file path
+# SQLite 数据库文件路径
 # database_url = "export/sqllog2db.db"
-# Table name to write records into (ASCII identifiers only: [A-Za-z_][A-Za-z0-9_]*)
+# 写入记录的表名（仅限 ASCII 标识符：[A-Za-z_][A-Za-z0-9_]*）
 # table_name = "sqllog_records"
-# Drop and recreate the table before writing (true/false)
+# 写入前删除并重建该表（true/false）
 # overwrite = true
-# Append rows to existing table instead of overwriting (true/false)
+# 追加行到已有表而非覆盖（true/false）
 # append = false
 "#;
 
-/// `SQLite`-mode template: CSV section commented out, `SQLite` section active.
-/// Used by the interactive wizard when the user selects `SQLite` output.
-/// Placeholder values are substituted by `apply_sqlite_substitutions`.
-pub(crate) const CONFIG_TEMPLATE_SQLITE_EN: &str = r#"# sqllog2db default configuration file (edit as needed)
+pub(crate) const CONFIG_TEMPLATE_SQLITE: &str = r#"# sqllog2db 默认配置文件（请按需修改）
 
 [sqllog]
-# SQL log path list: directories, single files, or glob patterns (e.g. "./logs/2025-*.log")
-# Multiple entries are supported.
+# SQL 日志路径列表：可为目录、单个文件或 glob 模式（例如 "./logs/2025-*.log"）
+# 支持配置多个条目。
 inputs = ["sqllogs"]
 
 [logging]
-# Application log file path
+# 应用日志文件路径
 file = "logs/sqllog2db.log"
-# Log level: trace | debug | info | warn | error
+# 日志级别：trace | debug | info | warn | error
 level = "info"
-# Log retention in days (1-365)
+# 日志保留天数（1-365）
 retention_days = 7
 
 [replace_parameters]
-# Write a normalized_sql column in export output (default: true).
-# For INS/DEL/UPD/ORA records, parameter values are substituted into SQL placeholders.
+# 是否在导出结果中写入 normalized_sql 列（默认：true）。
+# 对 INS/DEL/UPD/ORA 记录，会将参数值回填到 SQL 占位符中。
 enable = true
 
 [filter]
-# Enable the filter pipeline
+# 是否启用过滤管道
 enable = false
 
-# --- Include filters (record-level, AND semantics: every configured field must match) ---
-# Metadata fields use exact string matching.
+# --- 包含过滤器（记录级，AND 语义：每个已配置字段都必须匹配） ---
+# 元数据字段使用精确字符串匹配。
 [filter.include]
-# users      = ["SYSDBA"]                       # Exact-match list of usernames to include
-# ips        = ["127.0.0.1", "192.168.1.100"]   # Exact-match list of client IP addresses to include
-# sessions   = ["0x7f41435437a8"]               # Exact-match list of session IDs (hex strings) to include
-# threads    = ["2188515"]                       # Exact-match list of thread IDs to include
-# statements = ["INS", "UPD", "DEL"]            # Statement types to include (INS/UPD/DEL/SEL/SET/OTH/ORA)
-# apps       = ["DMSQL"]                        # Exact-match list of application names to include
-# tags       = ["[SEL]"]                        # Exact-match list of record tags to include (e.g. [SEL], [INS])
-# start_ts   = "2023-01-01 00:00:00"            # Inclusive lower bound of record timestamp (format: YYYY-MM-DD HH:MM:SS)
-# end_ts     = "2023-01-01 23:59:59"            # Inclusive upper bound of record timestamp (format: YYYY-MM-DD HH:MM:SS)
-# trxids     = ["257809109", "257809110"]        # Exact-match list of transaction IDs to include
+# users      = ["SYSDBA"]                       # 精确匹配：要保留的用户名列表
+# ips        = ["127.0.0.1", "192.168.1.100"]   # 精确匹配：要保留的客户端 IP 列表
+# sessions   = ["0x7f41435437a8"]               # 精确匹配：要保留的会话 ID 列表（十六进制字符串）
+# threads    = ["2188515"]                      # 精确匹配：要保留的线程 ID 列表
+# statements = ["INS", "UPD", "DEL"]            # 语句类型（INS/UPD/DEL/SEL/SET/OTH/ORA），匹配日志方括号标签
+# apps       = ["DMSQL"]                        # 精确匹配：要保留的应用名列表
+# tags       = ["SEL", "INS"]                   # 日志标签，不带方括号（与 statements 同义；日志中的 [SEL] 取值 "SEL"）
+# start_ts   = "2023-01-01 00:00:00"            # 记录时间戳的闭区间下界（格式：YYYY-MM-DD HH:MM:SS）
+# end_ts     = "2023-01-01 23:59:59"            # 记录时间戳的闭区间上界（格式：YYYY-MM-DD HH:MM:SS）
+# trxids     = ["257809109", "257809110"]       # 精确匹配：要保留的事务 ID 列表
 
-# --- Exclude filters (record-level, OR-veto: any match drops the record) ---
-# Metadata fields use exact string matching.
+# --- 排除过滤器（记录级，OR 否决：任意一项匹配即丢弃该记录） ---
+# 元数据字段使用精确字符串匹配。
 [filter.exclude]
-# users      = ["guest", "anon"]                # Exact-match list of usernames to exclude
-# ips        = ["10.0.0.1", "172.16.0.1"]       # Exact-match list of client IP addresses to exclude
-# sessions   = ["0x0000000000000000"]           # Exact-match list of session IDs (hex strings) to exclude
-# threads    = ["0"]                            # Exact-match list of thread IDs to exclude
-# statements = ["SEL", "SET"]                   # Statement types to exclude (INS/UPD/DEL/SEL/SET/OTH/ORA)
-# apps       = ["monitor", "health"]            # Exact-match list of application names to exclude
-# tags       = ["[SET]", "[OTH]"]              # Exact-match list of record tags to exclude
+# users      = ["guest", "anon"]                # 精确匹配：要排除的用户名列表
+# ips        = ["10.0.0.1", "172.16.0.1"]       # 精确匹配：要排除的客户端 IP 列表
+# sessions   = ["0x0000000000000000"]           # 精确匹配：要排除的会话 ID 列表（十六进制字符串）
+# threads    = ["0"]                            # 精确匹配：要排除的线程 ID 列表
+# statements = ["SEL", "SET"]                   # 语句类型（INS/UPD/DEL/SEL/SET/OTH/ORA），匹配日志方括号标签
+# apps       = ["monitor", "health"]            # 精确匹配：要排除的应用名列表
+# tags       = ["SET", "OTH"]                   # 日志标签，不带方括号（与 statements 同义；日志中的 [SET] 取值 "SET"）
 
-# --- Indicator filters (transaction-level: match retains the whole transaction; requires pre-scan) ---
+# --- 指标过滤器（事务级：命中即保留整笔事务，需要预扫描） ---
 [filter.indicators]
-# exec_ids = [257809109, 257809110]   # Transaction-level: retain whole transaction if any record's exec_id matches
-# min_runtime_ms = 1000               # Transaction-level: retain whole transaction if any statement's runtime (ms) >= threshold
-# min_row_count = 100                 # Transaction-level: retain whole transaction if any statement's row_count >= threshold
+# exec_ids = [257809109, 257809110]   # 事务级：任一记录的 exec_id 命中则保留整笔事务
+# min_runtime_ms = 1000               # 事务级：任一语句执行时长（毫秒）≥ 阈值则保留整笔事务
+# min_row_count = 100                 # 事务级：任一语句影响行数 ≥ 阈值则保留整笔事务
 
-# --- SQL filters (transaction-level: match retains the whole transaction; requires pre-scan) ---
+# --- SQL 内容过滤器（事务级：命中即保留整笔事务，需要预扫描） ---
 [filter.sql]
-# includes = ["FROM USER_TABLES", "DELETE FROM"]   # Transaction-level: retain whole transaction if any SQL text contains any substring listed
-# excludes = ["SELECT 1", "DUAL"]                  # Transaction-level: drop whole transaction if any SQL text contains any substring listed
+# includes = ["FROM USER_TABLES", "DELETE FROM"]   # 事务级：任一 SQL 文本包含所列任一子串则保留整笔事务
+# excludes = ["SELECT 1", "DUAL"]                  # 事务级：任一 SQL 文本包含所列任一子串则丢弃整笔事务
 
-# --- Stats subcommand time-range filter (optional) ---
+# --- stats 子命令的时间范围过滤（可选） ---
 [stats]
-# from = "2024-01-01"   # Start of time range. Formats: "YYYY-MM-DD" or "YYYY-MM-DD HH:MM:SS"
-# to   = "2024-01-31"   # End of time range. Same formats as from.
-# top  = 20             # Default top-N. CLI --top overrides this value.
-# CLI args --from / --to / --top override the values above. When both CLI and config are absent, stats runs without time filtering (top defaults to 20).
+# from = "2024-01-01"   # 时间范围起点。格式："YYYY-MM-DD" 或 "YYYY-MM-DD HH:MM:SS"
+# to   = "2024-01-31"   # 时间范围终点。格式同 from。
+# top  = 20             # 默认 top-N 数量。命令行 --top 会覆盖此值。
+# 命令行参数 --from / --to / --top 会覆盖以上配置。命令行与配置均未提供时，stats 不做时间过滤（top 默认为 20）。
 
-# ===================== Exporter Configuration =====================
-# Only one exporter can be active at a time. Priority: csv > sqlite
+# ===================== 导出器配置 =====================
+# 同一时刻只能启用一个导出器。优先级：csv > sqlite
 
-# Option 1: CSV export (default)
+# 方案 1：CSV 导出（默认）
 # [exporter.csv]
-# CSV output file path
+# CSV 输出文件路径
 # file = "outputs/sqllog.csv"
-# Drop and recreate the file before writing (true/false)
+# 写入前删除并重建文件（true/false）
 # overwrite = true
-# Append to existing CSV file instead of overwriting (true/false)
+# 追加到已有 CSV 文件而非覆盖（true/false）
 # append = false
 # Max rows per CSV file before splitting into sqllog_1.csv, sqllog_2.csv, ...
 # (unset or 0 = single file, split mode requires overwrite = true)
 # max_rows_per_file = 1000000
 
-# Option 2: SQLite database export
+# 方案 2：SQLite 数据库导出
 [exporter.sqlite]
-# SQLite database file path
+# SQLite 数据库文件路径
 database_url = "export/sqllog2db.db"
-# Table name to write records into (ASCII identifiers only: [A-Za-z_][A-Za-z0-9_]*)
+# 写入记录的表名（仅限 ASCII 标识符：[A-Za-z_][A-Za-z0-9_]*）
 table_name = "sqllog_records"
-# Drop and recreate the table before writing (true/false)
+# 写入前删除并重建该表（true/false）
 overwrite = true
-# Append rows to existing table instead of overwriting (true/false)
+# 追加行到已有表而非覆盖（true/false）
 append = false
 "#;

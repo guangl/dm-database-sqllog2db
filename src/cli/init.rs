@@ -1,4 +1,4 @@
-use crate::config::template::{CONFIG_TEMPLATE_EN, CONFIG_TEMPLATE_SQLITE_EN};
+use crate::config::template::{CONFIG_TEMPLATE_CSV, CONFIG_TEMPLATE_SQLITE};
 use crate::error::{ConfigError, Error, FileError, Result};
 use log::{error, info, warn};
 use std::fs;
@@ -12,7 +12,7 @@ use std::path::Path;
 /// 目标文件已存在且未指定 `--force`、父目录创建失败或文件写入失败时返回错误。
 pub fn handle_init(output_path: &str, force: bool) -> Result<()> {
     let path = Path::new(output_path);
-    let content = CONFIG_TEMPLATE_EN;
+    let content = CONFIG_TEMPLATE_CSV;
     write_config_file(path, content, force)?;
     info!("Next steps:");
     info!("  1. Edit configuration file: {output_path}");
@@ -234,8 +234,8 @@ fn apply_sqlite_substitutions(content: &str, answers: &WizardAnswers) -> String 
 fn apply_wizard_answers_to_template(answers: &WizardAnswers) -> String {
     let escaped_inputs = toml_escape(&answers.inputs);
     let template = match answers.exporter {
-        ExporterChoice::Csv => CONFIG_TEMPLATE_EN,
-        ExporterChoice::Sqlite => CONFIG_TEMPLATE_SQLITE_EN,
+        ExporterChoice::Csv => CONFIG_TEMPLATE_CSV,
+        ExporterChoice::Sqlite => CONFIG_TEMPLATE_SQLITE,
     };
     let content = template.replace(
         r#"inputs = ["sqllogs"]"#,
@@ -373,7 +373,7 @@ mod tests {
         };
         let output = apply_wizard_answers_to_template(&answers);
         assert_eq!(
-            output, CONFIG_TEMPLATE_EN,
+            output, CONFIG_TEMPLATE_CSV,
             "default CSV path should produce identical output to template"
         );
     }
