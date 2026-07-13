@@ -6,8 +6,8 @@
 //! - overwrite 模式清理上一轮遗留的分割文件（含编号空洞）
 //! - 配置校验拒绝非法组合
 
-use dm_database_sqllog2db::engine::run as handle_run;
 use dm_database_sqllog2db::config::{Config, CsvExporterConfig, ExporterConfig, SqllogConfig};
+use dm_database_sqllog2db::engine::run as handle_run;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;

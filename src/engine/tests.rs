@@ -1080,7 +1080,13 @@ mod collector {
                     continue;
                 }
             };
-            process_record(&mut state, record, pipeline, do_normalize, placeholder_override);
+            process_record(
+                &mut state,
+                record,
+                pipeline,
+                do_normalize,
+                placeholder_override,
+            );
         }
         Ok((state.rows, state.file_stats))
     }

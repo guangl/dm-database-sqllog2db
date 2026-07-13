@@ -58,7 +58,11 @@ pub(super) enum ExportAction {
 }
 
 /// 被过滤的 PARAMS 记录仅更新 `params_buffer`，不导出。
-fn update_params_buffer_only(record: &Sqllog, state: &mut LoopState<'_>, placeholder: Option<bool>) {
+fn update_params_buffer_only(
+    record: &Sqllog,
+    state: &mut LoopState<'_>,
+    placeholder: Option<bool>,
+) {
     let _ = crate::pipeline::compute_normalized(
         record,
         &record.sql,
@@ -224,7 +228,10 @@ pub(super) async fn process_log_file(
     let file_start = Instant::now();
     let file_name = std::path::Path::new(args.file_path)
         .file_name()
-        .map_or_else(|| args.file_path.to_string(), |n| n.to_string_lossy().into_owned());
+        .map_or_else(
+            || args.file_path.to_string(),
+            |n| n.to_string_lossy().into_owned(),
+        );
     setup_progress_bar(
         args.pb,
         args.reset_pb,
@@ -265,8 +272,14 @@ pub(super) async fn process_log_file(
         if !needs_processing {
             continue;
         }
-        let action =
-            normalize_and_export(&env, &record, exporter_manager, &mut state, args.remaining, passes);
+        let action = normalize_and_export(
+            &env,
+            &record,
+            exporter_manager,
+            &mut state,
+            args.remaining,
+            passes,
+        );
         total_processed = total_processed.wrapping_add(1);
         match action {
             ExportAction::BreakQuota | ExportAction::BreakFatal => break 'outer,
@@ -293,7 +306,12 @@ pub(super) async fn process_log_file(
         }
     }
     let elapsed = file_start.elapsed().as_secs_f64();
-    log_file_result(args, state.records_in_file, state.file_stats.total_errors, elapsed);
+    log_file_result(
+        args,
+        state.records_in_file,
+        state.file_stats.total_errors,
+        elapsed,
+    );
     Ok((state.records_in_file, state.file_stats))
 }
 

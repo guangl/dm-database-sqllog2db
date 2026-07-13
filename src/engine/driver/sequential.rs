@@ -17,7 +17,8 @@ pub(crate) async fn run_sequential(
     let mut exporter_manager = ExporterManager::from_config(ctx.cfg)?;
     exporter_manager.initialize()?;
     log::info!("Parsing and exporting SQL logs...");
-    let loop_result = run_file_loop(ctx, log_files, &mut exporter_manager, console, interrupted).await;
+    let loop_result =
+        run_file_loop(ctx, log_files, &mut exporter_manager, console, interrupted).await;
     // 无论 loop_result 成功与否都调用 finalize，确保 BufWriter 数据落盘
     let finalize_result = exporter_manager.finalize();
     (!console.quiet).then(|| exporter_manager.log_stats());

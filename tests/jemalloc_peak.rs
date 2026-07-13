@@ -13,8 +13,8 @@
 #[global_allocator]
 static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
-use dm_database_sqllog2db::engine::run as handle_run;
 use dm_database_sqllog2db::config::Config;
+use dm_database_sqllog2db::engine::run as handle_run;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use tempfile::TempDir;

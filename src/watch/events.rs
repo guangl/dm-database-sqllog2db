@@ -58,8 +58,16 @@ pub(super) async fn handle_event(
             continue;
         }
         if is_create {
-            trigger_full_file(path, env.cfg, env.quiet, env.verbose, env.interrupted, state, env.pb)
-                .await;
+            trigger_full_file(
+                path,
+                env.cfg,
+                env.quiet,
+                env.verbose,
+                env.interrupted,
+                state,
+                env.pb,
+            )
+            .await;
         } else {
             trigger_incremental(
                 path,

@@ -2,13 +2,13 @@
 //! Phase 02 集成测试 — WATCH-07（CSV append）、WATCH-08（error log append）、WATCH-09（exit 130）。
 //! 不依赖 notify watcher（FSEvents 不稳定，per Pitfall 6），直接调用 pub `trigger_*` 函数。
 
-use dm_database_sqllog2db::watch::{
-    WatchLoopState, run as handle_watch, trigger_full_file, trigger_incremental,
-};
 use dm_database_sqllog2db::config::{
     Config, CsvExporterConfig, ErrorLogConfig, ExporterConfig, SqliteExporterConfig, SqllogConfig,
 };
 use dm_database_sqllog2db::error::Error;
+use dm_database_sqllog2db::watch::{
+    WatchLoopState, run as handle_watch, trigger_full_file, trigger_incremental,
+};
 use indicatif::{ProgressBar, ProgressDrawTarget};
 use rusqlite::Connection;
 use std::collections::HashMap;

@@ -6,11 +6,7 @@ use std::path::PathBuf;
 ///
 /// 通过流式迭代器逐条读取，内存占用与文件大小无关。文件级打开失败（不存在/无权限）静默
 /// warn 并跳过该文件；单条记录解析失败同样静默 warn 并跳过，不影响同文件其余记录。
-pub(crate) fn scan_files<F>(
-    log_files: &[PathBuf],
-    on_record: &mut F,
-    stats: &mut ErrorStats,
-)
+pub(crate) fn scan_files<F>(log_files: &[PathBuf], on_record: &mut F, stats: &mut ErrorStats)
 where
     F: FnMut(&dm_database_parser_sqllog::Sqllog),
 {

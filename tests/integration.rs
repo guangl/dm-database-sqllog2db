@@ -1,11 +1,11 @@
 //! Integration tests for CLI handlers and the run pipeline.
 
 use dm_database_sqllog2db::cli::init::{ExporterChoice, handle_init, run_wizard};
-use dm_database_sqllog2db::engine::run as handle_run;
 use dm_database_sqllog2db::cli::validate::handle_validate;
 use dm_database_sqllog2db::config::{
     Config, CsvExporterConfig, ExporterConfig, SqliteExporterConfig, SqllogConfig,
 };
+use dm_database_sqllog2db::engine::run as handle_run;
 use dm_database_sqllog2db::pipeline::filters::types::{ExcludeFilters, IncludeFilters};
 use dm_database_sqllog2db::pipeline::{FiltersFeature, NormalizeConfig, OutputConfig};
 use std::sync::Arc;
