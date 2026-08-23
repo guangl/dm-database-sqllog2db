@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.16.1] - 2026-08-23
+
+### Fixed
+
+- **`cargo install` 编译失败**：`dm-database-parser-sqllog` 2.0.x 后续版本将 `LogParser::iter()` 返回值改为 `Result<LogIterator, ParseError>`，与 1.16.0 源码不兼容；本版本将解析器依赖锁定为 `=2.0.2`，恢复 `cargo install dm-database-sqllog2db` 的正常安装。
+
 ## [1.16.0] - 2026-06-07
 
 ### Added
