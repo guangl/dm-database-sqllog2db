@@ -5,8 +5,8 @@ use clap::{Parser, Subcommand};
 #[command(
     name = "sqllog2db",
     version,
-    about = "Parse DM database SQL logs and export to CSV/SQLite",
-    long_about = "A lightweight and efficient CLI tool for parsing DM database SQL logs (streaming) and exporting to CSV or SQLite.",
+    about = "Parse DM database SQL logs and export to Parquet/CSV/SQLite",
+    long_about = "A lightweight and efficient CLI tool for parsing DM database SQL logs (streaming) and exporting to Parquet, CSV, or SQLite.",
     after_help = "\
 EXAMPLES:
     Export all records from SQL log files:
@@ -44,7 +44,7 @@ pub struct Cli {
 pub enum Commands {
     /// Run the log export task
     #[command(
-        long_about = "Run the log export task. Parses DM database SQL log files and exports them to CSV or SQLite based on the configuration file.",
+        long_about = "Run the log export task. Parses DM database SQL log files and exports them to Parquet, CSV, or SQLite based on the configuration file.",
         after_help = "\
 EXAMPLES:
     Export using a custom configuration path:
@@ -56,7 +56,7 @@ EXAMPLES:
     Override input paths from CLI:
         sqllog2db run -c config.toml --input 'sqllogs/*.log' --input archive.log
 
-Configuration file sections: [csv] / [sqlite] for output, [filter] for filters (include, exclude, indicators, sql)."
+Configuration file sections: [exporter.parquet] / [exporter.csv] / [exporter.sqlite] for output, [filter] for filters (include, exclude, indicators, sql)."
     )]
     Run {
         /// TOML configuration file path
@@ -65,7 +65,7 @@ Configuration file sections: [csv] / [sqlite] for output, [filter] for filters (
             long = "config",
             default_value = "config.toml",
             env = "SQLLOG2DB_CONFIG",
-            help = "TOML configuration file path. See [csv], [sqlite], [filter] sections."
+            help = "TOML configuration file path. See [exporter], [filter], and [sqllog] sections."
         )]
         config: String,
         /// Input log paths. Repeat for multiple entries. Overrides config \[sqllog\].inputs.
@@ -144,7 +144,7 @@ EXAMPLES:
             long = "config",
             default_value = "config.toml",
             env = "SQLLOG2DB_CONFIG",
-            help = "TOML configuration file path. See [csv], [sqlite], [sqllog] sections."
+            help = "TOML configuration file path. Stats uses the [sqllog] and [stats] sections."
         )]
         config: String,
         /// Number of top records to display per table (default: 20)

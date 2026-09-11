@@ -182,7 +182,9 @@ impl Error {
                 ConfigError::InvalidValue { .. } => {
                     "Check the field value in the configuration file."
                 }
-                ConfigError::NoExporters => "Enable at least one exporter: [csv] or [sqlite].",
+                ConfigError::NoExporters => {
+                    "Enable at least one exporter: [parquet], [csv], or [sqlite]."
+                }
             },
             Error::File(e) => match e {
                 FileError::AlreadyExists { .. } => {
@@ -236,7 +238,7 @@ pub enum ConfigError {
         reason: String,
     },
 
-    #[error("At least one exporter must be configured (csv/sqlite)")]
+    #[error("At least one exporter must be configured (parquet/csv/sqlite)")]
     NoExporters,
 }
 

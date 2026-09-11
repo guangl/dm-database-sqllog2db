@@ -1,6 +1,6 @@
 use super::api::Exporter;
 use super::stats::ExportStats;
-use super::{CsvExporter, SqliteExporter};
+use super::{CsvExporter, ParquetExporter, SqliteExporter};
 use crate::error::Result;
 use dm_database_parser_sqllog::Sqllog;
 
@@ -8,6 +8,7 @@ use dm_database_parser_sqllog::Sqllog;
 /// 使编译器能够内联热路径。
 #[derive(Debug)]
 pub(crate) enum ExporterKind {
+    Parquet(ParquetExporter),
     Csv(CsvExporter),
     Sqlite(SqliteExporter),
 }
@@ -15,6 +16,7 @@ pub(crate) enum ExporterKind {
 impl ExporterKind {
     pub(crate) fn kind_name(&self) -> &'static str {
         match self {
+            Self::Parquet(_) => "Parquet",
             Self::Csv(_) => "CSV",
             Self::Sqlite(_) => "SQLite",
         }
@@ -24,12 +26,13 @@ impl ExporterKind {
     pub fn csv_include_performance_metrics(&self) -> bool {
         match self {
             Self::Csv(exporter) => exporter.include_performance_metrics,
-            Self::Sqlite(_) => true,
+            Self::Parquet(_) | Self::Sqlite(_) => true,
         }
     }
 
     pub(crate) fn initialize(&mut self) -> Result<()> {
         match self {
+            Self::Parquet(e) => e.initialize(),
             Self::Csv(e) => e.initialize(),
             Self::Sqlite(e) => e.initialize(),
         }
@@ -43,6 +46,7 @@ impl ExporterKind {
         normalized: Option<&str>,
     ) -> Result<()> {
         match self {
+            Self::Parquet(e) => e.export_one_preparsed(sqllog, include_pm, normalized),
             Self::Csv(e) => e.export_one_preparsed(sqllog, include_pm, normalized),
             Self::Sqlite(e) => e.export_one_preparsed(sqllog, include_pm, normalized),
         }
@@ -50,6 +54,7 @@ impl ExporterKind {
 
     pub(crate) fn finalize(&mut self) -> Result<()> {
         match self {
+            Self::Parquet(e) => e.finalize(),
             Self::Csv(e) => e.finalize(),
             Self::Sqlite(e) => e.finalize(),
         }
@@ -57,6 +62,7 @@ impl ExporterKind {
 
     pub(crate) fn stats_snapshot(&self) -> Option<ExportStats> {
         match self {
+            Self::Parquet(e) => e.stats_snapshot(),
             Self::Csv(e) => e.stats_snapshot(),
             Self::Sqlite(e) => e.stats_snapshot(),
         }

@@ -1,10 +1,8 @@
-//! SQL 统计分析模块（v1.13）：提供 SQL 标准化、聚合与输出。
+//! SQL 统计分析模块：提供 SQL 标准化、聚合与终端展示。
 
 pub mod aggregate;
 pub mod config;
 pub mod normalize;
-pub mod output;
-
 mod runner;
 
 #[cfg(test)]

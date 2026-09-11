@@ -180,9 +180,30 @@ enable = true
 
 ---
 
+## [exporter.parquet]
+
+Parquet 是默认导出格式，适合大数据量归档和分析。导出器按 row group 流式写入，并在缓冲数据约达 64 MiB 时提前刷新，避免长 SQL 导致内存无界增长。
+
+```toml
+[exporter.parquet]
+file = "outputs/sqllog.parquet"
+overwrite = true
+compression = "zstd"
+row_group_rows = 65536
+```
+
+| 字段 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| `file` | String | `"outputs/sqllog.parquet"` | 输出文件路径 |
+| `overwrite` | bool | `true` | 是否覆盖已有文件；为 `false` 时目标必须不存在 |
+| `compression` | String | `"zstd"` | `zstd`、`snappy` 或 `uncompressed` |
+| `row_group_rows` | usize | `65536` | 每个 row group 的最大记录数，必须大于 0 |
+
+---
+
 ## [exporter.csv]
 
-CSV 导出配置。当 CSV 和 SQLite 同时配置时，CSV 优先级更高。
+CSV 导出配置。
 
 ```toml
 [exporter.csv]
@@ -236,7 +257,7 @@ append = false
 
 ## [output]（可选）
 
-字段投影：选择导出哪些列以及列的顺序，对 CSV 和 SQLite 同时生效。省略该段则输出全部 15 个字段的默认顺序。
+字段投影：选择导出哪些列以及列的顺序，对 Parquet、CSV 和 SQLite 同时生效。省略该段则输出全部 15 个字段的默认顺序。
 
 ```toml
 [output]
@@ -256,7 +277,7 @@ fields = ["ts", "username", "sql", "exec_time_ms"]
 
 ### 导出器优先级
 
-每次运行只有一个导出器处于活动状态。优先级：CSV > SQLite。当 `[exporter.csv]` 和 `[exporter.sqlite]` 都配置时，CSV 优先。移除或注释 CSV 节即可使用 SQLite。
+每次运行只有一个导出器处于活动状态。优先级：Parquet > CSV > SQLite。建议一次只保留一个启用的导出器配置节。
 
 ### 处理管道快速路径
 
@@ -276,11 +297,10 @@ sqllog2db 提供五个子命令：
 
 **`sqllog2db run`** — 执行日志导出。`-c` 指定配置文件路径，`-v` 详细模式，`-q` 静默模式。
 
-**`sqllog2db stats`** — 统计分析。流式扫描日志文件，聚合慢 SQL 和高频 SQL。
-- `-c` 指定配置文件路径（复用 `[sqllog]` 输入配置和 `[exporter]` 输出目录）
-- `--top N`（默认 20）：每张表输出 Top N 条记录
-- CSV 模式：在 `[exporter.csv].file` 同级目录输出 `slow_sql.csv` 和 `frequent_sql.csv`，并在终端打印 Top N 表格
-- SQLite 模式：在配置的数据库中写入 `slow_sql` 和 `frequent_sql` 表
+**`sqllog2db stats`** — 统计分析。流式扫描日志文件，聚合慢 SQL 和高频 SQL，并直接在终端打印结果。
+- `-c` 指定配置文件路径（使用 `[sqllog]` 输入配置和 `[stats]` 统计配置）
+- `--top N`（默认 20）：每类结果显示 Top N 条记录
+- 不生成 Parquet/CSV 文件，也不写入 SQLite；`[exporter]` 配置对该命令不生效
 
 **`sqllog2db watch`** — 监听模式。持续监视 `[sqllog].inputs` 配置的目录，出现新的 `.log` 文件时自动触发处理。`-c` 指定配置文件路径，`-q` 静默模式（适合 cron/后台运行），按 Ctrl+C 停止。
 

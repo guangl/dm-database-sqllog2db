@@ -1,6 +1,6 @@
 # 架构说明
 
-sqllog2db 是一个解析达梦数据库 SQL 日志并导出为 CSV 或 SQLite 的命令行工具。本文档描述项目的整体架构、数据流、模块划分和关键抽象。面向希望深入理解内部设计的开发者和贡献者。
+sqllog2db 是一个解析达梦数据库 SQL 日志并导出为 Parquet、CSV 或 SQLite 的命令行工具。本文档描述项目的整体架构、数据流、模块划分和关键抽象。面向希望深入理解内部设计的开发者和贡献者。
 
 ## 数据流
 
@@ -16,7 +16,7 @@ SQL 日志文件 (.log)
     │ └─ FilterProcessor ────────── 过滤器处理
     ↓ ExporterManager — 路由到活跃导出器（src/exporter/）
     ▼
-CSV 输出（src/exporter/csv/mod.rs）或 SQLite 输出（src/exporter/sqlite/mod.rs）
+Parquet 输出（src/exporter/parquet/mod.rs）、CSV 输出（src/exporter/csv/mod.rs）或 SQLite 输出（src/exporter/sqlite/mod.rs）
 ```
 
 **设计要点：**
@@ -46,7 +46,7 @@ CSV 输出（src/exporter/csv/mod.rs）或 SQLite 输出（src/exporter/sqlite/m
 
 **结构：**
 - `run/mod.rs` — `handle_run()`：主编排逻辑（加载配置 → 构建管道 → 预扫描 → 流式导出）
-- `stats/mod.rs` — `handle_stats()`：委托给 `src/stats/run_stats()`，流式扫描 → 聚合 → 写出
+- `stats/mod.rs` — `handle_stats()`：委托给 `src/stats/run_stats()`，流式扫描 → 聚合 → 终端展示
 - `init.rs` — 生成默认配置
 - `validate.rs` — 验证配置文件（通过时静默，失败时输出 `[FAIL]` 行）
 
@@ -66,17 +66,18 @@ CSV 输出（src/exporter/csv/mod.rs）或 SQLite 输出（src/exporter/sqlite/m
 
 ### 导出层 — `src/exporter/`
 
-**职责：** 将已处理的记录写入目标后端（CSV 或 SQLite）。
+**职责：** 将已处理的记录写入目标后端（Parquet、CSV 或 SQLite）。
 
 **关键抽象：**
 - `Exporter` trait：导出器接口，三阶段生命周期 `initialize()` → `export_one_preparsed()` → `finalize()`
 - `ExporterKind` 枚举：静态分派（`match`）而非动态派发（`Box<dyn Trait>`），利于热路径内联
 
 **实现：**
+- `ParquetExporter`：Arrow 列式批次 + ZSTD/Snappy 压缩，行数和字节数双重限制 row group 内存
 - `CsvExporter`：2 MB `BufWriter` + `itoa` 零分配整数格式化，~520 万条/秒
 - `SqliteExporter`：批量 INSERT + PRAGMA 优化（synchronous=OFF、mmap_size、cache_size），~110 万条/秒
 
-**优先级：** CSV > SQLite。同时配置时仅 CSV 生效。
+**优先级：** Parquet > CSV > SQLite。同时配置时仅最高优先级的导出器生效。
 
 ### 支撑模块
 
@@ -84,7 +85,7 @@ CSV 输出（src/exporter/csv/mod.rs）或 SQLite 输出（src/exporter/sqlite/m
 |------|------|------|
 | 错误处理 | `src/error.rs` | 类型化错误枚举 `Error`、`pub type Result<T>` |
 | 解析器 | `src/parser.rs` | 日志文件发现、排序、迭代 |
-| 统计分析 | `src/stats/` | SQL 标准化（`normalize.rs`）、聚合（`aggregate.rs`）、输出（`output.rs`） |
+| 统计分析 | `src/stats/` | SQL 标准化（`normalize.rs`）、聚合（`aggregate.rs`）与终端展示 |
 | 日志 | `src/logging.rs` | 应用日志和错误日志 |
 | 预检 | `src/preflight.rs` | 运行前环境检查 |
 | 工具库 | `src/lib.rs` | 模块注册和公共导出 |
@@ -128,7 +129,7 @@ Release 构建采用激进优化：
 - `panic = "abort"`：移除恐慌展开代码
 - `strip = "symbols"`：剥离调试符号
 
-最终二进制文件约 5 MB，无外部运行时依赖。
+最终二进制文件无外部运行时依赖。
 
 ### 基准性能
 

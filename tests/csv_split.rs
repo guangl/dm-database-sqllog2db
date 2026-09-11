@@ -38,6 +38,7 @@ fn split_config(log_dir: &Path, csv_file: &Path, max_rows: usize) -> Config {
             path_deprecated: None,
         },
         exporter: ExporterConfig {
+            parquet: None,
             csv: Some(CsvExporterConfig {
                 file: csv_file.to_str().unwrap().to_string(),
                 overwrite: true,

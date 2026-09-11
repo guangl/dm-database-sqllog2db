@@ -12,8 +12,8 @@ use std::path::Path;
 /// 目标文件已存在且未指定 `--force`、父目录创建失败或文件写入失败时返回错误。
 pub fn handle_init(output_path: &str, force: bool) -> Result<()> {
     let path = Path::new(output_path);
-    let content = CONFIG_TEMPLATE_CSV;
-    write_config_file(path, content, force)?;
+    let content = build_parquet_template();
+    write_config_file(path, &content, force)?;
     info!("Next steps:");
     info!("  1. Edit configuration file: {output_path}");
     info!("  2. Validate configuration: sqllog2db validate -c {output_path}");
@@ -63,6 +63,7 @@ fn write_config_file(path: &Path, content: &str, force: bool) -> Result<()> {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ExporterChoice {
+    Parquet,
     Csv,
     Sqlite,
 }
@@ -71,6 +72,7 @@ pub enum ExporterChoice {
 pub struct WizardAnswers {
     pub inputs: String,
     pub exporter: ExporterChoice,
+    pub parquet_file: Option<String>,
     pub csv_file: Option<String>,
     pub sqlite_db: Option<String>,
     pub sqlite_table: Option<String>,
@@ -99,7 +101,7 @@ fn ask_exporter(
     writer: &mut impl Write,
     buf: &mut String,
 ) -> Result<ExporterChoice> {
-    write!(writer, "导出格式 (csv/sqlite) [default: csv]: ")?;
+    write!(writer, "导出格式 (parquet/csv/sqlite) [default: parquet]: ")?;
     writer.flush()?;
     let mut last_input = String::new();
     for _ in 0..3 {
@@ -107,10 +109,14 @@ fn ask_exporter(
         reader.read_line(buf)?;
         buf.trim().clone_into(&mut last_input);
         match last_input.as_str() {
-            "" | "csv" => return Ok(ExporterChoice::Csv),
+            "" | "parquet" => return Ok(ExporterChoice::Parquet),
+            "csv" => return Ok(ExporterChoice::Csv),
             "sqlite" => return Ok(ExporterChoice::Sqlite),
             _ => {
-                write!(writer, "无效格式\"{last_input}\"，请输入 csv 或 sqlite: ")?;
+                write!(
+                    writer,
+                    "无效格式\"{last_input}\"，请输入 parquet、csv 或 sqlite: "
+                )?;
                 writer.flush()?;
             }
         }
@@ -118,8 +124,31 @@ fn ask_exporter(
     Err(Error::Config(ConfigError::InvalidValue {
         field: "exporter".to_owned(),
         value: last_input,
-        reason: "must be 'csv' or 'sqlite'".to_owned(),
+        reason: "must be 'parquet', 'csv', or 'sqlite'".to_owned(),
     }))
+}
+
+fn build_parquet_answers(
+    reader: &mut impl BufRead,
+    writer: &mut impl Write,
+    inputs: String,
+    buf: &mut String,
+) -> Result<WizardAnswers> {
+    let parquet_file = prompt_line(
+        reader,
+        writer,
+        "Parquet 输出文件路径 [default: outputs/sqllog.parquet]: ",
+        "outputs/sqllog.parquet",
+        buf,
+    )?;
+    Ok(WizardAnswers {
+        inputs,
+        exporter: ExporterChoice::Parquet,
+        parquet_file: Some(parquet_file),
+        csv_file: None,
+        sqlite_db: None,
+        sqlite_table: None,
+    })
 }
 
 fn build_csv_answers(
@@ -138,6 +167,7 @@ fn build_csv_answers(
     Ok(WizardAnswers {
         inputs,
         exporter: ExporterChoice::Csv,
+        parquet_file: None,
         csv_file: Some(csv_file),
         sqlite_db: None,
         sqlite_table: None,
@@ -167,6 +197,7 @@ fn build_sqlite_answers(
     Ok(WizardAnswers {
         inputs,
         exporter: ExporterChoice::Sqlite,
+        parquet_file: None,
         csv_file: None,
         sqlite_db: Some(sqlite_db),
         sqlite_table: Some(sqlite_table),
@@ -189,9 +220,59 @@ pub fn run_wizard(reader: &mut impl BufRead, writer: &mut impl Write) -> Result<
     )?;
     let exporter = ask_exporter(reader, writer, &mut buf)?;
     match exporter {
+        ExporterChoice::Parquet => build_parquet_answers(reader, writer, inputs, &mut buf),
         ExporterChoice::Csv => build_csv_answers(reader, writer, inputs, &mut buf),
         ExporterChoice::Sqlite => build_sqlite_answers(reader, writer, inputs, &mut buf),
     }
+}
+
+const EXPORTER_MARKER: &str = "# ===================== 导出器配置 =====================";
+
+fn build_parquet_template() -> String {
+    let prefix = CONFIG_TEMPLATE_CSV
+        .split_once(EXPORTER_MARKER)
+        .map_or(CONFIG_TEMPLATE_CSV, |(prefix, _)| prefix);
+    format!(
+        "{prefix}{EXPORTER_MARKER}\n\
+# 同一时刻只能启用一个导出器。优先级：parquet > csv > sqlite\n\n\
+# 方案 1：Parquet 导出（默认）\n\
+[exporter.parquet]\n\
+file = \"outputs/sqllog.parquet\"\n\
+overwrite = true\n\
+# zstd | snappy | uncompressed\n\
+compression = \"zstd\"\n\
+# 每个 row group 的最大记录数\n\
+row_group_rows = 65536\n\n\
+# 方案 2：CSV 导出\n\
+# [exporter.csv]\n\
+# CSV 输出文件路径\n\
+# file = \"outputs/sqllog.csv\"\n\
+# 写入前删除并重建文件（true/false）\n\
+# overwrite = true\n\
+# 追加到已有 CSV 文件而非覆盖（true/false）\n\
+# append = false\n\n\
+# 方案 3：SQLite 数据库导出\n\
+# [exporter.sqlite]\n\
+# SQLite 数据库文件路径\n\
+# database_url = \"export/sqllog2db.db\"\n\
+# 写入记录的表名（仅限 ASCII 标识符：[A-Za-z_][A-Za-z0-9_]*）\n\
+# table_name = \"sqllog_records\"\n\
+# 写入前删除并重建该表（true/false）\n\
+# overwrite = true\n\
+# 追加行到已有表而非覆盖（true/false）\n\
+# append = false\n"
+    )
+}
+
+fn apply_parquet_substitutions(content: &str, answers: &WizardAnswers) -> String {
+    let file = answers
+        .parquet_file
+        .as_deref()
+        .unwrap_or("outputs/sqllog.parquet");
+    content.replace(
+        r#"file = "outputs/sqllog.parquet""#,
+        &format!(r#"file = "{}""#, toml_escape(file)),
+    )
 }
 
 /// Escape a user string for embedding inside a TOML basic string (double-quoted).
@@ -234,6 +315,15 @@ fn apply_sqlite_substitutions(content: &str, answers: &WizardAnswers) -> String 
 fn apply_wizard_answers_to_template(answers: &WizardAnswers) -> String {
     let escaped_inputs = toml_escape(&answers.inputs);
     let template = match answers.exporter {
+        ExporterChoice::Parquet => {
+            return apply_parquet_substitutions(
+                &build_parquet_template().replace(
+                    r#"inputs = ["sqllogs"]"#,
+                    &format!(r#"inputs = ["{escaped_inputs}"]"#),
+                ),
+                answers,
+            );
+        }
         ExporterChoice::Csv => CONFIG_TEMPLATE_CSV,
         ExporterChoice::Sqlite => CONFIG_TEMPLATE_SQLITE,
     };
@@ -242,6 +332,7 @@ fn apply_wizard_answers_to_template(answers: &WizardAnswers) -> String {
         &format!(r#"inputs = ["{escaped_inputs}"]"#),
     );
     match answers.exporter {
+        ExporterChoice::Parquet => unreachable!("handled above"),
         ExporterChoice::Csv => apply_csv_substitutions(&content, answers),
         ExporterChoice::Sqlite => apply_sqlite_substitutions(&content, answers),
     }
@@ -287,8 +378,12 @@ mod tests {
         let mut writer = Vec::<u8>::new();
         let answers = run_wizard(&mut reader, &mut writer).unwrap();
         assert_eq!(answers.inputs, "sqllogs");
-        assert!(matches!(answers.exporter, ExporterChoice::Csv));
-        assert_eq!(answers.csv_file.as_deref(), Some("outputs/sqllog.csv"));
+        assert!(matches!(answers.exporter, ExporterChoice::Parquet));
+        assert_eq!(
+            answers.parquet_file.as_deref(),
+            Some("outputs/sqllog.parquet")
+        );
+        assert!(answers.csv_file.is_none());
         assert!(answers.sqlite_db.is_none());
         assert!(answers.sqlite_table.is_none());
     }
@@ -353,12 +448,12 @@ mod tests {
             "prompt should contain 'SQL log 输入目录'"
         );
         assert!(
-            output.contains("导出格式 (csv/sqlite)"),
-            "prompt should contain '导出格式 (csv/sqlite)'"
+            output.contains("导出格式 (parquet/csv/sqlite)"),
+            "prompt should contain all exporter choices"
         );
         assert!(
-            output.contains("CSV 输出文件路径"),
-            "prompt should contain 'CSV 输出文件路径'"
+            output.contains("Parquet 输出文件路径"),
+            "default wizard should prompt for a Parquet path"
         );
     }
 
@@ -367,6 +462,7 @@ mod tests {
         let answers = WizardAnswers {
             inputs: "sqllogs".to_owned(),
             exporter: ExporterChoice::Csv,
+            parquet_file: None,
             csv_file: Some("outputs/sqllog.csv".to_owned()),
             sqlite_db: None,
             sqlite_table: None,
@@ -383,6 +479,7 @@ mod tests {
         let answers = WizardAnswers {
             inputs: "my/dir".to_owned(),
             exporter: ExporterChoice::Csv,
+            parquet_file: None,
             csv_file: Some("out/r.csv".to_owned()),
             sqlite_db: None,
             sqlite_table: None,
@@ -411,6 +508,7 @@ mod tests {
         let answers = WizardAnswers {
             inputs: "x".to_owned(),
             exporter: ExporterChoice::Sqlite,
+            parquet_file: None,
             sqlite_db: Some("d.db".to_owned()),
             sqlite_table: Some("t".to_owned()),
             csv_file: None,
@@ -447,6 +545,7 @@ mod tests {
         let answers_csv = WizardAnswers {
             inputs: "sqllogs".to_owned(),
             exporter: ExporterChoice::Csv,
+            parquet_file: None,
             csv_file: Some("outputs/sqllog.csv".to_owned()),
             sqlite_db: None,
             sqlite_table: None,
@@ -460,6 +559,7 @@ mod tests {
         let answers_sqlite = WizardAnswers {
             inputs: "sqllogs".to_owned(),
             exporter: ExporterChoice::Sqlite,
+            parquet_file: None,
             sqlite_db: Some("export/sqllog2db.db".to_owned()),
             sqlite_table: Some("sqllog_records".to_owned()),
             csv_file: None,
@@ -476,6 +576,7 @@ mod tests {
         let answers = WizardAnswers {
             inputs: "sqllogs".to_owned(),
             exporter: ExporterChoice::Csv,
+            parquet_file: None,
             csv_file: Some("outputs/sqllog.csv".to_owned()),
             sqlite_db: None,
             sqlite_table: None,
@@ -492,6 +593,7 @@ mod tests {
         let answers = WizardAnswers {
             inputs: "sqllogs".to_owned(),
             exporter: ExporterChoice::Sqlite,
+            parquet_file: None,
             sqlite_db: Some("export/sqllog2db.db".to_owned()),
             sqlite_table: Some("sqllog_records".to_owned()),
             csv_file: None,

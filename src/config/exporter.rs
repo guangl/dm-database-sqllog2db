@@ -3,13 +3,14 @@ use serde::Deserialize;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct ExporterConfig {
+    pub parquet: Option<ParquetExporterConfig>,
     pub csv: Option<CsvExporterConfig>,
     pub sqlite: Option<SqliteExporterConfig>,
 }
 
 impl ExporterConfig {
     pub(super) fn has_any(&self) -> bool {
-        self.csv.is_some() || self.sqlite.is_some()
+        self.parquet.is_some() || self.csv.is_some() || self.sqlite.is_some()
     }
 
     /// 校验导出器配置组合。
@@ -20,6 +21,9 @@ impl ExporterConfig {
     pub fn validate(&self) -> Result<()> {
         if !self.has_any() {
             return Err(Error::Config(ConfigError::NoExporters));
+        }
+        if let Some(parquet) = &self.parquet {
+            parquet.validate()?;
         }
         if let Some(csv) = &self.csv {
             csv.validate()?;
@@ -34,9 +38,70 @@ impl ExporterConfig {
 impl Default for ExporterConfig {
     fn default() -> Self {
         Self {
-            csv: Some(CsvExporterConfig::default()),
+            parquet: Some(ParquetExporterConfig::default()),
+            csv: None,
             sqlite: None,
         }
+    }
+}
+
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum ParquetCompression {
+    #[default]
+    Zstd,
+    Snappy,
+    Uncompressed,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct ParquetExporterConfig {
+    pub file: String,
+    #[serde(default = "default_true")]
+    pub overwrite: bool,
+    #[serde(default)]
+    pub compression: ParquetCompression,
+    #[serde(default = "default_row_group_rows")]
+    pub row_group_rows: usize,
+}
+
+fn default_row_group_rows() -> usize {
+    65_536
+}
+
+impl Default for ParquetExporterConfig {
+    fn default() -> Self {
+        Self {
+            file: "outputs/sqllog.parquet".to_string(),
+            overwrite: true,
+            compression: ParquetCompression::Zstd,
+            row_group_rows: default_row_group_rows(),
+        }
+    }
+}
+
+impl ParquetExporterConfig {
+    /// 校验 Parquet 输出路径和 row group 大小。
+    ///
+    /// # Errors
+    ///
+    /// 输出路径为空，或 `row_group_rows` 为 0 时返回配置错误。
+    pub fn validate(&self) -> Result<()> {
+        if self.file.trim().is_empty() {
+            return Err(Error::Config(ConfigError::InvalidValue {
+                field: "exporter.parquet.file".to_string(),
+                value: self.file.clone(),
+                reason: "Parquet output file path cannot be empty".to_string(),
+            }));
+        }
+        if self.row_group_rows == 0 {
+            return Err(Error::Config(ConfigError::InvalidValue {
+                field: "exporter.parquet.row_group_rows".to_string(),
+                value: "0".to_string(),
+                reason: "row_group_rows must be greater than 0".to_string(),
+            }));
+        }
+        Ok(())
     }
 }
 
@@ -220,6 +285,20 @@ fn default_true() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_parquet_defaults_and_validation() {
+        let cfg = ParquetExporterConfig::default();
+        assert_eq!(cfg.compression, ParquetCompression::Zstd);
+        assert_eq!(cfg.row_group_rows, 65_536);
+        assert!(cfg.validate().is_ok());
+
+        let invalid = ParquetExporterConfig {
+            row_group_rows: 0,
+            ..cfg
+        };
+        assert!(invalid.validate().is_err());
+    }
 
     fn base_cfg() -> SqliteExporterConfig {
         SqliteExporterConfig {

@@ -16,7 +16,10 @@ mod tests;
 // 因此在非测试编译上下文中可能触发 unused_imports 警告。
 pub use crate::stats::config::StatsConfig;
 pub use error_log::ErrorLogConfig;
-pub use exporter::{CsvExporterConfig, ExporterConfig, SqliteExporterConfig};
+pub use exporter::{
+    CsvExporterConfig, ExporterConfig, ParquetCompression, ParquetExporterConfig,
+    SqliteExporterConfig,
+};
 pub use logging::{LOG_LEVELS, LoggingConfig};
 pub use root::Config;
 pub use sqllog::SqllogConfig;

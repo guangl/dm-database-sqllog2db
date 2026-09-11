@@ -49,6 +49,7 @@ fn build_sqlite_config(log_path: &Path, db_path: &Path) -> Config {
             path_deprecated: None,
         },
         exporter: ExporterConfig {
+            parquet: None,
             csv: None,
             sqlite: Some(SqliteExporterConfig {
                 database_url: db_path.to_string_lossy().into_owned(),
@@ -296,6 +297,7 @@ fn build_csv_config(log_path: &std::path::Path, csv_path: &std::path::Path) -> C
             path_deprecated: None,
         },
         exporter: ExporterConfig {
+            parquet: None,
             csv: Some(CsvExporterConfig {
                 file: csv_path.to_string_lossy().into_owned(),
                 overwrite: true,

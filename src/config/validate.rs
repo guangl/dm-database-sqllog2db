@@ -17,6 +17,19 @@ impl Config {
         Ok(())
     }
 
+    /// 校验统计命令实际使用的配置，不要求配置任何导出器。
+    ///
+    /// # Errors
+    ///
+    /// logging、sqllog、stats 或 error 配置无效时返回错误。
+    pub fn validate_for_stats(&self) -> Result<()> {
+        self.logging.validate()?;
+        self.sqllog.validate()?;
+        self.validate_stats_time_fields()?;
+        self.validate_error_log()?;
+        Ok(())
+    }
+
     fn validate_error_log(&self) -> Result<()> {
         if let Some(err_cfg) = &self.error
             && err_cfg.file.trim().is_empty()
@@ -67,6 +80,16 @@ mod tests {
     #[test]
     fn test_validate_default_config_passes() {
         assert!(default_config().validate().is_ok());
+    }
+
+    #[test]
+    fn test_validate_for_stats_does_not_require_exporter() {
+        let mut cfg = default_config();
+        cfg.exporter.parquet = None;
+        cfg.exporter.csv = None;
+        cfg.exporter.sqlite = None;
+        assert!(cfg.validate().is_err());
+        assert!(cfg.validate_for_stats().is_ok());
     }
 
     #[test]
@@ -139,6 +162,7 @@ mod tests {
     #[test]
     fn test_validate_no_exporters() {
         let mut cfg = default_config();
+        cfg.exporter.parquet = None;
         cfg.exporter.csv = None;
         assert!(cfg.validate().is_err());
     }
