@@ -77,14 +77,14 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Check minimum supported Rust version
-        uses: dtolnay/rust-toolchain@1.88.0
+        uses: dtolnay/rust-toolchain@1.95.0
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: msrv
 
-      - name: Compile all targets with Rust 1.88
+      - name: Compile all targets with Rust 1.95
         run: cargo check --locked --all-targets
 
       - name: Install stable Rust for package verification

@@ -105,7 +105,7 @@ impl SqliteExporter {
 
     pub(super) fn batch_commit_if_needed(&mut self) -> Result<()> {
         self.row_count += 1;
-        if self.row_count % self.batch_size == 0 {
+        if self.row_count.is_multiple_of(self.batch_size) {
             let conn = self.conn_ref()?;
             conn.execute_batch("COMMIT; BEGIN")
                 .map_err(|e| Self::db_err(format!("batch commit failed: {e}")))?;
@@ -148,10 +148,10 @@ impl SqliteExporter {
     }
 
     pub(super) fn handle_delete_clear_result(result: rusqlite::Result<usize>, table_name: &str) {
-        if let Err(rusqlite::Error::SqliteFailure(_, Some(ref msg))) = result {
-            if msg.contains("no such table") {
-                return;
-            }
+        if let Err(rusqlite::Error::SqliteFailure(_, Some(ref msg))) = result
+            && msg.contains("no such table")
+        {
+            return;
         }
         if let Err(e) = result {
             log::warn!("sqlite clear failed for table {table_name}: {e}");

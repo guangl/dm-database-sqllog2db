@@ -4,7 +4,7 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/guangl/sqllog2db/ci.yaml?style=flat-square&logo=github-actions&logoColor=white&label=ci)](https://github.com/guangl/sqllog2db/actions/workflows/ci.yaml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](https://opensource.org/licenses/Apache-2.0)
 [![Release](https://img.shields.io/github/v/release/guangl/sqllog2db?style=flat-square&logo=github&logoColor=white&label=release)](https://github.com/guangl/sqllog2db/releases)
-[![Rust 1.88+](https://img.shields.io/badge/rust-1.88%2B-orange?style=flat-square&logo=rust&logoColor=white)](https://www.rust-lang.org/)
+[![Rust 1.95+](https://img.shields.io/badge/rust-1.95%2B-orange?style=flat-square&logo=rust&logoColor=white)](https://www.rust-lang.org/)
 
 **达梦数据库 SQL 日志高性能解析工具** — 流式处理百万级记录，常量内存占用，支持 CSV/SQLite 导出。
 
@@ -24,7 +24,7 @@ sqllog2db run -c config.toml
 sqllog2db stats -c config.toml
 ```
 
-需要 Rust 1.88+。二进制文件约 5 MB。
+需要 Rust 1.95+。二进制文件约 5 MB。
 
 ---
 

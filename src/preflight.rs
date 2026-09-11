@@ -58,15 +58,15 @@ fn check_path_writable(file_path: &str, result: &mut PreflightResult) {
     let path = Path::new(file_path);
 
     // 若父目录不存在，先尝试创建；创建失败则直接报错，无需继续检查文件。
-    if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
-        if !parent.exists() {
-            if std::fs::create_dir_all(parent).is_err() {
-                result
-                    .errors
-                    .push(format!("无法创建输出目录: {}", parent.display()));
-            }
-            return;
+    if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty())
+        && !parent.exists()
+    {
+        if std::fs::create_dir_all(parent).is_err() {
+            result
+                .errors
+                .push(format!("无法创建输出目录: {}", parent.display()));
         }
+        return;
     }
 
     // 用单次 open（create + write）镜像导出器实际行为，消除 exists() → open() 的 TOCTOU 竞争。

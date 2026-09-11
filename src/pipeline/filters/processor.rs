@@ -5,10 +5,11 @@ use std::collections::HashSet;
 
 pub(crate) fn build_pipeline(cfg: &Config) -> Pipeline {
     let mut pipeline = Pipeline::new();
-    if let Some(f) = cfg.filter.as_ref() {
-        if f.enable && (f.include.has_filters() || f.exclude.has_filters()) {
-            pipeline.add(Box::new(FilterProcessor::from_feature(f)));
-        }
+    if let Some(f) = cfg.filter.as_ref()
+        && f.enable
+        && (f.include.has_filters() || f.exclude.has_filters())
+    {
+        pipeline.add(Box::new(FilterProcessor::from_feature(f)));
     }
     pipeline
 }

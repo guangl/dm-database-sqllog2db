@@ -96,10 +96,10 @@ pub(super) fn should_trigger(
     // 清理过期条目（O(n)，n 极小）
     map.retain(|_, prev| now.duration_since(*prev) <= window * 4);
 
-    if let Some(prev) = map.get(path) {
-        if now.duration_since(*prev) < window {
-            return false;
-        }
+    if let Some(prev) = map.get(path)
+        && now.duration_since(*prev) < window
+    {
+        return false;
     }
     map.insert(path.to_path_buf(), now);
     true

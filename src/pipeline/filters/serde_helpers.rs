@@ -25,12 +25,12 @@ where
     D: Deserializer<'de>,
 {
     let v: Option<f32> = Option::deserialize(deserializer)?;
-    if let Some(ms) = v {
-        if !ms.is_finite() || ms < 0.0 {
-            return Err(serde::de::Error::custom(format!(
-                "min_runtime_ms must be a non-negative finite number, got {ms}"
-            )));
-        }
+    if let Some(ms) = v
+        && (!ms.is_finite() || ms < 0.0)
+    {
+        return Err(serde::de::Error::custom(format!(
+            "min_runtime_ms must be a non-negative finite number, got {ms}"
+        )));
     }
     Ok(v)
 }

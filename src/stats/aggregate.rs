@@ -141,11 +141,11 @@ impl StatsAccumulator {
             self.slow_heap.push(Reverse(entry));
             return;
         }
-        if let Some(Reverse(heap_top)) = self.slow_heap.peek() {
-            if entry.elapsed_ms.total_cmp(&heap_top.elapsed_ms) == Ordering::Greater {
-                self.slow_heap.pop();
-                self.slow_heap.push(Reverse(entry));
-            }
+        if let Some(Reverse(heap_top)) = self.slow_heap.peek()
+            && entry.elapsed_ms.total_cmp(&heap_top.elapsed_ms) == Ordering::Greater
+        {
+            self.slow_heap.pop();
+            self.slow_heap.push(Reverse(entry));
         }
     }
 
