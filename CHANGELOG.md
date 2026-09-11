@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.21.0] - 2026-09-11
+
+### Added
+
+- **CSV 自动分片**：新增 `max_rows_per_file` 配置，可按最大行数将 CSV 输出拆分为多个文件，同时支持顺序和并行导出路径。
+- **stats 终端输出**：未配置 CSV 或 SQLite 输出时，`stats` 可直接在终端展示慢 SQL 与高频 SQL 结果。
+
+### Changed
+
+- **CLI 架构精简**：重组配置、执行引擎、监听和导出模块，缩减 CLI 层职责，保持对外行为不变。
+- **依赖更新**：升级 `clap` 4.6.6、`tokio` 1.53.1、`toml` 1.1.4、`rusqlite` 0.40.2、`serde` 1.0.229、`thiserror` 2.0.19、`env_logger` 0.11.11、`indicatif` 0.18.6、`memchr` 2.8.3 和 `glob` 0.3.4。
+
+### Fixed
+
+- **statement 过滤语义**：`statements` 现在正确按 SQL 日志标签（如 `SEL` / `INS` / `ORA`）匹配。
+- **并行 CSV 分片**：并行路径现在正确遵守 `max_rows_per_file`，并避免在数据行数恰好整除分片上限时产生空的尾文件。
+
+### CI/CD
+
+- **发布质量门禁**：新增覆盖率、最低 Rust 1.95、发布包、内存峰值和导出完整性检查；标签发布会对实际候选二进制文件执行内存门禁。
+
 ## [1.20.1] - 2026-06-24
 
 ### Changed

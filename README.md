@@ -187,6 +187,13 @@ overwrite = true
 
 ## 版本亮点
 
+### v1.21.0 — CSV 分片与发布质量门禁（2026-09-11）
+
+- **CSV 自动分片**：通过 `max_rows_per_file` 限制单个输出文件行数，顺序与并行路径行为一致
+- **stats 终端输出**：无需配置导出器即可查看慢 SQL 和高频 SQL
+- **过滤修复**：`statements` 按日志标签正确匹配
+- **质量门禁**：发布前校验覆盖率、MSRV、发布包、内存峰值和导出完整性
+
 ### v1.20.0 — 性能全面提升（2026-06-11）
 
 - **SQLite batch INSERT**：multi-row `INSERT INTO t VALUES (...),(...),...`，缓冲 64 条一次 flush，benchmark 量化提升

@@ -1,6 +1,6 @@
 [package]
 name = "dm-database-sqllog2db"
-version = "1.20.1"
+version = "1.21.0"
 edition = "2024"
 rust-version = "1.95"
 authors = ["guangl <guangl@example.com>"]
@@ -63,8 +63,9 @@ cargo = { level = "warn", priority = -1 }
 # 唯一保留的 allow：multiple_crate_versions 检查的是依赖图（外部 crate），不是本仓库代码。
 # 剩余冲突全部在依赖自身子树内，无法从本仓库 Cargo.toml 修复：
 #   - hashbrown 0.16/0.17：rusqlite 内部（sqlite-wasm-rs + hashlink）
+#   - syn 2/3：过渡期宏依赖（tokio/wasm-bindgen/zerocopy + clap/serde/thiserror）
 #   - windows-sys 0.60/0.61：notify 落后于其余生态
-#   - bitflags 1.x/2.x：rusqlite 的 sqlite-wasm-rs 在 wasm/WASI target 的子树
+#   - wit-bindgen 0.46/0.51：tempfile -> getrandom 的 WASI 目标子树
 # 待上游收敛后即可移除本行。cargo 组其余 lint 仍生效。
 multiple_crate_versions = "allow"
 
