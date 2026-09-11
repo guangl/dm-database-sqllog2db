@@ -45,6 +45,10 @@ fn check_log_path(path_str: &str, result: &mut PreflightResult) {
 }
 
 fn check_output_writable(cfg: &Config, result: &mut PreflightResult) {
+    if let Some(parquet) = &cfg.exporter.parquet {
+        check_path_writable(&parquet.file, result);
+        return;
+    }
     if let Some(csv) = &cfg.exporter.csv {
         check_path_writable(&csv.file, result);
         return;
@@ -216,6 +220,7 @@ mod tests {
         let out_file = dir.path().join("out.csv");
         let mut cfg = config_with_log_dir(dir.path().to_str().unwrap());
         cfg.exporter = ExporterConfig {
+            parquet: None,
             csv: Some(CsvExporterConfig {
                 file: out_file.to_str().unwrap().to_string(),
                 overwrite: false,
@@ -236,6 +241,7 @@ mod tests {
         std::fs::write(&out_file, "").unwrap(); // pre-create file
         let mut cfg = config_with_log_dir(dir.path().to_str().unwrap());
         cfg.exporter = ExporterConfig {
+            parquet: None,
             csv: Some(CsvExporterConfig {
                 file: out_file.to_str().unwrap().to_string(),
                 overwrite: false,

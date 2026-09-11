@@ -114,6 +114,7 @@ fn test_from_config_sqlite_path() {
     use crate::config::{Config, ExporterConfig, SqllogConfig};
     let cfg = Config {
         exporter: ExporterConfig {
+            parquet: None,
             csv: None,
             sqlite: Some(SqliteExporterCfg {
                 database_url: "/tmp/test_mod.db".to_string(),
@@ -139,6 +140,7 @@ fn test_from_config_no_exporters_error() {
     use crate::config::{Config, ExporterConfig, SqllogConfig};
     let cfg = Config {
         exporter: ExporterConfig {
+            parquet: None,
             csv: None,
             sqlite: None,
         },

@@ -20,7 +20,7 @@ pub struct FrequentSqlRow {
     pub max_elapsed_ms: i64,
 }
 
-/// 慢 SQL 堆条目（内部使用，`f32` 保留精度，写出时用 `f32_ms_to_i64` 转换）
+/// 慢 SQL 堆条目（内部使用，`f32` 保留精度，展示前用 `f32_ms_to_i64` 转换）
 #[derive(Debug)]
 struct SlowSqlEntry {
     sql_text: String,

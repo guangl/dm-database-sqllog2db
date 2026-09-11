@@ -4,7 +4,7 @@ version = "1.21.0"
 edition = "2024"
 rust-version = "1.95"
 authors = ["guangl <guangl@example.com>"]
-description = "高性能 CLI 工具：流式解析达梦数据库 SQL 日志并导出到 CSV 或 SQLite"
+description = "高性能 CLI 工具：流式解析达梦数据库 SQL 日志并导出到 Parquet、CSV 或 SQLite"
 documentation = "https://guangl.github.io/sqllog2db/"
 homepage = "https://github.com/guangl/sqllog2db"
 repository = "https://github.com/guangl/sqllog2db"
@@ -49,6 +49,9 @@ indicatif = "0.18"
 rayon = "1.12"
 memchr = "2"
 rusqlite = { version = "0.40.1", features = ["bundled"] }
+arrow-array = "59.3.0"
+arrow-schema = "59.3.0"
+parquet = { version = "59.3.0", default-features = false, features = ["arrow", "zstd", "snap"] }
 tempfile = "3.27.0"
 
 

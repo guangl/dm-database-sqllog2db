@@ -25,7 +25,7 @@ cargo run -- run -c config.toml
 
 ## Architecture
 
-**sqllog2db** parses DaMeng (达梦) database SQL log files and exports them to CSV or SQLite. It streams log records through an optional processing pipeline and writes to a single configured exporter.
+**sqllog2db** parses DaMeng (达梦) database SQL log files and exports them to Parquet, CSV, or SQLite. It streams log records through an optional processing pipeline and writes to a single configured exporter.
 
 ### Data Flow
 
@@ -35,7 +35,7 @@ Input .log files (sqllogs/)
     ↓ dm-database-parser-sqllog  — parses each line into Sqllog records
     ↓ Pipeline            — optional filters and normalization (src/pipeline/)
     ↓ ExporterManager     — routes to active exporter (src/exporter/)
-    ↓ Output (CSV / SQLite)
+    ↓ Output (Parquet / CSV / SQLite)
 ```
 
 ### Key Modules
@@ -47,7 +47,7 @@ Input .log files (sqllogs/)
 - **`engine/prepare.rs`** — input resolution + two-phase pre-scan (collects transaction IDs for filter pre-population) + memory-budget job capping
 - **`engine/record.rs`** — record-level filter → normalize → export loop shared by all driver paths
 - **`watch/`** — top-level watch domain: notify watcher, watch loop, incremental/full triggers, offset persistence (`watch::run`). The `watch` CLI subcommand is temporarily disabled (commented out in `cli/opts.rs` + `main.rs`); the lib module and its tests still compile
-- **`exporter/mod.rs`** — `Exporter` trait + `ExporterManager` factory; only one exporter is active per run (priority: CSV > SQLite)
+- **`exporter/mod.rs`** — `Exporter` trait + `ExporterManager` factory; only one exporter is active per run (priority: Parquet > CSV > SQLite)
 - **`exporter/csv/writer.rs`** — CSV field serialization; `has_metrics` condition includes `rowcount != 0` to avoid silent data loss
 - **`pipeline/mod.rs`** — `LogProcessor` trait + `Pipeline`; `pipeline.is_empty()` enables a zero-overhead fast path when no filters are configured
 - **`pipeline/filters/processor.rs`** — `build_pipeline` + `FilterProcessor`; two-pass design: pre-scan finds matching transaction IDs, main pass applies all filters

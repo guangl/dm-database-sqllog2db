@@ -9,6 +9,7 @@ fn make_csv_config(log_path: &str, csv_path: &str) -> Config {
             path_deprecated: None,
         },
         exporter: ExporterConfig {
+            parquet: None,
             csv: Some(CsvExporterConfig {
                 file: csv_path.to_string(),
                 overwrite: true,
@@ -34,14 +35,14 @@ fn write_test_log(path: &std::path::Path, count: usize) {
 }
 
 #[test]
-fn test_run_stats_csv_mode_selected_when_only_csv_configured() {
+fn test_run_stats_does_not_create_export_files() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_file = dir.path().join("test.log");
     write_test_log(&log_file, 3);
     let csv_path = dir.path().join("out").join("data.csv");
     let cfg = make_csv_config(log_file.to_str().unwrap(), csv_path.to_str().unwrap());
     run_stats(&cfg, 10).unwrap();
-    assert!(dir.path().join("out").join("slow_sql.csv").exists());
+    assert!(!dir.path().join("out").exists());
 }
 
 #[test]
@@ -66,14 +67,10 @@ fn test_run_stats_skips_parse_errors() {
     std::fs::write(&log_file, content).unwrap();
     let csv_path = dir.path().join("out.csv");
     let cfg = make_csv_config(log_file.to_str().unwrap(), csv_path.to_str().unwrap());
-    // 应返回 Ok
+    // 应返回 Ok，且不产生聚合结果文件。
     run_stats(&cfg, 5).unwrap();
-    let slow_csv = dir.path().join("slow_sql.csv");
-    let slow_content = std::fs::read_to_string(slow_csv).unwrap();
-    assert!(
-        slow_content.lines().count() >= 2,
-        "should contain header + at least 1 data row from valid record"
-    );
+    assert!(!dir.path().join("slow_sql.csv").exists());
+    assert!(!dir.path().join("frequent_sql.csv").exists());
 }
 
 #[test]

@@ -1,5 +1,5 @@
 use super::kind::ExporterKind;
-use super::{CsvExporter, SqliteExporter};
+use super::{CsvExporter, ParquetExporter, SqliteExporter};
 use crate::config::Config;
 use crate::error::{ConfigError, Error, Result};
 use dm_database_parser_sqllog::Sqllog;
@@ -40,6 +40,17 @@ impl ExporterManager {
             || (0..crate::pipeline::FIELD_NAMES.len()).collect(),
             crate::pipeline::OutputConfig::ordered_field_indices,
         );
+
+        if let Some(cfg) = &config.exporter.parquet {
+            info!("Using Parquet exporter: {}", cfg.file);
+            let mut exporter = ParquetExporter::from_config(cfg);
+            exporter.normalize = normalize;
+            exporter.field_mask = field_mask;
+            exporter.ordered_indices.clone_from(&ordered_indices);
+            return Ok(Self {
+                exporter: ExporterKind::Parquet(exporter),
+            });
+        }
 
         if let Some(cfg) = &config.exporter.csv {
             info!("Using CSV exporter: {}", cfg.file);
@@ -83,7 +94,7 @@ impl ExporterManager {
     pub(crate) fn set_sqlite_wal_mode(&self) -> Result<()> {
         match &self.exporter {
             ExporterKind::Sqlite(e) => e.set_wal_mode(),
-            ExporterKind::Csv(_) => Ok(()),
+            ExporterKind::Parquet(_) | ExporterKind::Csv(_) => Ok(()),
         }
     }
 

@@ -1,12 +1,16 @@
 use crate::config::{
-    Config, CsvExporterConfig, ExporterConfig, LoggingConfig, SqliteExporterConfig,
+    Config, CsvExporterConfig, ExporterConfig, LoggingConfig, ParquetCompression,
+    SqliteExporterConfig,
 };
 
 // ── ExporterConfig ─────────────────────────────────────────
 #[test]
-fn test_exporter_config_has_any_csv() {
+fn test_exporter_config_defaults_to_parquet() {
     let cfg = ExporterConfig::default();
-    assert!(cfg.csv.is_some());
+    let parquet = cfg.parquet.expect("Parquet should be the default exporter");
+    assert_eq!(parquet.file, "outputs/sqllog.parquet");
+    assert_eq!(parquet.compression, ParquetCompression::Zstd);
+    assert!(cfg.csv.is_none());
 }
 
 #[test]

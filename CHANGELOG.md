@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Parquet 导出器**：新增按 row group 流式写入的 Parquet 输出，支持 ZSTD、Snappy 和不压缩，兼容字段投影与 `normalized_sql`。
+
+### Changed
+
+- **默认导出格式**：`Config::default()`、`sqllog2db init` 和交互式向导现在默认选择 Parquet + ZSTD。
+- **统计结果仅终端展示**：`stats` 不再生成 Parquet/CSV 聚合文件或 SQLite 聚合表，且运行时不再要求配置导出器。
+
 ## [1.21.0] - 2026-09-11
 
 ### Added

@@ -3,7 +3,8 @@
 use dm_database_sqllog2db::cli::init::{ExporterChoice, handle_init, run_wizard};
 use dm_database_sqllog2db::cli::validate::handle_validate;
 use dm_database_sqllog2db::config::{
-    Config, CsvExporterConfig, ExporterConfig, SqliteExporterConfig, SqllogConfig,
+    Config, CsvExporterConfig, ExporterConfig, ParquetExporterConfig, SqliteExporterConfig,
+    SqllogConfig,
 };
 use dm_database_sqllog2db::engine::run as handle_run;
 use dm_database_sqllog2db::pipeline::filters::types::{ExcludeFilters, IncludeFilters};
@@ -75,6 +76,7 @@ fn make_run_config(log_dir: &std::path::Path, csv_file: &std::path::Path) -> Con
             path_deprecated: None,
         },
         exporter: ExporterConfig {
+            parquet: None,
             csv: Some(CsvExporterConfig {
                 file: csv_file.to_str().unwrap().to_string(),
                 overwrite: true,
@@ -152,6 +154,44 @@ async fn test_handle_run_real_csv_export() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_handle_run_parquet_output_row_count() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_dir = dir.path().join("logs");
+    std::fs::create_dir_all(&log_dir).unwrap();
+    write_test_log(&log_dir.join("test.log"), 10);
+    let parquet_file = dir.path().join("out.parquet");
+    let cfg = Config {
+        sqllog: SqllogConfig {
+            inputs: vec![log_dir.to_string_lossy().into_owned()],
+            path_deprecated: None,
+        },
+        exporter: ExporterConfig {
+            parquet: Some(ParquetExporterConfig {
+                file: parquet_file.to_string_lossy().into_owned(),
+                row_group_rows: 4,
+                ..ParquetExporterConfig::default()
+            }),
+            csv: None,
+            sqlite: None,
+        },
+        ..Default::default()
+    };
+
+    handle_run(&cfg, true, false, &Arc::new(AtomicBool::new(false)), None)
+        .await
+        .unwrap();
+
+    let reader = parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder::try_new(
+        std::fs::File::open(parquet_file).unwrap(),
+    )
+    .unwrap()
+    .build()
+    .unwrap();
+    let rows: usize = reader.map(|batch| batch.unwrap().num_rows()).sum();
+    assert_eq!(rows, 10);
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_handle_run_interrupted() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
@@ -186,6 +226,8 @@ fn test_handle_init_creates_config_file() {
         content.contains("[sqllog]"),
         "init template should contain [sqllog] section"
     );
+    assert!(content.contains("[exporter.parquet]"));
+    assert!(!content.contains("\n[exporter.csv]"));
 }
 
 #[test]
@@ -346,6 +388,7 @@ fn test_handle_validate_default_config() {
 fn test_handle_validate_with_sqlite_exporter() {
     let cfg = Config {
         exporter: ExporterConfig {
+            parquet: None,
             csv: None,
             sqlite: Some(SqliteExporterConfig {
                 database_url: "/tmp/test.db".to_string(),
@@ -1624,7 +1667,7 @@ fn test_cli_stats_config_not_found_errors() {
     );
 }
 
-// ── Phase 52 stats output integration tests ──────────────────────────────────
+// ── stats terminal output integration tests ─────────────────────────────────
 
 /// 写入 N 条 DML 记录到测试日志文件的辅助函数（含不同 SQL 模板）。
 fn write_stats_test_log(path: &std::path::Path, count: usize) {
@@ -1670,111 +1713,108 @@ fn make_stats_sqlite_config(
     cfg_path
 }
 
-/// Phase 52 集成测试 1：stats 命令生成 `slow_sql.csv` 和 `frequent_sql.csv`。
+/// stats 不要求配置导出器，输入配置即可运行。
 #[test]
-fn test_stats_csv_outputs_two_files() {
+fn test_stats_runs_without_exporter_section() {
+    use assert_cmd::Command;
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_file = dir.path().join("test.log");
+    write_stats_test_log(&log_file, 2);
+    let cfg_path = dir.path().join("stats.toml");
+    let content = format!(
+        "[sqllog]\ninputs = [\"{}\"]\n",
+        log_file.to_string_lossy().replace('\\', "/")
+    );
+    std::fs::write(&cfg_path, content).unwrap();
+
+    let output = Command::cargo_bin("sqllog2db")
+        .unwrap()
+        .current_dir(dir.path())
+        .args(["stats", "-c"])
+        .arg(&cfg_path)
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    assert!(String::from_utf8_lossy(&output.stdout).contains("===== Slow SQL"));
+    assert!(!dir.path().join("outputs").exists());
+}
+
+/// stats 命令只在终端展示结果，不生成聚合文件。
+#[test]
+fn test_stats_prints_results_without_creating_files() {
     use assert_cmd::Command;
     let dir = tempfile::TempDir::new().unwrap();
     let log_file = dir.path().join("test.log");
     write_stats_test_log(&log_file, 3);
     let cfg_path = make_stats_csv_config(dir.path(), &log_file);
 
-    Command::cargo_bin("sqllog2db")
+    let output = Command::cargo_bin("sqllog2db")
         .unwrap()
         .args(["stats", "-c"])
         .arg(&cfg_path)
         .args(["--top", "10"])
-        .assert()
-        .success();
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("===== Slow SQL"));
+    assert!(stdout.contains("===== Frequent SQL"));
 
     let out_dir = dir.path().join("out");
     assert!(
-        out_dir.join("slow_sql.csv").exists(),
-        "slow_sql.csv must exist"
-    );
-    assert!(
-        out_dir.join("frequent_sql.csv").exists(),
-        "frequent_sql.csv must exist"
-    );
-    // 验证表头
-    let slow = std::fs::read_to_string(out_dir.join("slow_sql.csv")).unwrap();
-    assert_eq!(
-        slow.lines().next().unwrap(),
-        "sql_text,elapsed_ms,timestamp"
-    );
-    let freq = std::fs::read_to_string(out_dir.join("frequent_sql.csv")).unwrap();
-    assert_eq!(
-        freq.lines().next().unwrap(),
-        "normalized_sql,call_count,avg_elapsed_ms,max_elapsed_ms"
+        !out_dir.exists(),
+        "stats must not create an output directory"
     );
 }
 
-/// Phase 52 集成测试 2：--top 5 严格限制输出行数不超过 5。
+/// --top 5 应反映在终端统计结果中。
 #[test]
-fn test_stats_csv_top_5_limits_rows() {
+fn test_stats_top_5_is_printed_to_terminal() {
     use assert_cmd::Command;
     let dir = tempfile::TempDir::new().unwrap();
     let log_file = dir.path().join("test.log");
     write_stats_test_log(&log_file, 8);
     let cfg_path = make_stats_csv_config(dir.path(), &log_file);
 
-    Command::cargo_bin("sqllog2db")
+    let output = Command::cargo_bin("sqllog2db")
         .unwrap()
         .args(["stats", "-c"])
         .arg(&cfg_path)
         .args(["--top", "5"])
-        .assert()
-        .success();
-
-    let out_dir = dir.path().join("out");
-    let slow = std::fs::read_to_string(out_dir.join("slow_sql.csv")).unwrap();
-    // 数据行 = total lines - 1 (header)
-    let slow_data = slow.lines().count() - 1;
-    assert!(
-        (1..=5).contains(&slow_data),
-        "slow_sql.csv data rows should be 1..=5, got {slow_data}"
-    );
-
-    let freq = std::fs::read_to_string(out_dir.join("frequent_sql.csv")).unwrap();
-    let freq_data = freq.lines().count() - 1;
-    assert!(
-        (1..=5).contains(&freq_data),
-        "frequent_sql.csv data rows should be 1..=5, got {freq_data}"
-    );
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("===== Slow SQL (top 5) ====="));
 }
 
-/// Phase 52 集成测试 3：`SQLite` 配置时生成 `slow_sql` 和 `frequent_sql` 两张表。
+/// 即使配置了 `SQLite`，stats 也不创建数据库。
 #[test]
-fn test_stats_sqlite_outputs_two_tables() {
+fn test_stats_sqlite_config_does_not_create_database() {
     use assert_cmd::Command;
     let dir = tempfile::TempDir::new().unwrap();
     let log_file = dir.path().join("test.log");
     write_stats_test_log(&log_file, 3);
     let cfg_path = make_stats_sqlite_config(dir.path(), &log_file);
 
-    Command::cargo_bin("sqllog2db")
+    let output = Command::cargo_bin("sqllog2db")
         .unwrap()
         .args(["stats", "-c"])
         .arg(&cfg_path)
         .args(["--top", "10"])
-        .assert()
-        .success();
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    assert!(String::from_utf8_lossy(&output.stdout).contains("===== Slow SQL"));
 
     let db_path = dir.path().join("out").join("stats.db");
-    let conn = rusqlite::Connection::open(&db_path).unwrap();
-    let slow_count: i64 = conn
-        .query_row("SELECT COUNT(*) FROM slow_sql", [], |row| row.get(0))
-        .unwrap();
-    assert!(slow_count > 0, "slow_sql table should have rows");
-    let freq_count: i64 = conn
-        .query_row("SELECT COUNT(*) FROM frequent_sql", [], |row| row.get(0))
-        .unwrap();
-    assert!(freq_count > 0, "frequent_sql table should have rows");
+    assert!(!db_path.exists(), "stats must not create a SQLite database");
 }
 
-/// Phase 52 集成测试 4：同时配置 CSV 和 `SQLite` 时，只生成 CSV（CSV 优先）。
+/// 同时配置多个导出器时，stats 仍忽略所有导出器。
 #[test]
-fn test_stats_csv_preferred_over_sqlite_when_both_configured() {
+fn test_stats_ignores_all_exporters() {
     use assert_cmd::Command;
     let dir = tempfile::TempDir::new().unwrap();
     let log_file = dir.path().join("test.log");
@@ -1802,17 +1842,11 @@ fn test_stats_csv_preferred_over_sqlite_when_both_configured() {
         .success();
 
     let out_dir = dir.path().join("out");
-    assert!(
-        out_dir.join("slow_sql.csv").exists(),
-        "CSV should be generated when both exporters configured"
-    );
-    assert!(
-        !db_path.exists(),
-        "SQLite db should NOT be created when CSV takes priority"
-    );
+    assert!(!out_dir.exists(), "stats must not create exporter outputs");
+    assert!(!db_path.exists());
 }
 
-/// Phase 52 集成测试 5：exectime = 0 的记录纳入 slow_sql.csv（D-12）。
+/// exectime = 0 的记录也会打印到终端。
 #[test]
 fn test_stats_zero_elapsed_records_included() {
     use assert_cmd::Command;
@@ -1825,19 +1859,18 @@ fn test_stats_zero_elapsed_records_included() {
     ).unwrap();
 
     let cfg_path = make_stats_csv_config(dir.path(), &log_file);
-    Command::cargo_bin("sqllog2db")
+    let output = Command::cargo_bin("sqllog2db")
         .unwrap()
         .args(["stats", "-c"])
         .arg(&cfg_path)
         .args(["--top", "10"])
-        .assert()
-        .success();
-
-    let out_dir = dir.path().join("out");
-    let slow = std::fs::read_to_string(out_dir.join("slow_sql.csv")).unwrap();
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        slow.contains("SELECT zero FROM t"),
-        "zero-elapsed record should appear in slow_sql.csv, got:\n{slow}"
+        stdout.contains("SELECT zero FROM t"),
+        "zero-elapsed record should appear in terminal output, got:\n{stdout}"
     );
 }
 
@@ -2068,7 +2101,7 @@ fn test_stats_from_to_filters_to_single_day() {
     ];
     std::fs::write(&log_file, lines.join("\n") + "\n").unwrap();
     let cfg_path = make_stats_csv_config(dir.path(), &log_file);
-    Command::cargo_bin("sqllog2db")
+    let output = Command::cargo_bin("sqllog2db")
         .unwrap()
         .args([
             "stats",
@@ -2079,20 +2112,13 @@ fn test_stats_from_to_filters_to_single_day() {
             "--to",
             "2024-01-15",
         ])
-        .assert()
-        .success();
-    let slow_csv = dir.path().join("out").join("slow_sql.csv");
-    let content = std::fs::read_to_string(&slow_csv).unwrap();
-    let data_lines: Vec<&str> = content.lines().skip(1).filter(|l| !l.is_empty()).collect();
-    assert_eq!(
-        data_lines.len(),
-        1,
-        "only 2024-01-15 record should be included"
-    );
-    assert!(
-        data_lines[0].contains("2024-01-15"),
-        "timestamp should be 2024-01-15"
-    );
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("2024-01-15"));
+    assert!(!stdout.contains("2024-01-14"));
+    assert!(!stdout.contains("2024-01-16"));
 }
 
 #[test]
@@ -2106,19 +2132,15 @@ fn test_stats_no_from_to_filters_nothing() {
     ];
     std::fs::write(&log_file, lines.join("\n") + "\n").unwrap();
     let cfg_path = make_stats_csv_config(dir.path(), &log_file);
-    Command::cargo_bin("sqllog2db")
+    let output = Command::cargo_bin("sqllog2db")
         .unwrap()
         .args(["stats", "-c", cfg_path.to_str().unwrap(), "--top", "10"])
-        .assert()
-        .success();
-    let slow_csv = dir.path().join("out").join("slow_sql.csv");
-    let content = std::fs::read_to_string(&slow_csv).unwrap();
-    let data_lines: Vec<&str> = content.lines().skip(1).filter(|l| !l.is_empty()).collect();
-    assert_eq!(
-        data_lines.len(),
-        2,
-        "all records should be included when no time filter"
-    );
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("2024-01-14"));
+    assert!(stdout.contains("2024-01-16"));
 }
 
 /// P57-SC5 / STATS-12: stats CLI 在 --from 晚于 --to 时退出非零，stderr 包含字段名与 "must be <=" 文案（D-01/D-02）。
@@ -2320,6 +2342,7 @@ async fn test_parallel_csv_content_matches_sequential() {
                 path_deprecated: None,
             },
             exporter: ExporterConfig {
+                parquet: None,
                 csv: Some(CsvExporterConfig {
                     file: seq_csv.to_str().unwrap().to_string(),
                     overwrite: true,
@@ -2355,6 +2378,7 @@ async fn test_parallel_csv_content_matches_sequential() {
             path_deprecated: None,
         },
         exporter: ExporterConfig {
+            parquet: None,
             csv: Some(CsvExporterConfig {
                 file: par_csv.to_str().unwrap().to_string(),
                 overwrite: true,
@@ -2438,6 +2462,7 @@ async fn test_parallel_csv_filter_matches_sequential() {
                 path_deprecated: None,
             },
             exporter: ExporterConfig {
+                parquet: None,
                 csv: Some(CsvExporterConfig {
                     file: seq_csv.to_str().unwrap().to_string(),
                     overwrite: true,
@@ -2471,6 +2496,7 @@ async fn test_parallel_csv_filter_matches_sequential() {
             path_deprecated: None,
         },
         exporter: ExporterConfig {
+            parquet: None,
             csv: Some(CsvExporterConfig {
                 file: par_csv.to_str().unwrap().to_string(),
                 overwrite: true,
@@ -2559,6 +2585,7 @@ async fn test_parallel_csv_jobs_override_forces_parallel() {
             path_deprecated: None,
         },
         exporter: ExporterConfig {
+            parquet: None,
             csv: Some(CsvExporterConfig {
                 file: par_csv.to_str().unwrap().to_string(),
                 overwrite: true,
@@ -2615,6 +2642,7 @@ async fn test_parallel_csv_heterogeneous_matches_sequential() {
                 path_deprecated: None,
             },
             exporter: ExporterConfig {
+                parquet: None,
                 csv: Some(CsvExporterConfig {
                     file: seq_csv.to_str().unwrap().to_string(),
                     overwrite: true,
@@ -2645,6 +2673,7 @@ async fn test_parallel_csv_heterogeneous_matches_sequential() {
             path_deprecated: None,
         },
         exporter: ExporterConfig {
+            parquet: None,
             csv: Some(CsvExporterConfig {
                 file: par_csv.to_str().unwrap().to_string(),
                 overwrite: true,
@@ -2691,8 +2720,11 @@ fn test_wizard_integration_all_defaults() {
     let mut writer = Vec::<u8>::new();
     let answers = run_wizard(&mut reader, &mut writer).unwrap();
     assert_eq!(answers.inputs, "sqllogs");
-    assert!(matches!(answers.exporter, ExporterChoice::Csv));
-    assert_eq!(answers.csv_file.as_deref(), Some("outputs/sqllog.csv"));
+    assert!(matches!(answers.exporter, ExporterChoice::Parquet));
+    assert_eq!(
+        answers.parquet_file.as_deref(),
+        Some("outputs/sqllog.parquet")
+    );
 }
 
 #[test]
@@ -2730,8 +2762,8 @@ fn test_cli_init_interactive_all_defaults() {
         "default inputs must be sqllogs"
     );
     assert!(
-        content.contains(r#"file = "outputs/sqllog.csv""#),
-        "default csv file path must be outputs/sqllog.csv"
+        content.contains(r#"file = "outputs/sqllog.parquet""#),
+        "default parquet file path must be outputs/sqllog.parquet"
     );
 }
 

@@ -7,11 +7,11 @@
 [![Release](https://img.shields.io/github/v/release/guangl/sqllog2db?style=flat-square&logo=github&logoColor=white&label=release)](https://github.com/guangl/sqllog2db/releases)
 [![Rust 1.95+](https://img.shields.io/badge/rust-1.95%2B-orange?style=flat-square&logo=rust&logoColor=white)](https://www.rust-lang.org/)
 
-解析达梦数据库 SQL 日志并导出为 CSV 或 SQLite。
+解析达梦数据库 SQL 日志并导出为 Parquet、CSV 或 SQLite。Parquet 是默认格式。
 
 > **维护说明**：本仓库不保证积极运维，后续更新将跟随上游 [dm-database-parser-sqllog](https://crates.io/crates/dm-database-parser-sqllog) 的版本迭代进行同步。
 
-一款流式命令行工具，以恒定内存占用处理达梦 SQL 日志文件，从零依赖的静态二进制文件提供约 520 万条记录/秒的 CSV 吞吐量。无需外部运行时、无需数据库客户端、无需 JVM——只是一个约 5 MB 的二进制文件，可在 Rust 编译的任何平台上运行。
+一款流式命令行工具，以有界内存占用处理达梦 SQL 日志文件，CSV 路径可提供约 520 万条记录/秒的吞吐量。无需外部运行时、数据库客户端或 JVM。
 
 适用场景：日志归档、审计追踪提取、分析预处理、DBA 工作负载画像。该工具处理达梦特有的日志编码（GB18030/GBK），从每条 SQL 记录中解析结构化字段，并通过可选的处理管道将其路由后写入配置的导出器。
 
@@ -21,9 +21,10 @@
 
 - **流式解析器**：单线程顺序处理单个文件、目录中的 `.log` 文件或 glob 模式匹配的文件。无论文件大小，内存保持恒定——工具流式处理记录而非加载到内存中。
 - **灵活的输入模式**：支持单文件路径、目录自动扫描（递归查找 `.log` 文件）或 glob 模式（如 `./logs/2025-*.log`）。结果按路径排序以在多次运行间保持确定性顺序。
+- **Parquet 导出器（默认）**：按 row group 流式写入，默认使用 ZSTD level 1 压缩；也支持 Snappy 和不压缩。可直接供 DuckDB、Spark、Polars 和 Pandas 分析。
 - **CSV 导出器**：1 MiB `BufWriter` 配合 `itoa` 零分配整数格式化，实现高吞吐、低延迟输出。`memchr` 的 SIMD 加速字节搜索处理 CSV 转义。多文件场景支持 rayon 并行解析路径（`parallel.rs`）。
 - **SQLite 导出器**：批量事务配合性能 `PRAGMA` 调优（synchronous off、mmap size、cache size）和预编译语句实现批量插入吞吐量。多文件场景支持 rayon 并行解析路径（`sqlite_parallel.rs`）。
-- **优先级路由的 ExporterManager**：每次运行只有一个导出器处于活动状态；两者同时配置时 CSV 优先。`Exporter` trait 允许基准测试在不修改生产代码的情况下注入模拟导出器。
+- **优先级路由的 ExporterManager**：每次运行只有一个导出器处于活动状态；多个同时配置时按 Parquet > CSV > SQLite 选择。
 
 ### 过滤与字段控制
 
@@ -38,7 +39,7 @@
 - **嵌套子表的 TOML 配置**：v1.4+ 格式将 `[filter.include]`、`[filter.exclude]` 作为顶级节（而非嵌套在 `[features]` 下）。旧的扁平格式通过 `RawFiltersFeature` 中间结构和 serde 别名支持向后兼容。`validate()` 验证最终形式并拒绝旧版布局。
 - **零开销快速路径**：当管道为空（无过滤器、无 replace_parameters）时，热循环通过单个 `pipeline.is_empty()` 检查跳过所有功能门控。快速路径中无虚函数调用、无逐记录的条件分支。
 - **预编译的过滤器处理管道**：`CompiledMetaFilters` 和 `CompiledSqlFilters` 在启动时持有编译好的 `RegexSet` 实例。每个过滤器变体带有类型标签（include、exclude、indicator、SQL include、SQL exclude），无需字符串匹配即可派发。
-- **单线程流式处理**：无论数据量大小，性能可预测。使用标准库全局分配器。Release 配置：`opt-level=3`、LTO fat、codegen-units=1、panic=abort、strip=symbols——生成约 5 MB 的二进制文件。
+- **单线程流式处理**：无论数据量大小，性能可预测。Parquet 批次同时受行数和约 64 MiB 字节预算限制。Release 配置：`opt-level=3`、LTO fat、codegen-units=1、panic=abort、strip=symbols。
 - **基准测试结果**：~520 万条记录/秒 CSV（criterion，合成 50k 记录数据集，Apple M 系列芯片），~110 万条记录/秒 SQLite（batch + PRAGMA），~155 万条记录/秒（真实 1.1 GB 文件，约 300 万条记录，NVMe SSD）。
 - **简洁的 CLI**：`init`（生成配置）、`validate`（校验）、`run`（执行导出）、`stats`（统计分析）四个命令。
   （`watch` 持续监听子命令暂时下线——当前只支持追加写出到文件，功能价值有限；领域实现与测试仍保留在 `src/watch/`。）
@@ -50,7 +51,7 @@
 1. **发现**：`SqllogParser` 解析配置的路径（文件、目录或 glob）并生成有序的 `.log` 文件列表。
 2. **解析**：每个文件通过 `dm-database-parser-sqllog` 逐行流式读取，解码 GB18030/GBK 记录并提取结构化字段（用户、SQL 文本、执行时长、行数、会话 ID 等）。
 3. **处理管道**：解析后的记录通过可选的处理管道。当管道为空（无过滤器）时，记录通过零开销快速路径绕过所有功能逻辑。当管道活跃时，运行编译好的正则过滤器。
-4. **导出**：活跃的导出器（CSV 或 SQLite，按优先级选择）写入每条记录。ExporterManager 将记录路由到单一配置的导出器。
+4. **导出**：活跃的导出器（Parquet、CSV 或 SQLite，按优先级选择）写入每条记录。ExporterManager 将记录路由到单一配置的导出器。
 
 这种流式设计保持内存使用恒定——100 MB 日志文件和 100 GB 日志文件消耗相同的峰值内存。
 
@@ -61,13 +62,13 @@ graph LR
     C -->|empty| D[ExporterManager]
     C -->|filters| E[FilterProcessor]
     E --> D
-    D --> F[CSV / SQLite]
+    D --> F[Parquet / CSV / SQLite]
 ```
 
 同样的流程以文本形式表达：
 
 ```
-输入 .log 文件 --> SqllogParser --> 处理管道 --> ExporterManager --> CSV / SQLite
+输入 .log 文件 --> SqllogParser --> 处理管道 --> ExporterManager --> Parquet / CSV / SQLite
 ```
 
 ### 关键模块
@@ -75,8 +76,8 @@ graph LR
 - **`cli/run/mod.rs`**：主编排——加载配置、构建管道、预扫描事务过滤器、逐个文件流式处理记录。
 - **`cli/run/parallel.rs`**：CSV 导出的多文件并行解析路径（基于 rayon），解析错误通过 `log::warn!` 上报。
 - **`cli/run/sqlite_parallel.rs`**：SQLite 导出的多文件并行解析路径（基于 rayon），解析错误通过 `log::warn!` 上报。
-- **`cli/stats/mod.rs`**：`stats` 子命令入口，委托给 `src/stats/` 完成聚合与写出。
-- **`stats/mod.rs`**：`run_stats` 流式扫描 → `StatsAccumulator` → 写入 `slow_sql.csv` / `frequent_sql.csv`（或 SQLite 表）。
+- **`cli/stats/mod.rs`**：`stats` 子命令入口，委托给 `src/stats/` 完成聚合与终端展示。
+- **`stats/mod.rs`**：`run_stats` 流式扫描 → `StatsAccumulator` → 在终端打印慢 SQL 与高频 SQL。
 - **`exporter/mod.rs`**：`Exporter` trait 和 `ExporterManager` 工厂。每次运行只有一个导出器处于活动状态。
 - **`pipeline/mod.rs`**：`LogProcessor` trait 和 `Pipeline`。`pipeline.is_empty()` 启用零开销快速路径。
 - **`pipeline/filters/mod.rs`**：两遍过滤器设计。预扫描使用 `CompiledMetaFilters` 和 `CompiledSqlFilters` 查找匹配的事务 ID。
@@ -94,7 +95,7 @@ graph LR
 cargo install dm-database-sqllog2db
 ```
 
-需要 Rust 1.95+。Release 二进制文件约 5 MB（LTO fat、stripped、panic=abort、codegen-units=1）。
+需要 Rust 1.95+。Release 使用 LTO fat、stripped、panic=abort 和 codegen-units=1。
 
 ### 本地构建
 
@@ -120,7 +121,7 @@ sqllog2db validate -c config.toml
 sqllog2db run -c config.toml
 ```
 
-统计分析慢 SQL 和高频 SQL（输出到 `slow_sql.csv` / `frequent_sql.csv`）：
+统计分析慢 SQL 和高频 SQL（结果直接打印在终端）：
 
 ```bash
 sqllog2db stats -c config.toml
@@ -164,9 +165,11 @@ enable = false
 # users = ["SYSDBA"]
 # statements = ["INS", "UPD"]   # 语句类型，匹配日志方括号标签（取不带方括号的值）
 
-[exporter.csv]
-file = "outputs/sqllog.csv"
+[exporter.parquet]
+file = "outputs/sqllog.parquet"
 overwrite = true
+compression = "zstd"
+row_group_rows = 65536
 ```
 
 完整配置参考请参见 [docs/config-reference.md](./docs/config-reference.md)。

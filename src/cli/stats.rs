@@ -23,7 +23,7 @@ fn merge_stats_options(
 ///
 /// # Errors
 ///
-/// 时间范围格式非法、未找到任何日志文件、未配置导出器或统计结果写出失败时返回错误。
+/// 时间范围格式非法或未找到任何日志文件时返回错误。
 pub fn handle_stats(
     cfg: &Config,
     top: Option<u32>,
@@ -64,6 +64,7 @@ mod tests {
                 path_deprecated: None,
             },
             exporter: ExporterConfig {
+                parquet: None,
                 csv: Some(CsvExporterConfig {
                     file: dir.path().join("out.csv").to_str().unwrap().to_string(),
                     overwrite: true,

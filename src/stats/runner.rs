@@ -1,16 +1,15 @@
 use super::aggregate::{self, StatsAccumulator};
 use super::config as stats_config;
-use super::output;
 use crate::config::Config;
 use crate::error::{Error, ErrorStats, ParserError, Result};
 
-/// 执行统计分析：流式扫描日志文件，聚合慢 SQL 与高频 SQL，写入 CSV 或 `SQLite` 输出。
+/// 执行统计分析：流式扫描日志文件，聚合慢 SQL 与高频 SQL，并打印到终端。
 ///
 /// `top_n` 必须 ≥ 1（由 Phase 51 的 CLI 层保证）。
 ///
 /// # Errors
 ///
-/// 时间范围非法、未找到任何日志文件、未配置导出器或结果写出失败时返回错误。
+/// 时间范围非法或未找到任何日志文件时返回错误。
 pub fn run_stats(cfg: &Config, top_n: u32) -> Result<()> {
     debug_assert!(top_n >= 1, "top_n must be >= 1 (Phase 51 CLI validation)");
     stats_config::validate_stats_time_range(&cfg.stats)?;
@@ -24,15 +23,13 @@ pub fn run_stats(cfg: &Config, top_n: u32) -> Result<()> {
         StatsAccumulator::new(top_n, cfg.stats.from.clone(), cfg.stats.to.clone());
     scan_files_into_accumulator(&log_files, &mut accumulator);
     let (slow_rows, frequent_rows) = accumulator.into_results();
-    write_stats_output(cfg, &slow_rows, &frequent_rows)?;
     print_stats_summary(&slow_rows, &frequent_rows);
     Ok(())
 }
 
 /// 将统计结果以可读表格打印到终端（stdout）。
 ///
-/// `stats` 是用户显式请求分析结果的命令，因此始终在终端展示摘要，
-/// 而不只是静默写入 CSV/SQLite 文件。
+/// `stats` 是用户显式请求分析结果的命令，因此始终在终端展示摘要。
 fn print_stats_summary(
     slow_rows: &[aggregate::SlowSqlRow],
     frequent_rows: &[aggregate::FrequentSqlRow],
@@ -98,36 +95,4 @@ fn scan_files_into_accumulator(
             scan_stats.parse_errors
         );
     }
-}
-
-/// 按 CSV 优先策略，将结果写入输出目标（CSV 优先于 `SQLite`）。
-fn write_stats_output(
-    cfg: &Config,
-    slow_rows: &[aggregate::SlowSqlRow],
-    frequent_rows: &[aggregate::FrequentSqlRow],
-) -> Result<()> {
-    if let Some(csv_cfg) = cfg.exporter.csv.as_ref() {
-        let csv_dir = std::path::Path::new(&csv_cfg.file)
-            .parent()
-            .unwrap_or_else(|| std::path::Path::new("."));
-        output::write_csv_stats(slow_rows, frequent_rows, csv_dir)?;
-        log::info!(
-            "stats: wrote {} slow rows and {} frequent rows to {}",
-            slow_rows.len(),
-            frequent_rows.len(),
-            csv_dir.display()
-        );
-        return Ok(());
-    }
-    if let Some(sqlite_cfg) = cfg.exporter.sqlite.as_ref() {
-        output::write_sqlite_stats(slow_rows, frequent_rows, &sqlite_cfg.database_url)?;
-        log::info!(
-            "stats: wrote {} slow rows and {} frequent rows to {}",
-            slow_rows.len(),
-            frequent_rows.len(),
-            sqlite_cfg.database_url
-        );
-        return Ok(());
-    }
-    Err(Error::Config(crate::error::ConfigError::NoExporters))
 }

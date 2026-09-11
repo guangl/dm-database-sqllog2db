@@ -30,7 +30,7 @@ cd sqllog2db
 cargo build --release
 ```
 
-二进制文件约 5 MB，静态链接，位于 `target/release/sqllog2db`。
+二进制文件位于 `target/release/sqllog2db`，无需额外运行时。
 
 从源码克隆时，`sqllogs/` 目录下包含示例日志文件。生产环境请使用你自己的达梦 SQL 日志。
 
@@ -52,7 +52,7 @@ sqllog2db init -o config.toml --force
 Config written to config.toml
 ```
 
-**步骤 2：配置 CSV 导出**
+**步骤 2：配置 Parquet 导出（默认）**
 
 编辑 `config.toml`：
 
@@ -60,9 +60,11 @@ Config written to config.toml
 [sqllog]
 inputs = ["sqllogs"]
 
-[exporter.csv]
-file = "output/sqllog.csv"
+[exporter.parquet]
+file = "output/sqllog.parquet"
 overwrite = true
+compression = "zstd"
+row_group_rows = 65536
 ```
 
 **步骤 3：验证配置**
@@ -217,20 +219,18 @@ csvstat output/filtered.csv
 
 ## 场景四：SQL 统计分析
 
-使用 `stats` 子命令对 SQL 日志进行统计分析，生成慢 SQL 报告和高频 SQL 报告。
+使用 `stats` 子命令对 SQL 日志进行统计分析，在终端查看慢 SQL 和高频 SQL。
 
-**步骤 1：配置输入和输出目录**
+**步骤 1：配置输入**
 
 编辑 `config.toml`（复用 `run` 命令的配置格式）：
 
 ```toml
 [sqllog]
 inputs = ["sqllogs"]
-
-[exporter.csv]
-file = "output/sqllog.csv"
-overwrite = true
 ```
+
+`stats` 不使用 `[exporter]` 配置；配置文件中即使保留了导出器设置，也不会生成聚合结果文件或数据库表。
 
 **步骤 2：运行统计分析**
 
@@ -244,39 +244,16 @@ sqllog2db stats -c config.toml
 sqllog2db stats -c config.toml --top 10
 ```
 
-**步骤 3：查看输出**
+**步骤 3：查看终端结果**
 
-CSV 模式在 `[exporter.csv].file` 的同级目录（本例为 `output/`）生成：
+```text
+===== Slow SQL (top 10) =====
+elapsed_ms  timestamp                SQL
+...
 
-```
-output/slow_sql.csv       — Top N 最慢 SQL（字段：sql_text, elapsed_ms, timestamp）
-output/frequent_sql.csv   — Top N 高频 SQL（字段：normalized_sql, call_count, avg_elapsed_ms, max_elapsed_ms）
-```
-
-示例查看：
-
-```bash
-head -5 output/slow_sql.csv
-head -5 output/frequent_sql.csv
-```
-
-**使用 SQLite 输出：**
-
-```toml
-[sqllog]
-inputs = ["sqllogs"]
-
-[exporter.sqlite]
-database_url = "output/sqllog2db.db"
-table_name = "sqllog_records"
-overwrite = true
-```
-
-SQLite 模式在同一数据库中写入 `slow_sql` 和 `frequent_sql` 表，可直接用 SQL 查询：
-
-```bash
-sqlite3 output/sqllog2db.db "SELECT * FROM slow_sql LIMIT 5;"
-sqlite3 output/sqllog2db.db "SELECT * FROM frequent_sql ORDER BY call_count DESC LIMIT 5;"
+===== Frequent SQL (top 10) =====
+ count      avg_ms      max_ms  SQL
+...
 ```
 
 ---
