@@ -6,7 +6,7 @@
 
 ### 前置要求
 
-- **Rust 工具链**：通过 [rustup](https://rustup.rs/) 安装。项目最低支持 Rust 版本（MSRV）为 1.85+。
+- **Rust 工具链**：通过 [rustup](https://rustup.rs/) 安装。项目最低支持 Rust 版本（MSRV）为 1.88+。
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
