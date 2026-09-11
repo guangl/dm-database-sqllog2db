@@ -14,20 +14,20 @@ impl IndicatorFilters {
         if !self.has_filters() {
             return false;
         }
-        if let Some(ids) = &self.exec_ids {
-            if ids.contains(&exec_id) {
-                return true;
-            }
+        if let Some(ids) = &self.exec_ids
+            && ids.contains(&exec_id)
+        {
+            return true;
         }
-        if let Some(min_t) = self.min_runtime_ms {
-            if f64::from(runtime_ms) >= f64::from(min_t) {
-                return true;
-            }
+        if let Some(min_t) = self.min_runtime_ms
+            && f64::from(runtime_ms) >= f64::from(min_t)
+        {
+            return true;
         }
-        if let Some(min_r) = self.min_row_count {
-            if row_count >= min_r {
-                return true;
-            }
+        if let Some(min_r) = self.min_row_count
+            && row_count >= min_r
+        {
+            return true;
         }
         false
     }

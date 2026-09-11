@@ -910,3 +910,77 @@ fn test_sqlite_multi_row_batch_commit_interaction() {
         "batch_size=2 + multi_row_batch_size=4 交互，10 条记录应全部持久化"
     );
 }
+
+#[test]
+fn test_sqlite_memory_settings_survive_wal_and_existing_page_sizes() {
+    for page_size in [4096, 65536] {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("existing.db");
+        {
+            let conn = rusqlite::Connection::open(&path).unwrap();
+            conn.execute_batch(&format!(
+                "PRAGMA page_size = {page_size}; CREATE TABLE existing (id INTEGER);"
+            ))
+            .unwrap();
+        }
+        let mut exporter = SqliteExporter::new(
+            path.to_string_lossy().into_owned(),
+            "records".into(),
+            true,
+            false,
+        );
+        exporter.initialize().unwrap();
+        for wal in [false, true] {
+            if wal {
+                exporter.set_wal_mode().unwrap();
+            }
+            let conn = exporter.conn.as_ref().unwrap();
+            let pragma = |name: &str| {
+                conn.query_row(&format!("PRAGMA {name}"), [], |row| row.get::<_, i64>(0))
+                    .unwrap()
+            };
+            assert_eq!(pragma("page_size"), page_size);
+            assert_eq!(pragma("cache_size"), -16384, "cache budget must use KiB");
+            assert_eq!(pragma("mmap_size"), 0);
+            assert_eq!(
+                pragma("temp_store"),
+                1,
+                "temporary data must be able to spill to disk"
+            );
+        }
+        exporter.finalize().unwrap();
+    }
+}
+
+#[test]
+fn test_sqlite_builds_only_used_insert_sizes() {
+    let dir = tempfile::tempdir().unwrap();
+    let log = dir.path().join("input.log");
+    write_test_log(&log, 65);
+    let mut exporter = SqliteExporter::new(
+        dir.path().join("out.db").to_string_lossy().into_owned(),
+        "records".into(),
+        true,
+        false,
+    );
+    exporter.multi_row_batch_size = 64;
+    exporter.initialize().unwrap();
+    assert!(
+        exporter.sql_cache.is_empty(),
+        "initialization must not allocate all possible INSERTs"
+    );
+    for record in LogParserBuilder::new(&log).build().unwrap().iter().unwrap() {
+        exporter.export(&record.unwrap()).unwrap();
+    }
+    exporter.finalize().unwrap();
+    assert_eq!(exporter.sql_cache.len(), 2);
+    assert!(exporter.sql_cache.contains_key(&64));
+    assert!(exporter.sql_cache.contains_key(&1));
+    let count: i64 = exporter
+        .conn
+        .as_ref()
+        .unwrap()
+        .query_row("SELECT COUNT(*) FROM records", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(count, 65);
+}

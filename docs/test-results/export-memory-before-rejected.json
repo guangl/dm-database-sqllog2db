@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "platform": "macOS-26.6.2-arm64-arm-64bit",
+  "revision": null,
+  "binary_sha256": "20ebce3cdb47c40d0356ad4804a494fe50280c82db885baff079d04e09d31fb7",
+  "file_mib": 256,
+  "file_counts": [
+    1,
+    4
+  ],
+  "max_rss_mib": 128,
+  "max_growth_mib": 32,
+  "timeout_seconds": 600,
+  "cases": [
+    {
+      "format": "csv",
+      "files": 1,
+      "records": 1231355,
+      "peak_rss_bytes": 179421184,
+      "csv_sha256": "a97e3255f8c0540b9a0b27c95d7bef85d3c2a8909d73570a27a44951441c3e47",
+      "content_valid": true,
+      "elapsed_seconds": 0.23817325,
+      "expected_records": 1231355,
+      "growth_bytes": 0,
+      "failures": [
+        "peak RSS outside allowed range"
+      ],
+      "passed": false
+    },
+    {
+      "format": "csv",
+      "files": 4,
+      "records": 4925420,
+      "peak_rss_bytes": 43827200,
+      "csv_sha256": "a3ffc73ea13140b69d7aaf4ea75c9f07d1a7aaa84dfcadaf9fe48f15f4527891",
+      "content_valid": true,
+      "elapsed_seconds": 1.5362855,
+      "expected_records": 4925420,
+      "growth_bytes": 0,
+      "failures": [],
+      "passed": true
+    },
+    {
+      "format": "sqlite",
+      "files": 1,
+      "records": 1231355,
+      "peak_rss_bytes": 236027904,
+      "csv_sha256": null,
+      "content_valid": true,
+      "elapsed_seconds": 2.3389067499999996,
+      "expected_records": 1231355,
+      "growth_bytes": 0,
+      "failures": [
+        "peak RSS outside allowed range"
+      ],
+      "passed": false
+    },
+    {
+      "format": "sqlite",
+      "files": 4,
+      "records": 4925420,
+      "peak_rss_bytes": 918732800,
+      "csv_sha256": null,
+      "content_valid": true,
+      "elapsed_seconds": 9.944033459,
+      "expected_records": 4925420,
+      "growth_bytes": 682704896,
+      "failures": [
+        "peak RSS outside allowed range",
+        "RSS growth exceeds limit"
+      ],
+      "passed": false
+    }
+  ],
+  "passed": false
+}

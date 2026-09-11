@@ -25,7 +25,7 @@ impl Exporter for CsvExporter {
         // If metadata() fails (e.g. /dev/null), write the header to be safe.
         let file_is_empty = file.metadata().map_or(true, |meta| meta.len() == 0);
 
-        let mut writer = BufWriter::with_capacity(16 * 1024 * 1024, file);
+        let mut writer = BufWriter::with_capacity(1024 * 1024, file);
 
         if !append_mode || file_is_empty {
             let header = self.build_header();
@@ -176,7 +176,7 @@ impl CsvExporter {
 
         let new_path = self.current_file_path();
         let (file, _) = open_for_write(&new_path, WriteMode::Truncate)?;
-        let mut writer = BufWriter::with_capacity(16 * 1024 * 1024, file);
+        let mut writer = BufWriter::with_capacity(1024 * 1024, file);
 
         let header = self.build_header();
         writer.write_all(&header).map_err(|e| {

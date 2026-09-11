@@ -365,13 +365,13 @@ pub fn compute_normalized<'a>(
 ) -> Option<&'a str> {
     if record.tag.is_none() {
         // 无 tag → 可能是 PARAMS 记录。
-        if pm_sql.starts_with("PARAMS(") {
-            if let Some(params) = parse_params(pm_sql) {
-                buffer
-                    .entry(record.sess_id.clone())
-                    .or_default()
-                    .insert(record.statement.clone(), Arc::new(params));
-            }
+        if pm_sql.starts_with("PARAMS(")
+            && let Some(params) = parse_params(pm_sql)
+        {
+            buffer
+                .entry(record.sess_id.clone())
+                .or_default()
+                .insert(record.statement.clone(), Arc::new(params));
         }
         return None;
     }

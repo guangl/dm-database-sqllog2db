@@ -104,10 +104,10 @@ pub(super) fn normalize_and_export(
     } else {
         None
     };
-    if let Some(remaining) = remaining {
-        if state.records_in_file >= remaining {
-            return ExportAction::BreakQuota;
-        }
+    if let Some(remaining) = remaining
+        && state.records_in_file >= remaining
+    {
+        return ExportAction::BreakQuota;
     }
     let export_result = exporter_manager.export_one_preparsed(record, env.include_pm, ns);
     let file_path = env.file_path;
@@ -142,10 +142,11 @@ fn setup_progress_bar(
     total_files: usize,
     file_name: &str,
 ) {
-    if reset_pb && show_progress {
-        if let Some(pb) = pb {
-            pb.set_message(format!("[{file_index}/{total_files}] {file_name}"));
-        }
+    if reset_pb
+        && show_progress
+        && let Some(pb) = pb
+    {
+        pb.set_message(format!("[{file_index}/{total_files}] {file_name}"));
     }
 }
 
@@ -163,19 +164,19 @@ fn log_file_result(
     info!(
         "File {file_path}: {records_in_file} records, {errors_in_file} errors, total {elapsed:.2}s",
     );
-    if args.show_progress {
-        if let Some(pb) = args.pb {
-            let errors_label = if errors_in_file > 0 {
-                format!(", {errors_in_file} errors")
-            } else {
-                String::new()
-            };
-            pb.set_message(format!(
-                "✓ [{}/{}] {file_path} — {records_in_file}{errors_label}, {elapsed:.2}s",
-                args.file_index, args.total_files,
-            ));
-            pb.inc(1);
-        }
+    if args.show_progress
+        && let Some(pb) = args.pb
+    {
+        let errors_label = if errors_in_file > 0 {
+            format!(", {errors_in_file} errors")
+        } else {
+            String::new()
+        };
+        pb.set_message(format!(
+            "✓ [{}/{}] {file_path} — {records_in_file}{errors_label}, {elapsed:.2}s",
+            args.file_index, args.total_files,
+        ));
+        pb.inc(1);
     }
 }
 

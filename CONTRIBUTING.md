@@ -6,7 +6,7 @@
 
 ### 前置要求
 
-- **Rust 工具链**：通过 [rustup](https://rustup.rs/) 安装。项目最低支持 Rust 版本（MSRV）为 1.85+。
+- **Rust 工具链**：通过 [rustup](https://rustup.rs/) 安装。项目最低支持 Rust 版本（MSRV）为 1.95+。
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
@@ -98,12 +98,13 @@ cargo clippy --all-targets -- -D warnings
 cargo fmt --check
 cargo test
 cargo build --release
+cargo package --locked
 ```
 
 4. 如果是新功能或 bug 修复，建议在 `tests/` 目录或模块内联测试块中增加对应的测试用例。
 5. 推送分支并发起 Pull Request。
 6. 在 PR 描述中说明修改内容、动机和测试情况。
-7. CI 将自动运行 clippy、fmt 检查、测试和文档死链检查（lychee），全部通过后方可合并。
+7. CI 将自动运行 clippy、fmt、跨平台测试、覆盖率、MSRV、发布包可构建性、依赖风险和文档死链检查，全部通过后方可合并。
 8. 维护者审核后合并。
 
 ## Commit 规范
@@ -155,3 +156,7 @@ chore(ci): add lychee link checker to CI pipeline
 ---
 
 *本指南在 Phase 25 中编写，如有改进建议请通过 PR 提交。*
+
+## 发版门禁
+
+发版必须满足[发版门禁标准](docs/release-standard.md)：除现有测试、代码质量与覆盖率要求外，CSV/SQLite 在 1、4、16×256 MiB 输入下峰值 RSS 不得超过 128 MiB，多文件相对单文件增长不得超过 32 MiB，并验证完整导出内容。PR 与 main 自动检查；标签发布检测实际发布二进制，失败会阻止创建 Release。阈值和样本规模的变更必须通过评审。

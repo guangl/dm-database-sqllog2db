@@ -8,6 +8,21 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  verification:
+    name: Release quality gate
+    uses: ./.github/workflows/ci.yaml
+    permissions:
+      contents: read
+
+  export-memory:
+    name: Release artifact memory gate
+    needs: [release-linux-x86, release-linux-arm, release]
+    uses: ./.github/workflows/export-memory.yaml
+    permissions:
+      contents: read
+    with:
+      release_artifacts: true
+
   release-linux-x86:
     name: Release sqllog2db-x86_64-linux
     runs-on: ubuntu-latest
@@ -33,7 +48,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Build
-        run: cargo build --release --target x86_64-unknown-linux-gnu
+        run: cargo build --release --locked --target x86_64-unknown-linux-gnu
 
       - name: Prepare artifact
         run: |
@@ -72,7 +87,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Build
-        run: cargo build --release --target aarch64-unknown-linux-gnu
+        run: cargo build --release --locked --target aarch64-unknown-linux-gnu
 
       - name: Prepare artifact
         run: |
@@ -113,7 +128,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Build
-        run: cargo build --release --target ${{ matrix.target }}
+        run: cargo build --release --locked --target ${{ matrix.target }}
         shell: bash
 
       - name: Prepare artifact
@@ -135,7 +150,7 @@ jobs:
 
   create-release:
     name: Create GitHub Release
-    needs: [release-linux-x86, release-linux-arm, release]
+    needs: [verification, export-memory, release-linux-x86, release-linux-arm, release]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -148,6 +163,21 @@ jobs:
           path: dist
           pattern: sqllog2db-*
           merge-multiple: true
+
+      - name: Download memory gate reports
+        uses: actions/download-artifact@v8
+        with:
+          path: gate-reports
+          pattern: export-memory-*-candidate
+
+      - name: Include memory gate evidence in release
+        shell: bash
+        run: |
+          for platform in linux-x86_64 linux-aarch64 macos-aarch64; do
+            report="gate-reports/export-memory-${platform}-candidate/export-memory-report.json"
+            test -s "$report"
+            cp "$report" "dist/export-memory-${platform}.json"
+          done
 
       - name: Extract changelog
         shell: bash
