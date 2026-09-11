@@ -48,7 +48,9 @@ glob = "0.3"
 indicatif = "0.18"
 rayon = "1.12"
 memchr = "2"
-rusqlite = { version = "0.40.1", features = ["bundled"] }
+# 0.40.x 的 libsqlite3-sys 构建脚本使用了 Rust 1.95 才稳定的 cfg_select!;
+# 锁定 0.39 以保持本项目声明的 Rust 1.85 MSRV。
+rusqlite = { version = "=0.39.0", features = ["bundled"] }
 tempfile = "3.27.0"
 
 
