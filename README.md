@@ -84,6 +84,10 @@ graph LR
 
 ## 安装
 
+### 下载预编译二进制文件
+
+可从 [GitHub Releases](https://github.com/guangl/sqllog2db/releases) 下载 Linux、macOS 或 Windows 版本。官方预编译 Linux 二进制文件在 Debian 10（buster）环境中构建，运行时需要 **glibc 2.28 或更高版本**；不支持 musl libc。在旧版 glibc 或 musl 系统上，请使用下方的 `cargo install` 或本地构建方式。
+
 ### 从 crates.io 安装（推荐）
 
 ```bash
@@ -193,6 +197,7 @@ overwrite = true
 - **stats 终端输出**：无需配置导出器即可查看慢 SQL 和高频 SQL
 - **过滤修复**：`statements` 按日志标签正确匹配
 - **质量门禁**：发布前校验覆盖率、MSRV、发布包、内存峰值和导出完整性
+- **Linux 运行环境**：官方预编译二进制文件需要 glibc 2.28+，不支持 musl libc
 
 ### v1.20.0 — 性能全面提升（2026-06-11）
 

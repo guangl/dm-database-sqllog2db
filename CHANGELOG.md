@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **CLI 架构精简**：重组配置、执行引擎、监听和导出模块，缩减 CLI 层职责，保持对外行为不变。
 - **依赖更新**：升级 `clap` 4.6.6、`tokio` 1.53.1、`toml` 1.1.4、`rusqlite` 0.40.2、`serde` 1.0.229、`thiserror` 2.0.19、`env_logger` 0.11.11、`indicatif` 0.18.6、`memchr` 2.8.3 和 `glob` 0.3.4。
+- **Linux 运行前提**：官方预编译 Linux 二进制文件基于 Debian 10（buster）构建，需要 glibc 2.28+，不支持 musl libc。
 
 ### Fixed
 
