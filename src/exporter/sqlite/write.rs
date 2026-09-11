@@ -20,25 +20,29 @@ pub(super) fn sqllog_to_values(
             (None, None, None)
         };
 
-    let all: [Value; 15] = [
-        Value::Text(sqllog.ts.clone()),
-        Value::Integer(i64::from(sqllog.ep)),
-        Value::Text(sqllog.sess_id.clone()),
-        Value::Text(sqllog.thrd_id.clone()),
-        Value::Text(sqllog.username.clone()),
-        Value::Text(sqllog.trxid.clone()),
-        Value::Text(sqllog.statement.clone()),
-        Value::Text(sqllog.appname.clone()),
-        Value::Text(strip_ip_prefix(&sqllog.client_ip).to_string()),
-        sqllog
-            .tag
-            .as_ref()
-            .map_or(Value::Null, |t| Value::Text(t.clone())),
-        Value::Text(sqllog.sql.clone()),
-        exec_time_ms.map_or(Value::Null, Value::Integer),
-        row_count.map_or(Value::Null, |v| Value::Integer(i64::from(v))),
-        exec_id.map_or(Value::Null, Value::Integer),
-        normalized_sql.map_or(Value::Null, |s| Value::Text(s.to_string())),
-    ];
-    ordered_indices.iter().map(|&i| all[i].clone()).collect()
+    // 只复制实际导出的字段一次；先构造全量数组再 clone 会同时持有两份 SQL。
+    ordered_indices
+        .iter()
+        .map(|&i| match i {
+            0 => Value::Text(sqllog.ts.clone()),
+            1 => Value::Integer(i64::from(sqllog.ep)),
+            2 => Value::Text(sqllog.sess_id.clone()),
+            3 => Value::Text(sqllog.thrd_id.clone()),
+            4 => Value::Text(sqllog.username.clone()),
+            5 => Value::Text(sqllog.trxid.clone()),
+            6 => Value::Text(sqllog.statement.clone()),
+            7 => Value::Text(sqllog.appname.clone()),
+            8 => Value::Text(strip_ip_prefix(&sqllog.client_ip).to_string()),
+            9 => sqllog
+                .tag
+                .as_ref()
+                .map_or(Value::Null, |t| Value::Text(t.clone())),
+            10 => Value::Text(sqllog.sql.clone()),
+            11 => exec_time_ms.map_or(Value::Null, Value::Integer),
+            12 => row_count.map_or(Value::Null, |v| Value::Integer(i64::from(v))),
+            13 => exec_id.map_or(Value::Null, Value::Integer),
+            14 => normalized_sql.map_or(Value::Null, |s| Value::Text(s.to_string())),
+            _ => unreachable!("validated output field index"),
+        })
+        .collect()
 }

@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "platform": "macOS-26.6.2-arm64-arm-64bit",
+  "revision": null,
+  "binary_sha256": "6e16dca11fab7c667bfb06b2b1cc551c63150b35ffdab1b4d2347c5e9dcb5a8c",
+  "file_mib": 256,
+  "file_counts": [
+    1,
+    4,
+    16
+  ],
+  "max_rss_mib": 128,
+  "max_growth_mib": 32,
+  "timeout_seconds": 600,
+  "cases": [
+    {
+      "format": "csv",
+      "files": 1,
+      "records": 1231355,
+      "peak_rss_bytes": 19677184,
+      "csv_sha256": "a97e3255f8c0540b9a0b27c95d7bef85d3c2a8909d73570a27a44951441c3e47",
+      "content_valid": true,
+      "elapsed_seconds": 0.3505619579999999,
+      "expected_records": 1231355,
+      "growth_bytes": 0,
+      "failures": [],
+      "passed": true
+    },
+    {
+      "format": "csv",
+      "files": 4,
+      "records": 4925420,
+      "peak_rss_bytes": 10141696,
+      "csv_sha256": "a3ffc73ea13140b69d7aaf4ea75c9f07d1a7aaa84dfcadaf9fe48f15f4527891",
+      "content_valid": true,
+      "elapsed_seconds": 1.5337501249999999,
+      "expected_records": 4925420,
+      "growth_bytes": 0,
+      "failures": [],
+      "passed": true
+    },
+    {
+      "format": "csv",
+      "files": 16,
+      "records": 19701680,
+      "peak_rss_bytes": 10059776,
+      "csv_sha256": "3108aa7ed8f7a0699b16d3e697995690d3d1555999fd6996f0f97e0b253c1f9a",
+      "content_valid": true,
+      "elapsed_seconds": 7.573816833,
+      "expected_records": 19701680,
+      "growth_bytes": 0,
+      "failures": [],
+      "passed": true
+    },
+    {
+      "format": "sqlite",
+      "files": 1,
+      "records": 1231355,
+      "peak_rss_bytes": 30523392,
+      "csv_sha256": null,
+      "content_valid": true,
+      "elapsed_seconds": 2.189946749999999,
+      "expected_records": 1231355,
+      "growth_bytes": 0,
+      "failures": [],
+      "passed": true
+    },
+    {
+      "format": "sqlite",
+      "files": 4,
+      "records": 4925420,
+      "peak_rss_bytes": 30785536,
+      "csv_sha256": null,
+      "content_valid": true,
+      "elapsed_seconds": 9.567606833,
+      "expected_records": 4925420,
+      "growth_bytes": 262144,
+      "failures": [],
+      "passed": true
+    },
+    {
+      "format": "sqlite",
+      "files": 16,
+      "records": 19701680,
+      "peak_rss_bytes": 30769152,
+      "csv_sha256": null,
+      "content_valid": true,
+      "elapsed_seconds": 38.380560667000005,
+      "expected_records": 19701680,
+      "growth_bytes": 245760,
+      "failures": [],
+      "passed": true
+    }
+  ],
+  "passed": true
+}

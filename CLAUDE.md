@@ -57,7 +57,7 @@ Input .log files (sqllogs/)
 
 - Single-threaded streaming — constant memory regardless of file size
 - Multi-file parallel parse path for CSV export via rayon (`parallel.rs`) and SQLite export (`sqlite_parallel.rs`)
-- 16MB `BufWriter` + `itoa` crate for zero-allocation CSV formatting
+- 1 MiB `BufWriter` + `itoa` crate for zero-allocation CSV formatting
 - `pipeline.is_empty()` check in the hot loop avoids filter overhead when disabled
 - Binary: LTO (`fat`) + strip + `panic=abort` + `opt-level=3`
 - Benchmark: ~5.2M records/sec (synthetic CSV, criterion); ~1.55M records/sec on a real 1.1GB file

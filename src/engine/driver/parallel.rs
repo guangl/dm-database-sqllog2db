@@ -159,6 +159,13 @@ fn run_parallel_tasks(
     interrupted: &Arc<AtomicBool>,
 ) -> Result<Vec<Result<TaskResult>>> {
     use rayon::prelude::*;
+    // 切块路径也从这里进入，必须与多文件路径应用相同的预算限制。
+    let jobs = crate::engine::prepare::effective_jobs_for_memory_budget(
+        log_files,
+        jobs,
+        crate::engine::prepare::DEFAULT_MEMORY_BUDGET_BYTES,
+    )
+    .min(log_files.len().max(1));
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(jobs)
         .build()

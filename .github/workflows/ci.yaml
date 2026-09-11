@@ -1,6 +1,7 @@
 name: CI
 
 on:
+  workflow_call:
   push:
     branches: [main]
   pull_request:
@@ -17,7 +18,9 @@ jobs:
   test:
     name: Test
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
@@ -31,15 +34,16 @@ jobs:
 
       - name: Run tests
         shell: bash
-        run: cargo test --verbose
+        run: cargo test --locked --verbose
 
       - name: Run performance baseline (release)
         if: runner.os == 'Linux'
-        run: cargo test --release --test integration test_csv_throughput_baseline
+        run: cargo test --locked --release --test integration test_csv_throughput_baseline
 
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
 
@@ -55,19 +59,44 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Run clippy
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --locked --all-targets -- -D warnings
 
       - name: Check documentation
-        run: cargo doc --no-deps
+        run: cargo doc --locked --no-deps
         env:
           RUSTDOCFLAGS: -D warnings
 
       - name: Compile benchmarks
-        run: cargo bench --no-run
+        run: cargo bench --locked --no-run
+
+  compatibility:
+    name: Compatibility and package
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check minimum supported Rust version
+        uses: dtolnay/rust-toolchain@1.85.0
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: msrv
+
+      - name: Compile all targets with Rust 1.85
+        run: cargo check --locked --all-targets
+
+      - name: Install stable Rust for package verification
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Verify publishable package
+        run: cargo package --locked
 
   coverage:
     name: Coverage
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
 
@@ -85,5 +114,21 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Check coverage (≥ 70 % lines)
-        run: cargo llvm-cov --fail-under-lines 70
+        run: cargo llvm-cov --locked --fail-under-lines 70
 
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+
+  export-memory:
+    name: Export memory gate
+    # Tagged releases run this gate against the uploaded release binaries instead.
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    uses: ./.github/workflows/export-memory.yaml

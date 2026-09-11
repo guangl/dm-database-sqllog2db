@@ -1,0 +1,83 @@
+name: Export Memory Gate
+
+on:
+  workflow_call:
+    inputs:
+      release_artifacts:
+        description: Test the exact binaries prepared for publication
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  memory:
+    name: Export memory (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-x86_64
+            artifact: sqllog2db-x86_64-linux
+          - os: ubuntu-24.04-arm
+            platform: linux-aarch64
+            artifact: sqllog2db-aarch64-linux
+          - os: macos-latest
+            platform: macos-aarch64
+            artifact: sqllog2db-aarch64-macos
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install GNU time
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y time
+
+      - name: Install Rust
+        if: ${{ !inputs.release_artifacts }}
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        if: ${{ !inputs.release_artifacts }}
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build candidate
+        if: ${{ !inputs.release_artifacts }}
+        run: cargo build --release --locked
+
+      - name: Download release candidate
+        if: inputs.release_artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ matrix.artifact }}
+          path: candidate
+
+      - name: Test gate failure detection
+        run: python3 -B -m unittest discover -s scripts -p 'test_export_memory.py' -v
+
+      - name: Enforce export release standard
+        shell: bash
+        env:
+          RELEASE_ARTIFACTS: ${{ inputs.release_artifacts }}
+          ARTIFACT: ${{ matrix.artifact }}
+        run: |
+          binary=target/release/sqllog2db
+          if [ "$RELEASE_ARTIFACTS" = "true" ]; then
+            binary="candidate/$ARTIFACT"
+            chmod +x "$binary"
+          fi
+          python3 scripts/check_export_memory.py "$binary" \
+            --file-mib 256 --files 16 --max-rss-mib 128 --max-growth-mib 32 \
+            --timeout-seconds 600 --report export-memory-report.json
+
+      - name: Preserve gate evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: export-memory-${{ matrix.platform }}-${{ inputs.release_artifacts && 'candidate' || 'source' }}
+          path: export-memory-report.json
+          if-no-files-found: error
+          retention-days: 90

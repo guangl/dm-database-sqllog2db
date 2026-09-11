@@ -1,7 +1,7 @@
 use super::super::{ExportStats, Exporter};
 use super::exporter::SqliteExporter;
 use super::pragma::initialize_pragmas;
-use super::sql_builder::{build_create_sql, build_insert_sql, build_multi_row_insert_sql};
+use super::sql_builder::{build_create_sql, build_insert_sql};
 use super::write::sqllog_to_values;
 use crate::error::Result;
 use dm_database_parser_sqllog::Sqllog;
@@ -31,14 +31,8 @@ impl Exporter for SqliteExporter {
 
         self.insert_sql = build_insert_sql(&self.table_name, &self.ordered_indices);
 
-        // 预填充 sql_cache，覆盖 1..=multi_row_batch_size 所有行数
-        let ordered_indices_snapshot = self.ordered_indices.clone();
-        for n in 1..=self.multi_row_batch_size {
-            self.sql_cache.insert(
-                n,
-                build_multi_row_insert_sql(&self.table_name, &ordered_indices_snapshot, n),
-            );
-        }
+        // 按实际写入的批次大小生成 SQL，避免预生成所有大小造成 O(batch_size²) 内存。
+        self.sql_cache.clear();
 
         let conn = self.conn_ref()?;
         let create_sql = build_create_sql(&self.table_name, &self.ordered_indices);

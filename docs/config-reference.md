@@ -201,7 +201,7 @@ append = false
 | `append` | bool | `false` | 追加到已有文件而非覆盖 |
 | `include_performance_metrics` | bool | `true` | 是否输出 `exec_time_ms`/`row_count`/`exec_id` 三列；为 `false` 时跳过性能指标解析并省略这三列 |
 
-**说明：** CSV 使用 16 MB `BufWriter` + `itoa` 零分配整数格式化，实现约 520 万条记录/秒的吞吐量。`overwrite` 与 `append` 不能同时为 `false`（否则会静默截断已有文件），验证阶段会报错。列的投影与顺序由独立的 `[output]` 段控制（见下）。
+**说明：** CSV 使用 1 MiB `BufWriter` + `itoa` 零分配整数格式化。`overwrite` 与 `append` 不能同时为 `false`（否则会静默截断已有文件），验证阶段会报错。列的投影与顺序由独立的 `[output]` 段控制（见下）。
 
 ---
 
@@ -230,7 +230,7 @@ append = false
 | `batch_size` | usize | `10000` | 单个事务内的 INSERT 批大小（须 > 0） |
 | `multi_row_batch_size` | usize | `64` | 多行 INSERT 每条语句的行数，取值 1-64（15 列 × 64 = 960 < SQLite 变量上限 999） |
 
-**说明：** 使用批量 INSERT 配合 PRAGMA 优化（synchronous=OFF、mmap_size、cache_size），实现约 110 万条记录/秒的吞吐量。列的投影与顺序由独立的 `[output]` 段控制（见下）。
+**说明：** 使用批量 INSERT，页缓存预算为 16 MiB（`cache_size=-16384`，负值单位为 KiB）；禁用文件映射，临时数据允许落盘，避免导出大量文件时缓存随数据库增长到数十 GiB。此预算仅针对 SQLite 页缓存，并非整个进程的内存上限。列的投影与顺序由独立的 `[output]` 段控制（见下）。
 
 ---
 
