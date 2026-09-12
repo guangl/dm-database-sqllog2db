@@ -87,7 +87,7 @@ def measure(binary, root, inputs, fmt, expected_rows, timeout):
     cfg = root / "config.toml"
     cfg.write_text(
         '[sqllog]\ninputs = ' + json.dumps([str(p) for p in inputs])
-        + '\n[replace_parameters]\nenable = false\n[logging]\nlevel = "warn"\n'
+        + '\n[logging]\nlevel = "warn"\n'
         + f'file = "{root / "app.log"}"\n'
         + exporter + '\noverwrite = true\nappend = false\n', encoding="utf-8"
     )

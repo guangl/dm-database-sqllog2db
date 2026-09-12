@@ -1,7 +1,7 @@
 use crate::error::{ConfigError, Error, Result};
 use serde::Deserialize;
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Default)]
 pub struct SqllogConfig {
     /// 输入路径列表，支持目录、单文件或 glob 模式（如 `sqllogs/*.log`）
     #[serde(default)]
@@ -11,15 +11,6 @@ pub struct SqllogConfig {
     #[doc(hidden)]
     #[serde(rename = "path", default)]
     pub path_deprecated: Option<toml::Value>,
-}
-
-impl Default for SqllogConfig {
-    fn default() -> Self {
-        Self {
-            inputs: vec!["sqllogs".to_string()],
-            path_deprecated: None,
-        }
-    }
 }
 
 impl SqllogConfig {
@@ -65,9 +56,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_default_inputs_is_sqllogs() {
+    fn test_default_inputs_are_empty() {
         let cfg = SqllogConfig::default();
-        assert_eq!(cfg.inputs, vec!["sqllogs".to_string()]);
+        assert!(cfg.inputs.is_empty());
     }
 
     #[test]

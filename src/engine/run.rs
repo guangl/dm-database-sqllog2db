@@ -65,8 +65,7 @@ fn build_run_context(cfg: &Config) -> RunContext<'_> {
         || (0..FIELD_NAMES.len()).collect(),
         OutputConfig::ordered_field_indices,
     );
-    let do_normalize = field_mask.includes_normalized_sql()
-        && cfg.replace_parameters.as_ref().is_none_or(|r| r.enable);
+    let do_normalize = field_mask.includes_normalized_sql() && cfg.replace_parameters.is_some();
     let placeholder_override = cfg
         .replace_parameters
         .as_ref()

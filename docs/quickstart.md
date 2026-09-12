@@ -166,19 +166,14 @@ SYSDBA|5234
 [sqllog]
 inputs = ["sqllogs"]
 
-[filter]
-enable = true
-
 [filter.include]
 # 语句类型，匹配日志方括号标签（取不带方括号的值，如 [SEL] -> "SEL"）
-statements = ["INS", "UPD", "DEL"]
+tags = ["INS", "UPD", "DEL"]
+# 保留包含慢 SQL 的事务，再应用记录条件
+min_runtime_ms = 100
 
 [filter.exclude]
 users = ["SYSDBA", "MONITOR"]
-
-# 指标过滤器为事务级，须放在 [filter.indicators] 下（放在 include 下会被忽略）
-[filter.indicators]
-min_runtime_ms = 100
 
 [exporter.csv]
 file = "output/filtered.csv"
@@ -197,10 +192,12 @@ sqllog2db run -c config.toml
 事务级 SQL 内容过滤需要两遍预扫描：
 
 ```toml
-[filter.sql_filter]
-includes = ["FROM ORDERS", "JOIN PAYMENTS"]
-excludes = ["pg_catalog", "information_schema"]
+[filter.include]
+sql = ["FROM ORDERS", "JOIN PAYMENTS"]
 min_runtime_ms = 500
+
+[filter.exclude]
+sql = ["pg_catalog", "information_schema"]
 ```
 
 工具先扫描所有文件收集匹配的事务 ID，再于第二遍中应用全部过滤器。

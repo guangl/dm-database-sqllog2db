@@ -4,9 +4,8 @@
 use crate::config::Config;
 use crate::error::{Error, Result};
 use crate::parser::SqllogParser;
-use crate::pipeline::filters::{IndicatorFilters, SqlFilters};
+use crate::pipeline::filters::transaction::TransactionFilters;
 use crate::streaming::open_log_file;
-use dm_database_parser_sqllog::{Filter, FilterBuilder};
 use indicatif::{ProgressBar, ProgressStyle};
 use log::{info, warn};
 use std::io::IsTerminal;
@@ -73,10 +72,16 @@ pub(super) fn merge_trxid_prescan(
             }
             return Ok(None);
         }
-        let extra_trxids = scan_for_trxids_by_transaction_filters(log_files, cfg, jobs)?;
+        let matches = scan_for_trxids_by_transaction_filters(log_files, cfg, jobs)?;
         let mut tmp = cfg.clone();
         if let Some(f) = &mut tmp.filter {
-            f.merge_found_trxids(extra_trxids);
+            f.merge_found_trxids(matches.included.into_iter().collect());
+            if let Some(ids) = &mut f.include.trxids {
+                ids.retain(|id| !matches.excluded.contains(id));
+            }
+            // 第二遍只使用已计算的事务 ID；stdin 则保留原条件逐条匹配。
+            f.include.clear_transaction_filters();
+            f.exclude.clear_transaction_filters();
         }
         Ok(Some(tmp))
     } else {
@@ -101,73 +106,33 @@ pub(super) fn make_progress_bar(show_progress: bool, total_files: usize) -> Opti
     }
 }
 
-// ===== Pre-scan: 指标/SQL 过滤器构建 =====
-
-pub(super) fn build_indicator_filters(indicators: &IndicatorFilters) -> Vec<Filter> {
-    let mut filters = Vec::new();
-    if let Some(min_ms) = indicators.min_runtime_ms {
-        filters.push(FilterBuilder::new().exec_time_gte(min_ms).build());
-    }
-    if let Some(min_r) = indicators.min_row_count {
-        // rowcount >= min_r: for u32, rowcount_gt(min_r - 1) works when min_r > 0
-        let filter = if min_r == 0 {
-            FilterBuilder::new().build()
-        } else {
-            FilterBuilder::new().rowcount_gt(min_r - 1).build()
-        };
-        filters.push(filter);
-    }
-    if let Some(ids) = &indicators.exec_ids {
-        for &id in ids {
-            filters.push(FilterBuilder::new().exec_id_eq(id).build());
-        }
-    }
-    filters
-}
-
-pub(super) fn build_sql_include_filters(sf: &SqlFilters) -> Vec<Filter> {
-    sf.includes
-        .as_deref()
-        .unwrap_or(&[])
-        .iter()
-        .map(|p| FilterBuilder::new().sql_contains(p.clone()).build())
-        .collect()
-}
-
-pub(super) fn build_sql_exclude_filters(sf: &SqlFilters) -> Vec<Filter> {
-    sf.excludes
-        .as_deref()
-        .unwrap_or(&[])
-        .iter()
-        .map(|p| FilterBuilder::new().sql_contains(p.clone()).build())
-        .collect()
-}
-
 // ===== Pre-scan: 单文件扫描（rayon 并行 + 文件内去重）=====
 
-/// 扫描单个日志文件，返回满足事务级过滤条件的去重 `trxid` 列表。
-///
-/// 通过流式迭代器逐条处理记录（内存占用与文件大小无关），单条记录解析失败时跳过并记录警告，
-/// 不影响同文件其余记录的扫描。可被上层跨文件的 `par_iter()` 安全调用（文件级并行）。
-pub(super) fn scan_log_file_for_matches(file_path: &str, cfg: &Config) -> Vec<String> {
+/// 预扫描选中的事务和被否决的事务；跨文件合并后统一应用否决。
+#[derive(Debug, Default)]
+pub(super) struct TransactionMatches {
+    pub included: std::collections::HashSet<String>,
+    pub excluded: std::collections::HashSet<String>,
+}
+
+/// 流式扫描单个文件，分别收集包含和排除条件命中的事务 ID。
+/// 内存随唯一事务数量增长；解析失败的记录会跳过并记录警告。
+pub(super) fn scan_log_file_for_matches(file_path: &str, cfg: &Config) -> TransactionMatches {
     let filters = match &cfg.filter {
         Some(f) if f.has_transaction_filters() => f,
-        _ => return Vec::new(),
+        _ => return TransactionMatches::default(),
     };
 
     let records = match open_log_file(std::path::Path::new(file_path)) {
         Ok(it) => it,
         Err(e) => {
             log::warn!("Pre-scan: failed to parse '{file_path}': {e}");
-            return Vec::new();
+            return TransactionMatches::default();
         }
     };
 
-    let indicator_filters = build_indicator_filters(&filters.indicators);
-    let sql_include_filters = build_sql_include_filters(&filters.sql);
-    let sql_exclude_filters = build_sql_exclude_filters(&filters.sql);
-    let has_sql_filters = filters.sql.has_filters();
-    let mut trxids: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let filters = TransactionFilters::new(filters);
+    let mut matches = TransactionMatches::default();
     for result in records {
         let record = match result {
             Ok(r) => r,
@@ -176,24 +141,14 @@ pub(super) fn scan_log_file_for_matches(file_path: &str, cfg: &Config) -> Vec<St
                 continue;
             }
         };
-        let indicator_match =
-            !indicator_filters.is_empty() && indicator_filters.iter().any(|f| f.matches(&record));
-
-        // SQL match is an independent path — not subordinate to indicator match.
-        // Both filter types evaluate independently; trxid is collected if either matches.
-        let sql_match = has_sql_filters && {
-            let include_ok = sql_include_filters.is_empty()
-                || sql_include_filters.iter().any(|f| f.matches(&record));
-            let exclude_ok = sql_exclude_filters.is_empty()
-                || !sql_exclude_filters.iter().any(|f| f.matches(&record));
-            include_ok && exclude_ok
-        };
-
-        if indicator_match || sql_match {
-            trxids.insert(record.trxid.clone());
+        if filters.includes(&record) {
+            matches.included.insert(record.trxid.clone());
+        }
+        if filters.excludes(&record) {
+            matches.excluded.insert(record.trxid);
         }
     }
-    trxids.into_iter().collect()
+    matches
 }
 
 // ===== Pre-scan: 跨文件编排（文件级 rayon 并行）=====
@@ -202,7 +157,7 @@ pub(super) fn scan_for_trxids_by_transaction_filters(
     log_files: &[std::path::PathBuf],
     cfg: &Config,
     jobs: usize,
-) -> Result<Vec<String>> {
+) -> Result<TransactionMatches> {
     use rayon::prelude::*;
 
     log::info!(
@@ -215,11 +170,11 @@ pub(super) fn scan_for_trxids_by_transaction_filters(
         .build()
         .map_err(|e| Error::Io(std::io::Error::other(format!("rayon thread pool: {e}"))))?;
 
-    let matched: std::collections::HashSet<String> = tokio::task::block_in_place(|| {
+    let matched: TransactionMatches = tokio::task::block_in_place(|| {
         pool.install(|| {
             log_files
                 .par_iter()
-                .flat_map(|file| {
+                .map(|file| {
                     if let Some(path) = file.to_str() {
                         scan_log_file_for_matches(path, cfg)
                     } else {
@@ -227,14 +182,18 @@ pub(super) fn scan_for_trxids_by_transaction_filters(
                             "Pre-scan: skipping file with non-UTF8 path: {}",
                             file.display()
                         );
-                        Vec::new()
+                        TransactionMatches::default()
                     }
                 })
-                .collect()
+                .reduce(TransactionMatches::default, |mut all, next| {
+                    all.included.extend(next.included);
+                    all.excluded.extend(next.excluded);
+                    all
+                })
         })
     });
 
-    Ok(matched.into_iter().collect())
+    Ok(matched)
 }
 
 // ===== 内存预算并发控制 =====

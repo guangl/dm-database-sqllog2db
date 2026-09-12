@@ -55,9 +55,6 @@ fn cfg_no_pipeline(sqllog_dir: &Path, bench_dir: &Path) -> Config {
 fn cfg_pipeline_passthrough(sqllog_dir: &Path, bench_dir: &Path) -> Config {
     let toml = format!(
         "{base}
-[filter]
-enable = true
-
 [filter.include]
 start_ts = \"2000-01-01\"
 ",
@@ -72,9 +69,6 @@ fn cfg_trxid_small(sqllog_dir: &Path, bench_dir: &Path) -> Config {
     let ids: Vec<String> = (0..10).map(|i: usize| format!("\"{i}\"")).collect();
     let toml = format!(
         "{base}
-[filter]
-enable = true
-
 [filter.include]
 trxids = [{ids}]
 ",
@@ -90,9 +84,6 @@ fn cfg_trxid_large(sqllog_dir: &Path, bench_dir: &Path) -> Config {
     let ids: Vec<String> = (0..1_000).map(|i: usize| format!("\"{i}\"")).collect();
     let toml = format!(
         "{base}
-[filter]
-enable = true
-
 [filter.include]
 trxids = [{ids}]
 ",
@@ -107,10 +98,7 @@ trxids = [{ids}]
 fn cfg_indicator_prescan(sqllog_dir: &Path, bench_dir: &Path) -> Config {
     let toml = format!(
         "{base}
-[filter]
-enable = true
-
-[filter.indicators]
+[filter.include]
 min_runtime_ms = 2000
 ",
         base = base_toml(sqllog_dir, bench_dir)
@@ -124,9 +112,6 @@ min_runtime_ms = 2000
 fn cfg_exclude_passthrough(sqllog_dir: &Path, bench_dir: &Path) -> Config {
     let toml = format!(
         "{base}
-[filter]
-enable = true
-
 [filter.exclude]
 users = [\"BENCH_EXCLUDE\"]
 ",
@@ -140,9 +125,6 @@ users = [\"BENCH_EXCLUDE\"]
 fn cfg_exclude_active(sqllog_dir: &Path, bench_dir: &Path) -> Config {
     let toml = format!(
         "{base}
-[filter]
-enable = true
-
 [filter.exclude]
 users = [\"BENCH\"]
 ",

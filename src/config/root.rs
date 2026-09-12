@@ -14,7 +14,7 @@ pub struct Config {
     #[serde(default)]
     pub sqllog: SqllogConfig,
     #[serde(default)]
-    pub logging: LoggingConfig,
+    pub logging: Option<LoggingConfig>,
     #[serde(default)]
     pub exporter: ExporterConfig,
     #[serde(default)]

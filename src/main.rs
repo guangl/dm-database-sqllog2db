@@ -21,17 +21,18 @@ const EXIT_PARTIAL: i32 = 1;
 const EXIT_FATAL: i32 = 2;
 const EXIT_INTERRUPTED: i32 = 130;
 
-/// Initialize simple console logging for non-run commands.
-/// verbose flag is intentionally ignored: non-Run commands (init/validate)
-/// only support quiet suppression; debug verbosity requires the full logging
-/// stack initialized in the Run path.
-fn init_simple_logging(quiet: bool) {
+/// Initialize console diagnostics without creating a log file.
+/// Also used by run/stats when no logging section is configured.
+fn init_simple_logging(quiet: bool, verbose: bool) {
     let filter = if quiet {
         log::LevelFilter::Error
+    } else if verbose {
+        log::LevelFilter::Debug
     } else {
         log::LevelFilter::Info
     };
     let _ = env_logger::Builder::from_default_env()
+        .target(env_logger::Target::Stdout)
         .filter_level(filter)
         .try_init();
 }
@@ -42,10 +43,13 @@ fn init_simple_logging(quiet: bool) {
 /// - quiet=true   → "error" (suppress most log output)
 /// - neither      → leave the config value unchanged
 fn apply_verbosity_to_config(cfg: &mut Config, verbose: bool, quiet: bool) {
+    let Some(logging) = cfg.logging.as_mut() else {
+        return;
+    };
     if verbose {
-        cfg.logging.level = "debug".to_string();
+        logging.level = "debug".to_string();
     } else if quiet {
-        cfg.logging.level = "error".to_string();
+        logging.level = "error".to_string();
     }
 }
 
@@ -129,7 +133,7 @@ async fn run() -> Result<Option<(ErrorStats, bool)>> {
         Some(cli::opts::Commands::Run { .. } | cli::opts::Commands::Stats { .. })
     );
     if needs_simple_logging {
-        init_simple_logging(cli.quiet);
+        init_simple_logging(cli.quiet, cli.verbose);
     }
 
     match &cli.command {
@@ -151,7 +155,11 @@ async fn run() -> Result<Option<(ErrorStats, bool)>> {
             cfg.validate()?;
 
             apply_verbosity_to_config(&mut cfg, cli.verbose, cli.quiet);
-            logging::init_logging(&cfg.logging, false)?;
+            if let Some(logging_config) = &cfg.logging {
+                logging::init_logging(logging_config, false)?;
+            } else {
+                init_simple_logging(cli.quiet, cli.verbose);
+            }
             info!("Application started");
             info!("Configuration validation passed");
 
@@ -188,7 +196,11 @@ async fn run() -> Result<Option<(ErrorStats, bool)>> {
             let mut cfg = Config::from_file(Path::new(config))?;
             cfg.validate_for_stats()?;
             apply_verbosity_to_config(&mut cfg, cli.verbose, cli.quiet);
-            logging::init_logging(&cfg.logging, false)?;
+            if let Some(logging_config) = &cfg.logging {
+                logging::init_logging(logging_config, false)?;
+            } else {
+                init_simple_logging(cli.quiet, cli.verbose);
+            }
             cli::stats::handle_stats(&cfg, *top, from.clone(), to.clone())?;
             Ok(None)
         }
@@ -319,25 +331,41 @@ mod tests {
     }
 
     #[test]
-    fn test_apply_verbosity_quiet() {
+    fn verbosity_does_not_enable_file_logging() {
         let mut cfg = Config::default();
+        apply_verbosity_to_config(&mut cfg, true, false);
+        assert!(cfg.logging.is_none());
+    }
+
+    #[test]
+    fn test_apply_verbosity_quiet() {
+        let mut cfg = Config {
+            logging: Some(dm_database_sqllog2db::config::LoggingConfig::default()),
+            ..Config::default()
+        };
         apply_verbosity_to_config(&mut cfg, false, true);
-        assert_eq!(cfg.logging.level, "error");
+        assert_eq!(cfg.logging.as_ref().unwrap().level, "error");
     }
 
     #[test]
     fn test_apply_verbosity_not_quiet() {
-        let mut cfg = Config::default();
-        let original = cfg.logging.level.clone();
+        let mut cfg = Config {
+            logging: Some(dm_database_sqllog2db::config::LoggingConfig::default()),
+            ..Config::default()
+        };
+        let original = cfg.logging.as_ref().unwrap().level.clone();
         apply_verbosity_to_config(&mut cfg, false, false);
-        assert_eq!(cfg.logging.level, original);
+        assert_eq!(cfg.logging.as_ref().unwrap().level, original);
     }
 
     #[test]
     fn test_apply_verbosity_verbose_sets_debug() {
-        let mut cfg = Config::default();
+        let mut cfg = Config {
+            logging: Some(dm_database_sqllog2db::config::LoggingConfig::default()),
+            ..Config::default()
+        };
         apply_verbosity_to_config(&mut cfg, true, false);
-        assert_eq!(cfg.logging.level, "debug");
+        assert_eq!(cfg.logging.as_ref().unwrap().level, "debug");
     }
 
     #[test]
@@ -358,8 +386,7 @@ mod tests {
     #[test]
     fn test_apply_cli_inputs_none_keeps_config() {
         let mut cfg = Config::default();
-        // Default inputs = ["sqllogs"]
-        assert_eq!(cfg.sqllog.inputs, vec!["sqllogs".to_string()]);
+        cfg.sqllog.inputs = vec!["sqllogs".to_string()];
         apply_cli_inputs_to_config(&mut cfg, None);
         assert_eq!(
             cfg.sqllog.inputs,

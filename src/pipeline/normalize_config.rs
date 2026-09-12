@@ -1,26 +1,15 @@
 use serde::Deserialize;
 
 /// `[replace_parameters]` 配置段
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Default)]
+#[serde(deny_unknown_fields)]
 pub struct NormalizeConfig {
-    /// 是否在导出结果中写入 `normalized_sql` 列（默认 true）
-    #[serde(default = "default_true")]
-    pub enable: bool,
     /// 显式声明 SQL 中使用的占位符列表，例如 `["?"]` 或 `[":1"]`。
     /// - 只含 `"?"` → 仅匹配 `?` 顺序占位符
     /// - 含任意 `:N` 形式（如 `":1"`）→ 仅匹配 `:N` 序号占位符
     /// - 空数组（默认）→ 自动检测
     #[serde(default)]
     pub placeholders: Vec<String>,
-}
-
-impl Default for NormalizeConfig {
-    fn default() -> Self {
-        Self {
-            enable: true,
-            placeholders: Vec::new(),
-        }
-    }
 }
 
 impl NormalizeConfig {
@@ -40,8 +29,4 @@ impl NormalizeConfig {
             _ => None,
         }
     }
-}
-
-fn default_true() -> bool {
-    true
 }

@@ -2,6 +2,16 @@
 
 本文档描述 sqllog2db 中所有可用的配置选项。配置文件使用 TOML 格式编写。默认配置由 `sqllog2db init -o config.toml --force` 生成。以下每节记录一个配置块，包含字段、默认值和使用说明。
 
+所有配置段默认均不启用，写入配置才生效。配置段内部仍可有参数默认值，例如显式写 `[logging]` 后，未填的 level 使用 info。
+
+- 省略 `[replace_parameters]`：不替换参数，不输出 `normalized_sql` 列。
+- 省略 `[logging]` / `[error]`：不创建对应日志文件，运行日志默认输出到 stdout。
+- 省略所有 `[exporter.*]`：不默认选择导出器；`run` / `validate` 会提示需要配置导出器，`stats` 无需导出器。
+- 省略 `[sqllog]`：不默认读取 sqllogs 目录；通过配置 inputs 或命令行 `--input` 提供输入。
+- 省略 filter / output / stats：不附加过滤、字段投影或统计选项。统计命令自身的 top-N 等默认参数不变。
+
+`init` 生成的模板会显式配置输入和一个导出器，可选功能以注释形式展示。启用功能只需添加对应配置段，关闭则删除或注释该段；不再使用 enable 开关。
+
 ---
 
 ## [sqllog]
@@ -26,7 +36,7 @@ inputs = ["sqllogs"]
 
 ## [logging]
 
-控制应用日志（程序自身运行日志）的输出路径、级别和滚动保留。
+控制应用日志（程序自身运行日志）的输出路径、级别和滚动保留。省略该段或未填写 file 时，运行日志输出到 stdout，不写日志文件；只有显式填写 file 才写文件。stdout 日志默认为 info，--verbose 使用 debug，--quiet 仅输出 error。
 
 ```toml
 [logging]
@@ -40,7 +50,7 @@ retention_days = 7
 
 | 字段 | 类型 | 默认值 | 描述 |
 |------|------|--------|------|
-| `file` | String | `"logs/sqllog2db.log"` | 应用日志文件路径（不可为空） |
+| `file` | String | 未配置（输出到 stdout） | 显式指定后写入该文件，不可为空 |
 | `level` | String | `"info"` | 最低日志级别（trace/debug/info/warn/error） |
 | `retention_days` | usize | `7` | 滚动日志保留天数，取值 1-365 |
 
@@ -64,125 +74,98 @@ file = "export/errors.log"
 
 ---
 
-## [filter]
+## [replace_parameters]（可选）
 
-过滤功能的总开关及其子表。过滤分两类：**记录级**（`[filter.include]` / `[filter.exclude]`，逐条判断）和**事务级**（`[filter.indicators]` / `[filter.sql]`，命中即保留或丢弃整笔事务，需要两遍预扫描）。所有元数据字段均为**精确字符串匹配**（不支持正则），且取值均为**列表**。
+该段存在即启用参数替换，将日志中的 PARAMS 回填到 SQL 占位符，并在导出中增加 `normalized_sql` 列。省略该段时关闭替换，也不会输出该列。原始 `sql` 列保持不变。
 
 ```toml
-[filter]
-# 是否启用过滤管道（false 时下方所有子表均被忽略，走零开销快速路径）
-enable = true
+[replace_parameters]
+# 可省略，默认自动检测；也可指定 ["?"] 或 [":1"]
+# placeholders = []
 ```
 
 | 字段 | 类型 | 默认值 | 描述 |
 |------|------|--------|------|
-| `enable` | bool | `false` | 过滤功能总开关。为 `false` 时所有过滤子表都不生效 |
+| `placeholders` | [String] | `[]` | 空列表自动检测，仅 `?` 使用顺序占位符，仅 `:N` 使用序号占位符 |
+
+**迁移：** 旧 `enable = true` 改为仅保留配置段；旧 `enable = false` 改为删除或注释整个配置段。enable 和未知字段会直接报错。若 output.fields 不包含 normalized_sql，则不会计算或导出替换结果。
 
 ---
 
-## [filter.include]
+## [filter.include] / [filter.exclude]
 
-记录级包含过滤。**同一字段内的多个值为 OR**（命中任一即可），**不同字段之间为 AND**（每个已配置字段都必须命中，记录才保留）。
+过滤只需两组：`include` 保留，`exclude` 排除。**写了条件就生效**；不写过滤器、空子表或空列表表示不过滤。已移除 enable 开关；关闭过滤时删除或注释对应条件。
 
 ```toml
 [filter.include]
-# users      = ["SYSDBA"]                      # 用户名
-# ips        = ["127.0.0.1", "192.168.1.100"]  # 客户端 IP
-# sessions   = ["0x7f41435437a8"]              # 会话 ID（十六进制字符串）
-# threads    = ["2188515"]                     # 线程 ID
-# statements = ["INS", "UPD", "DEL"]           # 语句类型（见下方说明）
-# apps       = ["DMSQL"]                        # 应用名
-# tags       = ["SEL", "INS"]                  # 日志标签（与 statements 同义）
-# start_ts   = "2023-01-01 00:00:00"           # 时间戳闭区间下界
-# end_ts     = "2023-01-01 23:59:59"           # 时间戳闭区间上界
-# trxids     = ["257809109", "257809110"]      # 事务 ID
-```
+users = ["SYSDBA"]
+min_runtime_ms = 1000
+# sql = ["UPDATE", "DELETE FROM"]
 
-| 字段 | 类型 | 默认值 | 描述 |
-|------|------|--------|------|
-| `users` | [String] | `null` | 要保留的用户名列表 |
-| `ips` | [String] | `null` | 要保留的客户端 IP 列表 |
-| `sessions` | [String] | `null` | 要保留的会话 ID 列表（十六进制字符串） |
-| `threads` | [String] | `null` | 要保留的线程 ID 列表 |
-| `statements` | [String] | `null` | 要保留的语句类型列表（INS/UPD/DEL/SEL/SET/OTH/ORA），匹配日志方括号标签 |
-| `apps` | [String] | `null` | 要保留的应用名列表 |
-| `tags` | [String] | `null` | 要保留的日志标签列表，不带方括号（`statements` 的同义字段） |
-| `start_ts` | String | `null` | 记录时间戳的闭区间下界（格式 `YYYY-MM-DD HH:MM:SS`） |
-| `end_ts` | String | `null` | 记录时间戳的闭区间上界（格式同上） |
-| `trxids` | [String] | `null` | 要保留的事务 ID 列表 |
-
----
-
-## [filter.exclude]
-
-记录级排除过滤，采用 **OR 否决**：任意一个字段的任意一个值命中，即丢弃该记录。字段集合与 include 相同（时间戳与事务 ID 除外）。
-
-```toml
 [filter.exclude]
-# users      = ["guest", "anon"]         # 用户名
-# ips        = ["10.0.0.1"]              # 客户端 IP
-# sessions   = ["0x0000000000000000"]    # 会话 ID
-# threads    = ["0"]                     # 线程 ID
-# statements = ["ORA"]                   # 语句类型（见下方说明）
-# apps       = ["monitor", "health"]     # 应用名
-# tags       = ["ORA"]                   # 日志标签（与 statements 同义）
+tags = ["ORA"]
+sql = ["SELECT 1", "FROM DUAL"]
 ```
 
-| 字段 | 类型 | 默认值 | 描述 |
+上例保留含执行时间 ≥ 1000 ms 语句的事务，再仅输出其中 SYSDBA 的非 ORA 记录；如果事务中任一 SQL 包含 `SELECT 1` 或 `FROM DUAL`，整笔事务都会被排除。
+
+### 记录条件
+
+元数据为精确字符串匹配，不支持正则。同一字段内多个值为 OR；include 的不同记录字段为 AND；exclude 的任意记录条件命中就丢弃该条记录。
+
+| 字段 | 类型 | 可用组 | 含义 |
 |------|------|--------|------|
-| `users` | [String] | `null` | 要排除的用户名列表 |
-| `ips` | [String] | `null` | 要排除的客户端 IP 列表 |
-| `sessions` | [String] | `null` | 要排除的会话 ID 列表 |
-| `threads` | [String] | `null` | 要排除的线程 ID 列表 |
-| `statements` | [String] | `null` | 要排除的语句类型列表，匹配日志方括号标签 |
-| `apps` | [String] | `null` | 要排除的应用名列表 |
-| `tags` | [String] | `null` | 要排除的日志标签列表，不带方括号（`statements` 的同义字段） |
+| `users` | [String] | 两组 | 用户名 |
+| `ips` | [String] | 两组 | 客户端 IP |
+| `sessions` | [String] | 两组 | 会话 ID（十六进制字符串） |
+| `threads` | [String] | 两组 | 线程 ID |
+| `apps` | [String] | 两组 | 应用名 |
+| `tags` | [String] | 两组 | 日志标签，如 `SEL`、`INS`、`UPD`、`DEL`、`SET`、`OTH`、`ORA`，不带方括号 |
+| `start_ts` | String | include | 时间闭区间下界，`YYYY-MM-DD HH:MM:SS` |
+| `end_ts` | String | include | 时间闭区间上界，格式同上 |
+| `trxids` | [String] | include | 事务 ID 列表 |
 
-**关于 `statements` 与 `tags`：** DM SQL 日志中的语句类型以方括号标签形式出现（如 `[SEL]`、`[INS]`、`[ORA]`），解析后存于记录的 `tag` 字段，取值**不含方括号**（`[ORA]` → `"ORA"`）。`statements` 与 `tags` 匹配的是**同一个字段**，互为同义——填 `["ORA"]` 即可，`["[ORA]"]` 匹配不到。日志里的 `stmt:` 句柄指针（如 `0x7fa38c03a480`）不是语句类型，无法也无需按它过滤。
+语句类型只使用 `tags`，旧字段 `statements` 已移除。日志里的 `stmt:` 句柄不是语句类型。
 
----
+### 事务条件
 
-## [filter.indicators]
+以下字段直接写在 include 或 exclude 中。**同一组的事务条件按 OR 匹配**，任一记录命中即可选中或排除整笔事务；exclude 优先，即使该事务也命中 include。跨文件的同一事务也适用。
 
-事务级指标过滤（需要两遍预扫描）：命中任一条件即**保留整笔事务**的所有记录。
+| 字段 | 类型 | 含义 |
+|------|------|------|
+| `sql` | [String] | SQL 文本包含任一字面量子串，区分大小写，不支持正则 |
+| `exec_ids` | [i64] | 执行 ID 命中任一值 |
+| `min_runtime_ms` | number | 执行时长（毫秒）≥ 阈值，支持小数，必须非负且有限 |
+| `min_row_count` | u32 | 影响行数 ≥ 阈值（0 匹配所有记录） |
 
-```toml
-[filter.indicators]
-# exec_ids = [257809109, 257809110]   # 执行 ID 列表
-# min_runtime_ms = 1000               # 最小执行时长（毫秒）
-# min_row_count = 100                 # 最小影响行数
-```
+事务条件需要额外一遍预扫描。没有 include 事务条件时，从全部事务中排除；有 include 事务条件时，从命中事务中排除。显式 `include.trxids` 与预扫描选中 ID 取并集，但仍受事务排除约束。选中的事务还要经过上述记录条件，因此配置记录条件后，导出结果可能只包含事务的部分记录。
 
-| 字段 | 类型 | 默认值 | 描述 |
-|------|------|--------|------|
-| `exec_ids` | [i64] | `null` | 任一记录的 `exec_id` 命中则保留整笔事务 |
-| `min_runtime_ms` | u32 | `null` | 任一语句执行时长（毫秒）≥ 此阈值则保留整笔事务 |
-| `min_row_count` | u32 | `null` | 任一语句影响行数 ≥ 此阈值则保留整笔事务 |
+stdin 无法预扫描，会输出警告并将 SQL / 指标条件降级为逐条匹配，不能保证整笔事务的保留或排除。
 
----
+### 旧配置迁移
 
-## [filter.sql]
+这是不兼容变更：旧字段和未知字段会在加载时直接报错，请先按下表迁移。
 
-事务级 SQL 内容过滤（需要两遍预扫描）：按 SQL 文本的**字面量子串**匹配（`str::contains`，不支持正则）。
+| 旧写法 | 新写法 |
+|--------|--------|
+| `[filter] enable = true` | 删除此开关，条件自动生效 |
+| `[filter] enable = false` | 删除过滤条件，或将其注释掉 |
+| `[filter.indicators]` 下的指标 | 移到 `[filter.include]`，字段名不变 |
+| `[filter.sql] includes` / `include_patterns` | `[filter.include] sql` |
+| `[filter.sql] excludes` / `exclude_patterns` | `[filter.exclude] sql` |
+| `statements` | `tags` |
+| `[filter] usernames`、`client_ips` 等旧扁平字段 | `[filter.include] users`、`ips` 等 |
+| `[filter] exclude_usernames` 等 | `[filter.exclude] users` 等 |
 
-```toml
-[filter.sql]
-# includes = ["FROM USER_TABLES", "DELETE FROM"]   # 命中任一子串则保留整笔事务
-# excludes = ["SELECT 1", "DUAL"]                  # 命中任一子串则丢弃整笔事务
-```
+新旧格式不能混用。`filter` 只接受 `include` 和 `exclude`，两组内的拼写错误和已移除字段也会报错。
 
-| 字段 | 类型 | 默认值 | 描述 |
-|------|------|--------|------|
-| `includes` | [String] | `null` | 任一 SQL 文本包含所列任一子串则保留整笔事务（旧字段名 `include_patterns` 仍兼容） |
-| `excludes` | [String] | `null` | 任一 SQL 文本包含所列任一子串则丢弃整笔事务（旧字段名 `exclude_patterns` 仍兼容） |
-
-**说明：** 记录级组合规则为 `(include 各字段 AND) AND (NOT exclude 任一命中)`。事务级过滤器（`indicators`、`sql`）在预扫描阶段收集命中的事务 ID，正式扫描时保留这些事务的全部记录。启用任一事务级过滤器都会触发预扫描，对大文件有额外一遍 I/O 成本。旧版扁平字段（如 `usernames`、`client_ips`、`exclude_usernames`）仍向后兼容，但建议迁移到上述子表写法。
+**行为修正：** SQL 排除现在真正排除整笔事务。旧实现可能因为同事务的另一条 SQL 未命中排除条件而将它重新保留；迁移前后此类数据的导出结果会不同。所有已配置条件都会自动生效。
 
 ---
 
 ## [exporter.parquet]
 
-Parquet 是默认导出格式，适合大数据量归档和分析。导出器按 row group 流式写入，并在缓冲数据约达 64 MiB 时提前刷新，避免长 SQL 导致内存无界增长。
+Parquet 是 init 模板显式选择的导出格式，适合大数据量归档和分析；省略 exporter 时不会自动启用。导出器按 row group 流式写入，并在缓冲数据约达 64 MiB 时提前刷新，避免长 SQL 导致内存无界增长。
 
 ```toml
 [exporter.parquet]

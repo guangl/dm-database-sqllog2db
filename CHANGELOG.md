@@ -7,13 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-09-12
+
 ### Added
 
 - **Parquet 导出器**：新增按 row group 流式写入的 Parquet 输出，支持 ZSTD、Snappy 和不压缩，兼容字段投影与 `normalized_sql`。
 
 ### Changed
 
-- **默认导出格式**：`Config::default()`、`sqllog2db init` 和交互式向导现在默认选择 Parquet + ZSTD。
+- **配置按存在启用（BREAKING）**：replace_parameters 移除 enable，省略配置时不替换参数、不输出 normalized_sql；空配置段即启用。logging 默认输出到 stdout、不写文件，exporter 不再自动选择 Parquet，输入路径不再默认指向 sqllogs。init 仅显式开启输入和导出器，可选功能保持注释。
+- **过滤配置收敛（BREAKING）**：仅接受 `[filter.include]` / `[filter.exclude]`，SQL 与指标直接写入对应组，配置即生效；删除 enable、旧事务子表、扁平字段和 statements 同义字段，旧字段及未知字段直接报错。Rust 配置结构也同步移除兼容类型。默认模板只展示常用项。
+- **事务排除修正**：SQL 或指标排除命中后丢弃整笔事务，跨文件仍生效；stdin 降级时会实际逐条应用 SQL / 指标条件。
+- **初始化导出格式**：`sqllog2db init` 和交互式向导显式生成 Parquet + ZSTD；`Config::default()` 不配置导出器。
 - **统计结果仅终端展示**：`stats` 不再生成 Parquet/CSV 聚合文件或 SQLite 聚合表，且运行时不再要求配置导出器。
 
 ## [1.21.0] - 2026-09-11

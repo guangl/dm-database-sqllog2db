@@ -1,16 +1,14 @@
 use crate::config::{
-    Config, CsvExporterConfig, ExporterConfig, LoggingConfig, ParquetCompression,
-    SqliteExporterConfig,
+    Config, CsvExporterConfig, ExporterConfig, LoggingConfig, SqliteExporterConfig,
 };
 
 // ── ExporterConfig ─────────────────────────────────────────
 #[test]
-fn test_exporter_config_defaults_to_parquet() {
+fn test_exporter_config_defaults_to_none() {
     let cfg = ExporterConfig::default();
-    let parquet = cfg.parquet.expect("Parquet should be the default exporter");
-    assert_eq!(parquet.file, "outputs/sqllog.parquet");
-    assert_eq!(parquet.compression, ParquetCompression::Zstd);
+    assert!(cfg.parquet.is_none());
     assert!(cfg.csv.is_none());
+    assert!(cfg.sqlite.is_none());
 }
 
 #[test]
@@ -57,7 +55,7 @@ fn test_from_file_invalid_toml_returns_error() {
 #[test]
 fn test_default_logging_config_values() {
     let cfg = LoggingConfig::default();
-    assert_eq!(cfg.file, "logs/sqllog2db.log");
+    assert!(cfg.file.is_none());
     assert_eq!(cfg.level, "info");
     assert_eq!(cfg.retention_days, 7);
 }
@@ -130,4 +128,32 @@ fn test_config_missing_stats_section_defaults_to_none() {
     assert!(cfg.stats.from.is_none());
     assert!(cfg.stats.to.is_none());
     assert!(cfg.stats.top.is_none());
+}
+
+#[test]
+fn absent_sections_do_not_enable_features() {
+    for cfg in [Config::default(), toml::from_str::<Config>("").unwrap()] {
+        assert!(cfg.logging.is_none());
+        assert!(cfg.replace_parameters.is_none());
+        assert!(cfg.filter.is_none());
+        assert!(cfg.output.is_none());
+        assert!(cfg.error.is_none());
+        assert!(cfg.sqllog.inputs.is_empty());
+        assert!(cfg.exporter.parquet.is_none());
+        assert!(cfg.exporter.csv.is_none());
+        assert!(cfg.exporter.sqlite.is_none());
+        assert!(cfg.stats.top.is_none());
+        assert!(cfg.validate().is_err());
+    }
+}
+
+#[test]
+fn present_sections_activate_with_internal_defaults() {
+    let cfg: Config = toml::from_str("[logging]\n[replace_parameters]").unwrap();
+    assert!(cfg.replace_parameters.is_some());
+    assert_eq!(cfg.logging.unwrap().level, "info");
+    for value in ["true", "false"] {
+        let source = format!("[replace_parameters]\nenable = {value}");
+        assert!(toml::from_str::<Config>(&source).is_err());
+    }
 }

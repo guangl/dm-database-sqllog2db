@@ -24,7 +24,6 @@ fn test_pipeline_add() {
 #[test]
 fn test_placeholder_override_question() {
     let cfg = NormalizeConfig {
-        enable: true,
         placeholders: vec!["?".into()],
     };
     assert_eq!(cfg.placeholder_override(), Some(false));
@@ -33,7 +32,6 @@ fn test_placeholder_override_question() {
 #[test]
 fn test_placeholder_override_colon() {
     let cfg = NormalizeConfig {
-        enable: true,
         placeholders: vec![":1".into()],
     };
     assert_eq!(cfg.placeholder_override(), Some(true));
@@ -42,7 +40,6 @@ fn test_placeholder_override_colon() {
 #[test]
 fn test_placeholder_override_auto() {
     let cfg = NormalizeConfig {
-        enable: true,
         placeholders: vec![],
     };
     assert_eq!(cfg.placeholder_override(), None);
@@ -51,7 +48,6 @@ fn test_placeholder_override_auto() {
 #[test]
 fn test_placeholder_override_both_is_auto() {
     let cfg = NormalizeConfig {
-        enable: true,
         placeholders: vec!["?".into(), ":1".into()],
     };
     assert_eq!(cfg.placeholder_override(), None);
@@ -60,7 +56,6 @@ fn test_placeholder_override_both_is_auto() {
 #[test]
 fn test_normalize_config_default() {
     let cfg = NormalizeConfig::default();
-    assert!(cfg.enable);
     assert!(cfg.placeholders.is_empty());
 }
 
@@ -109,9 +104,9 @@ fn test_output_config_ordered_indices_empty_equals_all() {
 }
 
 #[test]
-fn test_default_true_via_serde() {
+fn test_empty_replace_parameters_section() {
     let cfg: NormalizeConfig = toml::from_str("").unwrap();
-    assert!(cfg.enable);
+    assert!(cfg.placeholders.is_empty());
 }
 
 #[test]

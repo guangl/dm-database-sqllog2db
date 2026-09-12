@@ -116,8 +116,15 @@ impl log::Log for SimpleLogger {
 pub fn init_logging(config: &LoggingConfig, log_to_stdout: bool) -> Result<()> {
     // 解析日志级别
     let level = parse_log_level(&config.level)?;
-    // 获取日志文件路径和目录
-    let log_path = Path::new(&config.file);
+    let Some(file_path) = &config.file else {
+        let _ = env_logger::Builder::new()
+            .target(env_logger::Target::Stdout)
+            .filter_level(level)
+            .try_init();
+        return Ok(());
+    };
+    // 获取显式指定的日志文件路径和目录
+    let log_path = Path::new(file_path);
     let parent_dir = log_path.parent().ok_or_else(|| {
         Error::File(FileError::CreateDirectoryFailed {
             path: log_path.to_path_buf(),
@@ -168,7 +175,7 @@ pub fn init_logging(config: &LoggingConfig, log_to_stdout: bool) -> Result<()> {
     log::info!(
         "Logging initialized - level: {:?}, file: {}, retention_days: {}",
         level,
-        config.file,
+        file_path,
         config.retention_days
     );
 
@@ -193,7 +200,7 @@ mod tests {
 
     fn make_logging_config(dir: &std::path::Path, level: &str) -> LoggingConfig {
         LoggingConfig {
-            file: dir.join("app.log").to_str().unwrap().to_string(),
+            file: Some(dir.join("app.log").to_str().unwrap().to_string()),
             level: level.to_string(),
             retention_days: 7,
         }
@@ -222,7 +229,7 @@ mod tests {
         let dir = tempfile::TempDir::new().unwrap();
         let nested = dir.path().join("sub/nested");
         let cfg = LoggingConfig {
-            file: nested.join("app.log").to_str().unwrap().to_string(),
+            file: Some(nested.join("app.log").to_str().unwrap().to_string()),
             level: "warn".to_string(),
             retention_days: 7,
         };
@@ -236,12 +243,13 @@ mod tests {
         let dir = tempfile::TempDir::new().unwrap();
         for level in &["trace", "debug", "info", "warn", "error"] {
             let cfg = LoggingConfig {
-                file: dir
-                    .path()
-                    .join(format!("{level}.log"))
-                    .to_str()
-                    .unwrap()
-                    .to_string(),
+                file: Some(
+                    dir.path()
+                        .join(format!("{level}.log"))
+                        .to_str()
+                        .unwrap()
+                        .to_string(),
+                ),
                 level: (*level).to_string(),
                 retention_days: 7,
             };

@@ -321,59 +321,14 @@ fn test_init_template_has_filter_inline_comments() {
     let config_path = dir.path().join("config.toml");
     handle_init(config_path.to_str().unwrap(), false).unwrap();
     let content = std::fs::read_to_string(&config_path).unwrap();
-    assert!(
-        content.contains("精确匹配：要保留的用户名列表"),
-        "filter.include must have users inline comment"
-    );
-    assert!(
-        content.contains("精确匹配：要保留的客户端 IP 列表"),
-        "filter.include must have ips inline comment"
-    );
-    assert!(
-        content.contains("精确匹配：要保留的会话 ID 列表（十六进制字符串）"),
-        "filter.include must have sessions inline comment"
-    );
-    // 语句类型匹配日志方括号标签（statements/tags 同义）
-    assert!(
-        content.contains("语句类型（INS/UPD/DEL/SEL/SET/OTH/ORA），匹配日志方括号标签"),
-        "filter must document statements matching the log tag"
-    );
-    assert!(
-        content.contains("与 statements 同义"),
-        "tags inline comment must note it is a synonym of statements"
-    );
-    assert!(
-        content.contains("精确匹配：要排除的用户名列表"),
-        "filter.exclude must have users inline comment"
-    );
-    assert!(
-        content.contains("精确匹配：要排除的客户端 IP 列表"),
-        "filter.exclude must have ips inline comment"
-    );
-    assert!(
-        content.contains("精确匹配：要排除的会话 ID 列表（十六进制字符串）"),
-        "filter.exclude must have sessions inline comment"
-    );
-    assert!(
-        content.contains("事务级：任一记录的 exec_id 命中则保留整笔事务"),
-        "filter.indicators must have exec_ids inline comment"
-    );
-    assert!(
-        content.contains("事务级：任一语句执行时长（毫秒）≥ 阈值则保留整笔事务"),
-        "filter.indicators must have min_runtime_ms inline comment"
-    );
-    assert!(
-        content.contains("事务级：任一语句影响行数 ≥ 阈值则保留整笔事务"),
-        "filter.indicators must have min_row_count inline comment"
-    );
-    assert!(
-        content.contains("事务级：任一 SQL 文本包含所列任一子串则保留整笔事务"),
-        "filter.sql must have includes inline comment"
-    );
-    assert!(
-        content.contains("事务级：任一 SQL 文本包含所列任一子串则丢弃整笔事务"),
-        "filter.sql must have excludes inline comment"
-    );
+    let cfg: Config = toml::from_str(&content).unwrap();
+    assert!(cfg.filter.is_none());
+    assert!(cfg.logging.is_none());
+    assert!(cfg.replace_parameters.is_none());
+    assert!(content.contains("[filter.include]"));
+    assert!(content.contains("[filter.exclude]"));
+    assert!(!content.contains("[filter.indicators]"));
+    assert!(!content.contains("[filter.sql]"));
 }
 
 // ── handle_validate tests ────────────────────────────────────────────────────
@@ -417,7 +372,6 @@ fn test_handle_validate_with_replace_parameters_none() {
 fn test_handle_validate_with_replace_parameters_some() {
     let cfg = Config {
         replace_parameters: Some(NormalizeConfig {
-            enable: true,
             placeholders: vec!["?".to_string()],
         }),
         ..Default::default()
@@ -436,48 +390,35 @@ fn test_handle_validate_with_filters_none() {
 
 #[test]
 fn test_handle_validate_with_filters_all_fields() {
-    use dm_database_sqllog2db::pipeline::filters::{IndicatorFilters, SqlFilters};
-    let cfg = Config {
-        filter: Some(FiltersFeature {
-            enable: true,
-            include: IncludeFilters {
-                start_ts: Some("2025-01-01".to_string()),
-                end_ts: Some("2025-12-31".to_string()),
-                users: Some(vec!["admin".to_string()]),
-                ips: Some(vec!["10.0.0.1".to_string()]),
-                trxids: Some(["tx1"].iter().map(|s| String::from(*s)).collect()),
-                ..Default::default()
-            },
-            exclude: ExcludeFilters::default(),
-            indicators: IndicatorFilters {
-                exec_ids: Some([42_i64].into_iter().collect()),
-                min_runtime_ms: Some(100.0),
-                min_row_count: Some(10),
-            },
-            sql: SqlFilters {
-                includes: Some(vec!["SELECT".to_string()]),
-                excludes: Some(vec!["DROP".to_string()]),
-            },
-        }),
-        ..Default::default()
-    };
-    handle_validate(&cfg); // validate called without panic (all filter sub-fields populated)
+    let cfg: Config = toml::from_str(
+        r#"
+        [filter.include]
+        users = ["admin"]
+        ips = ["10.0.0.1"]
+        trxids = ["tx1"]
+        start_ts = "2025-01-01"
+        end_ts = "2025-12-31"
+        exec_ids = [42]
+        min_runtime_ms = 100.0
+        min_row_count = 10
+        sql = ["SELECT"]
+        [filter.exclude]
+        sql = ["DROP"]
+    "#,
+    )
+    .unwrap();
+    handle_validate(&cfg);
 }
 
 #[test]
-fn test_handle_validate_filters_disabled() {
-    use dm_database_sqllog2db::pipeline::filters::IndicatorFilters;
+fn test_handle_validate_empty_filters() {
     let cfg = Config {
         filter: Some(FiltersFeature {
-            enable: false,
-            include: IncludeFilters::default(),
-            exclude: ExcludeFilters::default(),
-            indicators: IndicatorFilters::default(),
             ..Default::default()
         }),
         ..Default::default()
     };
-    handle_validate(&cfg); // validate called without panic (filter configured but not enabled)
+    handle_validate(&cfg);
 }
 
 // ── handle_run coverage supplement ──────────────────────────────────────────
@@ -508,13 +449,11 @@ async fn test_handle_run_with_filters_builds_pipeline() {
     // Enable a record-level filter — exercises build_pipeline and FilterProcessor
     // Explicitly compiles filters and passes them to handle_run (pre-compiled path)
     cfg.filter = Some(FiltersFeature {
-        enable: true,
         include: IncludeFilters {
             users: Some(vec!["TESTUSER".to_string()]),
             ..Default::default()
         },
         exclude: ExcludeFilters::default(),
-        ..Default::default()
     });
     let interrupted = Arc::new(AtomicBool::new(false));
     handle_run(&cfg, true, false, &interrupted, None)
@@ -540,15 +479,14 @@ async fn test_handle_run_with_transaction_filters_prescans() {
     // exec_ids filter triggers transaction pre-scan path
     // Passes compiled_filters=None — exercises handle_run's internal recompile_meta_if_needed path
     cfg.filter = Some(FiltersFeature {
-        enable: true,
-        include: IncludeFilters::default(),
         exclude: ExcludeFilters::default(),
-        indicators: dm_database_sqllog2db::pipeline::filters::IndicatorFilters {
+        include: dm_database_sqllog2db::pipeline::filters::types::IncludeFilters {
             exec_ids: Some([0_i64, 1, 2].into_iter().collect()),
             min_runtime_ms: None,
             min_row_count: None,
+
+            ..Default::default()
         },
-        ..Default::default()
     });
     let interrupted = Arc::new(AtomicBool::new(false));
     handle_run(&cfg, true, false, &interrupted, None)
@@ -574,15 +512,14 @@ async fn test_handle_run_with_min_runtime_filter() {
     // min_runtime filter — exercises the record-level runtime check
     // Passes compiled_filters=None — exercises handle_run's internal recompile_meta_if_needed path
     cfg.filter = Some(FiltersFeature {
-        enable: true,
-        include: IncludeFilters::default(),
         exclude: ExcludeFilters::default(),
-        indicators: dm_database_sqllog2db::pipeline::filters::IndicatorFilters {
+        include: dm_database_sqllog2db::pipeline::filters::types::IncludeFilters {
             exec_ids: None,
             min_runtime_ms: Some(1.0),
             min_row_count: None,
+
+            ..Default::default()
         },
-        ..Default::default()
     });
     let interrupted = Arc::new(AtomicBool::new(false));
     handle_run(&cfg, true, false, &interrupted, None)
@@ -687,12 +624,12 @@ fn test_init_generates_new_nested_format() {
         "init template must contain [filter.exclude]"
     );
     assert!(
-        content.contains("[filter.indicators]"),
-        "init template must contain [filter.indicators]"
+        !content.contains("[filter.indicators]"),
+        "transaction metrics belong in include/exclude"
     );
     assert!(
-        content.contains("[filter.sql]"),
-        "init template must contain [filter.sql]"
+        !content.contains("[filter.sql]"),
+        "SQL belongs in include/exclude"
     );
     assert!(
         content.contains("[replace_parameters]"),
@@ -745,13 +682,11 @@ async fn test_e2e_filter_pipeline() {
     let mut cfg = make_run_config(&log_dir, &csv_file);
     // 配置 include.users = ["TESTUSER"]，全部 10 条应通过过滤
     cfg.filter = Some(FiltersFeature {
-        enable: true,
         include: IncludeFilters {
             users: Some(vec!["TESTUSER".to_string()]),
             ..Default::default()
         },
         exclude: ExcludeFilters::default(),
-        ..Default::default()
     });
 
     // Act
@@ -786,13 +721,11 @@ async fn test_e2e_filter_pipeline() {
     let csv_file2 = dir.path().join("out2.csv");
     let mut cfg2 = make_run_config(&log_dir2, &csv_file2);
     cfg2.filter = Some(FiltersFeature {
-        enable: true,
         include: IncludeFilters {
             users: Some(vec!["TESTUSER".to_string()]),
             ..Default::default()
         },
         exclude: ExcludeFilters::default(),
-        ..Default::default()
     });
     handle_run(&cfg2, true, false, &Arc::new(AtomicBool::new(false)), None)
         .await
@@ -890,13 +823,11 @@ async fn test_boundary_all_filtered() {
     let csv_file = dir.path().join("out.csv");
     let mut cfg = make_run_config(&log_dir, &csv_file);
     cfg.filter = Some(FiltersFeature {
-        enable: true,
         include: IncludeFilters {
             users: Some(vec!["NONEXISTENT".to_string()]),
             ..Default::default()
         },
         exclude: ExcludeFilters::default(),
-        ..Default::default()
     });
 
     // Act
@@ -2220,7 +2151,7 @@ fn test_cli_run_csv_output_header_and_row_count() {
 
     let content = std::fs::read_to_string(&csv_file).unwrap();
     let mut lines = content.lines();
-    let expected_header = dm_database_sqllog2db::pipeline::FIELD_NAMES.join(",");
+    let expected_header = dm_database_sqllog2db::pipeline::FIELD_NAMES[..14].join(",");
     assert_eq!(
         lines.next().unwrap(),
         expected_header,
@@ -2440,13 +2371,11 @@ async fn test_parallel_csv_filter_matches_sequential() {
     let interrupted = Arc::new(AtomicBool::new(false));
 
     let filter_cfg = Some(FiltersFeature {
-        enable: true,
         include: IncludeFilters {
             users: Some(vec!["TESTUSER".to_string()]),
             ..Default::default()
         },
         exclude: ExcludeFilters::default(),
-        ..Default::default()
     });
 
     // 顺序基线
@@ -3076,5 +3005,79 @@ mod watch_tests {
             !csv_file.exists(),
             "CSV output should NOT exist when only non-.log files are written"
         );
+    }
+}
+
+#[test]
+fn test_cli_replace_parameters_requires_section_and_logging_is_optional() {
+    use assert_cmd::Command;
+    for enabled in [false, true] {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(dir.path().join("input.log"), "\
+2025-01-15 10:30:28.010 (EP[0] sess:0x1 user:U trxid:1 stmt:0x2 appname:A ip:10.0.0.1) PARAMS(SEQNO, TYPE, DATA)={(0, VARCHAR, 'alice')}\n\
+2025-01-15 10:30:28.011 (EP[0] sess:0x1 user:U trxid:1 stmt:0x2 appname:A ip:10.0.0.1) [INS] INSERT INTO t(name) VALUES (?). EXECTIME: 2(ms) ROWCOUNT: 1(rows) EXEC_ID: 101.\n").unwrap();
+        let section = if enabled {
+            "[replace_parameters]\n"
+        } else {
+            ""
+        };
+        std::fs::write(
+            dir.path().join("config.toml"),
+            format!(
+                "{section}[sqllog]\ninputs = ['input.log']\n[exporter.csv]\nfile = 'out.csv'\n"
+            ),
+        )
+        .unwrap();
+        Command::cargo_bin("sqllog2db")
+            .unwrap()
+            .current_dir(dir.path())
+            .args(["run", "-c", "config.toml"])
+            .assert()
+            .success();
+        let output = std::fs::read_to_string(dir.path().join("out.csv")).unwrap();
+        assert_eq!(
+            output.lines().next().unwrap().contains("normalized_sql"),
+            enabled
+        );
+        assert_eq!(output.contains("VALUES ('alice')"), enabled);
+        assert!(!dir.path().join("logs").exists());
+        assert!(!dir.path().join("outputs").exists());
+    }
+}
+
+#[test]
+fn test_cli_default_logs_go_to_stdout_and_quiet_suppresses_info() {
+    use assert_cmd::Command;
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_dir = dir.path().join("input");
+    std::fs::create_dir(&log_dir).unwrap();
+    write_test_log(&log_dir.join("test.log"), 1);
+    let cfg = write_run_config_toml(dir.path(), &log_dir, &dir.path().join("out.csv"));
+    for (logging_section, quiet) in [
+        ("", false),
+        ("", true),
+        ("[logging]\nlevel = 'info'\n", false),
+        ("[logging]\nlevel = 'warn'\n", false),
+    ] {
+        let base = std::fs::read_to_string(&cfg).unwrap();
+        let base = base.split("[logging]").next().unwrap();
+        std::fs::write(&cfg, format!("{base}{logging_section}")).unwrap();
+        let mut command = Command::cargo_bin("sqllog2db").unwrap();
+        command
+            .current_dir(dir.path())
+            .args(["run", "-c"])
+            .arg(&cfg);
+        if quiet {
+            command.arg("--quiet");
+        }
+        let output = command.assert().success().get_output().clone();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(
+            stdout.contains("Application started"),
+            !quiet && !logging_section.contains("warn")
+        );
+        assert!(!stderr.contains("Application started"));
+        assert!(!dir.path().join("logs").exists());
     }
 }
