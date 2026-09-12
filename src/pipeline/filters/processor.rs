@@ -6,8 +6,7 @@ use std::collections::HashSet;
 pub(crate) fn build_pipeline(cfg: &Config) -> Pipeline {
     let mut pipeline = Pipeline::new();
     if let Some(f) = cfg.filter.as_ref()
-        && f.enable
-        && (f.include.has_filters() || f.exclude.has_filters())
+        && (f.include.has_filters() || f.exclude.has_filters() || f.has_transaction_filters())
     {
         pipeline.add(Box::new(FilterProcessor::from_feature(f)));
     }
@@ -16,6 +15,7 @@ pub(crate) fn build_pipeline(cfg: &Config) -> Pipeline {
 
 struct FilterProcessor {
     base_filter: Filter,
+    transactions: super::transaction::TransactionFilters,
     include_groups: Vec<Vec<Filter>>,
     exclude_groups: Vec<Vec<Filter>>,
     trxid_set: Option<HashSet<String>>,
@@ -49,10 +49,8 @@ fn build_include_groups(f: &FiltersFeature) -> Vec<Vec<Filter>> {
         build_or_group(f.include.ips.as_deref(), |fb, v| fb.client_ip_eq(v)),
         build_or_group(f.include.sessions.as_deref(), |fb, v| fb.sess_id_eq(v)),
         build_or_group(f.include.threads.as_deref(), |fb, v| fb.thrd_id_eq(v)),
-        // 语句类型 (INS/UPD/DEL/SEL/ORA...) 存于记录的 `tag` 字段，而非 `stmt` 句柄，
-        // 因此按类型过滤须匹配 tag。
-        build_or_group(f.include.statements.as_deref(), |fb, v| fb.tag_eq(v)),
         build_or_group(f.include.apps.as_deref(), |fb, v| fb.appname_eq(v)),
+        // 语句类型匹配 tag（不含方括号），而非 stmt 句柄。
         build_or_group(f.include.tags.as_deref(), |fb, v| fb.tag_eq(v)),
     ]
 }
@@ -63,8 +61,6 @@ fn build_exclude_groups(f: &FiltersFeature) -> Vec<Vec<Filter>> {
         build_or_group(f.exclude.ips.as_deref(), |fb, v| fb.client_ip_eq(v)),
         build_or_group(f.exclude.sessions.as_deref(), |fb, v| fb.sess_id_eq(v)),
         build_or_group(f.exclude.threads.as_deref(), |fb, v| fb.thrd_id_eq(v)),
-        // 见 build_include_groups：语句类型匹配 tag 字段。
-        build_or_group(f.exclude.statements.as_deref(), |fb, v| fb.tag_eq(v)),
         build_or_group(f.exclude.apps.as_deref(), |fb, v| fb.appname_eq(v)),
         build_or_group(f.exclude.tags.as_deref(), |fb, v| fb.tag_eq(v)),
     ]
@@ -90,6 +86,7 @@ impl FilterProcessor {
             || trxid_set.is_some();
         Self {
             base_filter,
+            transactions: super::transaction::TransactionFilters::new(f),
             include_groups,
             exclude_groups,
             trxid_set,
@@ -104,7 +101,10 @@ impl LogProcessor for FilterProcessor {
     }
 
     fn process_with_meta(&self, record: &Sqllog) -> bool {
-        if !self.base_filter.matches(record) {
+        if !self.base_filter.matches(record)
+            || !self.transactions.includes(record)
+            || self.transactions.excludes(record)
+        {
             return false;
         }
 
@@ -160,12 +160,29 @@ mod tests {
     }
 
     fn make_feature(include: IncludeFilters, exclude: ExcludeFilters) -> FiltersFeature {
-        FiltersFeature {
-            enable: true,
-            include,
-            exclude,
-            ..FiltersFeature::default()
-        }
+        FiltersFeature { include, exclude }
+    }
+
+    #[test]
+    fn transaction_conditions_apply_per_record_without_prescan() {
+        let cfg: Config = toml::from_str(
+            r#"
+            [filter.include]
+            min_runtime_ms = 50
+            [filter.exclude]
+            sql = ["DROP"]
+        "#,
+        )
+        .unwrap();
+        let pipeline = build_pipeline(&cfg);
+        assert!(!pipeline.is_empty());
+        let mut record = make_record("U", "127.0.0.1", "1", Some("SEL"));
+        assert!(pipeline.run_with_meta(&record));
+        record.sql = "DROP TABLE t".into();
+        assert!(!pipeline.run_with_meta(&record));
+        record.sql = "SELECT 1".into();
+        record.exectime = 1.0;
+        assert!(!pipeline.run_with_meta(&record));
     }
 
     #[test]
@@ -338,7 +355,7 @@ mod tests {
     fn test_include_statement_filter() {
         // 语句类型过滤匹配记录的 `tag` 字段（INS/UPD/DEL/SEL/ORA...），而非 `stmt` 句柄。
         let include = IncludeFilters {
-            statements: Some(vec!["SEL".into()]),
+            tags: Some(vec!["SEL".into()]),
             ..Default::default()
         };
         let proc = FilterProcessor::from_feature(&make_feature(include, ExcludeFilters::default()));

@@ -56,7 +56,7 @@ EXAMPLES:
     Override input paths from CLI:
         sqllog2db run -c config.toml --input 'sqllogs/*.log' --input archive.log
 
-Configuration file sections: [exporter.parquet] / [exporter.csv] / [exporter.sqlite] for output, [filter] for filters (include, exclude, indicators, sql)."
+Configuration file sections: [exporter.parquet] / [exporter.csv] / [exporter.sqlite] for output, [filter] for filters (include and exclude; SQL and metrics inside each group)."
     )]
     Run {
         /// TOML configuration file path

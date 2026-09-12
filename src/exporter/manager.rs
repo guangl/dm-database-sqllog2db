@@ -30,7 +30,7 @@ impl ExporterManager {
     pub(crate) fn from_config(config: &Config) -> Result<Self> {
         info!("Initializing exporter manager...");
 
-        let normalize = config.replace_parameters.as_ref().is_none_or(|r| r.enable);
+        let normalize = config.replace_parameters.is_some();
 
         let field_mask = config.output.as_ref().map_or(
             crate::pipeline::FieldMask::ALL,

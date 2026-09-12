@@ -8,7 +8,9 @@ impl Config {
     ///
     /// 任一子配置节校验失败时返回该节的错误。
     pub fn validate(&self) -> Result<()> {
-        self.logging.validate()?;
+        if let Some(logging) = &self.logging {
+            logging.validate()?;
+        }
         self.exporter.validate()?;
         self.sqllog.validate()?;
         self.validate_output_fields()?;
@@ -23,7 +25,9 @@ impl Config {
     ///
     /// logging、sqllog、stats 或 error 配置无效时返回错误。
     pub fn validate_for_stats(&self) -> Result<()> {
-        self.logging.validate()?;
+        if let Some(logging) = &self.logging {
+            logging.validate()?;
+        }
         self.sqllog.validate()?;
         self.validate_stats_time_fields()?;
         self.validate_error_log()?;
@@ -73,7 +77,18 @@ mod tests {
     use crate::pipeline::OutputConfig;
 
     fn default_config() -> Config {
-        Config::default()
+        Config {
+            logging: Some(crate::config::LoggingConfig::default()),
+            sqllog: crate::config::SqllogConfig {
+                inputs: vec!["sqllogs".into()],
+                ..Default::default()
+            },
+            exporter: crate::config::ExporterConfig {
+                csv: Some(CsvExporterConfig::default()),
+                ..Default::default()
+            },
+            ..Config::default()
+        }
     }
 
     // ── validate ───────────────────────────────────────────────
@@ -95,7 +110,7 @@ mod tests {
     #[test]
     fn test_validate_empty_logging_file() {
         let mut cfg = default_config();
-        cfg.logging.file = "  ".into();
+        cfg.logging.as_mut().unwrap().file = Some("  ".into());
         assert!(cfg.validate().is_err());
     }
 
@@ -134,21 +149,21 @@ mod tests {
     #[test]
     fn test_validate_invalid_log_level() {
         let mut cfg = default_config();
-        cfg.logging.level = "invalid".into();
+        cfg.logging.as_mut().unwrap().level = "invalid".into();
         assert!(cfg.validate().is_err());
     }
 
     #[test]
     fn test_validate_retention_days_zero() {
         let mut cfg = default_config();
-        cfg.logging.retention_days = 0;
+        cfg.logging.as_mut().unwrap().retention_days = 0;
         assert!(cfg.validate().is_err());
     }
 
     #[test]
     fn test_validate_retention_days_over_365() {
         let mut cfg = default_config();
-        cfg.logging.retention_days = 366;
+        cfg.logging.as_mut().unwrap().retention_days = 366;
         assert!(cfg.validate().is_err());
     }
 
@@ -280,8 +295,6 @@ mod tests {
         let toml = r#"
 [sqllog]
 inputs = ["sqllogs"]
-[filter]
-enable = true
 [filter.include]
 users = ["admin"]
 [filter.exclude]
@@ -321,7 +334,6 @@ file = "out.csv"
 [sqllog]
 inputs = ["sqllogs"]
 [filter]
-enable = false
 [output]
 fields = ["ts", "sql", "username"]
 [exporter.csv]

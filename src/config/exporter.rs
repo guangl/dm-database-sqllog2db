@@ -1,7 +1,7 @@
 use crate::error::{ConfigError, Error, Result};
 use serde::Deserialize;
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Default)]
 pub struct ExporterConfig {
     pub parquet: Option<ParquetExporterConfig>,
     pub csv: Option<CsvExporterConfig>,
@@ -32,16 +32,6 @@ impl ExporterConfig {
             sqlite.validate()?;
         }
         Ok(())
-    }
-}
-
-impl Default for ExporterConfig {
-    fn default() -> Self {
-        Self {
-            parquet: Some(ParquetExporterConfig::default()),
-            csv: None,
-            sqlite: None,
-        }
     }
 }
 

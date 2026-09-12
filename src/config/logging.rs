@@ -5,16 +5,12 @@ pub const LOG_LEVELS: &[&str] = &["trace", "debug", "info", "warn", "error"];
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct LoggingConfig {
-    #[serde(default = "default_file")]
-    pub file: String,
+    #[serde(default)]
+    pub file: Option<String>,
     #[serde(default = "default_level")]
     pub level: String,
     #[serde(default = "default_retention_days")]
     pub retention_days: usize,
-}
-
-fn default_file() -> String {
-    "logs/sqllog2db.log".to_string()
 }
 
 fn default_level() -> String {
@@ -28,7 +24,7 @@ fn default_retention_days() -> usize {
 impl Default for LoggingConfig {
     fn default() -> Self {
         Self {
-            file: "logs/sqllog2db.log".to_string(),
+            file: None,
             level: "info".to_string(),
             retention_days: 7,
         }
@@ -42,10 +38,12 @@ impl LoggingConfig {
     ///
     /// 日志文件路径为空白、日志级别不在合法集合内或 `retention_days` 越界时返回错误。
     pub fn validate(&self) -> Result<()> {
-        if self.file.trim().is_empty() {
+        if let Some(file) = &self.file
+            && file.trim().is_empty()
+        {
             return Err(Error::Config(ConfigError::InvalidValue {
                 field: "logging.file".to_string(),
-                value: self.file.clone(),
+                value: file.clone(),
                 reason: "Log file path cannot be empty".to_string(),
             }));
         }

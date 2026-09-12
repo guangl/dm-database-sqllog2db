@@ -98,7 +98,7 @@ async fn test_filter_path() {
     let app_log = dir.path().join("app.log");
 
     let toml = format!(
-        "[sqllog]\ninputs = [\"{logdir}\"]\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[filter]\nenable = true\nusernames = [\"U\"]\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n",
+        "[sqllog]\ninputs = [\"{logdir}\"]\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[filter.include]\nusers = [\"U\"]\n[exporter.csv]\nfile = \"{csv}\"\noverwrite = true\nappend = false\n",
         logdir = dir.path().to_string_lossy().replace('\\', "/"),
         errlog = error_log.to_string_lossy().replace('\\', "/"),
         applog = app_log.to_string_lossy().replace('\\', "/"),
@@ -222,7 +222,7 @@ async fn test_sqlite_parallel_matches_sequential() {
 
     let make_cfg = |logdir: &std::path::Path, db_path: &str| {
         let toml = format!(
-            "[sqllog]\ninputs = [\"{logdir}\"]\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[exporter.sqlite]\ndatabase_url = \"{db}\"\ntable_name = \"sqllog\"\noverwrite = true\nappend = false\nbatch_size = 1000\n",
+            "[sqllog]\ninputs = [\"{logdir}\"]\n[error]\nfile = \"{errlog}\"\n[logging]\nfile = \"{applog}\"\nlevel = \"warn\"\nretention_days = 1\n[replace_parameters]\n[exporter.sqlite]\ndatabase_url = \"{db}\"\ntable_name = \"sqllog\"\noverwrite = true\nappend = false\nbatch_size = 1000\n",
             logdir = logdir.to_string_lossy().replace('\\', "/"),
             errlog = error_log.to_string_lossy().replace('\\', "/"),
             applog = app_log.to_string_lossy().replace('\\', "/"),
@@ -835,108 +835,9 @@ async fn test_collector_interrupted_returns_empty() {
     );
 }
 
-// ── prescan: build_indicator_filters / build_sql_*_filters 单元测试 ─────────
-
-#[test]
-fn test_build_indicator_filters_min_row_count_zero() {
-    use crate::pipeline::filters::IndicatorFilters;
-    let indicators = IndicatorFilters {
-        min_row_count: Some(0),
-        ..IndicatorFilters::default()
-    };
-    let filters = super::prepare::build_indicator_filters(&indicators);
-    assert_eq!(
-        filters.len(),
-        1,
-        "min_row_count=0 应构建一个全匹配 Filter（FilterBuilder::new().build() 分支）"
-    );
-}
-
-#[test]
-fn test_build_indicator_filters_min_row_count_positive() {
-    use crate::pipeline::filters::IndicatorFilters;
-    let indicators = IndicatorFilters {
-        min_row_count: Some(5),
-        ..IndicatorFilters::default()
-    };
-    let filters = super::prepare::build_indicator_filters(&indicators);
-    assert_eq!(
-        filters.len(),
-        1,
-        "min_row_count=5 应构建一个带 rowcount_gt(4) 约束的 Filter"
-    );
-}
-
-#[test]
-fn test_build_indicator_filters_empty_returns_empty() {
-    use crate::pipeline::filters::IndicatorFilters;
-    let indicators = IndicatorFilters::default();
-    let filters = super::prepare::build_indicator_filters(&indicators);
-    assert_eq!(filters.len(), 0, "所有字段均为 None 时应返回空 Vec<Filter>");
-}
-
-#[test]
-fn test_build_sql_exclude_filters_multiple_returns_correct_count() {
-    use crate::pipeline::filters::SqlFilters;
-    let sf = SqlFilters {
-        excludes: Some(vec![
-            "SELECT 1".into(),
-            "DROP".into(),
-            "DELETE FROM x".into(),
-        ]),
-        includes: None,
-    };
-    let filters = super::prepare::build_sql_exclude_filters(&sf);
-    assert_eq!(
-        filters.len(),
-        3,
-        "3 个 exclude 模式应构建 3 个 Filter（非空 excludes 分支）"
-    );
-}
-
-#[test]
-fn test_build_sql_exclude_filters_none_returns_empty() {
-    use crate::pipeline::filters::SqlFilters;
-    let sf = SqlFilters::default();
-    let filters = super::prepare::build_sql_exclude_filters(&sf);
-    assert_eq!(
-        filters.len(),
-        0,
-        "excludes=None 应通过 unwrap_or(&[]) 返回空 Vec<Filter>"
-    );
-}
-
-#[test]
-fn test_build_sql_include_filters_multiple() {
-    use crate::pipeline::filters::SqlFilters;
-    let sf = SqlFilters {
-        includes: Some(vec!["SELECT".into(), "UPDATE".into()]),
-        excludes: None,
-    };
-    let filters = super::prepare::build_sql_include_filters(&sf);
-    assert_eq!(filters.len(), 2, "2 个 include 模式应构建 2 个 Filter");
-}
-
-#[test]
-fn test_build_indicator_filters_exec_ids_multiple() {
-    use crate::pipeline::filters::IndicatorFilters;
-    use std::collections::HashSet;
-    let indicators = IndicatorFilters {
-        exec_ids: Some(HashSet::from([1_i64, 2, 42])),
-        ..IndicatorFilters::default()
-    };
-    let filters = super::prepare::build_indicator_filters(&indicators);
-    assert_eq!(
-        filters.len(),
-        3,
-        "3 个 exec_ids 应产生 3 个独立的 Filter（每个 ID 一个）"
-    );
-}
-
 #[tokio::test(flavor = "multi_thread")]
 async fn test_min_row_count_zero_matches_all_records() {
     use crate::pipeline::FiltersFeature;
-    use crate::pipeline::filters::IndicatorFilters;
     use std::fmt::Write as _;
 
     let dir = tempfile::TempDir::new().unwrap();
@@ -953,10 +854,9 @@ async fn test_min_row_count_zero_matches_all_records() {
 
     let cfg = Config {
         filter: Some(FiltersFeature {
-            enable: true,
-            indicators: IndicatorFilters {
+            include: crate::pipeline::filters::types::IncludeFilters {
                 min_row_count: Some(0),
-                ..IndicatorFilters::default()
+                ..Default::default()
             },
             ..FiltersFeature::default()
         }),
@@ -965,7 +865,7 @@ async fn test_min_row_count_zero_matches_all_records() {
 
     let matched = super::prepare::scan_log_file_for_matches(logfile.to_str().unwrap(), &cfg);
     assert_eq!(
-        matched.len(),
+        matched.included.len(),
         3,
         "min_row_count=0 应匹配所有记录（全匹配 Filter），实际匹配: {matched:?}",
     );
@@ -974,7 +874,6 @@ async fn test_min_row_count_zero_matches_all_records() {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_scan_for_trxids_by_transaction_filters_dedup_across_files() {
     use crate::pipeline::FiltersFeature;
-    use crate::pipeline::filters::IndicatorFilters;
     use std::fmt::Write as _;
 
     let dir = tempfile::TempDir::new().unwrap();
@@ -997,10 +896,9 @@ async fn test_scan_for_trxids_by_transaction_filters_dedup_across_files() {
 
     let cfg = Config {
         filter: Some(FiltersFeature {
-            enable: true,
-            indicators: IndicatorFilters {
+            include: crate::pipeline::filters::types::IncludeFilters {
                 min_row_count: Some(0),
-                ..IndicatorFilters::default()
+                ..Default::default()
             },
             ..FiltersFeature::default()
         }),
@@ -1008,7 +906,11 @@ async fn test_scan_for_trxids_by_transaction_filters_dedup_across_files() {
     };
 
     let mut matched =
-        super::prepare::scan_for_trxids_by_transaction_filters(&[file1, file2], &cfg, 2).unwrap();
+        super::prepare::scan_for_trxids_by_transaction_filters(&[file1, file2], &cfg, 2)
+            .unwrap()
+            .included
+            .into_iter()
+            .collect::<Vec<_>>();
     matched.sort();
     assert_eq!(
         matched,
@@ -1128,6 +1030,76 @@ mod collector {
                 placeholder_override,
                 &mut state.ns_scratch,
             );
+        }
+    }
+}
+
+/// 同一事务的 SQL 分布在不同文件，排除条件必须优先于包含条件与显式 ID。
+#[tokio::test(flavor = "multi_thread")]
+async fn test_two_group_transaction_filters_across_files() {
+    use crate::pipeline::filters::build_pipeline;
+    let dir = tempfile::TempDir::new().unwrap();
+    let files: Vec<_> = ["a.log", "b.log"].map(|name| dir.path().join(name)).into();
+    let line = |id, sql: &str, ms| {
+        format!(
+            "2025-01-15 10:30:28.001 (EP[0] sess:0x1 user:U trxid:{id} stmt:0x1 appname:A ip:10.0.0.1) [SEL] {sql}. EXECTIME: {ms}(ms) ROWCOUNT: 1(rows) EXEC_ID: {id}.\n"
+        )
+    };
+    std::fs::write(
+        &files[0],
+        line(1, "SELECT keep", 100) + &line(2, "SELECT keep", 100) + &line(3, "SELECT other", 1),
+    )
+    .unwrap();
+    std::fs::write(
+        &files[1],
+        line(1, "SELECT forbidden", 1) + &line(2, "SELECT companion", 1),
+    )
+    .unwrap();
+    let cases = [
+        (
+            "[filter.include]\nsql = ['keep']\n[filter.exclude]\nsql = ['forbidden']",
+            vec!["2", "2"],
+        ),
+        ("[filter.exclude]\nsql = ['forbidden']", vec!["2", "3", "2"]),
+        (
+            "[filter.include]\nmin_runtime_ms = 50\ntrxids = ['1']\n[filter.exclude]\nsql = ['forbidden']",
+            vec!["2", "2"],
+        ),
+        ("[filter.exclude]\nmin_runtime_ms = 50", vec!["3"]),
+        ("[filter.include]\nsql = ['absent']", vec![]),
+        (
+            "[filter.include]\nsql = ['absent']\nexec_ids = [2]",
+            vec!["2", "2"],
+        ),
+        (
+            "[filter.include]\nsql = []\n[filter.exclude]\nexec_ids = []",
+            vec!["1", "2", "3", "1", "2"],
+        ),
+        ("[filter]", vec!["1", "2", "3", "1", "2"]),
+        ("[filter.exclude]\nmin_row_count = 0", vec![]),
+        ("[filter.exclude]\nexec_ids = [1]", vec!["2", "3", "2"]),
+        (
+            "[filter.include]\nmin_runtime_ms = 100",
+            vec!["1", "2", "1", "2"],
+        ),
+        ("[filter.include]\nmin_runtime_ms = 100.1", vec![]),
+    ];
+    for (source, expected) in cases {
+        for jobs in [1, 2] {
+            let cfg: Config = toml::from_str(source).unwrap();
+            let merged =
+                super::prepare::merge_trxid_prescan(&cfg, &files, jobs, false, true).unwrap();
+            let pipeline = build_pipeline(merged.as_ref().unwrap_or(&cfg));
+            let mut actual = Vec::new();
+            for path in &files {
+                for record in crate::streaming::open_log_file(path).unwrap() {
+                    let record = record.unwrap();
+                    if pipeline.run_with_meta(&record) {
+                        actual.push(record.trxid);
+                    }
+                }
+            }
+            assert_eq!(actual, expected, "{source}; jobs={jobs}");
         }
     }
 }

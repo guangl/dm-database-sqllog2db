@@ -28,7 +28,7 @@
 
 ### 过滤与字段控制
 
-- **记录级包含过滤器**（AND 语义）：每条记录必须匹配每个配置的字段才能通过。支持用户名、IP、会话、线程、语句类型（INS/UPD/DEL/SEL/ORA 等，匹配日志方括号标签，取不带方括号的值如 `SEL`）、应用名称、标签以及通过 `start_ts`/`end_ts` 设定的时间戳范围。`statements` 与 `tags` 匹配同一字段（日志标签），互为同义。
+- **记录级包含过滤器**（AND 语义）：每条记录必须匹配每个配置的字段才能通过。支持用户名、IP、会话、线程、语句类型（INS/UPD/DEL/SEL/ORA 等，匹配日志方括号标签，取不带方括号的值如 `SEL`）、应用名称、标签以及通过 `start_ts`/`end_ts` 设定的时间戳范围。语句类型统一使用 `tags`。
 - **记录级排除过滤器**（OR 否决）：任意单次匹配立即丢弃记录，不继续评估剩余的排除字段。字段集与包含过滤器相同。包含和排除叠加：包含缩小候选集，排除剔除例外项。
 - **事务级指标过滤器**：匹配 `exec_id`、最小执行时长（`min_runtime_ms`）或最小行数（`min_row_count`）。当事务中某条语句匹配时，整个事务被保留。需要两遍预扫描以检测事务边界。
 - **事务级 SQL 内容过滤器**：应用于 SQL 文本内容的字符串模式（`includes` 和 `excludes`）。两遍设计：预扫描收集匹配的事务 ID，主遍将事务集过滤器与记录级过滤器一起应用。
@@ -36,9 +36,9 @@
 
 ### 配置与性能
 
-- **嵌套子表的 TOML 配置**：v1.4+ 格式将 `[filter.include]`、`[filter.exclude]` 作为顶级节（而非嵌套在 `[features]` 下）。旧的扁平格式通过 `RawFiltersFeature` 中间结构和 serde 别名支持向后兼容。`validate()` 验证最终形式并拒绝旧版布局。
+- **两组过滤配置**：`[filter.include]` 保留、`[filter.exclude]` 排除，SQL 和指标直接放入对应组，配置后自动生效。旧字段和未知字段在加载时直接报错，迁移方法见配置参考。
 - **零开销快速路径**：当管道为空（无过滤器、无 replace_parameters）时，热循环通过单个 `pipeline.is_empty()` 检查跳过所有功能门控。快速路径中无虚函数调用、无逐记录的条件分支。
-- **预编译的过滤器处理管道**：`CompiledMetaFilters` 和 `CompiledSqlFilters` 在启动时持有编译好的 `RegexSet` 实例。每个过滤器变体带有类型标签（include、exclude、indicator、SQL include、SQL exclude），无需字符串匹配即可派发。
+- **统一过滤管道**：元数据使用精确匹配，SQL 使用字面量子串匹配。SQL 与指标共用 `TransactionFilters`，预扫描分别收集保留和排除的事务 ID，正式扫描按集合过滤。
 - **单线程流式处理**：无论数据量大小，性能可预测。Parquet 批次同时受行数和约 64 MiB 字节预算限制。Release 配置：`opt-level=3`、LTO fat、codegen-units=1、panic=abort、strip=symbols。
 - **基准测试结果**：~520 万条记录/秒 CSV（criterion，合成 50k 记录数据集，Apple M 系列芯片），~110 万条记录/秒 SQLite（batch + PRAGMA），~155 万条记录/秒（真实 1.1 GB 文件，约 300 万条记录，NVMe SSD）。
 - **简洁的 CLI**：`init`（生成配置）、`validate`（校验）、`run`（执行导出）、`stats`（统计分析）四个命令。
@@ -80,7 +80,7 @@ graph LR
 - **`stats/mod.rs`**：`run_stats` 流式扫描 → `StatsAccumulator` → 在终端打印慢 SQL 与高频 SQL。
 - **`exporter/mod.rs`**：`Exporter` trait 和 `ExporterManager` 工厂。每次运行只有一个导出器处于活动状态。
 - **`pipeline/mod.rs`**：`LogProcessor` trait 和 `Pipeline`。`pipeline.is_empty()` 启用零开销快速路径。
-- **`pipeline/filters/mod.rs`**：两遍过滤器设计。预扫描使用 `CompiledMetaFilters` 和 `CompiledSqlFilters` 查找匹配的事务 ID。
+- **`pipeline/filters/mod.rs`**：两遍过滤器设计。`TransactionFilters` 统一匹配 include/exclude 的 SQL 与指标条件，预扫描汇总事务 ID 后应用排除。
 - **`config/mod.rs`**：所有配置结构体，支持 serde 反序列化、嵌套子表支持和 `validate()` 校验。
 
 ## 安装
@@ -152,18 +152,19 @@ sqllog2db run -c config.toml --verbose
 
 ## 配置
 
-`sqllog2db init` 生成的默认配置使用嵌套 TOML 子表来设置过滤器选项（v1.4+ 格式）：
+所有配置段均按是否存在生效。省略 replace_parameters 不替换参数，省略 logging 时日志输出到 stdout，不写日志文件，省略 exporter 不默认选择导出器。`sqllog2db init` 显式生成输入和一个导出器，可选功能以注释展示：
 
 ```toml
 [sqllog]
 inputs = ["sqllogs"]
 
-[filter]
-enable = false
-
 [filter.include]
 # users = ["SYSDBA"]
-# statements = ["INS", "UPD"]   # 语句类型，匹配日志方括号标签（取不带方括号的值）
+# tags = ["INS", "UPD"]
+# min_runtime_ms = 1000
+
+[filter.exclude]
+# sql = ["SELECT 1"]
 
 [exporter.parquet]
 file = "outputs/sqllog.parquet"
@@ -193,6 +194,14 @@ row_group_rows = 65536
 通过 Ctrl+C 优雅关闭会在当前批次完成后停止。退出码：0（成功）、1（处理完成但有非致命错误）、2（致命错误，包含配置/文件/解析/导出）、130（用户中断）。
 
 ## 版本亮点
+
+### v2.0.0 — 配置按需启用
+
+- filter 统一为 include/exclude，SQL 和指标直接写入对应组。
+- replace_parameters 配置段存在即启用，删除 enable 与旧过滤字段。
+- 日志默认输出 stdout，只有填写 logging.file 才写文件。
+- 默认不配置输入、导出器或可选功能；init 显式生成输入和 Parquet 导出配置。
+- 升级前请按[配置迁移说明](./docs/config-reference.md)调整旧配置。
 
 ### v1.21.0 — CSV 分片与发布质量门禁（2026-09-11）
 
