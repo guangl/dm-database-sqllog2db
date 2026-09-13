@@ -24,7 +24,8 @@ Windows 必须通过功能测试与发布构建；当前 RSS 门禁仅支持 Lin
 
 - PR 和 main 推送：CI 调用 `export-memory.yaml`，在 Linux x86_64、Linux aarch64、macOS aarch64 构建 release 程序并执行相同门禁。
 - `v*` 标签：`release.yaml` 的 `verification` 调用完整 CI；`export-memory` 等待发布产物构建完成，在对应原生平台下载并检测**将要发布的实际二进制**。标签 CI 不重复执行源代码构建版内存门禁。
-- `create-release.needs` 同时依赖 `verification`、`export-memory` 和全部构建任务。没有 `continue-on-error`，发布步骤没有 `always()` 绕过失败。
+- `publish-crate.needs` 同时依赖 `verification`、`export-memory` 和全部构建任务。标签必须与 `Cargo.toml` 版本一致，且仓库需配置具有该 crate 发布权限的 `CARGO_REGISTRY_TOKEN` secret。门禁通过后执行 `cargo publish --locked`；发布失败会阻止 `create-release` 创建 GitHub Release。
+- `create-release` 等待 `publish-crate` 成功。没有 `continue-on-error`，发布步骤没有 `always()` 绕过失败。
 - 检测报告以 Actions artifact 保留 90 天；成功发版时三个平台的 JSON 报告同时作为 Release 附件，文件名为 `export-memory-<platform>.json`。
 - 普通 Criterion benchmark 仍是参考数据，不作为内存门禁的替代。600 秒是卡死保护，不是吞吐性能目标。
 

@@ -148,9 +148,46 @@ jobs:
           path: dist/${{ matrix.artifact }}
           retention-days: 1
 
+  publish-crate:
+    name: Publish to crates.io
+    needs: [verification, export-memory, release-linux-x86, release-linux-arm, release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Verify tag matches crate version
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version=$(cargo metadata --no-deps --format-version 1 --locked --offline | jq -r '.packages[] | select(.name == "dm-database-sqllog2db") | .version')
+          if [ -z "$version" ] || [ "$RELEASE_TAG" != "v$version" ]; then
+            echo "::error::Release tag $RELEASE_TAG does not match Cargo.toml version $version"
+            exit 1
+          fi
+
+      - name: Publish crate
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          if [ -z "$CARGO_REGISTRY_TOKEN" ]; then
+            echo "::error::Repository secret CARGO_REGISTRY_TOKEN is required to publish to crates.io"
+            exit 1
+          fi
+          cargo publish --locked
+
   create-release:
     name: Create GitHub Release
-    needs: [verification, export-memory, release-linux-x86, release-linux-arm, release]
+    needs: [publish-crate]
     runs-on: ubuntu-latest
     permissions:
       contents: write
