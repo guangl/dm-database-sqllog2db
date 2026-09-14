@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-09-14
+
 ### Removed
 
 - **SQLite、watch 和文件拆分（BREAKING）**：移除 SQLite 后端与依赖、watch 命令与偏移跟踪、输入切块和 CSV 按行轮转。旧 `[exporter.sqlite]`、`max_rows_per_file` 配置会报错；导出仅保留 CSV/Parquet 单文件输出。
@@ -392,7 +394,8 @@ The 0.x series (0.1.0 through 0.10.7) covered the initial development of sqllog2
 
 See git history for full details.
 
-[Unreleased]: https://github.com/guangl/sqllog2db/compare/v1.15.0...HEAD
+[Unreleased]: https://github.com/guangl/dm-database-sqllog2db/compare/v3.0.0...HEAD
+[3.0.0]: https://github.com/guangl/dm-database-sqllog2db/compare/v2.0.0...v3.0.0
 [1.15.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.15.0
 [1.14.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.14.0
 [1.13.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.13.0
