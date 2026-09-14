@@ -480,7 +480,7 @@ dependencies = [
 
 [[package]]
 name = "dm-database-sqllog2db"
-version = "2.0.0"
+version = "3.0.0"
 dependencies = [
  "arrow-array",
  "arrow-schema",
