@@ -3,7 +3,7 @@ name: Pages
 on:
   push:
     branches: [main]
-    paths: ["site/**"]
+    paths: ["docs/**", "CONTRIBUTING.md", "SECURITY.md", ".github/workflows/pages.yml"]
 
 concurrency:
   group: pages
@@ -22,11 +22,11 @@ jobs:
         with:
           mdbook-version: "0.4.45"
       - name: Build
-        run: mdbook build site
+        run: mdbook build docs
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: site/book
+          publish_dir: target/book
           publish_branch: gh-pages
           force_orphan: true

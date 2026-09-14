@@ -9,14 +9,14 @@
 | 功能测试 | Linux、Windows、macOS 的 `cargo test --locked` 全部通过；已有明确标注 ignored 的测试仍按现状处理 |
 | 代码质量 | rustfmt、Clippy 零警告、文档零警告、benchmark 编译全部通过 |
 | 覆盖率 | 行覆盖率 ≥ 70%，沿用现有 CI 标准 |
-| 导出内存 | CSV、SQLite 各测 1、4、16 份日志，每份约 256 MiB；每个场景独立启动进程 |
+| 导出内存 | CSV 测 1、4、16 份日志，每份约 256 MiB；每个场景独立启动进程 |
 | 峰值上限 | 每个导出进程峰值 RSS ≤ 128 MiB；不是虚拟内存，也不是退出后的内存差值 |
 | 增长上限 | 同格式 4、16 文件场景分别相对 1 文件场景，峰值 RSS 增量 ≤ 32 MiB |
-| 数据完整性 | 记录数精确一致；CSV 全文件 SHA-256 与独立构造的预期文件一致；SQLite 所有导出字段符合预期且 `quick_check=ok` |
+| 数据完整性 | 记录数精确一致；CSV 全文件 SHA-256 与独立构造的预期文件一致 |
 | 执行可靠性 | 每次导出最多 600 秒；非零退出、超时、缺失/无效 RSS、检查异常均失败，不得跳过后放行 |
 | 可追溯性 | JSON 报告包含二进制 SHA-256、CI 提交 SHA、平台、阈值、每场景数据和最终结论 |
 
-内存数据固定为合成 SELECT 日志，参数替换关闭、无事务级过滤，最大输入约 4 GiB、19,701,680 条记录。内存阈值仅约束该标准场景，不代表所有异常超长 SQL、参数缓存或事务过滤场景都有相同内存上限。功能语义、异构数据、追加、字段投影和拆分另由 Rust 测试覆盖。
+内存数据固定为合成 SELECT 日志，参数替换关闭、无事务级过滤，最大输入约 4 GiB、19,701,680 条记录。内存阈值仅约束该标准场景，不代表所有异常超长 SQL、参数缓存或事务过滤场景都有相同内存上限。功能语义、异构数据、追加和字段投影另由 Rust 测试覆盖。
 
 Windows 必须通过功能测试与发布构建；当前 RSS 门禁仅支持 Linux/macOS，不宣称验证了 Windows 的内存。发布仍需三个受测平台全部通过。
 
@@ -43,7 +43,7 @@ RUSTDOCFLAGS='-D warnings' cargo doc --locked --no-deps
 cargo bench --locked --no-run
 cargo llvm-cov --locked --fail-under-lines 70
 cargo build --release --locked
-python3 -B -m unittest discover -s scripts -p 'test_export_memory.py' -v
+python3 -B -m unittest discover -s tests/python -p 'test_*.py' -v
 python3 scripts/check_export_memory.py target/release/sqllog2db \
   --file-mib 256 --files 16 --max-rss-mib 128 --max-growth-mib 32 \
   --timeout-seconds 600 --report export-memory-report.json
@@ -51,7 +51,9 @@ python3 scripts/check_export_memory.py target/release/sqllog2db \
 
 退出码 0 才是通过。自定义较小输入适合调试，不能代替标准命令；调整阈值或样本规模必须通过正常代码评审并提供各受测平台的新证据，不能为了让失败版本发版而临时跳过。
 
-## 本次本地验收（2026-09-10）
+## 历史本地验收（2026-09-10）
+
+以下为移除 SQLite 前的历史证据，不代表当前版本的验收结果；当前脚本仅检查 CSV。
 
 本机 Rust 功能测试 542 项通过（另有 3 项既有 ignored）；rustfmt、Clippy、文档检查及 benchmark 编译全部通过。行覆盖率为 89.71%，高于 70% 门槛。
 

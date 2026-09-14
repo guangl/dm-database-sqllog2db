@@ -1,0 +1,153 @@
+use crate::config::{Config, CsvExporterConfig, ExporterConfig, LoggingConfig};
+
+// ── ExporterConfig ─────────────────────────────────────────
+#[test]
+fn test_exporter_config_defaults_to_none() {
+    let cfg = ExporterConfig::default();
+    assert!(cfg.parquet.is_none());
+    assert!(cfg.csv.is_none());
+}
+
+// ── from_file ──────────────────────────────────────────────
+#[test]
+fn test_from_file_not_found() {
+    let result = Config::from_file("/nonexistent/path/config.toml");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_from_file_valid_toml() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let path = dir.path().join("config.toml");
+    std::fs::write(
+        &path,
+        r#"
+[sqllog]
+inputs = ["sqllogs"]
+[exporter.csv]
+file = "out.csv"
+"#,
+    )
+    .unwrap();
+    let cfg = Config::from_file(&path).unwrap();
+    assert_eq!(cfg.sqllog.inputs, vec!["sqllogs".to_string()]);
+    assert_eq!(cfg.exporter.csv.unwrap().file, "out.csv");
+}
+
+#[test]
+fn test_from_file_invalid_toml_returns_error() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let path = dir.path().join("bad.toml");
+    std::fs::write(&path, "not valid toml ][[").unwrap();
+    let result = Config::from_file(&path);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_default_logging_config_values() {
+    let cfg = LoggingConfig::default();
+    assert!(cfg.file.is_none());
+    assert_eq!(cfg.level, "info");
+    assert_eq!(cfg.retention_days, 7);
+}
+
+#[test]
+fn test_csv_exporter_default_include_performance_metrics_true() {
+    let cfg = CsvExporterConfig::default();
+    assert!(cfg.include_performance_metrics);
+}
+
+#[test]
+fn test_csv_toml_default_include_performance_metrics() {
+    let toml = r#"
+[sqllog]
+inputs = ["sqllogs"]
+[exporter.csv]
+file = "/tmp/x.csv"
+overwrite = true
+append = false
+"#;
+    let cfg: Config = toml::from_str(toml).unwrap();
+    assert!(
+        cfg.exporter
+            .csv
+            .as_ref()
+            .unwrap()
+            .include_performance_metrics,
+    );
+}
+
+#[test]
+fn test_config_has_3_top_level_optional_fields() {
+    // 确保 3 个顶层字段默认值为 None
+    let cfg = Config::default();
+    assert!(cfg.replace_parameters.is_none());
+    assert!(cfg.filter.is_none());
+    assert!(cfg.output.is_none());
+}
+
+#[test]
+fn test_config_default_stats_all_none() {
+    let cfg = Config::default();
+    assert!(cfg.stats.from.is_none());
+    assert!(cfg.stats.to.is_none());
+    assert!(cfg.stats.top.is_none());
+}
+
+#[test]
+fn test_config_parses_stats_section() {
+    let toml = "[stats]\nfrom = \"2024-01-01\"\nto = \"2024-01-31\"\ntop = 5\n[sqllog]\ninputs = [\"sqllogs\"]\n[exporter.csv]\nfile = \"out.csv\"";
+    let cfg: Config = toml::from_str(toml).unwrap();
+    assert_eq!(cfg.stats.from, Some("2024-01-01".to_string()));
+    assert_eq!(cfg.stats.to, Some("2024-01-31".to_string()));
+    assert_eq!(cfg.stats.top, Some(5));
+}
+
+#[test]
+fn test_config_missing_stats_section_defaults_to_none() {
+    let toml = "[sqllog]\ninputs=[\"sqllogs\"]\n[exporter.csv]\nfile=\"out.csv\"";
+    let cfg: Config = toml::from_str(toml).unwrap();
+    assert!(cfg.stats.from.is_none());
+    assert!(cfg.stats.to.is_none());
+    assert!(cfg.stats.top.is_none());
+}
+
+#[test]
+fn absent_sections_do_not_enable_features() {
+    for cfg in [Config::default(), toml::from_str::<Config>("").unwrap()] {
+        assert!(cfg.logging.is_none());
+        assert!(cfg.replace_parameters.is_none());
+        assert!(cfg.filter.is_none());
+        assert!(cfg.output.is_none());
+        assert!(cfg.error.is_none());
+        assert!(cfg.sqllog.inputs.is_empty());
+        assert!(cfg.exporter.parquet.is_none());
+        assert!(cfg.exporter.csv.is_none());
+        assert!(cfg.stats.top.is_none());
+        assert!(cfg.validate().is_err());
+    }
+}
+
+#[test]
+fn present_sections_activate_with_internal_defaults() {
+    let cfg: Config = toml::from_str("[logging]\n[replace_parameters]").unwrap();
+    assert!(cfg.replace_parameters.is_some());
+    assert_eq!(cfg.logging.unwrap().level, "info");
+    for value in ["true", "false"] {
+        let source = format!("[replace_parameters]\nenable = {value}");
+        assert!(toml::from_str::<Config>(&source).is_err());
+    }
+}
+
+#[test]
+fn removed_exporter_is_rejected_even_with_a_valid_file_exporter() {
+    for file_exporter in [
+        "",
+        "[exporter.csv]\nfile = 'out.csv'\n",
+        "[exporter.parquet]\nfile = 'out.parquet'\n",
+    ] {
+        let text = format!("{file_exporter}[exporter.sqlite]\ndatabase_url = 'out.db'\n");
+        let error = toml::from_str::<Config>(&text).unwrap_err().to_string();
+        assert!(error.contains("unknown field `sqlite`"), "{error}");
+    }
+}

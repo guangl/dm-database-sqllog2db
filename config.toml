@@ -37,7 +37,7 @@ inputs = ["sqllogs"]
 # 命令行参数 --from / --to / --top 会覆盖以上配置。命令行与配置均未提供时，stats 不做时间过滤（top 默认为 20）。
 
 # ===================== 导出器配置 =====================
-# 同一时刻只能启用一个导出器。优先级：parquet > csv > sqlite
+# 同一时刻只能启用一个导出器。优先级：parquet > csv
 
 # 方案 1：Parquet 导出（默认）
 [exporter.parquet]
@@ -55,15 +55,4 @@ row_group_rows = 65536
 # 写入前删除并重建文件（true/false）
 # overwrite = true
 # 追加到已有 CSV 文件而非覆盖（true/false）
-# append = false
-
-# 方案 3：SQLite 数据库导出
-# [exporter.sqlite]
-# SQLite 数据库文件路径
-# database_url = "export/sqllog2db.db"
-# 写入记录的表名（仅限 ASCII 标识符：[A-Za-z_][A-Za-z0-9_]*）
-# table_name = "sqllog_records"
-# 写入前删除并重建该表（true/false）
-# overwrite = true
-# 追加行到已有表而非覆盖（true/false）
 # append = false

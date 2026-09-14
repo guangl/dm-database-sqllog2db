@@ -1,17 +1,14 @@
 //! 记录级处理循环：驱动路径共享的"过滤 → 归一化 → 写出"逻辑。
 //!
-//! - [`process_log_file`]：顺序路径（`driver::sequential`）的单文件主循环，
-//!   带进度条、导出配额与 fatal 错误响应。
-//! - [`iterate_records`]：并行路径（`driver::parallel` / `driver::sqlite`）共享的
-//!   记录迭代 + 过滤 + 归一化 + 写出回调函数（STRUCT-04）。
+//! - [`process_log_file`]：顺序路径（`sequential`）的单文件主循环，
+//!   带进度条与 fatal 错误响应。
 
-use crate::engine::run::RunContext;
-use crate::error::{ErrorStats, Result};
+use crate::engine::context::RunContext;
+use crate::error::ErrorStats;
 use crate::exporter::ExporterManager;
-use crate::pipeline::Pipeline;
 use crate::pipeline::normalizer::ParamBuffer;
-use crate::streaming::open_log_file;
-use dm_database_parser_sqllog::{ParseError, Sqllog};
+use crate::streaming::export_records;
+use dm_database_parser_sqllog::Sqllog;
 use indicatif::ProgressBar;
 use log::info;
 use std::sync::Arc;
@@ -24,11 +21,6 @@ pub(super) struct ProcessArgs<'a> {
     pub(super) file_path: &'a str,
     pub(super) file_index: usize,
     pub(super) total_files: usize,
-    pub(super) show_progress: bool,
-    /// 最多再导出多少条记录（跨文件的剩余配额），`None` 表示不限制。
-    pub(super) remaining: Option<usize>,
-    /// 是否在文件开始时重置进度条计数；并行模式传 `false`，避免多线程互相重置。
-    pub(super) reset_pb: bool,
     pub(super) pb: Option<&'a ProgressBar>,
 }
 
@@ -51,8 +43,6 @@ pub(super) struct LoopState<'a> {
 pub(super) enum ExportAction {
     /// 正常导出（或被过滤后 `params_buffer` 已更新），继续处理下一条。
     Continue,
-    /// 达到导出配额上限，跳出主循环。
-    BreakQuota,
     /// 遇到 fatal 导出错误，跳出主循环。
     BreakFatal,
 }
@@ -67,6 +57,7 @@ fn update_params_buffer_only(
         record,
         &record.sql,
         state.params_buffer,
+        &[],
         placeholder,
         state.ns_scratch,
     );
@@ -81,7 +72,6 @@ pub(super) fn normalize_and_export(
     record: &Sqllog,
     exporter_manager: &mut ExporterManager,
     state: &mut LoopState<'_>,
-    remaining: Option<usize>,
     passes: bool,
 ) -> ExportAction {
     let do_normalize = env.ctx.do_normalize;
@@ -98,17 +88,13 @@ pub(super) fn normalize_and_export(
             record,
             &record.sql,
             state.params_buffer,
+            &env.ctx.normalize_tags,
             placeholder,
             state.ns_scratch,
         )
     } else {
         None
     };
-    if let Some(remaining) = remaining
-        && state.records_in_file >= remaining
-    {
-        return ExportAction::BreakQuota;
-    }
     let export_result = exporter_manager.export_one_preparsed(record, env.include_pm, ns);
     let file_path = env.file_path;
     match export_result {
@@ -131,25 +117,6 @@ pub(super) fn normalize_and_export(
     }
 }
 
-/// 在文件处理开始时设置进度条消息与位置。
-///
-/// 仅在 `reset_pb && show_progress` 时生效，否则为空操作。
-fn setup_progress_bar(
-    pb: Option<&ProgressBar>,
-    reset_pb: bool,
-    show_progress: bool,
-    file_index: usize,
-    total_files: usize,
-    file_name: &str,
-) {
-    if reset_pb
-        && show_progress
-        && let Some(pb) = pb
-    {
-        pb.set_message(format!("[{file_index}/{total_files}] {file_name}"));
-    }
-}
-
 /// 文件处理结束时输出统计日志与进度条完成消息。
 fn log_file_result(
     args: &ProcessArgs<'_>,
@@ -164,9 +131,7 @@ fn log_file_result(
     info!(
         "File {file_path}: {records_in_file} records, {errors_in_file} errors, total {elapsed:.2}s",
     );
-    if args.show_progress
-        && let Some(pb) = args.pb
-    {
+    if let Some(pb) = args.pb {
         let errors_label = if errors_in_file > 0 {
             format!(", {errors_in_file} errors")
         } else {
@@ -213,13 +178,13 @@ fn tick_progress(
 }
 
 /// 处理单个日志文件，返回 `(实际导出记录数, 文件级错误统计)`。
-pub(super) async fn process_log_file(
+pub(super) fn process_log_file(
     exporter_manager: &mut ExporterManager,
     args: &ProcessArgs<'_>,
     params_buffer: &mut ParamBuffer,
     ns_scratch: &mut Vec<u8>,
     interrupted: &Arc<AtomicBool>,
-) -> Result<(usize, ErrorStats)> {
+) -> (usize, ErrorStats) {
     params_buffer.clear();
     let env = ExportEnv {
         ctx: args.ctx,
@@ -233,21 +198,19 @@ pub(super) async fn process_log_file(
             || args.file_path.to_string(),
             |n| n.to_string_lossy().into_owned(),
         );
-    setup_progress_bar(
-        args.pb,
-        args.reset_pb,
-        args.show_progress,
-        args.file_index,
-        args.total_files,
-        &file_name,
-    );
-    let records = match open_log_file(std::path::Path::new(args.file_path)) {
+    if let Some(pb) = args.pb {
+        pb.set_message(format!(
+            "[{}/{}] {file_name}",
+            args.file_index, args.total_files
+        ));
+    }
+    let records = match export_records(std::path::Path::new(args.file_path)) {
         Ok(it) => it,
         Err(e) => {
             log::warn!("parse failed for '{}': {e}", args.file_path);
             let mut file_stats = ErrorStats::default();
             file_stats.add_parse_error();
-            return Ok((0, file_stats));
+            return (0, file_stats);
         }
     };
     let mut state = LoopState {
@@ -273,17 +236,10 @@ pub(super) async fn process_log_file(
         if !needs_processing {
             continue;
         }
-        let action = normalize_and_export(
-            &env,
-            &record,
-            exporter_manager,
-            &mut state,
-            args.remaining,
-            passes,
-        );
+        let action = normalize_and_export(&env, &record, exporter_manager, &mut state, passes);
         total_processed = total_processed.wrapping_add(1);
         match action {
-            ExportAction::BreakQuota | ExportAction::BreakFatal => break 'outer,
+            ExportAction::BreakFatal => break 'outer,
             ExportAction::Continue
                 if passes
                     && tick_progress(
@@ -313,88 +269,5 @@ pub(super) async fn process_log_file(
         state.file_stats.total_errors,
         elapsed,
     );
-    Ok((state.records_in_file, state.file_stats))
-}
-
-// ===== 并行路径共享的记录迭代（STRUCT-04）=====
-
-/// 迭代流式解析出的记录，对每条记录执行过滤、归一化，并通过 `on_pass` 回调写出通过过滤的记录。
-///
-/// - `records`：流式记录迭代器（[`crate::streaming::open_log_file`]），逐条产出
-///   `Result<Sqllog, ParseError>`；单条记录解析失败会被跳过并计入 `file_stats`，不影响同文件
-///   其余记录的处理（与旧的 `AsyncLogParser::parse()` 整文件 all-or-nothing 语义不同）。
-/// - `pipeline`：过滤与处理管道
-/// - `do_normalize`：是否启用 SQL 归一化
-/// - `placeholder_override`：参数占位符覆盖配置
-/// - `interrupted`：中断信号（Ctrl+C）
-/// - `file_stats`：文件级错误统计，函数内累加 `filtered_out` 与逐条解析错误
-/// - `on_pass`：通过过滤时的写出回调，接收 `(&Sqllog, Option<&str>)`（记录与归一化 SQL）
-///
-/// 返回成功写出的记录数。
-pub(super) fn iterate_records<I, F>(
-    records: I,
-    pipeline: &Pipeline,
-    do_normalize: bool,
-    placeholder_override: Option<bool>,
-    interrupted: &Arc<AtomicBool>,
-    file_stats: &mut ErrorStats,
-    mut on_pass: F,
-) -> Result<usize>
-where
-    I: IntoIterator<Item = std::result::Result<Sqllog, ParseError>>,
-    F: FnMut(&Sqllog, Option<&str>) -> Result<()>,
-{
-    let mut params_buf = ParamBuffer::default();
-    let mut ns_scratch: Vec<u8> = Vec::with_capacity(4096);
-    let mut count = 0usize;
-
-    for result in records {
-        if interrupted.load(Ordering::Acquire) {
-            break;
-        }
-        let record = match result {
-            Ok(r) => r,
-            Err(e) => {
-                log::warn!("skipping malformed record: {e}");
-                file_stats.add_parse_error();
-                continue;
-            }
-        };
-
-        let passes = pipeline.is_empty() || pipeline.run_with_meta(&record);
-        let needs_processing = passes || (do_normalize && record.tag.is_none());
-        if !needs_processing {
-            // 与 process_log_file 保持一致：!needs_processing 路径不计入 filtered_out。
-            // filtered_out 只在 needs_processing=true && !passes 的分支（被过滤的 PARAMS 记录）累加。
-            continue;
-        }
-
-        if passes {
-            let normalized = if do_normalize && (!params_buf.is_empty() || record.tag.is_none()) {
-                crate::pipeline::compute_normalized(
-                    &record,
-                    &record.sql,
-                    &mut params_buf,
-                    placeholder_override,
-                    &mut ns_scratch,
-                )
-                .map(str::to_owned)
-            } else {
-                None
-            };
-            on_pass(&record, normalized.as_deref())?;
-            count += 1;
-        } else {
-            file_stats.filtered_out += 1;
-            crate::pipeline::compute_normalized(
-                &record,
-                &record.sql,
-                &mut params_buf,
-                placeholder_override,
-                &mut ns_scratch,
-            );
-        }
-    }
-
-    Ok(count)
+    (state.records_in_file, state.file_stats)
 }

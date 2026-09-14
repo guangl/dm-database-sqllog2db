@@ -13,7 +13,6 @@ import pathlib
 import platform
 import re
 import signal
-import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -30,14 +29,6 @@ CSV_ROW = (
     b'2025-01-15 10:30:28.001,0,0x1,,BENCH,1,0x1,BenchApp,10.0.0.1,SEL,'
     b'"SELECT col1, col2 FROM bench_table WHERE id=1 AND status=\'active\'. ",13,1,1\n'
 )
-EXPECTED_VALUES = (
-    "2025-01-15 10:30:28.001", 0, "0x1", "", "BENCH", "1", "0x1",
-    "BenchApp", "10.0.0.1", "SEL",
-    "SELECT col1, col2 FROM bench_table WHERE id=1 AND status='active'. ",
-    13, 1, 1, None,
-)
-
-
 def expected_csv_digest(rows):
     hasher = hashlib.sha256(HEADER)
     block = CSV_ROW * 8192
@@ -79,11 +70,7 @@ def evaluate(result, baseline, max_rss, max_growth):
 def measure(binary, root, inputs, fmt, expected_rows, timeout):
     output = root / f"output.{fmt}"
     output.unlink(missing_ok=True)
-    exporter = (
-        f'[exporter.csv]\nfile = "{output}"'
-        if fmt == "csv"
-        else f'[exporter.sqlite]\ndatabase_url = "{output}"\ntable_name = "records"'
-    )
+    exporter = f'[exporter.csv]\nfile = "{output}"'
     cfg = root / "config.toml"
     cfg.write_text(
         '[sqllog]\ninputs = ' + json.dumps([str(p) for p in inputs])
@@ -105,26 +92,13 @@ def measure(binary, root, inputs, fmt, expected_rows, timeout):
     match = re.search(pattern, stderr)
     if match is None:
         raise RuntimeError(f"Peak RSS missing from time output: {stderr}")
-    digest = None
-    if fmt == "sqlite":
-        with sqlite3.connect(output) as conn:
-            count = conn.execute("SELECT COUNT(*) FROM records").fetchone()[0]
-            if conn.execute("PRAGMA quick_check").fetchone()[0] != "ok":
-                raise RuntimeError("SQLite integrity check failed")
-            columns = HEADER.decode().strip().split(",") + ["normalized_sql"]
-            predicate = " AND ".join(f'"{col}" IS ?' for col in columns)
-            mismatches = conn.execute(
-                f"SELECT COUNT(*) FROM records WHERE NOT ({predicate})", EXPECTED_VALUES,
-            ).fetchone()[0]
-            content_valid = mismatches == 0
-    else:
-        count, hasher = -1, hashlib.sha256()  # Exclude header.
-        with output.open("rb") as stream:
-            while block := stream.read(MIB):
-                count += block.count(b"\n")
-                hasher.update(block)
-        digest = hasher.hexdigest()
-        content_valid = digest == expected_csv_digest(expected_rows)
+    count, hasher = -1, hashlib.sha256()  # Exclude header.
+    with output.open("rb") as stream:
+        while block := stream.read(MIB):
+            count += block.count(b"\n")
+            hasher.update(block)
+    digest = hasher.hexdigest()
+    content_valid = digest == expected_csv_digest(expected_rows)
     output.unlink()
     return dict(format=fmt, files=len(inputs), records=count,
                 peak_rss_bytes=int(match[1]) * unit, csv_sha256=digest,
@@ -167,7 +141,7 @@ def main():
                     for _ in range(rows // 8192):
                         stream.write(block)
                     stream.write(LINE * (rows % 8192))
-            for fmt in ("csv", "sqlite"):
+            for fmt in ("csv",):
                 baseline = None
                 for count in report["file_counts"]:
                     result = measure(binary, root, inputs[:count], fmt,
@@ -183,7 +157,7 @@ def main():
                     report["cases"].append(result)
                     print(json.dumps(result), flush=True)
             report["passed"] = all(case["passed"] for case in report["cases"])
-    except (OSError, RuntimeError, sqlite3.Error, subprocess.TimeoutExpired) as exc:
+    except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
         report["error"] = str(exc)
         print(str(exc), file=sys.stderr)
     finally:

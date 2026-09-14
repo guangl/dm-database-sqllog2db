@@ -159,4 +159,6 @@ chore(ci): add lychee link checker to CI pipeline
 
 ## 发版门禁
 
-发版必须满足[发版门禁标准](docs/release-standard.md)：除现有测试、代码质量与覆盖率要求外，CSV/SQLite 在 1、4、16×256 MiB 输入下峰值 RSS 不得超过 128 MiB，多文件相对单文件增长不得超过 32 MiB，并验证完整导出内容。PR 与 main 自动检查；标签发布检测实际发布二进制，失败会阻止创建 Release。阈值和样本规模的变更必须通过评审。
+发版必须满足[发版门禁标准][release-standard]：除现有测试、代码质量与覆盖率要求外，CSV 在 1、4、16×256 MiB 输入下峰值 RSS 不得超过 128 MiB，多文件相对单文件增长不得超过 32 MiB，并验证完整导出内容。PR 与 main 自动检查；标签发布检测实际发布二进制，失败会阻止创建 Release。阈值和样本规模的变更必须通过评审。
+
+[release-standard]: docs/release-standard.md

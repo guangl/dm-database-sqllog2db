@@ -5,8 +5,8 @@ use clap::{Parser, Subcommand};
 #[command(
     name = "sqllog2db",
     version,
-    about = "Parse DM database SQL logs and export to Parquet/CSV/SQLite",
-    long_about = "A lightweight and efficient CLI tool for parsing DM database SQL logs (streaming) and exporting to Parquet, CSV, or SQLite.",
+    about = "Parse DM database SQL logs and export to Parquet/CSV",
+    long_about = "A lightweight and efficient CLI tool for parsing DM database SQL logs (streaming) and exporting to Parquet or CSV.",
     after_help = "\
 EXAMPLES:
     Export all records from SQL log files:
@@ -44,7 +44,7 @@ pub struct Cli {
 pub enum Commands {
     /// Run the log export task
     #[command(
-        long_about = "Run the log export task. Parses DM database SQL log files and exports them to Parquet, CSV, or SQLite based on the configuration file.",
+        long_about = "Run the log export task. Parses DM database SQL log files and exports them to Parquet or CSV based on the configuration file.",
         after_help = "\
 EXAMPLES:
     Export using a custom configuration path:
@@ -56,7 +56,7 @@ EXAMPLES:
     Override input paths from CLI:
         sqllog2db run -c config.toml --input 'sqllogs/*.log' --input archive.log
 
-Configuration file sections: [exporter.parquet] / [exporter.csv] / [exporter.sqlite] for output, [filter] for filters (include and exclude; SQL and metrics inside each group)."
+Configuration file sections: [exporter.parquet] / [exporter.csv] for output, [filter] for filters (include and exclude; SQL and metrics inside each group)."
     )]
     Run {
         /// TOML configuration file path
@@ -169,30 +169,4 @@ EXAMPLES:
         )]
         to: Option<String>,
     },
-    // watch 子命令暂时下线：当前只支持追加写出到文件，功能价值有限。
-    // 领域实现（src/watch/）与测试保留编译；恢复时取消下方注释并还原 main.rs 的
-    // `mod watch;` 与 Watch 分支即可。
-    //
-    // /// Watch directory for new .log files and process them automatically
-    // #[command(
-    //     long_about = "Watch configured input directories for new .log files. Automatically triggers processing when new files appear. Press Ctrl+C to stop.",
-    //     after_help = "\
-    // EXAMPLES:
-    //     Watch and process new log files automatically:
-    //         sqllog2db watch -c config.toml
-    //
-    //     Watch in quiet mode (suitable for cron/background):
-    //         sqllog2db watch -c config.toml --quiet"
-    // )]
-    // Watch {
-    //     /// TOML configuration file path
-    //     #[arg(
-    //         short = 'c',
-    //         long = "config",
-    //         default_value = "config.toml",
-    //         env = "SQLLOG2DB_CONFIG",
-    //         help = "TOML configuration file path."
-    //     )]
-    //     config: String,
-    // },
 }

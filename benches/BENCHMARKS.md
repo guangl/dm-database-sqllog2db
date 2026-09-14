@@ -5,8 +5,7 @@ Machine: Apple Silicon (Darwin 25.4.0), release build (`opt-level=3`, LTO=fat, s
 Synthetic log lines ≈ 170 bytes/record (realistic DaMeng SQL log format).
 Real-file inputs: `sqllogs/` 下 269MB × 2 个真实达梦日志文件（合计 ~538MB，约 800 万条记录量级）。
 CSV synthetic output goes to `/dev/null` (measures parse + serialization, no disk I/O).
-SQLite synthetic output goes to a real file (`target/bench_sqlite/bench.db`) with `JOURNAL_MODE=OFF SYNCHRONOUS=OFF`.
-Real-file benchmarks 使用独立 `target/bench_{csv,sqlite}_real/` 目录，CI 缺 `sqllogs/` 时自动 skip。
+Real-file benchmarks 使用独立 `target/bench_csv_real/` 目录，CI 缺 `sqllogs/` 时自动 skip。
 
 ---
 
@@ -15,7 +14,6 @@ Real-file benchmarks 使用独立 `target/bench_{csv,sqlite}_real/` 目录，CI 
 ```bash
 # Synthetic + real-file（real-file 在 sqllogs/ 缺失时自动 skip）
 cargo bench --bench bench_csv
-cargo bench --bench bench_sqlite
 cargo bench --bench bench_filters
 
 # 全套
@@ -29,7 +27,6 @@ baseline JSON 数据存档在 `benches/baselines/`，criterion 通过 `CRITERION
 ```bash
 # 对比当前修改与 v1.0 baseline
 CRITERION_HOME=benches/baselines cargo bench --bench bench_csv -- --baseline v1.0
-CRITERION_HOME=benches/baselines cargo bench --bench bench_sqlite -- --baseline v1.0
 
 # 保存新的 named baseline（例如 Phase 4 优化后）
 CRITERION_HOME=benches/baselines cargo bench --bench bench_csv -- --save-baseline phase4
@@ -61,20 +58,6 @@ criterion 输出会标注 "Performance has improved" / "Performance has regresse
 | sqllogs/ (538MB, 2 文件) | 0.33 s | ~9.1 M records/s（按粗略记录数估算） |
 
 > 备注：real-file 未预扫描记录数，吞吐为粗略估算。Phase 4/5 对比时以 median time 为准（吞吐仅作参考）。
-
-### SQLite synthetic export (→ target/bench_sqlite/bench.db, JOURNAL_MODE=OFF SYNCHRONOUS=OFF)
-
-| Records | Median time | Throughput |
-|--------:|------------:|-----------:|
-|   1 000 |    0.851 ms |  1.18 M/s  |
-|  10 000 |    7.070 ms |  1.41 M/s  |
-|  50 000 |   35.603 ms |  1.40 M/s  |
-
-### SQLite real-file export (→ target/bench_sqlite_real/bench.db)
-
-| Input        | Median time | Approx throughput |
-|--------------|------------:|------------------:|
-| sqllogs/ (538MB, 2 文件) | 1.28 s | ~2.3 M records/s（粗略估算）|
 
 ### Filter pipeline (10 000 records, CSV → /dev/null)
 
@@ -109,7 +92,6 @@ Top 3 占比函数（来自 v1.0 火焰图人工观察）：
 2. `<dm_database_parser_sqllog::parser::LogIterator as core::iter::traits::iterator::Iterator>::next`
 3. `_platform_memmove`
 
-> 这些函数是 Phase 4 (CSV 优化) 的优先目标。parse_meta 与 LogIterator::next 属于解析层热路径，_platform_memmove 指向字符串拷贝开销。Phase 5 SQLite 优化可重新采集 `sqlite_export_real/real_file` 的火焰图。
 
 ---
 
@@ -120,9 +102,7 @@ Top 3 占比函数（来自 v1.0 火焰图人工观察）：
 | Benchmark                       | Hard limit (v1.0 median × 1.05) |
 |---------------------------------|---------------------------------|
 | `csv_export/10000`              | ≤ 2.233 ms                      |
-| `sqlite_export/10000`           | ≤ 7.424 ms                      |
 | `csv_export_real/real_file`     | ≤ 0.347 s                       |
-| `sqlite_export_real/real_file`  | ≤ 1.344 s                       |
 | `filters/no_pipeline`           | ≤ 2.21 ms                       |
 | `filters/pipeline_passthrough`  | ≤ 2.91 ms                       |
 
@@ -201,87 +181,6 @@ csv_format_only/10000   time:   [506.87 µs 508.52 µs 510.38 µs]
 - [x] D-05 兜底已启用（include_performance_metrics=false 配置项已实现，可将 parse_performance_metrics() 开销降至零）
 - [ ] PERF-08 flamegraph diff 已生成于 docs/flamegraphs/csv_export_real_phase4.json（D-09，可选，未采集）
 - [x] 全部 cargo test 通过（649 个），clippy/fmt 净化
-
----
-
-## Phase 5 — SQLite 性能优化（批量事务 + prepare_cached 确认）
-
-**Date:** 2026-05-10
-**Goal:** 批量事务（PERF-04），prepare_cached 复用确认（PERF-06），sqlite_export/10000 ≤ 7.424ms hard limit
-**Test environment:** Apple Silicon (Darwin 25.4.0), release build (`opt-level=3`, LTO=fat, strip=symbols, panic=abort), Rust stable, Criterion 20 samples.
-
-> 注：PERF-05（WAL 模式）在用户决策后移除 — 数据无需崩溃保护，保留 `JOURNAL_MODE=OFF SYNCHRONOUS=OFF` 高性能模式。
-
-### 各 Wave 数值
-
-| Group | v1.0 baseline | Phase 5 实测（batch_size=10000） | vs v1.0 |
-|-------|--------------|----------------------------------|---------|
-| sqlite_export/1000    | 0.851 ms  | 0.836 ms  | −2.1%（improved）  |
-| sqlite_export/10000   | 7.070 ms  | 7.076 ms  | −0.7%（no change） |
-| sqlite_export/50000   | 35.603 ms | 36.527 ms | +2.7%（regressed，在 5% 容差内） |
-| sqlite_single_row/1000  | —      | 3.584 ms  | —（新增对照组）     |
-| sqlite_single_row/10000 | —      | 35.401 ms | —（新增对照组）     |
-
-> **批量 vs 单行对比（PERF-04）：** sqlite_export/10000 (7.1ms) vs sqlite_single_row/10000 (35.4ms) → **5x 差距**，批量事务优势可量化。
-
-### Criterion 输出原文
-
-<details>
-<summary>cargo bench --bench bench_sqlite --baseline v1.0（sqlite_export，Phase 5）</summary>
-
-```
-sqlite_export/1000      time:   [834.13 µs 835.51 µs 837.04 µs]
-                        thrpt:  [1.1947 Melem/s 1.1969 Melem/s 1.1989 Melem/s]
-                 change:
-                        time:   [−2.3130% −2.0614% −1.7370%] (p = 0.00 < 0.05)
-                        thrpt:  [+1.7677% +2.1048% +2.3677%]
-                        Performance has improved.
-
-sqlite_export/10000     time:   [7.0226 ms 7.0762 ms 7.1294 ms]
-                        thrpt:  [1.4026 Melem/s 1.4132 Melem/s 1.4240 Melem/s]
-                 change:
-                        time:   [−1.5799% −0.7002% +0.1754%] (p = 0.13 > 0.05)
-                        thrpt:  [−0.1751% +0.7052% +1.6053%]
-                        No change in performance detected.
-
-sqlite_export/50000     time:   [36.480 ms 36.527 ms 36.575 ms]
-                        thrpt:  [1.3670 Melem/s 1.3688 Melem/s 1.3706 Melem/s]
-                 change:
-                        time:   [+2.1833% +2.6580% +3.1747%] (p = 0.00 < 0.05)
-                        thrpt:  [−3.0770% −2.5892% −2.1367%]
-                        Performance has regressed.
-```
-
-</details>
-
-<details>
-<summary>cargo bench --bench bench_sqlite sqlite_single_row（新增对照组，无 v1.0 baseline）</summary>
-
-```
-sqlite_single_row/1000  time:   [3.5714 ms 3.5836 ms 3.5910 ms]
-                        thrpt:  [278.47 Kelem/s 279.05 Kelem/s 280.00 Kelem/s]
-
-sqlite_single_row/10000 time:   [34.819 ms 35.401 ms 36.361 ms]
-                        thrpt:  [275.02 Kelem/s 282.48 Kelem/s 287.20 Kelem/s]
-```
-
-</details>
-
-### 优化实施总结
-
-| 优化项 | 实施内容 | 验证方式 |
-|--------|---------|---------|
-| PERF-04 批量事务 | `batch_commit_if_needed()`，每 `batch_size` 条 COMMIT+BEGIN | criterion sqlite_single_row 对照（5x 差距） |
-| PERF-05 WAL 模式 | **已移除**（用户决策：数据无需崩溃保护，保留 OFF+OFF） | — |
-| PERF-06 prepared statement | `prepare_cached()` LRU 复用（`StatementCache` 容量 16），代码注释确认 | 代码审查（`src/exporter/sqlite.rs`，`do_insert_preparsed` 注释） |
-
-### 结论
-
-- [x] PERF-04 批量事务 benchmark 可量化（sqlite_single_row/10000 对照组：35.4ms vs 7.1ms）
-- [x] PERF-05 已移除 WAL 模式（用户决策，保留 OFF+OFF 高性能模式）
-- [x] PERF-06 prepare_cached 复用已确认（代码注释 + 代码审查）
-- [x] sqlite_export/10000 ≤ 7.424ms hard limit（实测：7.076ms ✓）
-- [x] 全部 cargo test 通过（50 个），clippy/fmt 净化
 
 ---
 
@@ -400,13 +299,11 @@ Benchmark 1: ./target/release/sqllog2db validate -c config_no_regex.toml
 ### samply Profiling 结论
 
 采集方法：`samply record --save-only` 采集真实达梦日志（sqllogs/ 3 文件，约 237 万条记录，运行约 3.13s），
-3129 个 CPU 采样。配置：SQLite 导出，启用 replace_parameters。profile 通过 `nm` 符号表静态解析地址。
 
 Top 10 函数（self time 占比，按 CPU 采样自底向上统计）：
 
 1. `<dm_database_parser_sqllog::parser::LogIterator as Iterator>::next` — 26.8% self time（第三方库内部，D-G2 排除）
 2. `rayon_core::thread_pool::ThreadPool::build` — 9.2% self time（第三方库内部，D-G2 排除）
-3. `sqlite3VdbeExec` (SQLite VDBE 执行引擎) — 8.9% self time（第三方库内部，D-G2 排除）
 4. `dm_database_parser_sqllog::sqllog::Sqllog::parse_meta` — 5.9% self time（第三方库内部，D-G2 排除）
 5. `sqllog2db::cli::run::process_log_file` — 4.6% self time（src/cli/run.rs，<5% 未触发 D-G1）
 6. `rayon_core::registry::WorkerThread::take_local_job` — 4.2% self time（第三方库内部，D-G2 排除）
@@ -416,7 +313,6 @@ Top 10 函数（self time 占比，按 CPU 采样自底向上统计）：
 10. `serde_core::de::Visitor::visit_i128` — 2.6% self time（第三方库内部，D-G2 排除）
 
 > 备注：profile 未在 samply 浏览器 UI 中查看（headless 采集环境），通过 `nm` 静态符号表解析地址。
-> SQLite 运行时开销来自 SQLite 导出模式（config.toml 配置），若使用 CSV 导出则 SQLite 占比为零。
 
 ### Filter Benchmark（Phase 10 新增场景）
 
@@ -464,7 +360,6 @@ D-G1 标准（三条全满足才命中）：
 
 **分析：**
 
-- `LogIterator::next`（26.8%）、`rayon_core`（9.2%+4.2%+3.0%）、`sqlite3VdbeExec`（8.9%）、`Sqllog::parse_meta`（5.9%）、`memchr`（4.1%）均属于第三方库内部 → **D-G2 排除**。
 - `sqllog2db::cli::run::process_log_file`（4.6%）属于 src/ 业务逻辑，但 self time < 5% → **不满足条件 1**。
 - `sqllog2db::features::replace_parameters::compute_normalized`（3.2%）属于 src/ 业务逻辑，但 self time < 5% → **不满足条件 1**。
 
@@ -480,7 +375,6 @@ D-G1 标准（三条全满足才命中）：
 |------|----------:|-----------------|------|
 | `<dm_database_parser_sqllog::parser::LogIterator as Iterator>::next` | 26.8% | 第三方库内部（D-G2 排除） | 达梦日志解析器核心循环，不在 src/ 中 |
 | `rayon_core::thread_pool::ThreadPool::build` | 9.2% | 第三方库内部（D-G2 排除） | rayon 线程池初始化，由解析库内部调用 |
-| `sqlite3VdbeExec` (SQLite VDBE 执行引擎) | 8.9% | 第三方库内部（D-G2 排除） | SQLite 内部虚拟机；CSV 导出模式下此项为零 |
 | `dm_database_parser_sqllog::sqllog::Sqllog::parse_meta` | 5.9% | 第三方库内部（D-G2 排除） | 解析库内部元数据解析，非 src/ 函数 |
 | `sqllog2db::cli::run::process_log_file` | 4.6% | self time < 5%（D-G1 第 1 条不满足） | 属于 src/cli/run.rs，但 4.6% < 5% 门控阈值 |
 | `rayon_core::registry::WorkerThread::take_local_job` | 4.2% | 第三方库内部（D-G2 排除） | rayon 工作窃取调度，由解析库内部调用 |
@@ -514,8 +408,6 @@ PERF-10 验收通过：bench scenarios 已补全（D-B1），samply 已采集（
 **Goal:** 量化 dm-database-parser-sqllog 原始解析速度（mmap + 解析，无导出层），建立 Phase 44 热路径优化的可量化对比基线（BENCH-01 第四场景）
 **Test environment:** Apple Silicon (Darwin 25.5.0), release build (`opt-level=3`, LTO=fat, strip=symbols, panic=abort), Rust stable, Criterion 100 samples.
 
-Synthetic log lines ≈ 170 bytes/record（与 bench_csv / bench_sqlite 格式完全一致）。
-每次 iter 重建 `LogParserBuilder`，测全链路（mmap 文件读取 + 解析迭代），排除任何 CSV/SQLite 导出层开销。
 Baseline JSON 存档于 `benches/baselines/parser_throughput/v1.0/`。
 
 ### parser_throughput（合成日志，三规模）
@@ -550,7 +442,6 @@ parser_throughput/50000 time:   [25.630 ms 25.667 ms 25.704 ms]
 
 ### 结论
 
-- [x] BENCH-01 四大场景齐全：CSV + SQLite + filter + parser 原始解析（本 Phase 新增）
 - [x] parser_throughput group 包含 Throughput::Elements，输出 records/sec 指标
 - [x] baseline JSON 已存档至 benches/baselines/parser_throughput/v1.0/
 - [x] cargo test 全量通过，clippy/fmt 净化
@@ -732,79 +623,6 @@ gh run download <run-id> -n bench-results-<sha>
 
 ---
 
-## Phase 73 — SQLite batch INSERT（v1.21）
-
-**Date:** 2026-06-09
-**Goal:** multi-row batch INSERT 吞吐量量化（SQLITE-02）
-**Test environment:** Apple Silicon (Darwin 25.5.0)，release build（opt-level=3, LTO=fat, strip=symbols, panic=abort）
-
-### SQLite multi-row INSERT 对比（criterion，sqlite_multi_row group）
-
-| n | multi_row_batch_size | throughput (elem/s) |
-|---|----------------------|---------------------|
-| 10,000 | 1  | 397,200 |
-| 10,000 | 16 | 523,410 |
-| 10,000 | 32 | 507,970 |
-| 10,000 | 64 | 503,250 |
-| 50,000 | 1  | 398,230 |
-| 50,000 | 16 | 517,820 |
-| 50,000 | 32 | 501,120 |
-| 50,000 | 64 | 499,240 |
-
-**量化收益（SQLITE-02 验收）：**
-- n=10,000：multi_row=64 vs multi_row=1 吞吐量提升 26.7%（397,200 → 503,250 elem/s）
-- n=50,000：multi_row=64 vs multi_row=1 吞吐量提升 25.4%（398,230 → 499,240 elem/s）
-
-> 注：multi_row=16 在两种规模下均为最高吞吐（523K / 518K elem/s），优于 multi_row=64。推测原因：在合成场景（单线程批量写入无竞争）下，更小的 VALUES 子句（16 行）可完整保留在 SQLite 内部缓存中，大批次（64 行）反而触发额外内存压力。此行为与具体机器/系统负载有关，生产环境可按实际数据规模调优 multi_row_batch_size。
-
-### Criterion 输出原文
-
-<details>
-<summary>cargo bench --bench bench_sqlite sqlite_multi_row（Phase 73）</summary>
-
-```
-sqlite_multi_row/n=10000/multi_row=1
-                        time:   [25.113 ms 25.176 ms 25.243 ms]
-                        thrpt:  [396.16 Kelem/s 397.20 Kelem/s 398.19 Kelem/s]
-
-sqlite_multi_row/n=10000/multi_row=16
-                        time:   [19.042 ms 19.105 ms 19.185 ms]
-                        thrpt:  [521.24 Kelem/s 523.41 Kelem/s 525.14 Kelem/s]
-
-sqlite_multi_row/n=10000/multi_row=32
-                        time:   [19.657 ms 19.686 ms 19.712 ms]
-                        thrpt:  [507.30 Kelem/s 507.97 Kelem/s 508.74 Kelem/s]
-
-sqlite_multi_row/n=10000/multi_row=64
-                        time:   [19.832 ms 19.871 ms 19.911 ms]
-                        thrpt:  [502.23 Kelem/s 503.25 Kelem/s 504.25 Kelem/s]
-
-sqlite_multi_row/n=50000/multi_row=1
-                        time:   [125.15 ms 125.56 ms 125.96 ms]
-                        thrpt:  [396.96 Kelem/s 398.23 Kelem/s 399.52 Kelem/s]
-
-sqlite_multi_row/n=50000/multi_row=16
-                        time:   [96.273 ms 96.559 ms 96.944 ms]
-                        thrpt:  [515.76 Kelem/s 517.82 Kelem/s 519.36 Kelem/s]
-
-sqlite_multi_row/n=50000/multi_row=32
-                        time:   [99.425 ms 99.776 ms 100.18 ms]
-                        thrpt:  [499.10 Kelem/s 501.12 Kelem/s 502.89 Kelem/s]
-
-sqlite_multi_row/n=50000/multi_row=64
-                        time:   [100.01 ms 100.15 ms 100.29 ms]
-                        thrpt:  [498.55 Kelem/s 499.24 Kelem/s 499.96 Kelem/s]
-```
-
-</details>
-
-### 结论
-
-- [x] SQLITE-02：benchmark 已量化 multi-row INSERT 相较于单行模式的吞吐量提升（multi_row=64 vs multi_row=1 约提升 26%）
-- v1.20 baseline 对比：Phase 73 新增 sqlite_multi_row group，无直接 v1.20 baseline 对比（该 group 为首次引入）；sqlite_export group 无回归
-
----
-
 ## Phase 72 — 基准体系完善（v1.20）
 
 **Date:** 2026-06-08
@@ -855,7 +673,6 @@ Benchmark 1: ./target/release/sqllog2db validate -c benches/hyperfine-validate.t
 
 ### Criterion v1.20 Baseline 存档（BENCH-02）
 
-v1.20 criterion baseline 已存档至 `benches/baselines/`，覆盖 4 个 bench 文件（bench_csv、bench_sqlite、bench_filters、bench_parser）的全部合成场景（csv_export 3 sizes、csv_format_only、sqlite_export 3 sizes、sqlite_single_row 2 sizes、filters 7 场景、parser_throughput 3 sizes，共 19 个 v1.20 目录）。`csv_export_real` 与 `sqlite_export_real` 因 `sqllogs/` 不在 repo 内自动 skip（与 Phase 4 处理方式一致）。
 
 ```bash
 # 存档命令（已执行）

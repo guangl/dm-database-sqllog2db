@@ -7,14 +7,12 @@ on:
       - 'README.md'
       - 'CHANGELOG.md'
       - 'docs/*.md'
-      - 'site/**/*.md'
   pull_request:
     branches: [main]
     paths:
       - 'README.md'
       - 'CHANGELOG.md'
       - 'docs/*.md'
-      - 'site/**/*.md'
 
 jobs:
   link-check:
@@ -47,6 +45,5 @@ jobs:
             README.md
             CHANGELOG.md
             './docs/**/*.md'
-            './site/**/*.md'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
