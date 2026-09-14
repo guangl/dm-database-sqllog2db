@@ -171,16 +171,7 @@ fn bench_filters(c: &mut Criterion) {
     for (name, cfg) in scenarios {
         group.bench_with_input(BenchmarkId::from_parameter(name), cfg, |b, cfg| {
             b.iter(|| {
-                tokio::runtime::Runtime::new()
-                    .unwrap()
-                    .block_on(handle_run(
-                        cfg,
-                        true,
-                        false,
-                        &Arc::new(AtomicBool::new(false)),
-                        None,
-                    ))
-                    .unwrap();
+                handle_run(cfg, true, false, &Arc::new(AtomicBool::new(false))).unwrap();
             });
         });
     }

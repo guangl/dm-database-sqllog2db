@@ -194,7 +194,7 @@ csv_format_only/10000   time:   [506.87 µs 508.52 µs 510.38 µs]
 | API / 特性 | 版本引入 | 评估结论 |
 |-----------|---------|---------|
 | mmap 零拷贝读取 | 已有（0.9.1） | 当前 `LogParser::from_path()` 已使用，1.0.0 自动生效 |
-| `par_iter()` 文件内并行 | 已有（0.9.1） | 预扫描路径（`scan_log_file_for_matches`）已调用，1.0.0 小文件单分区优化自动生效 |
+| 文件级顺序流式读取 | 当前实现 | 预扫描路径按文件顺序读取，不再依赖应用层 Rayon |
 | 更完整的编码检测（头+尾双采样） | 1.0.0 新增 | `LogParser::from_path()` 内部实现，无需代码变更，自动生效 |
 | `MADV_SEQUENTIAL` 预读 hint | 1.0.0 新增 | mmap 层内部，无需代码变更，自动生效 |
 | `index()` / `RecordIndex` 两阶段字节偏移索引 | 1.0.0 新增 | **不集成**：适用随机访问场景，当前为流式写入（顺序遍历），引入无收益 |
@@ -298,18 +298,21 @@ Benchmark 1: ./target/release/sqllog2db validate -c config_no_regex.toml
 
 ### samply Profiling 结论
 
+> 本节记录的是旧实现的历史 profiling 结果。当前版本已移除应用层 Rayon 和多文件并行路径，
+> 因此下方 `rayon_core` 样本不代表当前运行时依赖；Criterion 当前也已关闭 Rayon 特性。
+
 采集方法：`samply record --save-only` 采集真实达梦日志（sqllogs/ 3 文件，约 237 万条记录，运行约 3.13s），
 
 Top 10 函数（self time 占比，按 CPU 采样自底向上统计）：
 
 1. `<dm_database_parser_sqllog::parser::LogIterator as Iterator>::next` — 26.8% self time（第三方库内部，D-G2 排除）
-2. `rayon_core::thread_pool::ThreadPool::build` — 9.2% self time（第三方库内部，D-G2 排除）
+2. `rayon_core::thread_pool::ThreadPool::build` — 9.2% self time（旧实现历史样本）
 4. `dm_database_parser_sqllog::sqllog::Sqllog::parse_meta` — 5.9% self time（第三方库内部，D-G2 排除）
 5. `sqllog2db::cli::run::process_log_file` — 4.6% self time（src/cli/run.rs，<5% 未触发 D-G1）
-6. `rayon_core::registry::WorkerThread::take_local_job` — 4.2% self time（第三方库内部，D-G2 排除）
+6. `rayon_core::registry::WorkerThread::take_local_job` — 4.2% self time（旧实现历史样本）
 7. `memchr::memmem::searcher::searcher_kind_neon` — 4.1% self time（第三方库内部 NEON SIMD，D-G2 排除）
 8. `sqllog2db::features::replace_parameters::compute_normalized` — 3.2% self time（src/features/replace_parameters.rs，<5% 未触发 D-G1）
-9. `rayon_core::join::join_context (closure)` — 3.0% self time（第三方库内部，D-G2 排除）
+9. `rayon_core::join::join_context (closure)` — 3.0% self time（旧实现历史样本）
 10. `serde_core::de::Visitor::visit_i128` — 2.6% self time（第三方库内部，D-G2 排除）
 
 > 备注：profile 未在 samply 浏览器 UI 中查看（headless 采集环境），通过 `nm` 静态符号表解析地址。
@@ -374,13 +377,13 @@ D-G1 标准（三条全满足才命中）：
 | 函数 | Self time | 不构成热点的原因 | 备注 |
 |------|----------:|-----------------|------|
 | `<dm_database_parser_sqllog::parser::LogIterator as Iterator>::next` | 26.8% | 第三方库内部（D-G2 排除） | 达梦日志解析器核心循环，不在 src/ 中 |
-| `rayon_core::thread_pool::ThreadPool::build` | 9.2% | 第三方库内部（D-G2 排除） | rayon 线程池初始化，由解析库内部调用 |
+| `rayon_core::thread_pool::ThreadPool::build` | 9.2% | 历史 profiling 样本 | 旧实现中的 rayon 线程池初始化 |
 | `dm_database_parser_sqllog::sqllog::Sqllog::parse_meta` | 5.9% | 第三方库内部（D-G2 排除） | 解析库内部元数据解析，非 src/ 函数 |
 | `sqllog2db::cli::run::process_log_file` | 4.6% | self time < 5%（D-G1 第 1 条不满足） | 属于 src/cli/run.rs，但 4.6% < 5% 门控阈值 |
-| `rayon_core::registry::WorkerThread::take_local_job` | 4.2% | 第三方库内部（D-G2 排除） | rayon 工作窃取调度，由解析库内部调用 |
+| `rayon_core::registry::WorkerThread::take_local_job` | 4.2% | 历史 profiling 样本 | 旧实现中的 rayon 工作窃取调度 |
 | `memchr::memmem::searcher::searcher_kind_neon` | 4.1% | 第三方库内部 NEON SIMD（D-G2 排除） | memchr SIMD 字节搜索，由解析库调用 |
 | `sqllog2db::features::replace_parameters::compute_normalized` | 3.2% | self time < 5%（D-G1 第 1 条不满足） | 属于 src/features/replace_parameters.rs，但 3.2% < 5% 门控阈值 |
-| `rayon_core::join::join_context (closure)` | 3.0% | 第三方库内部（D-G2 排除） | rayon 并行 join 上下文，由解析库内部调用 |
+| `rayon_core::join::join_context (closure)` | 3.0% | 历史 profiling 样本 | 旧实现中的 rayon 并行 join 上下文 |
 | `serde_core::de::Visitor::visit_i128` | 2.6% | 第三方库内部（D-G2 排除） | serde 反序列化访客模式，非 src/ 函数 |
 
 **结论：已达当前瓶颈.** 当前性能受限于：

@@ -89,9 +89,9 @@ fn make_run_config(log_dir: &std::path::Path, csv_file: &std::path::Path) -> Con
 
 // ── handle_run tests ─────────────────────────────────────────────────────────
 
-#[tokio::test(flavor = "multi_thread")]
+#[test]
 #[cfg(target_os = "windows")]
-async fn test_handle_run_empty_dir_returns_no_files_found() {
+fn test_handle_run_empty_dir_returns_no_files_found() {
     // Windows: stdin pipe fallback disabled, NoFilesFound is the only path
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
@@ -99,7 +99,7 @@ async fn test_handle_run_empty_dir_returns_no_files_found() {
     let csv_file = dir.path().join("out.csv");
     let cfg = make_run_config(&log_dir, &csv_file);
     let interrupted = Arc::new(AtomicBool::new(false));
-    let result = handle_run(&cfg, true, false, &interrupted, None).await;
+    let result = handle_run(&cfg, true, false, &interrupted);
     assert!(result.is_err());
     let err = result.unwrap_err().to_string();
     assert!(err.contains("No log files found matching inputs"));
@@ -110,8 +110,8 @@ async fn test_handle_run_empty_dir_returns_no_files_found() {
 #[ignore = "stdin tty behavior is non-deterministic in CI; covered indirectly by C3"]
 fn test_handle_run_empty_dir_unix_behavior() {}
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_handle_run_multi_file() {
+#[test]
+fn test_handle_run_multi_file() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
     std::fs::create_dir_all(&log_dir).unwrap();
@@ -122,13 +122,11 @@ async fn test_handle_run_multi_file() {
     let cfg = make_run_config(&log_dir, &csv_file);
 
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None)
-        .await
-        .unwrap();
+    handle_run(&cfg, true, false, &interrupted).unwrap();
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_handle_run_real_csv_export() {
+#[test]
+fn test_handle_run_real_csv_export() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
     std::fs::create_dir_all(&log_dir).unwrap();
@@ -138,9 +136,7 @@ async fn test_handle_run_real_csv_export() {
     let cfg = make_run_config(&log_dir, &csv_file);
 
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None)
-        .await
-        .unwrap();
+    handle_run(&cfg, true, false, &interrupted).unwrap();
 
     let content = std::fs::read_to_string(&csv_file).unwrap();
     // header + 10 data rows = 11 lines
@@ -151,8 +147,8 @@ async fn test_handle_run_real_csv_export() {
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_handle_run_parquet_output_row_count() {
+#[test]
+fn test_handle_run_parquet_output_row_count() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
     std::fs::create_dir_all(&log_dir).unwrap();
@@ -174,9 +170,7 @@ async fn test_handle_run_parquet_output_row_count() {
         ..Default::default()
     };
 
-    handle_run(&cfg, true, false, &Arc::new(AtomicBool::new(false)), None)
-        .await
-        .unwrap();
+    handle_run(&cfg, true, false, &Arc::new(AtomicBool::new(false))).unwrap();
 
     let reader = parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder::try_new(
         std::fs::File::open(parquet_file).unwrap(),
@@ -188,8 +182,8 @@ async fn test_handle_run_parquet_output_row_count() {
     assert_eq!(rows, 10);
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_handle_run_interrupted() {
+#[test]
+fn test_handle_run_interrupted() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
     std::fs::create_dir_all(&log_dir).unwrap();
@@ -200,7 +194,7 @@ async fn test_handle_run_interrupted() {
 
     // Pre-set interrupted flag — run returns Err(Interrupted) when flag is set before processing
     let interrupted = Arc::new(AtomicBool::new(true));
-    let result = handle_run(&cfg, true, false, &interrupted, None).await;
+    let result = handle_run(&cfg, true, false, &interrupted);
     assert!(
         matches!(
             result,
@@ -373,8 +367,8 @@ fn test_handle_validate_empty_filters() {
 
 // ── handle_run coverage supplement ──────────────────────────────────────────
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_handle_run_non_quiet_prints_summary() {
+#[test]
+fn test_handle_run_non_quiet_prints_summary() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
     std::fs::create_dir_all(&log_dir).unwrap();
@@ -383,13 +377,11 @@ async fn test_handle_run_non_quiet_prints_summary() {
     let cfg = make_run_config(&log_dir, &csv_file);
     let interrupted = Arc::new(AtomicBool::new(false));
     // quiet=false exercises the summary print path
-    handle_run(&cfg, false, false, &interrupted, None)
-        .await
-        .unwrap();
+    handle_run(&cfg, false, false, &interrupted).unwrap();
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_handle_run_with_filters_builds_pipeline() {
+#[test]
+fn test_handle_run_with_filters_builds_pipeline() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
     std::fs::create_dir_all(&log_dir).unwrap();
@@ -406,9 +398,7 @@ async fn test_handle_run_with_filters_builds_pipeline() {
         exclude: ExcludeFilters::default(),
     });
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None)
-        .await
-        .unwrap();
+    handle_run(&cfg, true, false, &interrupted).unwrap();
     // include.users = ["TESTUSER"]，全部 20 条匹配 → header + 20 = 21 行
     let content = std::fs::read_to_string(&csv_file).unwrap();
     assert_eq!(
@@ -418,8 +408,8 @@ async fn test_handle_run_with_filters_builds_pipeline() {
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_handle_run_with_transaction_filters_prescans() {
+#[test]
+fn test_handle_run_with_transaction_filters_prescans() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
     std::fs::create_dir_all(&log_dir).unwrap();
@@ -439,9 +429,7 @@ async fn test_handle_run_with_transaction_filters_prescans() {
         },
     });
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None)
-        .await
-        .unwrap();
+    handle_run(&cfg, true, false, &interrupted).unwrap();
     // exec_ids = [0, 1, 2]，30 条记录中匹配 3 条 → header + 3 = 4 行
     let content = std::fs::read_to_string(&csv_file).unwrap();
     assert_eq!(
@@ -451,8 +439,8 @@ async fn test_handle_run_with_transaction_filters_prescans() {
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_handle_run_with_min_runtime_filter() {
+#[test]
+fn test_handle_run_with_min_runtime_filter() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
     std::fs::create_dir_all(&log_dir).unwrap();
@@ -472,9 +460,7 @@ async fn test_handle_run_with_min_runtime_filter() {
         },
     });
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None)
-        .await
-        .unwrap();
+    handle_run(&cfg, true, false, &interrupted).unwrap();
     // EXECTIME = (i*13)%1000：i=0 时为 0ms（被过滤），其余 19 条 ≥ 13ms
     // → header + 19 = 20 行
     let content = std::fs::read_to_string(&csv_file).unwrap();
@@ -485,14 +471,14 @@ async fn test_handle_run_with_min_runtime_filter() {
     );
 }
 
-// ── parallel CSV tests ──────────────────────────────────────────────────────
+// ── multi-file CSV tests ────────────────────────────────────────────────────
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_handle_run_parallel_csv_multiple_files() {
+#[test]
+fn test_handle_run_multi_file_csv() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
     std::fs::create_dir_all(&log_dir).unwrap();
-    // Create 3 log files to trigger the parallel path
+    // Create 3 log files to exercise the multi-file path
     write_test_log(&log_dir.join("a.log"), 10);
     write_test_log(&log_dir.join("b.log"), 10);
     write_test_log(&log_dir.join("c.log"), 10);
@@ -501,10 +487,8 @@ async fn test_handle_run_parallel_csv_multiple_files() {
     let cfg = make_run_config(&log_dir, &csv_file);
     let interrupted = Arc::new(AtomicBool::new(false));
 
-    // jobs=2, multiple files, no limit, CSV exporter → triggers process_csv_parallel
-    handle_run(&cfg, true, false, &interrupted, None)
-        .await
-        .unwrap();
+    // Multiple files, no limit, CSV exporter → use the unified export path.
+    handle_run(&cfg, true, false, &interrupted).unwrap();
 
     let content = std::fs::read_to_string(&csv_file).unwrap();
     let data_lines = content.lines().count().saturating_sub(1);
@@ -519,8 +503,8 @@ async fn test_handle_run_parallel_csv_multiple_files() {
 //   - release builds: 500k rec/s  (catches real regressions)
 // Run with `cargo test --release` for meaningful numbers.
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_csv_throughput_baseline() {
+#[test]
+fn test_csv_throughput_baseline() {
     const RECORD_COUNT: usize = 20_000;
 
     // Debug builds run ~100k rec/s on dev machines, ~10k on slow CI (Windows).
@@ -540,9 +524,7 @@ async fn test_csv_throughput_baseline() {
 
     let interrupted = Arc::new(AtomicBool::new(false));
     let start = std::time::Instant::now();
-    handle_run(&cfg, true, false, &interrupted, None)
-        .await
-        .unwrap();
+    handle_run(&cfg, true, false, &interrupted).unwrap();
     let elapsed = start.elapsed().as_secs_f64();
 
     let rate = f64::from(u32::try_from(RECORD_COUNT).expect("20_000 fits in u32")) / elapsed;
@@ -620,8 +602,8 @@ fn test_init_generated_en_template_passes_validate() {
 
 // ── E2E pipeline tests (TEST-02) ─────────────────────────────────────────────
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_e2e_filter_pipeline() {
+#[test]
+fn test_e2e_filter_pipeline() {
     // Arrange: 10 条 user=TESTUSER 记录
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
@@ -641,9 +623,7 @@ async fn test_e2e_filter_pipeline() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None)
-        .await
-        .unwrap();
+    handle_run(&cfg, true, false, &interrupted).unwrap();
 
     // Assert: header + 10 条数据行 = 11 行
     let content = std::fs::read_to_string(&csv_file).unwrap();
@@ -677,9 +657,7 @@ async fn test_e2e_filter_pipeline() {
         },
         exclude: ExcludeFilters::default(),
     });
-    handle_run(&cfg2, true, false, &Arc::new(AtomicBool::new(false)), None)
-        .await
-        .unwrap();
+    handle_run(&cfg2, true, false, &Arc::new(AtomicBool::new(false))).unwrap();
     let content2 = std::fs::read_to_string(&csv_file2).unwrap();
     // OTHER 全被过滤，只有 header
     assert_eq!(
@@ -689,8 +667,8 @@ async fn test_e2e_filter_pipeline() {
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_e2e_field_projection() {
+#[test]
+fn test_e2e_field_projection() {
     // Arrange: 3 条记录，字段投影为 ts/username/sql
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
@@ -709,9 +687,7 @@ async fn test_e2e_field_projection() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None)
-        .await
-        .unwrap();
+    handle_run(&cfg, true, false, &interrupted).unwrap();
 
     // Assert: header 精确为 "ts,username,sql"（已验证字段投影正确）
     // 数据行只验证行数（不用 split(',').count()，SQL 含逗号时会误判）
@@ -732,8 +708,8 @@ async fn test_e2e_field_projection() {
 
 // ── Boundary tests (TEST-03) ─────────────────────────────────────────────────
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_boundary_empty_log_file() {
+#[test]
+fn test_boundary_empty_log_file() {
     // Arrange: 0 字节 empty.log
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
@@ -745,9 +721,7 @@ async fn test_boundary_empty_log_file() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None)
-        .await
-        .unwrap();
+    handle_run(&cfg, true, false, &interrupted).unwrap();
 
     // Assert: CSV 文件存在且只有 header（1 行）
     assert!(
@@ -762,8 +736,8 @@ async fn test_boundary_empty_log_file() {
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_boundary_all_filtered() {
+#[test]
+fn test_boundary_all_filtered() {
     // Arrange: 5 条 user=TESTUSER 记录，但过滤器 include.users=["NONEXISTENT"]
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
@@ -782,9 +756,7 @@ async fn test_boundary_all_filtered() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None)
-        .await
-        .unwrap();
+    handle_run(&cfg, true, false, &interrupted).unwrap();
 
     // Assert: CSV 只有 header（全部记录被过滤）
     let content = std::fs::read_to_string(&csv_file).unwrap();
@@ -795,8 +767,8 @@ async fn test_boundary_all_filtered() {
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_boundary_malformed_line() {
+#[test]
+fn test_boundary_malformed_line() {
     use std::fmt::Write as FmtWrite;
 
     // Arrange: 1 条无效行（文件开头）+ 4 条正常行 = 4 条正常记录
@@ -821,9 +793,7 @@ async fn test_boundary_malformed_line() {
 
     // Act
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None)
-        .await
-        .unwrap();
+    handle_run(&cfg, true, false, &interrupted).unwrap();
 
     // Assert: 无效行被跳过，4 条正常记录导出 → header + 4 data = 5 行
     let csv_content = std::fs::read_to_string(&csv_file).unwrap();
@@ -834,8 +804,8 @@ async fn test_boundary_malformed_line() {
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_boundary_long_sql() {
+#[test]
+fn test_boundary_long_sql() {
     // Arrange: 1 条超长 SQL 记录（SQL 字段 1MB），保持完整达梦日志格式
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
@@ -852,9 +822,7 @@ async fn test_boundary_long_sql() {
 
     // Act: 不应 panic，不应 OOM
     let interrupted = Arc::new(AtomicBool::new(false));
-    handle_run(&cfg, true, false, &interrupted, None)
-        .await
-        .unwrap();
+    handle_run(&cfg, true, false, &interrupted).unwrap();
 
     // Assert: 1 条记录正常导出 → header + 1 data = 2 行
     let csv_content = std::fs::read_to_string(&csv_file).unwrap();
@@ -1050,17 +1018,13 @@ fn test_cli_verbose_prints_processing_line_per_file() {
 }
 
 /// Verify that `--verbose run` with multiple log files emits `Processing: <path>` to stderr for
-/// each file regardless of whether the parallel or sequential path is taken.
-///
-/// Two files are created so that on multi-core machines the parallel path (PARALLEL-05) is
-/// exercised.  On single-core CI (jobs=1) the sequential path still emits the same line per
-/// file, so the assertion holds in both cases.
+/// each file in the multi-file path.
 #[test]
-fn test_cli_verbose_parallel_prints_processing_lines() {
+fn test_cli_verbose_multi_file_prints_processing_lines() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
     std::fs::create_dir_all(&log_dir).unwrap();
-    // Two files: on multi-core hosts this triggers the parallel path (jobs > 1 && files > 1).
+    // Two files ensure that both inputs are processed.
     write_test_log(&log_dir.join("a.log"), 5);
     write_test_log(&log_dir.join("b.log"), 5);
 
@@ -2102,15 +2066,15 @@ fn test_cli_init_existing_file_without_force_exits_nonzero() {
 
 // ── Phase 66 兼容性验证集成测试 (COMPAT-01/02/03) ───────────────────────────
 
-/// COMPAT-02: 并行路径输出内容与逐文件顺序路径完全一致（集合排序后相等）。
+/// COMPAT-02: 多文件路径输出内容与逐文件运行结果完全一致（集合排序后相等）。
 ///
 /// 策略：
 /// 1. 写入 2 个各含 20 条记录的 .log 文件
 /// 2. 顺序基线：对每个文件单独构建 Config（单文件 inputs），逐个运行 `handle_run`，收集数据行
-/// 3. 并行路径：将两个文件配置为 inputs，一次 `handle_run`（触发并行路径），读取数据行
-/// 4. 对两组数据行排序后断言相等；同时验证并行输出存在 header 行
-#[tokio::test(flavor = "multi_thread")]
-async fn test_parallel_csv_content_matches_sequential() {
+/// 3. 多文件路径：将两个文件配置为 inputs，一次 `handle_run`，读取数据行
+/// 4. 对两组数据行排序后断言相等；同时验证多文件输出存在 header 行
+#[test]
+fn test_multi_file_csv_content_matches_single_file_runs() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
     std::fs::create_dir_all(&log_dir).unwrap();
@@ -2145,11 +2109,9 @@ async fn test_parallel_csv_content_matches_sequential() {
             },
             ..Default::default()
         };
-        // 禁用 csv.append 确保顺序路径（单文件不触发并行）
+        // 禁用 csv.append，确保每次单文件运行都创建独立输出。
         seq_cfg.exporter.csv.as_mut().unwrap().append = false;
-        handle_run(&seq_cfg, true, false, &interrupted, None)
-            .await
-            .unwrap();
+        handle_run(&seq_cfg, true, false, &interrupted).unwrap();
         let content = std::fs::read_to_string(&seq_csv).unwrap();
         // 跳过 header 行，收集数据行
         for line in content.lines().skip(1) {
@@ -2159,8 +2121,8 @@ async fn test_parallel_csv_content_matches_sequential() {
         }
     }
 
-    // 并行路径：两个文件一次 handle_run
-    let par_csv = dir.path().join("parallel.csv");
+    // 多文件路径：两个文件一次 handle_run
+    let par_csv = dir.path().join("multi_file.csv");
     let par_cfg = Config {
         sqllog: SqllogConfig {
             inputs: vec![
@@ -2180,16 +2142,14 @@ async fn test_parallel_csv_content_matches_sequential() {
         },
         ..Default::default()
     };
-    handle_run(&par_cfg, true, false, &interrupted, None)
-        .await
-        .unwrap();
+    handle_run(&par_cfg, true, false, &interrupted).unwrap();
 
     let par_content = std::fs::read_to_string(&par_csv).unwrap();
     let mut par_lines_iter = par_content.lines();
-    // 验证并行输出存在 header 行
+    // 验证多文件输出存在 header 行
     let header = par_lines_iter
         .next()
-        .expect("parallel CSV must have a header");
+        .expect("multi-file CSV must have a header");
     assert!(
         header.contains("ts") || header.contains("username"),
         "first line should be a header, got: {header}"
@@ -2199,26 +2159,26 @@ async fn test_parallel_csv_content_matches_sequential() {
         .map(String::from)
         .collect();
 
-    // 排序后比较（并行路径文件间行顺序不确定）
+    // 排序后比较（多文件输出的行顺序不作为契约）
     seq_lines.sort();
     par_lines.sort();
     assert_eq!(
         seq_lines.len(),
         par_lines.len(),
-        "parallel and sequential should produce the same number of records"
+        "multi-file and single-file runs should produce the same number of records"
     );
     assert_eq!(
         seq_lines, par_lines,
-        "parallel CSV content must match sequential after sorting"
+        "multi-file CSV content must match single-file runs after sorting"
     );
 }
 
-/// COMPAT-02: 并行路径在启用 include 过滤器时，与顺序路径输出内容一致（集合排序后相等）。
+/// COMPAT-02: 多文件路径启用 include 过滤器时，与逐文件运行结果一致（集合排序后相等）。
 ///
 /// 使用 `include.users = ["TESTUSER"]` 过滤器；合成记录的 user 字段均为 TESTUSER，
-/// 因此所有记录应通过过滤，并行与顺序结果相同。
-#[tokio::test(flavor = "multi_thread")]
-async fn test_parallel_csv_filter_matches_sequential() {
+/// 因此所有记录应通过过滤，多文件与逐文件结果相同。
+#[test]
+fn test_multi_file_csv_filter_matches_single_file_runs() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
     std::fs::create_dir_all(&log_dir).unwrap();
@@ -2262,9 +2222,7 @@ async fn test_parallel_csv_filter_matches_sequential() {
             filter: filter_cfg.clone(),
             ..Default::default()
         };
-        handle_run(&seq_cfg, true, false, &interrupted, None)
-            .await
-            .unwrap();
+        handle_run(&seq_cfg, true, false, &interrupted).unwrap();
         let content = std::fs::read_to_string(&seq_csv).unwrap();
         for line in content.lines().skip(1) {
             if !line.is_empty() {
@@ -2273,8 +2231,8 @@ async fn test_parallel_csv_filter_matches_sequential() {
         }
     }
 
-    // 并行路径（带过滤器）
-    let par_csv = dir.path().join("parallel_filter.csv");
+    // 多文件路径（带过滤器）
+    let par_csv = dir.path().join("multi_file_filter.csv");
     let par_cfg = Config {
         sqllog: SqllogConfig {
             inputs: vec![
@@ -2295,9 +2253,7 @@ async fn test_parallel_csv_filter_matches_sequential() {
         filter: filter_cfg,
         ..Default::default()
     };
-    handle_run(&par_cfg, true, false, &interrupted, None)
-        .await
-        .unwrap();
+    handle_run(&par_cfg, true, false, &interrupted).unwrap();
 
     let par_content = std::fs::read_to_string(&par_csv).unwrap();
     let mut par_lines: Vec<String> = par_content
@@ -2312,18 +2268,18 @@ async fn test_parallel_csv_filter_matches_sequential() {
     assert_eq!(
         seq_lines.len(),
         par_lines.len(),
-        "filtered parallel and sequential should produce the same number of records"
+        "filtered multi-file and single-file runs should produce the same number of records"
     );
     assert_eq!(
         seq_lines, par_lines,
-        "filtered parallel CSV content must match sequential after sorting"
+        "filtered multi-file CSV content must match single-file runs after sorting"
     );
 }
 
-/// COMPAT-03: `sqllog2db init` 生成的 config.toml 模板不包含并行相关新字段
-/// （如 "parallel" 或 "jobs" 字样），确认 v1.16 config 格式没有被修改。
+/// COMPAT-03: `sqllog2db init` 生成的 config.toml 模板不包含已删除的并行相关字段
+/// （如 "parallel" 或 "jobs" 字样）。
 #[test]
-fn test_init_no_parallel_fields() {
+fn test_init_no_legacy_parallel_fields() {
     let dir = tempfile::TempDir::new().unwrap();
     let config_path = dir.path().join("config.toml");
     handle_init(config_path.to_str().unwrap(), false).unwrap();
@@ -2347,12 +2303,9 @@ fn test_init_no_parallel_fields() {
     );
 }
 
-/// PARALLEL-06: `jobs_override=Some(2)` 强制并行路径在所有环境下被执行。
-///
-/// 使用两个异构文件（trxid 空间不重叠、不同 user），强制 jobs=2 触发并行路径，
-/// 断言输出总行数 == 35（20+15），且两个 user 均出现在输出中。
-#[tokio::test(flavor = "multi_thread")]
-async fn test_parallel_csv_jobs_override_forces_parallel() {
+/// 多文件异构输入不会丢失记录，且两个 user 均出现在输出中。
+#[test]
+fn test_multi_file_csv_heterogeneous_records() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
     std::fs::create_dir_all(&log_dir).unwrap();
@@ -2361,7 +2314,7 @@ async fn test_parallel_csv_jobs_override_forces_parallel() {
     write_heterogeneous_log(&file_a, 20, 0, "USERA");
     write_heterogeneous_log(&file_b, 15, 1000, "USERB");
 
-    let par_csv = dir.path().join("parallel_jobs.csv");
+    let par_csv = dir.path().join("multi_file_heterogeneous.csv");
     let interrupted = Arc::new(AtomicBool::new(false));
     let par_cfg = Config {
         sqllog: SqllogConfig {
@@ -2382,9 +2335,7 @@ async fn test_parallel_csv_jobs_override_forces_parallel() {
         },
         ..Default::default()
     };
-    handle_run(&par_cfg, true, false, &interrupted, Some(2))
-        .await
-        .unwrap();
+    handle_run(&par_cfg, true, false, &interrupted).unwrap();
 
     let par_content = std::fs::read_to_string(&par_csv).unwrap();
     let data_lines: Vec<&str> = par_content
@@ -2395,19 +2346,23 @@ async fn test_parallel_csv_jobs_override_forces_parallel() {
     assert_eq!(
         data_lines.len(),
         35,
-        "jobs_override=Some(2) 并行路径应输出 35 条记录 (20+15)，实际 {}",
+        "多文件路径应输出 35 条记录 (20+15)，实际 {}",
         data_lines.len()
     );
-    assert!(par_content.contains("USERA"), "并行输出应包含 USERA 的记录");
-    assert!(par_content.contains("USERB"), "并行输出应包含 USERB 的记录");
+    assert!(
+        par_content.contains("USERA"),
+        "多文件输出应包含 USERA 的记录"
+    );
+    assert!(
+        par_content.contains("USERB"),
+        "多文件输出应包含 USERB 的记录"
+    );
 }
 
-/// PARALLEL-07: 异构数据(不重叠 trxid + 不同 user)下并行 == 顺序；任何聚合 bug 立即可见。
-///
-/// 顺序基线逐文件运行，并行路径强制 jobs=2，排序后逐字节比对。
-/// 若并行路径漏记录（任何聚合 bug），`len()` 断言立即失败。
-#[tokio::test(flavor = "multi_thread")]
-async fn test_parallel_csv_heterogeneous_matches_sequential() {
+/// 异构数据（不重叠 trxid + 不同 user）下，多文件运行 == 逐文件运行；
+/// 任何聚合 bug 都应立即可见。
+#[test]
+fn test_multi_file_csv_heterogeneous_matches_single_file_runs() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_dir = dir.path().join("logs");
     std::fs::create_dir_all(&log_dir).unwrap();
@@ -2438,17 +2393,15 @@ async fn test_parallel_csv_heterogeneous_matches_sequential() {
             },
             ..Default::default()
         };
-        handle_run(&seq_cfg, true, false, &interrupted, None)
-            .await
-            .unwrap();
+        handle_run(&seq_cfg, true, false, &interrupted).unwrap();
         let content = std::fs::read_to_string(&seq_csv).unwrap();
         for line in content.lines().skip(1).filter(|l| !l.is_empty()) {
             seq_lines.push(line.to_string());
         }
     }
 
-    // 并行路径：强制 jobs=2
-    let par_csv = dir.path().join("par_hetero.csv");
+    // 多文件路径
+    let par_csv = dir.path().join("multi_file_hetero.csv");
     let par_cfg = Config {
         sqllog: SqllogConfig {
             inputs: vec![
@@ -2468,9 +2421,7 @@ async fn test_parallel_csv_heterogeneous_matches_sequential() {
         },
         ..Default::default()
     };
-    handle_run(&par_cfg, true, false, &interrupted, Some(2))
-        .await
-        .unwrap();
+    handle_run(&par_cfg, true, false, &interrupted).unwrap();
 
     let par_content = std::fs::read_to_string(&par_csv).unwrap();
     let mut par_lines: Vec<String> = par_content
@@ -2485,13 +2436,13 @@ async fn test_parallel_csv_heterogeneous_matches_sequential() {
     assert_eq!(
         seq_lines.len(),
         par_lines.len(),
-        "异构数据下并行 ({}) 与顺序 ({}) 行数应相同",
+        "异构数据下多文件 ({}) 与逐文件 ({}) 行数应相同",
         par_lines.len(),
         seq_lines.len()
     );
     assert_eq!(
         seq_lines, par_lines,
-        "异构数据下并行 CSV 内容排序后应与顺序基线完全一致"
+        "异构数据下多文件 CSV 内容排序后应与逐文件基线完全一致"
     );
 }
 

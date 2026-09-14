@@ -31,8 +31,7 @@ name = "sqllog2db"
 path = "src/main.rs"
 
 [dependencies]
-dm-database-parser-sqllog = { version = "2.0.4", features = ["async"] }
-tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+dm-database-parser-sqllog = "2.0.4"
 env_logger = "0.11.10"
 log = "0.4.32"
 thiserror = "2.0.18"
@@ -45,12 +44,10 @@ ctrlc = "3"
 glob = "0.3"
 
 indicatif = "0.18"
-rayon = "1.12"
 memchr = "2"
 arrow-array = "59.3.0"
 arrow-schema = "59.3.0"
 parquet = { version = "59.3.0", default-features = false, features = ["arrow", "zstd", "snap"] }
-tempfile = "3.27.0"
 
 
 [lints.rust]
@@ -63,7 +60,7 @@ pedantic = { level = "warn", priority = -1 }
 cargo = { level = "warn", priority = -1 }
 # 唯一保留的 allow：multiple_crate_versions 检查的是依赖图（外部 crate），不是本仓库代码。
 # 剩余冲突全部在依赖自身子树内，无法从本仓库 Cargo.toml 修复：
-#   - syn 2/3：过渡期宏依赖（tokio/wasm-bindgen/zerocopy + clap/serde/thiserror）
+#   - syn 2/3：过渡期宏依赖（wasm-bindgen/zerocopy + clap/serde/thiserror）
 #   - wit-bindgen 0.46/0.51：tempfile -> getrandom 的 WASI 目标子树
 # 待上游收敛后即可移除本行。cargo 组其余 lint 仍生效。
 multiple_crate_versions = "allow"
@@ -81,9 +78,14 @@ debug = true
 strip = "none"
 
 [dev-dependencies]
-criterion = { version = "0.8", features = ["html_reports"] }
+criterion = { version = "0.8", default-features = false, features = [
+    "cargo_bench_support",
+    "html_reports",
+    "plotters",
+] }
 assert_cmd = "2"
 predicates = "3"
+tempfile = "3.27.0"
 
 [target.'cfg(not(target_os = "windows"))'.dependencies]
 tikv-jemallocator = "0.6.1"

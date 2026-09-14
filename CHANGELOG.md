@@ -7,8 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [3.0.0] - 2026-09-14
-
 ### Removed
 
 - **SQLite、watch 和文件拆分（BREAKING）**：移除 SQLite 后端与依赖、watch 命令与偏移跟踪、输入切块和 CSV 按行轮转。旧 `[exporter.sqlite]`、`max_rows_per_file` 配置会报错；导出仅保留 CSV/Parquet 单文件输出。

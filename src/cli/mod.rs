@@ -30,8 +30,9 @@ enum CommandOutcome {
 }
 
 /// Execute the CLI and return its process exit code.
-pub async fn run() -> i32 {
-    match dispatch().await {
+#[must_use]
+pub fn run() -> i32 {
+    match dispatch() {
         Ok(CommandOutcome::Exported(stats, quiet)) => {
             if stats.has_fatal() {
                 return EXIT_FATAL;
@@ -59,7 +60,7 @@ pub async fn run() -> i32 {
     0
 }
 
-async fn dispatch() -> Result<CommandOutcome> {
+fn dispatch() -> Result<CommandOutcome> {
     use clap::{CommandFactory, FromArgMatches};
 
     let cmd = cli::opts::Cli::command();
@@ -108,7 +109,7 @@ async fn dispatch() -> Result<CommandOutcome> {
             })
             .ok();
 
-            let stats = engine::run(&cfg, cli.quiet, cli.verbose, &interrupted, None).await?;
+            let stats = engine::run(&cfg, cli.quiet, cli.verbose, &interrupted)?;
             Ok(CommandOutcome::Exported(stats, cli.quiet))
         }
         Some(cli::opts::Commands::Validate { config }) => {
