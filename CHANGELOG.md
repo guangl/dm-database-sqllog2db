@@ -394,8 +394,8 @@ The 0.x series (0.1.0 through 0.10.7) covered the initial development of sqllog2
 
 See git history for full details.
 
-[Unreleased]: https://github.com/guangl/dm-database-sqllog2db/compare/v3.0.0...HEAD
-[3.0.0]: https://github.com/guangl/dm-database-sqllog2db/compare/v2.0.0...v3.0.0
+[Unreleased]: https://github.com/guangl/dm-database-sqllog2db/compare/6c6d890667b0e6e2e36b9b5cfb58d561f4f94b57...HEAD
+[3.0.0]: https://github.com/guangl/dm-database-sqllog2db/compare/v2.0.0...6c6d890667b0e6e2e36b9b5cfb58d561f4f94b57
 [1.15.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.15.0
 [1.14.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.14.0
 [1.13.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.13.0
