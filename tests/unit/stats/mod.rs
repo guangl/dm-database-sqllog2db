@@ -60,7 +60,7 @@ fn test_run_stats_propagates_no_files_found() {
 fn test_run_stats_skips_parse_errors() {
     let dir = tempfile::TempDir::new().unwrap();
     let log_file = dir.path().join("mixed.log");
-    // AsyncLogParser 在文件级别解析：含任何无效行的文件会被整体跳过（静默 warn）
+    // 旧的一次性解析入口在文件级别解析：含任何无效行的文件会被整体跳过（静默 warn）
     // 使用纯合法内容确保 run_stats 正常返回 Ok
     let content = "2025-01-15 10:30:28.001 (EP[0] sess:0x0001 user:U trxid:1 stmt:0x1 appname:A ip:10.0.0.1) [ORA] : SELECT id FROM orders. EXECTIME: 5(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.\n";
     std::fs::write(&log_file, content).unwrap();

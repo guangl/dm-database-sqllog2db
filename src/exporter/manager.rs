@@ -22,7 +22,7 @@ impl std::fmt::Debug for ExporterManager {
 }
 
 impl ExporterManager {
-    /// 从已构建的 `CsvExporter` 创建管理器（并行处理时每个任务独立调用）。
+    /// 从已构建的 `CsvExporter` 创建管理器（测试辅助构造器）。
     #[cfg(test)]
     #[must_use]
     pub(crate) fn from_csv(exporter: CsvExporter) -> Self {

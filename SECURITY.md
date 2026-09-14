@@ -36,7 +36,7 @@ sqllog2db 是一个达梦数据库 SQL 日志解析命令行工具。我们重�
 
 如无法使用 GitHub Advisory，可通过以下邮箱报告：
 
-**安全邮箱：** `[请替换为实际安全邮箱]`
+**安全邮箱：** `guangluo@outlook.com`
 
 建议使用 GPG 加密通信。如果你有 GPG 公钥需求，请先在 issue 中请求。
 

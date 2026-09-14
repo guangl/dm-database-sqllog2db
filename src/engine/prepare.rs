@@ -1,15 +1,15 @@
 //! Run 前置准备：输入文件解析与 stdin pipe 检测、事务级过滤器预扫描（trxid 收集）、
-//! 多文件并行的内存预算并发控制，以及进度条构建。
+//! 以及进度条构建。
 
 use crate::config::Config;
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::parser::SqllogParser;
 use crate::pipeline::filters::transaction::TransactionFilters;
 use crate::streaming::open_log_file;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::{info, warn};
 use std::io::IsTerminal;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 // ===== 输入解析与进度条 =====
 
@@ -49,10 +49,9 @@ pub(super) fn resolve_input_files(cfg: &Config) -> Result<(Vec<PathBuf>, bool)> 
 pub(super) fn merge_trxid_prescan(
     cfg: &Config,
     log_files: &[PathBuf],
-    jobs: usize,
     is_stdin_pipe: bool,
     quiet: bool,
-) -> Result<Option<Config>> {
+) -> Option<Config> {
     if cfg
         .filter
         .as_ref()
@@ -70,9 +69,9 @@ pub(super) fn merge_trxid_prescan(
                      degrading to per-record matching."
                 );
             }
-            return Ok(None);
+            return None;
         }
-        let matches = scan_for_trxids_by_transaction_filters(log_files, cfg, jobs)?;
+        let matches = scan_for_trxids_by_transaction_filters(log_files, cfg);
         let mut tmp = cfg.clone();
         if let Some(f) = &mut tmp.filter {
             f.merge_found_trxids(matches.included.into_iter().collect());
@@ -83,9 +82,9 @@ pub(super) fn merge_trxid_prescan(
             f.include.clear_transaction_filters();
             f.exclude.clear_transaction_filters();
         }
-        Ok(Some(tmp))
+        Some(tmp)
     } else {
-        Ok(None)
+        None
     }
 }
 
@@ -106,7 +105,7 @@ pub(super) fn make_progress_bar(show_progress: bool, total_files: usize) -> Opti
     }
 }
 
-// ===== Pre-scan: 单文件扫描（rayon 并行 + 文件内去重）=====
+// ===== Pre-scan: 单文件扫描（文件内去重）=====
 
 /// 预扫描选中的事务和被否决的事务；跨文件合并后统一应用否决。
 #[derive(Debug, Default)]
@@ -151,100 +150,30 @@ pub(super) fn scan_log_file_for_matches(file_path: &str, cfg: &Config) -> Transa
     matches
 }
 
-// ===== Pre-scan: 跨文件编排（文件级 rayon 并行）=====
+// ===== Pre-scan: 跨文件编排（顺序扫描）=====
 
 pub(super) fn scan_for_trxids_by_transaction_filters(
     log_files: &[std::path::PathBuf],
     cfg: &Config,
-    jobs: usize,
-) -> Result<TransactionMatches> {
-    use rayon::prelude::*;
-
+) -> TransactionMatches {
     log::info!(
         "Pre-scanning {} files for transaction-level filters...",
         log_files.len()
     );
 
-    let pool = rayon::ThreadPoolBuilder::new()
-        .num_threads(jobs)
-        .build()
-        .map_err(|e| Error::Io(std::io::Error::other(format!("rayon thread pool: {e}"))))?;
-
-    let matched: TransactionMatches = tokio::task::block_in_place(|| {
-        pool.install(|| {
-            log_files
-                .par_iter()
-                .map(|file| {
-                    if let Some(path) = file.to_str() {
-                        scan_log_file_for_matches(path, cfg)
-                    } else {
-                        log::warn!(
-                            "Pre-scan: skipping file with non-UTF8 path: {}",
-                            file.display()
-                        );
-                        TransactionMatches::default()
-                    }
-                })
-                .reduce(TransactionMatches::default, |mut all, next| {
-                    all.included.extend(next.included);
-                    all.excluded.extend(next.excluded);
-                    all
-                })
-        })
-    });
-
-    Ok(matched)
-}
-
-// ===== 内存预算并发控制 =====
-//
-// 多文件并行场景下的内存预算控制。
-//
-// 旧的 `AsyncLogParser` 实现会把整份文件一次性读入内存解析成 `Vec<Sqllog>`（无流式 API），
-// 并行解析的峰值内存约为 `jobs × 单文件大小`：`jobs` 越大、文件越大，越容易突破进程内存上限。
-//
-// 本模块在"按文件大小动态降低并发度"的策略下，把并行解析阶段的峰值内存控制在
-// [`DEFAULT_MEMORY_BUDGET_BYTES`]（2GB）以内：取参与并行的文件中最大的一个作为
-// 单任务内存占用的保守估计（乘以 [`PARSE_MEMORY_AMPLIFICATION`] 放大系数，
-// 覆盖解析后 `Sqllog` 结构体中每个字段额外的 `String` 分配开销），
-// 用 `budget / 单任务估计内存` 反推允许的最大并发数，并与用户请求的 `jobs` 取较小值。
-//
-// 不处理的场景：单个文件本身的预估内存就超过预算（即使并发数降到 1 也无法满足）。
-// 解析器只提供一次性读取整个文件的 API，没有流式/分块接口，无法在不进一步拆分文件的前提下
-// 把单文件解析的峰值内存压低；这种情况下退回到 `jobs = 1`，仅做警告，不阻止运行。
-
-/// 并行解析阶段的默认内存预算：2GB。
-pub(super) const DEFAULT_MEMORY_BUDGET_BYTES: u64 = 2 * 1024 * 1024 * 1024;
-
-/// 解析后内存相对原始文本的放大系数（保守估计）：
-/// `Sqllog` 的每个字段都是独立的 `String`/`Vec` 分配，加上 `Vec<Sqllog>` 本身的容量开销，
-/// 实测文本到结构体的膨胀通常在 2~3 倍之间；取 3 作为安全上界。
-const PARSE_MEMORY_AMPLIFICATION: u64 = 3;
-
-/// 根据参与并行的文件大小，把用户请求的 `jobs` 降低到内存预算允许的范围内。
-///
-/// 返回值始终 `>= 1`（即使单文件预估内存已超过预算，也保留至少 1 个并发，仅靠调用方记录警告）。
-pub(super) fn effective_jobs_for_memory_budget(
-    files: &[std::path::PathBuf],
-    requested_jobs: usize,
-    budget_bytes: u64,
-) -> usize {
-    if requested_jobs <= 1 {
-        return requested_jobs.max(1);
+    let mut matched = TransactionMatches::default();
+    for file in log_files {
+        let next = if let Some(path) = file.to_str() {
+            scan_log_file_for_matches(path, cfg)
+        } else {
+            log::warn!(
+                "Pre-scan: skipping file with non-UTF8 path: {}",
+                file.display()
+            );
+            TransactionMatches::default()
+        };
+        matched.included.extend(next.included);
+        matched.excluded.extend(next.excluded);
     }
-    let max_size = files.iter().filter_map(|f| file_size(f)).max().unwrap_or(0);
-    if max_size == 0 {
-        return requested_jobs;
-    }
-    let per_task_bytes = max_size.saturating_mul(PARSE_MEMORY_AMPLIFICATION).max(1);
-    let budget_jobs = usize::try_from((budget_bytes / per_task_bytes).max(1)).unwrap_or(usize::MAX);
-    requested_jobs.min(budget_jobs).max(1)
+    matched
 }
-
-fn file_size(path: &Path) -> Option<u64> {
-    std::fs::metadata(path).ok().map(|m| m.len())
-}
-
-#[cfg(test)]
-#[path = "../../tests/unit/engine/prepare.rs"]
-mod tests;

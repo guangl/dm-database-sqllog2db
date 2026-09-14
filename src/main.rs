@@ -4,9 +4,8 @@
 #[global_allocator]
 static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
-#[tokio::main]
-async fn main() {
-    let code = dm_database_sqllog2db::cli::run().await;
+fn main() {
+    let code = dm_database_sqllog2db::cli::run();
     if code != 0 {
         std::process::exit(code);
     }

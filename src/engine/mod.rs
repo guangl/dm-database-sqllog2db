@@ -10,10 +10,7 @@ mod sequential;
 mod tests;
 
 use self::context::{Console, build_run_context};
-use self::prepare::{
-    DEFAULT_MEMORY_BUDGET_BYTES, effective_jobs_for_memory_budget, make_progress_bar,
-    merge_trxid_prescan, resolve_input_files,
-};
+use self::prepare::{make_progress_bar, merge_trxid_prescan, resolve_input_files};
 use self::report::{RunSummary, print_run_summary, write_error_log};
 use self::sequential::run_sequential;
 use crate::config::Config;
@@ -24,28 +21,21 @@ use std::time::Instant;
 
 /// 主编排函数：解析日志文件并导出到配置的导出器。
 /// 所有导出器共用顺序流式处理和进度展示。
-/// `jobs_override` 为测试钩子，生产代码传 None 保持 `available_parallelism` 原行为。
 ///
 /// # Errors
 ///
 /// 未找到任何输入文件、导出器初始化/写出发生致命错误，或运行期间收到中断信号
 /// （返回 [`Error::Interrupted`]）时返回错误。
-#[allow(clippy::unused_async, reason = "preserve the public async entry point")]
-pub async fn run(
+pub fn run(
     cfg: &Config,
     quiet: bool,
     verbose: bool,
     interrupted: &Arc<AtomicBool>,
-    jobs_override: Option<usize>,
 ) -> Result<ErrorStats> {
     let total_start = Instant::now();
     let mut run_stats = ErrorStats::default();
     let (log_files, is_stdin_pipe) = resolve_input_files(cfg)?;
-    let jobs = jobs_override
-        .unwrap_or_else(|| std::thread::available_parallelism().map_or(1, std::num::NonZero::get));
-    let prescan_jobs =
-        effective_jobs_for_memory_budget(&log_files, jobs, DEFAULT_MEMORY_BUDGET_BYTES);
-    let merged = merge_trxid_prescan(cfg, &log_files, prescan_jobs, is_stdin_pipe, quiet)?;
+    let merged = merge_trxid_prescan(cfg, &log_files, is_stdin_pipe, quiet);
     let final_cfg: &Config = merged.as_ref().unwrap_or(cfg);
     let ctx = build_run_context(final_cfg);
     let show_progress = !quiet;
