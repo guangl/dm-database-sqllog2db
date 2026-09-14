@@ -4,7 +4,7 @@ version = "2.0.0"
 edition = "2024"
 rust-version = "1.95"
 authors = ["guangl <guangl@example.com>"]
-description = "高性能 CLI 工具：流式解析达梦数据库 SQL 日志并导出到 Parquet、CSV 或 SQLite"
+description = "高性能 CLI 工具：流式解析达梦数据库 SQL 日志并导出到 Parquet 或 CSV"
 documentation = "https://guangl.github.io/sqllog2db/"
 homepage = "https://github.com/guangl/sqllog2db"
 repository = "https://github.com/guangl/sqllog2db"
@@ -42,13 +42,11 @@ clap = { version = "4.6.1", features = ["derive", "env"] }
 serde = { version = "1.0.228", features = ["derive"] }
 toml = { version = "1.1.2", features = ["serde"] }
 ctrlc = "3"
-notify = "8"
 glob = "0.3"
 
 indicatif = "0.18"
 rayon = "1.12"
 memchr = "2"
-rusqlite = { version = "0.40.1", features = ["bundled"] }
 arrow-array = "59.3.0"
 arrow-schema = "59.3.0"
 parquet = { version = "59.3.0", default-features = false, features = ["arrow", "zstd", "snap"] }
@@ -65,9 +63,7 @@ pedantic = { level = "warn", priority = -1 }
 cargo = { level = "warn", priority = -1 }
 # 唯一保留的 allow：multiple_crate_versions 检查的是依赖图（外部 crate），不是本仓库代码。
 # 剩余冲突全部在依赖自身子树内，无法从本仓库 Cargo.toml 修复：
-#   - hashbrown 0.16/0.17：rusqlite 内部（sqlite-wasm-rs + hashlink）
 #   - syn 2/3：过渡期宏依赖（tokio/wasm-bindgen/zerocopy + clap/serde/thiserror）
-#   - windows-sys 0.60/0.61：notify 落后于其余生态
 #   - wit-bindgen 0.46/0.51：tempfile -> getrandom 的 WASI 目标子树
 # 待上游收敛后即可移除本行。cargo 组其余 lint 仍生效。
 multiple_crate_versions = "allow"
@@ -89,16 +85,15 @@ criterion = { version = "0.7", features = ["html_reports"] }
 assert_cmd = "2"
 predicates = "3"
 
+[target.'cfg(not(target_os = "windows"))'.dependencies]
+tikv-jemallocator = "0.6.1"
+
 [target.'cfg(not(target_os = "windows"))'.dev-dependencies]
 tikv-jemallocator = { version = "0.6.1", features = ["stats"] }
 tikv-jemalloc-ctl = { version = "0.6.1", features = ["stats"] }
 
 [[bench]]
 name = "bench_csv"
-harness = false
-
-[[bench]]
-name = "bench_sqlite"
 harness = false
 
 [[bench]]

@@ -80,12 +80,15 @@ file = "export/errors.log"
 
 ```toml
 [replace_parameters]
+# 默认仅回填 SEL；可增加 "INS"、"UPD"、"DEL" 等日志标签
+# tags = ["SEL"]
 # 可省略，默认自动检测；也可指定 ["?"] 或 [":1"]
 # placeholders = []
 ```
 
 | 字段 | 类型 | 默认值 | 描述 |
 |------|------|--------|------|
+| `tags` | [String] | `["SEL"]` | 仅对这些日志标签对应的 SQL 回填参数 |
 | `placeholders` | [String] | `[]` | 空列表自动检测，仅 `?` 使用顺序占位符，仅 `:N` 使用序号占位符 |
 
 **迁移：** 旧 `enable = true` 改为仅保留配置段；旧 `enable = false` 改为删除或注释整个配置段。enable 和未知字段会直接报错。若 output.fields 不包含 normalized_sql，则不会计算或导出替换结果。
@@ -209,38 +212,9 @@ append = false
 
 ---
 
-## [exporter.sqlite]
-
-SQLite 导出配置。当 CSV 和 SQLite 同时配置时，SQLite 优先级较低。
-
-```toml
-[exporter.sqlite]
-# 输出 SQLite 数据库文件路径
-database_url = "export/sqllog2db.db"
-# 目标表名（仅限 ASCII 标识符：^[A-Za-z_][A-Za-z0-9_]*$）
-table_name = "sqllog_records"
-# 写入前删除并重建该表
-overwrite = true
-# 追加行到已有表而非覆盖
-append = false
-```
-
-| 字段 | 类型 | 默认值 | 描述 |
-|------|------|--------|------|
-| `database_url` | String | *（必填）* | 输出 SQLite 数据库文件路径（不可为空） |
-| `table_name` | String | `"sqllog_records"` | 目标表名，须匹配 `^[A-Za-z_][A-Za-z0-9_]*$` |
-| `overwrite` | bool | `true` | 写入前删除并重建该表 |
-| `append` | bool | `false` | 追加行到已有表而非覆盖 |
-| `batch_size` | usize | `10000` | 单个事务内的 INSERT 批大小（须 > 0） |
-| `multi_row_batch_size` | usize | `64` | 多行 INSERT 每条语句的行数，取值 1-64（15 列 × 64 = 960 < SQLite 变量上限 999） |
-
-**说明：** 使用批量 INSERT，页缓存预算为 16 MiB（`cache_size=-16384`，负值单位为 KiB）；禁用文件映射，临时数据允许落盘，避免导出大量文件时缓存随数据库增长到数十 GiB。此预算仅针对 SQLite 页缓存，并非整个进程的内存上限。列的投影与顺序由独立的 `[output]` 段控制（见下）。
-
----
-
 ## [output]（可选）
 
-字段投影：选择导出哪些列以及列的顺序，对 Parquet、CSV 和 SQLite 同时生效。省略该段则输出全部 15 个字段的默认顺序。
+字段投影：选择导出哪些列以及列的顺序，对 Parquet 和 CSV 同时生效。省略该段则输出全部 15 个字段的默认顺序。
 
 ```toml
 [output]
@@ -260,7 +234,7 @@ fields = ["ts", "username", "sql", "exec_time_ms"]
 
 ### 导出器优先级
 
-每次运行只有一个导出器处于活动状态。优先级：Parquet > CSV > SQLite。建议一次只保留一个启用的导出器配置节。
+每次运行只有一个导出器处于活动状态。优先级：Parquet > CSV。建议一次只保留一个启用的导出器配置节。
 
 ### 处理管道快速路径
 
@@ -272,7 +246,7 @@ fields = ["ts", "username", "sql", "exec_time_ms"]
 
 ### 命令行子命令
 
-sqllog2db 提供五个子命令：
+sqllog2db 提供四个子命令：
 
 **`sqllog2db init`** — 生成默认配置文件。支持 `-o` 指定输出路径、`--force` 强制覆盖。
 
@@ -283,9 +257,8 @@ sqllog2db 提供五个子命令：
 **`sqllog2db stats`** — 统计分析。流式扫描日志文件，聚合慢 SQL 和高频 SQL，并直接在终端打印结果。
 - `-c` 指定配置文件路径（使用 `[sqllog]` 输入配置和 `[stats]` 统计配置）
 - `--top N`（默认 20）：每类结果显示 Top N 条记录
-- 不生成 Parquet/CSV 文件，也不写入 SQLite；`[exporter]` 配置对该命令不生效
+- 不生成 Parquet/CSV 文件；`[exporter]` 配置对该命令不生效
 
-**`sqllog2db watch`** — 监听模式。持续监视 `[sqllog].inputs` 配置的目录，出现新的 `.log` 文件时自动触发处理。`-c` 指定配置文件路径，`-q` 静默模式（适合 cron/后台运行），按 Ctrl+C 停止。
 
 示例见[快速入门指南](quickstart.md)。
 

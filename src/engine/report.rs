@@ -6,11 +6,9 @@ use std::path::PathBuf;
 
 /// 运行结果摘要数据（供 [`print_run_summary`] 渲染）。
 pub(super) struct RunSummary<'a> {
-    pub(super) use_parallel: bool,
     pub(super) elapsed: f64,
     pub(super) processed_files: &'a [(PathBuf, usize)],
     pub(super) total_records: usize,
-    pub(super) skipped_files: usize,
 }
 
 /// 输出运行摘要（文件数、记录数、耗时、错误统计）。`quiet` 为 true 时不输出任何内容。
@@ -21,26 +19,18 @@ pub(super) fn print_run_summary(
     run_stats: &ErrorStats,
 ) {
     let RunSummary {
-        use_parallel,
         elapsed,
         processed_files,
         total_records,
-        skipped_files,
     } = *summary;
     if !quiet {
-        let mode_label = if use_parallel { " [parallel]" } else { "" };
-        let skip_label = if skipped_files > 0 {
-            format!(", {skipped_files} skipped")
-        } else {
-            String::new()
-        };
         if verbose && !processed_files.is_empty() {
             for (path, count) in processed_files {
                 eprintln!("Processed: {} — {} records", path.display(), count);
             }
         }
         eprintln!(
-            "\n✓ SQL Log Export Task Completed{mode_label} in {elapsed:.2}s — {total_records} records total{skip_label}",
+            "\n✓ SQL Log Export Task Completed in {elapsed:.2}s — {total_records} records total",
         );
         if run_stats.has_errors() {
             eprintln!(
@@ -103,7 +93,7 @@ pub(super) fn print_run_summary(
     }
 }
 
-/// 将解析错误记录批量写出到配置的 error log 文件。`cfg.append_error_log=true` 时为追加模式（watch 触发），`false` 时为覆盖模式（run 子命令默认）。
+/// 将本次解析错误记录批量写出到配置的 error log 文件，覆盖已有内容。
 /// 无配置或无错误时为空操作；写出失败仅 warn 不终止。
 pub(super) fn write_error_log(cfg: &crate::config::Config, stats: &ErrorStats) {
     let Some(error_cfg) = cfg.error.as_ref() else {
@@ -112,18 +102,7 @@ pub(super) fn write_error_log(cfg: &crate::config::Config, stats: &ErrorStats) {
     if stats.parse_error_records.is_empty() {
         return;
     }
-    let file = if cfg.append_error_log {
-        std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&error_cfg.file)
-    } else {
-        std::fs::OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open(&error_cfg.file)
-    };
+    let file = std::fs::File::create(&error_cfg.file);
     let file = match file {
         Ok(f) => f,
         Err(e) => {

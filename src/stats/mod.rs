@@ -6,6 +6,7 @@ pub mod normalize;
 mod runner;
 
 #[cfg(test)]
+#[path = "../../tests/unit/stats/mod.rs"]
 mod tests;
 
 pub use runner::run_stats;

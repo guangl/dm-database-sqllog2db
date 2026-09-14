@@ -1,4 +1,6 @@
-# CSV / SQLite 导出内存检查（2026-09-10）
+# 导出内存检查
+
+当前脚本仅检查 CSV。下方 2026-09-10 的修复数据保留为历史记录，包含现已移除的 SQLite 后端。
 
 ## 问题与修复
 
@@ -26,7 +28,7 @@ cargo build --release
 python3 scripts/check_export_memory.py target/release/sqllog2db
 ```
 
-脚本支持 macOS 和 Linux，需要 `/usr/bin/time`（Linux 为 GNU time），默认生成 16×256 MiB 临时日志，依次检查 1、4、16 文件的 CSV/SQLite 导出。每次导出峰值不超过 128 MiB、多文件增长不超过 32 MiB，并核对记录数与完整字段内容；SQLite 还执行 quick_check。临时输入和输出在完成后自动删除。128 MiB 是本合成场景的回归阈值，可通过 `--max-rss-mib` 调整，不是所有真实日志的进程内存保证。
+脚本支持 macOS 和 Linux，需要 `/usr/bin/time`（Linux 为 GNU time），默认生成 16×256 MiB 临时日志，依次检查 1、4、16 文件的 CSV 导出。每次导出峰值不超过 128 MiB、多文件增长不超过 32 MiB，并核对记录数与完整字段内容。临时输入和输出在完成后自动删除。128 MiB 是本合成场景的回归阈值，可通过 `--max-rss-mib` 调整，不是所有真实日志的进程内存保证。
 
 `cargo test` 与 `cargo clippy --all-targets -- -D warnings` 已通过。缓存设置调整顺序后另外重跑 SQLite 测试和实际内存测量。
 
@@ -40,3 +42,28 @@ python3 scripts/check_export_memory.py target/release/sqllog2db
 ## 发版标准
 
 本报告中的初次 4 文件对比已扩展为 1、4、16 文件的强制门禁，并接入 PR、main 和标签发布。当前标准、命令与验收证据以[发版门禁标准](release-standard.md)为准。
+
+当前导出路径：CSV 和 Parquet 均顺序流式写出；CSV 使用单个 1 MiB 缓冲，不再按输入文件数启动并发写出任务。输入切块和输出分片已删除。下述历史测量不代表本次修改后的重新测量。
+
+### 顺序导出复测（2026-09-13）
+
+本地 debug 构建，关闭参数替换和事务过滤，每个输入文件约 8 MiB。CSV 的 1、4、8 文件场景峰值 RSS 分别为 12,369,920、12,419,072、12,468,224 字节，较单文件最大增长 98,304 字节；记录数及 SHA-256 校验均通过。这是小规模验证，未重跑 release 4 GiB 门禁；不代表超长记录或关联缓存具有进程级硬内存限制。
+
+### 真实日志优化复测（2026-09-14）
+
+输入为 sqllogs/ 全部 101 个日志，共 25.32 GiB；两个版本均为 release 构建，无过滤、无参数回填，默认压缩及 row group 设置不变。每个导出器均写入单个输出文件。
+
+| 格式 | 优化前 | 优化后 | 耗时下降 | 原峰值 RSS | 新峰值 RSS |
+|---|---:|---:|---:|---:|---:|
+| CSV | 57.25 秒 | 50.71 秒 | 11.4% | 10.2 MiB | 18.2 MiB |
+| PARQUET | 103.53 秒 | 73.64 秒 | 28.9% | 563.6 MiB | 93.9 MiB |
+
+两者均正常退出，成功导出 115,306,013 条记录，无解析或导出错误。CSV 和 Parquet 全部输出均与旧版逐字节相同。
+
+改动：Parquet StringBuilder 直接构建列；CSV 借用路径；非 Windows CLI 使用 jemalloc；普通文件解析与写出通过最多两个批次的队列重叠，每批最多 512 条、约 1 MiB 容量目标，保持记录顺序。stdin 保持同步读取。
+
+内存数据是本机真实输入的峰值测量，并非所有输入的进程内存硬上限；超长单记录、参数缓存与事务过滤仍可增加内存。Windows 使用系统分配器，本次 macOS 的性能结果不应直接外推。
+
+测量使用 macOS /usr/bin/time -l；测试按顺序执行，没有同时进行输出回读。419 个自动测试通过，2 个按设计忽略；新增测试覆盖预读的顺序、错误透传与提前退出；Clippy 严格检查及文档构建通过。
+
+复测原始数据：full/comparison.json（旧版基线），pipelined/measurements.json（最终版本），full-validation.json（逐字节校验）。

@@ -10,6 +10,7 @@ cargo build --release
 
 # Test
 cargo test
+python3 -B -m unittest discover -s tests/python -p 'test_*.py' -v
 
 # Lint (must pass with no warnings)
 cargo clippy --all-targets -- -D warnings
@@ -25,7 +26,7 @@ cargo run -- run -c config.toml
 
 ## Architecture
 
-**sqllog2db** parses DaMeng (达梦) database SQL log files and exports them to Parquet, CSV, or SQLite. It streams log records through an optional processing pipeline and writes to a single configured exporter.
+**sqllog2db** parses DaMeng (达梦) database SQL log files and exports them to Parquet or CSV. It streams log records through an optional processing pipeline and writes to a single configured exporter.
 
 ### Data Flow
 
@@ -35,20 +36,19 @@ Input .log files (sqllogs/)
     ↓ dm-database-parser-sqllog  — parses each line into Sqllog records
     ↓ Pipeline            — optional filters and normalization (src/pipeline/)
     ↓ ExporterManager     — routes to active exporter (src/exporter/)
-    ↓ Output (Parquet / CSV / SQLite)
+    ↓ Output (Parquet / CSV)
 ```
 
 ### Key Modules
 
-**Layering:** `cli/` is the thin command layer (arg parsing in `opts.rs`, per-command handlers). Command-level orchestration lives in top-level domain modules — mirror this split when adding a command (see `stats/` + `cli/stats/`).
+**Layering:** `cli/` is the thin command layer (arg parsing in `opts.rs`, per-command handlers). `cli/mod.rs` dispatches commands, `cli/runtime.rs` applies config overrides, initializes logging and formats errors. Command-level orchestration lives in top-level domain modules — mirror this split when adding a command (see `stats/` + `cli/stats.rs`).
 
-- **`engine/run.rs`** — run-command orchestration: loads config, builds pipeline, pre-scans for transaction filters, routes to parallel/sequential/chunked paths (`engine::run`, called from `main.rs` and `watch`)
-- **`engine/driver/`** — the four execution paths: `parallel.rs` (multi-file CSV, rayon), `sqlite.rs` (SQLite, serial writes), `sequential.rs` (streaming), `chunk.rs` (single-file split); parse errors logged via `log::warn!`
+- **`engine/mod.rs`** — run-command orchestration: resolves inputs, pre-scans transaction filters, builds context, executes the selected plan, and reports results (`engine::run`, called from `cli/mod.rs`)
+- **`engine/context.rs`** — shared run configuration and driver result types
 - **`engine/prepare.rs`** — input resolution + two-phase pre-scan (collects transaction IDs for filter pre-population) + memory-budget job capping
 - **`engine/record.rs`** — record-level filter → normalize → export loop shared by all driver paths
-- **`watch/`** — top-level watch domain: notify watcher, watch loop, incremental/full triggers, offset persistence (`watch::run`). The `watch` CLI subcommand is temporarily disabled (commented out in `cli/opts.rs` + `main.rs`); the lib module and its tests still compile
-- **`exporter/mod.rs`** — `Exporter` trait + `ExporterManager` factory; only one exporter is active per run (priority: Parquet > CSV > SQLite)
-- **`exporter/csv/writer.rs`** — CSV field serialization; `has_metrics` condition includes `rowcount != 0` to avoid silent data loss
+- **`exporter/mod.rs`** — `Exporter` trait + `ExporterManager` factory; only one exporter is active per run (priority: Parquet > CSV)
+- **`exporter/csv.rs`** — CSV field serialization; `has_metrics` condition includes `rowcount != 0` to avoid silent data loss
 - **`pipeline/mod.rs`** — `LogProcessor` trait + `Pipeline`; `pipeline.is_empty()` enables a zero-overhead fast path when no filters are configured
 - **`pipeline/filters/processor.rs`** — `build_pipeline` + `FilterProcessor`; two-pass design: pre-scan finds matching transaction IDs, main pass applies all filters
 - **`config/mod.rs`** — all config structs with serde deserialization and validation; `config/template.rs` holds the `init` default-config TOML assets
@@ -56,7 +56,6 @@ Input .log files (sqllogs/)
 ### Performance Design
 
 - Single-threaded streaming — constant memory regardless of file size
-- Multi-file parallel parse path for CSV export via rayon (`parallel.rs`) and SQLite export (`sqlite_parallel.rs`)
 - 1 MiB `BufWriter` + `itoa` crate for zero-allocation CSV formatting
 - `pipeline.is_empty()` check in the hot loop avoids filter overhead when disabled
 - Binary: LTO (`fat`) + strip + `panic=abort` + `opt-level=3`
@@ -65,3 +64,9 @@ Input .log files (sqllogs/)
 ### Error Handling
 
 Parse errors are not fatal — they are written to the configured error log file (`[error] file`) and processing continues. Structured errors use `thiserror`; all variants include path/reason context.
+
+### Test organization
+
+All test implementations and test-only helpers live under root `tests/`: Rust unit tests in `tests/unit/` mirror source modules, Cargo integration tests are root-level `.rs` files, and Python tests live in `tests/python/`. Production modules reference unit tests with `#[cfg(test)]` plus `#[path]`; keep private APIs private.
+
+- CSV and Parquet share `engine/sequential.rs`: a common bounded parse-ahead queue, one ordered streaming writer, one output file, progress unless quiet. No file splitting or exporter-specific concurrency.

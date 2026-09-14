@@ -30,3 +30,102 @@ pub(crate) fn open_log_file(path: &Path) -> Result<LogIterator, ParseError> {
         .build()?
         .iter()
 }
+
+/// Overlap parsing with export using two bounded batches, retaining input order.
+/// Non-regular inputs stay synchronous so cancellation never waits on a blocked pipe.
+pub(crate) fn export_records(
+    path: &Path,
+) -> Result<
+    Box<dyn Iterator<Item = Result<dm_database_parser_sqllog::Sqllog, ParseError>>>,
+    ParseError,
+> {
+    let records = open_log_file(path)?;
+    if !path.is_file() {
+        return Ok(Box::new(records));
+    }
+    let (sender, receiver) = std::sync::mpsc::sync_channel(2);
+    let worker = std::thread::spawn(move || {
+        let mut batch = Vec::with_capacity(512);
+        let mut bytes = 0;
+        for record in records {
+            bytes += record.as_ref().map_or(1024, |r| {
+                std::mem::size_of_val(r)
+                    + r.ts.capacity()
+                    + r.sess_id.capacity()
+                    + r.thrd_id.capacity()
+                    + r.username.capacity()
+                    + r.trxid.capacity()
+                    + r.statement.capacity()
+                    + r.appname.capacity()
+                    + r.client_ip.capacity()
+                    + r.tag.as_ref().map_or(0, String::capacity)
+                    + r.sql.capacity()
+            });
+            batch.push(record);
+            if batch.len() >= 512 || bytes >= 1024 * 1024 {
+                if sender
+                    .send(std::mem::replace(&mut batch, Vec::with_capacity(512)))
+                    .is_err()
+                {
+                    return;
+                }
+                bytes = 0;
+            }
+        }
+        if !batch.is_empty() {
+            let _ = sender.send(batch);
+        }
+    });
+    Ok(Box::new(PrefetchedRecords {
+        receiver: Some(receiver),
+        worker: Some(worker),
+        batch: Vec::new().into_iter(),
+    }))
+}
+
+type Record = Result<dm_database_parser_sqllog::Sqllog, ParseError>;
+
+struct PrefetchedRecords {
+    receiver: Option<std::sync::mpsc::Receiver<Vec<Record>>>,
+    worker: Option<std::thread::JoinHandle<()>>,
+    batch: std::vec::IntoIter<Record>,
+}
+
+impl Iterator for PrefetchedRecords {
+    type Item = Record;
+
+    fn next(&mut self) -> Option<Record> {
+        if let Some(record) = self.batch.next() {
+            return Some(record);
+        }
+        if let Ok(batch) = self.receiver.as_ref()?.recv() {
+            self.batch = batch.into_iter();
+            self.batch.next()
+        } else {
+            if let Some(worker) = self.worker.take()
+                && let Err(panic) = worker.join()
+            {
+                std::panic::resume_unwind(panic);
+            }
+            None
+        }
+    }
+}
+
+impl Drop for PrefetchedRecords {
+    fn drop(&mut self) {
+        self.receiver.take();
+        if let Some(worker) = self.worker.take() {
+            let result = worker.join();
+            if !std::thread::panicking()
+                && let Err(panic) = result
+            {
+                std::panic::resume_unwind(panic);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "../tests/unit/streaming.rs"]
+mod tests;

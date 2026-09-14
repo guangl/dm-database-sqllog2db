@@ -3,8 +3,7 @@
 use dm_database_sqllog2db::cli::init::{ExporterChoice, handle_init, run_wizard};
 use dm_database_sqllog2db::cli::validate::handle_validate;
 use dm_database_sqllog2db::config::{
-    Config, CsvExporterConfig, ExporterConfig, ParquetExporterConfig, SqliteExporterConfig,
-    SqllogConfig,
+    Config, CsvExporterConfig, ExporterConfig, ParquetExporterConfig, SqllogConfig,
 };
 use dm_database_sqllog2db::engine::run as handle_run;
 use dm_database_sqllog2db::pipeline::filters::types::{ExcludeFilters, IncludeFilters};
@@ -83,7 +82,6 @@ fn make_run_config(log_dir: &std::path::Path, csv_file: &std::path::Path) -> Con
                 append: false,
                 ..CsvExporterConfig::default()
             }),
-            ..Default::default()
         },
         ..Default::default()
     }
@@ -172,7 +170,6 @@ async fn test_handle_run_parquet_output_row_count() {
                 ..ParquetExporterConfig::default()
             }),
             csv: None,
-            sqlite: None,
         },
         ..Default::default()
     };
@@ -288,34 +285,6 @@ fn test_init_template_has_csv_append_comment() {
 }
 
 #[test]
-fn test_init_template_has_sqlite_field_comments() {
-    let dir = tempfile::TempDir::new().unwrap();
-    let config_path = dir.path().join("config.toml");
-    handle_init(config_path.to_str().unwrap(), false).unwrap();
-    let content = std::fs::read_to_string(&config_path).unwrap();
-    assert!(
-        content.contains("SQLite 数据库文件路径"),
-        "init template should contain sqlite database_url comment"
-    );
-    assert!(
-        content.contains("写入记录的表名"),
-        "init template should contain sqlite table_name comment"
-    );
-    assert!(
-        content.contains("ASCII 标识符"),
-        "init template should contain ASCII identifiers note"
-    );
-    assert!(
-        content.contains("写入前删除并重建该表"),
-        "init template should contain sqlite overwrite comment"
-    );
-    assert!(
-        content.contains("追加行到已有表而非覆盖"),
-        "init template should contain sqlite append comment"
-    );
-}
-
-#[test]
 fn test_init_template_has_filter_inline_comments() {
     let dir = tempfile::TempDir::new().unwrap();
     let config_path = dir.path().join("config.toml");
@@ -340,26 +309,6 @@ fn test_handle_validate_default_config() {
 }
 
 #[test]
-fn test_handle_validate_with_sqlite_exporter() {
-    let cfg = Config {
-        exporter: ExporterConfig {
-            parquet: None,
-            csv: None,
-            sqlite: Some(SqliteExporterConfig {
-                database_url: "/tmp/test.db".to_string(),
-                table_name: "records".to_string(),
-                overwrite: true,
-                append: false,
-                batch_size: 10_000,
-                multi_row_batch_size: 64,
-            }),
-        },
-        ..Default::default()
-    };
-    handle_validate(&cfg); // validate called without panic (sqlite exporter config)
-}
-
-#[test]
 fn test_handle_validate_with_replace_parameters_none() {
     let cfg = Config {
         replace_parameters: None,
@@ -372,6 +321,7 @@ fn test_handle_validate_with_replace_parameters_none() {
 fn test_handle_validate_with_replace_parameters_some() {
     let cfg = Config {
         replace_parameters: Some(NormalizeConfig {
+            tags: vec!["SEL".to_string()],
             placeholders: vec!["?".to_string()],
         }),
         ..Default::default()
@@ -1628,22 +1578,6 @@ fn make_stats_csv_config(dir: &std::path::Path, log_path: &std::path::Path) -> s
     cfg_path
 }
 
-/// 创建仅含 `SQLite` exporter 的统计配置文件。
-fn make_stats_sqlite_config(
-    dir: &std::path::Path,
-    log_path: &std::path::Path,
-) -> std::path::PathBuf {
-    let cfg_path = dir.join("stats_sqlite.toml");
-    let db_path = dir.join("out").join("stats.db");
-    let content = format!(
-        "[sqllog]\ninputs = [\"{}\"]\n[exporter.sqlite]\ndatabase_url = \"{}\"\n",
-        log_path.to_string_lossy().replace('\\', "/"),
-        db_path.to_string_lossy().replace('\\', "/"),
-    );
-    std::fs::write(&cfg_path, content).unwrap();
-    cfg_path
-}
-
 /// stats 不要求配置导出器，输入配置即可运行。
 #[test]
 fn test_stats_runs_without_exporter_section() {
@@ -1720,29 +1654,6 @@ fn test_stats_top_5_is_printed_to_terminal() {
     assert!(stdout.contains("===== Slow SQL (top 5) ====="));
 }
 
-/// 即使配置了 `SQLite`，stats 也不创建数据库。
-#[test]
-fn test_stats_sqlite_config_does_not_create_database() {
-    use assert_cmd::Command;
-    let dir = tempfile::TempDir::new().unwrap();
-    let log_file = dir.path().join("test.log");
-    write_stats_test_log(&log_file, 3);
-    let cfg_path = make_stats_sqlite_config(dir.path(), &log_file);
-
-    let output = Command::cargo_bin("sqllog2db")
-        .unwrap()
-        .args(["stats", "-c"])
-        .arg(&cfg_path)
-        .args(["--top", "10"])
-        .output()
-        .unwrap();
-    assert!(output.status.success());
-    assert!(String::from_utf8_lossy(&output.stdout).contains("===== Slow SQL"));
-
-    let db_path = dir.path().join("out").join("stats.db");
-    assert!(!db_path.exists(), "stats must not create a SQLite database");
-}
-
 /// 同时配置多个导出器时，stats 仍忽略所有导出器。
 #[test]
 fn test_stats_ignores_all_exporters() {
@@ -1753,14 +1664,14 @@ fn test_stats_ignores_all_exporters() {
 
     let cfg_path = dir.path().join("both.toml");
     let csv_path = dir.path().join("out").join("data.csv");
-    let db_path = dir.path().join("out").join("stats.db");
+    let parquet_path = dir.path().join("out").join("stats.parquet");
     let content = format!(
         "[sqllog]\ninputs = [\"{}\"]\n\
          [exporter.csv]\nfile = \"{}\"\noverwrite = true\n\
-         [exporter.sqlite]\ndatabase_url = \"{}\"\n",
+         [exporter.parquet]\nfile = \"{}\"\n",
         log_file.to_string_lossy().replace('\\', "/"),
         csv_path.to_string_lossy().replace('\\', "/"),
-        db_path.to_string_lossy().replace('\\', "/"),
+        parquet_path.to_string_lossy().replace('\\', "/"),
     );
     std::fs::write(&cfg_path, &content).unwrap();
 
@@ -1774,7 +1685,7 @@ fn test_stats_ignores_all_exporters() {
 
     let out_dir = dir.path().join("out");
     assert!(!out_dir.exists(), "stats must not create exporter outputs");
-    assert!(!db_path.exists());
+    assert!(!parquet_path.exists());
 }
 
 /// exectime = 0 的记录也会打印到终端。
@@ -2113,22 +2024,6 @@ fn write_run_config_toml(
     cfg_path
 }
 
-/// Phase 57 TEST-01: 生成 run 命令的 `SQLite` 配置文件（默认表名 `sqllog_records`）。
-fn write_run_sqlite_config_toml(
-    dir: &std::path::Path,
-    log_dir: &std::path::Path,
-    db_output: &std::path::Path,
-) -> std::path::PathBuf {
-    let cfg_path = dir.join("run_sqlite_config.toml");
-    let content = format!(
-        "[sqllog]\ninputs = [\"{}\"]\n[exporter.sqlite]\ndatabase_url = \"{}\"\n",
-        log_dir.to_string_lossy().replace('\\', "/"),
-        db_output.to_string_lossy().replace('\\', "/"),
-    );
-    std::fs::write(&cfg_path, content).unwrap();
-    cfg_path
-}
-
 /// TEST-01 (Phase 57): run 子命令 CLI 输出 CSV header 与记录数（D-04/D-05/D-06）。
 #[test]
 fn test_cli_run_csv_output_header_and_row_count() {
@@ -2161,39 +2056,6 @@ fn test_cli_run_csv_output_header_and_row_count() {
     assert_eq!(
         data_count, record_count,
         "row count must match written records"
-    );
-}
-
-/// TEST-01 (Phase 57): run 子命令 CLI 输出 `SQLite` 文件存在与表 `sqllog_records` 记录数（D-07，表名修正）。
-#[test]
-fn test_cli_run_sqlite_output_row_count() {
-    use assert_cmd::Command;
-    let dir = tempfile::TempDir::new().unwrap();
-    let log_dir = dir.path().join("logs");
-    std::fs::create_dir_all(&log_dir).unwrap();
-    let record_count = 5usize;
-    write_test_log(&log_dir.join("test.log"), record_count);
-
-    let db_file = dir.path().join("out.db");
-    let cfg_path = write_run_sqlite_config_toml(dir.path(), &log_dir, &db_file);
-
-    Command::cargo_bin("sqllog2db")
-        .unwrap()
-        .args(["run", "-c"])
-        .arg(&cfg_path)
-        .assert()
-        .success();
-
-    assert!(db_file.exists(), "SQLite output file must exist");
-
-    let conn = rusqlite::Connection::open(&db_file).unwrap();
-    let count: i64 = conn
-        .query_row("SELECT COUNT(*) FROM sqllog_records", [], |row| row.get(0))
-        .unwrap();
-    assert_eq!(
-        count,
-        i64::try_from(record_count).unwrap(),
-        "sqllog_records table row count must match"
     );
 }
 
@@ -2280,7 +2142,6 @@ async fn test_parallel_csv_content_matches_sequential() {
                     append: false,
                     ..CsvExporterConfig::default()
                 }),
-                ..Default::default()
             },
             ..Default::default()
         };
@@ -2316,7 +2177,6 @@ async fn test_parallel_csv_content_matches_sequential() {
                 append: false,
                 ..CsvExporterConfig::default()
             }),
-            ..Default::default()
         },
         ..Default::default()
     };
@@ -2398,7 +2258,6 @@ async fn test_parallel_csv_filter_matches_sequential() {
                     append: false,
                     ..CsvExporterConfig::default()
                 }),
-                ..Default::default()
             },
             filter: filter_cfg.clone(),
             ..Default::default()
@@ -2432,7 +2291,6 @@ async fn test_parallel_csv_filter_matches_sequential() {
                 append: false,
                 ..CsvExporterConfig::default()
             }),
-            ..Default::default()
         },
         filter: filter_cfg,
         ..Default::default()
@@ -2521,7 +2379,6 @@ async fn test_parallel_csv_jobs_override_forces_parallel() {
                 append: false,
                 ..CsvExporterConfig::default()
             }),
-            ..Default::default()
         },
         ..Default::default()
     };
@@ -2578,7 +2435,6 @@ async fn test_parallel_csv_heterogeneous_matches_sequential() {
                     append: false,
                     ..CsvExporterConfig::default()
                 }),
-                ..Default::default()
             },
             ..Default::default()
         };
@@ -2609,7 +2465,6 @@ async fn test_parallel_csv_heterogeneous_matches_sequential() {
                 append: false,
                 ..CsvExporterConfig::default()
             }),
-            ..Default::default()
         },
         ..Default::default()
     };
@@ -2654,17 +2509,6 @@ fn test_wizard_integration_all_defaults() {
         answers.parquet_file.as_deref(),
         Some("outputs/sqllog.parquet")
     );
-}
-
-#[test]
-fn test_wizard_integration_sqlite() {
-    let input = b"\nsqlite\ndb/out.db\nmy_records\n";
-    let mut reader = std::io::Cursor::new(input.as_ref());
-    let mut writer = Vec::<u8>::new();
-    let answers = run_wizard(&mut reader, &mut writer).unwrap();
-    assert!(matches!(answers.exporter, ExporterChoice::Sqlite));
-    assert_eq!(answers.sqlite_db.as_deref(), Some("db/out.db"));
-    assert_eq!(answers.sqlite_table.as_deref(), Some("my_records"));
 }
 
 // ── e2e CLI 测试: init --interactive (INIT-01/02/03 + SC4 + D-02) ─────────────
@@ -2715,45 +2559,6 @@ fn test_cli_init_interactive_custom_inputs() {
     assert!(
         content.contains(r#"inputs = ["my/dir"]"#),
         "custom inputs path must appear in generated config"
-    );
-}
-
-/// INIT-02: `init -i` sqlite 模式，生成 config.toml 含正确的 `SQLite` 配置段
-#[test]
-fn test_cli_init_interactive_sqlite() {
-    use assert_cmd::Command;
-    let dir = tempfile::TempDir::new().unwrap();
-    let out_file = dir.path().join("cfg.toml");
-
-    // stdin: inputs=默认\n, format=sqlite\n, sqlite_db=默认\n, sqlite_table=默认\n
-    Command::cargo_bin("sqllog2db")
-        .unwrap()
-        .args(["init", "-i", "-o"])
-        .arg(&out_file)
-        .write_stdin("\nsqlite\n\n\n")
-        .assert()
-        .success();
-
-    let content = std::fs::read_to_string(&out_file).unwrap();
-    assert!(
-        content.contains("[exporter.sqlite]"),
-        "[exporter.sqlite] must be activated (uncommented)"
-    );
-    assert!(
-        !content.contains("# [exporter.sqlite]"),
-        "[exporter.sqlite] must not remain commented"
-    );
-    assert!(
-        content.contains(r#"database_url = "export/sqllog2db.db""#),
-        "database_url must use default value"
-    );
-    assert!(
-        content.contains(r#"table_name = "sqllog_records""#),
-        "table_name must use default value"
-    );
-    assert!(
-        content.contains("# [exporter.csv]"),
-        "[exporter.csv] must be commented out in sqlite mode"
     );
 }
 
@@ -2860,167 +2665,18 @@ fn test_cli_init_interactive_force_overwrites_existing() {
     );
 }
 
-// ── watch subcommand tests ─────────────────────────────────────────────────────
-
-mod watch_tests {
-    use dm_database_sqllog2db::watch::run as handle_watch;
-    use std::sync::Arc;
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use std::time::Duration;
-
-    /// 向指定路径写入一行最小可解析的 DM SQL 日志。
-    fn write_minimal_log(path: &std::path::Path) {
-        let line = "2025-01-15 10:30:28.001 (EP[0] sess:0x0001 user:TESTUSER trxid:1 stmt:0x1 appname:App ip:10.0.0.1) [SEL] SELECT id FROM t WHERE id=1. EXECTIME: 5(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.\n";
-        std::fs::write(path, line).unwrap();
-    }
-
-    /// W1: `watch --help` 包含配置文件说明和使用示例（WATCH-01 可发现性）。
-    #[test]
-    #[ignore = "watch CLI 暂时下线（cli/opts.rs 中 Watch variant 已注释）；恢复后移除此 ignore"]
-    fn test_watch_help_lists_subcommand() {
-        use assert_cmd::Command;
-        let output = Command::cargo_bin("sqllog2db")
-            .unwrap()
-            .arg("watch")
-            .arg("--help")
-            .output()
-            .unwrap();
-        assert!(
-            output.status.success(),
-            "watch --help should exit 0, got: {:?}",
-            output.status.code()
-        );
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        assert!(
-            stdout.contains("TOML configuration file path"),
-            "help should mention 'TOML configuration file path', got:\n{stdout}"
-        );
-        assert!(
-            stdout.contains("sqllog2db watch -c config.toml"),
-            "help should include usage example 'sqllog2db watch -c config.toml', got:\n{stdout}"
-        );
-    }
-
-    /// W2: interrupted=true 预置时 `handle_watch` 返回 `Err(Error::Interrupted)`（WATCH-09 exit 130）。
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_watch_exits_when_interrupted() {
-        let dir = tempfile::TempDir::new().unwrap();
-        let log_dir = dir.path().join("logs");
-        std::fs::create_dir_all(&log_dir).unwrap();
-        let csv_file = dir.path().join("out.csv");
-        let cfg = super::make_run_config(&log_dir, &csv_file);
-        let interrupted = Arc::new(AtomicBool::new(true));
-        let result = handle_watch(&cfg, true, false, &interrupted).await;
-        // WATCH-09: interrupted=true 时 handle_watch 应返回 Err(Error::Interrupted)，
-        // main.rs 处理该错误并 exit(130)
-        assert!(
-            matches!(
-                result,
-                Err(dm_database_sqllog2db::error::Error::Interrupted)
-            ),
-            "handle_watch with interrupted=true should return Err(Interrupted), got: {result:?}"
-        );
-    }
-
-    /// W3: 新 .log 文件出现时触发 `handle_run`，CSV 输出行数 > header（WATCH-02/05）。
-    /// macOS `FSEvents` 在 cargo test 进程中对临时目录的事件不稳定（coalescence 延迟 > 8s），
-    /// stdin-pipe hang 已由 CR-01 修复，但 `FSEvents` 事件可靠性需 smoke test 环境验证。
-    #[tokio::test(flavor = "multi_thread")]
-    #[ignore = "macOS FSEvents coalescing in cargo test env; smoke test required for reliable verification"]
-    async fn test_watch_triggers_on_new_log_file() {
-        let dir = tempfile::TempDir::new().unwrap();
-        let log_dir = dir.path().join("logs");
-        std::fs::create_dir_all(&log_dir).unwrap();
-        let csv_file = dir.path().join("out.csv");
-        let cfg = super::make_run_config(&log_dir, &csv_file);
-        let interrupted = Arc::new(AtomicBool::new(false));
-        let interrupted_clone = Arc::clone(&interrupted);
-        let log_dir_clone = log_dir.clone();
-        std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_millis(500));
-            write_minimal_log(&log_dir_clone.join("new_file.log"));
-            // Poll until CSV appears or 8 s elapses, then signal done.
-            let deadline = std::time::Instant::now() + Duration::from_secs(8);
-            let csv_path = log_dir_clone.parent().unwrap().join("out.csv");
-            while std::time::Instant::now() < deadline {
-                if csv_path.exists() {
-                    break;
-                }
-                std::thread::sleep(Duration::from_millis(100));
-            }
-            interrupted_clone.store(true, Ordering::Release);
-        });
-        let result = handle_watch(&cfg, true, false, &interrupted).await;
-        assert!(
-            result.is_ok()
-                || matches!(
-                    result,
-                    Err(dm_database_sqllog2db::error::Error::Interrupted)
-                ),
-            "handle_watch should succeed or return Interrupted, got: {result:?}"
-        );
-        assert!(
-            csv_file.exists(),
-            "CSV output file should exist after watch trigger"
-        );
-        let content = std::fs::read_to_string(&csv_file).unwrap();
-        let line_count = content.lines().count();
-        assert!(
-            line_count > 1,
-            "CSV should have header + at least 1 data row, got {line_count} lines"
-        );
-    }
-
-    /// W4: 写入非 .log 文件不触发 `handle_run`，CSV 输出不产生（WATCH-02 扩展名过滤）。
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_watch_ignores_non_log_files() {
-        let dir = tempfile::TempDir::new().unwrap();
-        let log_dir = dir.path().join("logs");
-        std::fs::create_dir_all(&log_dir).unwrap();
-        let csv_file = dir.path().join("out.csv");
-        let cfg = super::make_run_config(&log_dir, &csv_file);
-        let interrupted = Arc::new(AtomicBool::new(false));
-        let interrupted_clone = Arc::clone(&interrupted);
-        let log_dir_clone = log_dir.clone();
-        std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_millis(300));
-            std::fs::write(
-                log_dir_clone.join("garbage.txt"),
-                "this is not a log file\n",
-            )
-            .unwrap();
-            std::thread::sleep(Duration::from_millis(700));
-            interrupted_clone.store(true, Ordering::Release);
-        });
-        let result = handle_watch(&cfg, true, false, &interrupted).await;
-        // WATCH-09: interrupted=true 时 handle_watch 返回 Err(Interrupted)，验证非 .log 文件不触发
-        assert!(
-            matches!(
-                result,
-                Err(dm_database_sqllog2db::error::Error::Interrupted)
-            ),
-            "handle_watch should return Err(Interrupted) after interrupt, got: {result:?}"
-        );
-        assert!(
-            !csv_file.exists(),
-            "CSV output should NOT exist when only non-.log files are written"
-        );
-    }
-}
-
 #[test]
 fn test_cli_replace_parameters_requires_section_and_logging_is_optional() {
     use assert_cmd::Command;
-    for enabled in [false, true] {
+    for (section, has_normalized_column, replaces_insert_parameters) in [
+        ("", false, false),
+        ("[replace_parameters]\n", true, false),
+        ("[replace_parameters]\ntags = ['INS']\n", true, true),
+    ] {
         let dir = tempfile::TempDir::new().unwrap();
         std::fs::write(dir.path().join("input.log"), "\
 2025-01-15 10:30:28.010 (EP[0] sess:0x1 user:U trxid:1 stmt:0x2 appname:A ip:10.0.0.1) PARAMS(SEQNO, TYPE, DATA)={(0, VARCHAR, 'alice')}\n\
 2025-01-15 10:30:28.011 (EP[0] sess:0x1 user:U trxid:1 stmt:0x2 appname:A ip:10.0.0.1) [INS] INSERT INTO t(name) VALUES (?). EXECTIME: 2(ms) ROWCOUNT: 1(rows) EXEC_ID: 101.\n").unwrap();
-        let section = if enabled {
-            "[replace_parameters]\n"
-        } else {
-            ""
-        };
         std::fs::write(
             dir.path().join("config.toml"),
             format!(
@@ -3037,9 +2693,12 @@ fn test_cli_replace_parameters_requires_section_and_logging_is_optional() {
         let output = std::fs::read_to_string(dir.path().join("out.csv")).unwrap();
         assert_eq!(
             output.lines().next().unwrap().contains("normalized_sql"),
-            enabled
+            has_normalized_column
         );
-        assert_eq!(output.contains("VALUES ('alice')"), enabled);
+        assert_eq!(
+            output.contains("VALUES ('alice')"),
+            replaces_insert_parameters
+        );
         assert!(!dir.path().join("logs").exists());
         assert!(!dir.path().join("outputs").exists());
     }

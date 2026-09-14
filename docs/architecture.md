@@ -1,186 +1,103 @@
 # 架构说明
 
-sqllog2db 是一个解析达梦数据库 SQL 日志并导出为 Parquet、CSV 或 SQLite 的命令行工具。本文档描述项目的整体架构、数据流、模块划分和关键抽象。面向希望深入理解内部设计的开发者和贡献者。
+sqllog2db 将达梦数据库 SQL 日志流式导出为 Parquet 或 CSV。代码按命令入口、运行编排、记录处理、输出后端划分；统计分析拥有独立的领域模块。
 
-## 数据流
+## 项目目录
 
-工具的数据流分为四个阶段：**发现 → 解析 → 管道处理 → 导出**。以下 ASCII art 图展示了完整的数据流路径。
-
-```
-SQL 日志文件 (.log)
-    ↓ SqllogParser — 文件发现与排序（src/parser.rs）
-    ↓ dm-database-parser-sqllog — 逐行解析（外部 crate）
-    ↓ Sqllog 记录
-    ↓ Pipeline — 可选过滤器/处理器链（src/pipeline/）
-    │ ├─ (空) ───────────────────── 零开销快速路径
-    │ └─ FilterProcessor ────────── 过滤器处理
-    ↓ ExporterManager — 路由到活跃导出器（src/exporter/）
-    ▼
-Parquet 输出（src/exporter/parquet/mod.rs）、CSV 输出（src/exporter/csv/mod.rs）或 SQLite 输出（src/exporter/sqlite/mod.rs）
+```text
+src/          生产代码：CLI、配置、引擎、处理管道、导出、统计
+tests/        所有测试：unit/、python/ 与根目录集成测试
+benches/      性能基准与历史基线
+docs/         使用说明、架构、验证记录和 mdBook 站点配置
+scripts/      内存检查、基准结果收集脚本
+.github/      CI、发布与文档站工作流
+target/       本地构建产物与文档站输出（忽略提交）
 ```
 
-**设计要点：**
+导出器公共接口和统计位于 `exporter/mod.rs`，后端选择与管理位于 `exporter/manager.rs`；CSV 生命周期与字段序列化分为两个文件，Parquet 使用单文件实现。引擎驱动直接放在 `engine/`；字段投影定义集中在 `pipeline/output.rs`。
 
-- 流式处理：记录逐行读取，内存占用恒定，不受文件大小影响——100 MB 和 100 GB 日志文件消耗相同的峰值内存。
-- 当管道（Pipeline）为空（无过滤器）时，热循环通过 `pipeline.is_empty()` 检查跳过所有功能逻辑，实现零开销快速路径。
+## 从哪里开始阅读
 
-## 模块划分
+| 要了解的行为 | 入口 | 职责 |
+| --- | --- | --- |
+| 命令如何执行 | `src/main.rs` → `src/cli/mod.rs` | 启动运行时、分派命令、决定退出码 |
+| 配置如何生效 | `src/cli/runtime.rs`、`src/config/` | 加载配置、应用 CLI 覆盖、校验、初始化日志 |
+| 配置如何生成 | `src/cli/init.rs` | 集中完成文件写入、交互问答、TOML 渲染 |
+| 一次导出如何运行 | `src/engine/mod.rs` | 输入解析 → 事务预扫描 → 执行 → 汇总 |
+| 驱动共享什么 | `src/engine/context.rs` | 配置、Pipeline、字段投影、参数替换选项和结果类型 |
+| 单条记录如何处理 | `src/engine/record.rs` | 过滤、参数缓存维护、参数回填、导出和错误计数 |
+| 参数如何替换 | `src/pipeline/normalizer.rs` | PARAMS 解析、占位符替换、session/statement 关联 |
+| 输出如何写入 | `src/exporter/` | 导出器选择、字段投影、后端生命周期与写入 |
+| 如何统计 SQL | `src/stats/runner.rs` | 流式扫描、慢 SQL/高频 SQL 聚合与展示 |
+| 错误如何表达 | `src/error.rs` | 结构化错误、严重程度、建议和有界错误统计 |
 
-项目按职责分为 4 大核心模块和若干支撑模块。
+## 数据流与职责边界
 
-### 配置层 — `src/config/`
+```text
+main → cli::run
+         ├─ init     → cli/init.rs → 配置文件
+         ├─ validate → config → cli/validate
+         ├─ stats    → stats/runner → scanner → 聚合结果
+         └─ run      → engine::run
+                         ├─ prepare：发现文件、事务预扫描、并发预算
+                         ├─ context：构建共享运行配置
+                         ├─ driver → record → pipeline → exporter
+                         └─ report：汇总结果、写错误日志
+```
 
-**职责：** 加载 TOML 配置文件，验证配置完整性。支持嵌套子表格式（v1.4+）。
+- `main.rs` 只启动 Tokio 并应用退出码。命令分派和终端错误格式放在 `cli/`，业务模块无需依赖 CLI。
+- `engine/mod.rs` 管理一次导出的生命周期；驱动依赖 `context.rs` 中的共享类型，不反向依赖编排实现。
+- `parser.rs` 负责输入文件发现与排序；`streaming.rs` 封装外部解析器的流式读取；`scanner.rs` 提供预扫描和统计使用的扫描接口。
+- `config/` 聚合配置并负责校验，过滤、归一化、字段投影与统计选项由对应功能模块定义。
+- `error.rs` 集中定义结构化错误、严重程度和有界错误统计。
 
-**关键抽象：**
-- `Config`：顶层配置结构，包含所有子配置段
-- `validate_and_compile()`：验证配置并编译正则表达式
+## 执行路径
 
-**特性：**
-- 嵌套子表支持（v1.4+）：`[filter.include]`、`[filter.exclude]` 为顶级段
-- 向后兼容：通过 `RawFiltersFeature` 中间结构支持旧版扁平格式
+CSV 和 Parquet 统一由 `engine/sequential.rs` 按输入顺序逐文件导出，直接写入配置的单个输出文件。普通文件由一个解析线程预读，单个写入器按顺序消费；队列最多两个批次，每批最多 512 条，按约 1 MiB 的记录容量提前发送。超长单条记录可能超过此目标；stdin 等特殊输入保持同步读取。两种格式共用文件进度、记录速率和错误统计；除 `--quiet` 外均启用进度展示，非终端输出由 indicatif 自动隐藏。
 
-### CLI / 编排层 — `src/cli/`
+输入切块、输出按行拆分和 CSV 专用并发路径已移除。旧 `max_rows_per_file` 配置会报错，需删除该字段。
 
-**职责：** 解析命令行参数，分派子命令，编排整体工作流。
+## 记录处理与参数替换
 
-**结构：**
-- `run/mod.rs` — `handle_run()`：主编排逻辑（加载配置 → 构建管道 → 预扫描 → 流式导出）
-- `stats/mod.rs` — `handle_stats()`：委托给 `src/stats/run_stats()`，流式扫描 → 聚合 → 终端展示
-- `init.rs` — 生成默认配置
-- `validate.rs` — 验证配置文件（通过时静默，失败时输出 `[FAIL]` 行）
+`Pipeline` 通过 `LogProcessor` 链执行过滤；空管道使用快速路径。事务级过滤由 `engine/prepare.rs` 预扫描命中的事务 ID，再将结果交给主处理阶段。
 
-**模式：** CLI handler 函数以 `handle_` 为前缀（`handle_run`、`handle_stats` 等）。
+参数替换拆为三个职责：
 
-### Pipeline / 特性层 — `src/pipeline/`
+`normalizer.rs` 集中解析 PARAMS、处理占位符并维护 session/statement 参数关联，按配置的标签决定是否回填。
 
-**职责：** 实现可选的记录处理链——包括过滤器和 SQL 参数归一化。
+PARAMS 记录即使被过滤，仍可能需要更新参数缓存。回填结果写入调用方复用的 scratch 缓冲。公开的 `pipeline::normalizer::{ParamBuffer, ParamValue, parse_params, count_placeholders, compute_normalized}` 路径保持不变。
 
-**关键抽象：**
-- `LogProcessor` trait：可插拔的记录处理接口，定义 `process_with_meta()` 方法
-- `Pipeline`：记录处理器的有序链，`is_empty()` 判断是否需要处理
+## 导出与内存
 
-**模式：**
-- 短路语义：任一 processor 返回跳过信号即停止链
-- 零开销快路径：`pipeline.is_empty()` 检查避免热循环中不必要的函数调用
+`ExporterConfig::active()` 统一选择活跃后端，供预检查、导出创建共用；`ExporterManager` 直接用枚举持有并调用后端；导出器通过 `initialize()`、记录写入方法和 `finalize()` 管理生命周期。后端实现位于 `exporter/parquet.rs`、`exporter/csv.rs`。
 
-### 导出层 — `src/exporter/`
+解析过程逐条读取，不整文件加载。CSV 使用单个 1 MiB 写缓冲，Parquet 直接通过 Arrow StringBuilder 构建字符串列，并按行数与字节数限制 row group 缓冲。但事务 ID 集合、参数关联缓存和统计聚合仍随不同事务、statement 或 SQL 的数量增长，因此不能将所有配置下的总内存描述为绝对恒定。内存验证方法见 [导出内存检查](export-memory-check.md)。
 
-**职责：** 将已处理的记录写入目标后端（Parquet、CSV 或 SQLite）。
+## 错误与退出码
 
-**关键抽象：**
-- `Exporter` trait：导出器接口，三阶段生命周期 `initialize()` → `export_one_preparsed()` → `finalize()`
-- `ExporterKind` 枚举：静态分派（`match`）而非动态派发（`Box<dyn Trait>`），利于热路径内联
-
-**实现：**
-- `ParquetExporter`：Arrow 列式批次 + ZSTD/Snappy 压缩，行数和字节数双重限制 row group 内存
-- `CsvExporter`：2 MB `BufWriter` + `itoa` 零分配整数格式化，~520 万条/秒
-- `SqliteExporter`：批量 INSERT + PRAGMA 优化（synchronous=OFF、mmap_size、cache_size），~110 万条/秒
-
-**优先级：** Parquet > CSV > SQLite。同时配置时仅最高优先级的导出器生效。
-
-### 支撑模块
-
-| 模块 | 路径 | 职责 |
-|------|------|------|
-| 错误处理 | `src/error.rs` | 类型化错误枚举 `Error`、`pub type Result<T>` |
-| 解析器 | `src/parser.rs` | 日志文件发现、排序、迭代 |
-| 统计分析 | `src/stats/` | SQL 标准化（`normalize.rs`）、聚合（`aggregate.rs`）与终端展示 |
-| 日志 | `src/logging.rs` | 应用日志和错误日志 |
-| 预检 | `src/preflight.rs` | 运行前环境检查 |
-| 工具库 | `src/lib.rs` | 模块注册和公共导出 |
-
-## 关键抽象
-
-### Exporter trait + ExporterKind 枚举
-
-输出后端接口定义。`ExporterKind` 使用静态分派（`match` 语句）替代动态派发（`Box<dyn Trait>`），编译器可以为热路径中每种变体生成优化的内联代码。三阶段生命周期（初始化 → 逐条写入 → 收尾）提供了清晰的资源管理边界。
-
-### LogProcessor trait + Pipeline
-
-可插拔的记录处理链。每个 `LogProcessor` 实现 `process_with_meta()` 方法处理单条日志记录。`Pipeline` 将多个处理器串联为有序链。关键设计：`is_empty()` 允许在配置无过滤器需求时完全绕过管道，实现零开销。
-
-### FieldMask
-
-`u16` 位掩码用于字段投影。16 个位对应 15 个输出字段（位 15 保留）。在整个管道中传递，控制每个字段是否被写入。提供 `contains(index)` 和 `set(index)` 方法，编译期内联。
-
-## 性能设计
-
-### 流式架构
-
-单线程流式处理是核心性能策略。每条记录被解析后立即传递给管道和导出器，不存入内存。这意味着文件大小的增长不会影响峰值内存——无论 100 MB 还是 100 GB 的日志文件，内存曲线是平直的水平线。
-
-### 零开销快路径
-
-当没有配置任何过滤器时，热循环中的 `pipeline.is_empty()` 检查确保所有功能逻辑被跳过。此时记录不经处理直接流式写入导出器，性能接近裸文件复制的水平。
-
-### CSV 导出优化
-
-- 2 MB `BufWriter`：大幅减少系统调用次数
-- `itoa` 零分配整数格式化：整数直接写入缓冲区，无需分配中间字符串
-- `memchr` SIMD 加速：字节搜索处理 CSV 转义，比逐字节扫描快数倍
-
-### 编译优化
-
-Release 构建采用激进优化：
-- `opt-level = 3`：最高代码优化级别
-- `lto = "fat"`：跨 crate 的链接时优化
-- `codegen-units = 1`：单一代码生成单元，最大化内联机会
-- `panic = "abort"`：移除恐慌展开代码
-- `strip = "symbols"`：剥离调试符号
-
-最终二进制文件无外部运行时依赖。
-
-### 基准性能
-
-| 场景 | 吞吐量 | 说明 |
-|------|--------|------|
-| CSV（合成数据） | ~520 万条/秒 | criterion 基准，50k 记录 |
-| SQLite（合成数据） | ~110 万条/秒 | 批量 + PRAGMA 优化 |
-| 真实文件（1.1 GB） | ~155 万条/秒 | ~300 万条记录，NVMe SSD |
-
-## 错误处理策略
-
-### 分层错误类型
-
-顶层 `Error` 枚举通过 `thiserror` 派生宏包含所有子错误变体：
-
-- `Config(ConfigError)` — 配置加载和验证错误
-- `File(FileError)` — 文件打开和读写错误
-- `Parser(ParserError)` — 日志解析错误
-- `Export(ExportError)` — 导出写入错误
-- `Io(io::Error)` — 底层 I/O 错误
-- `Interrupted` — 用户中断（Ctrl+C）
-
-每个子错误变体包含上下文字段（`path: PathBuf`、`reason: String`），而非裸字符串，便于故障排查。
-
-### 非致命解析错误
-
-解析失败不会中断整个导出过程。无法解析的行被记录到错误日志文件（配置中的 `[error] file`），工具继续处理下一行。在运行结束时汇总各文件的解析成功率。
-
-### 退出码
+可恢复的解析错误被记录并跳过，运行继续；致命配置、I/O 或导出错误终止处理。`cli/runtime.rs` 统一输出严重程度和修复建议，`engine/report.rs` 输出运行统计及配置的错误日志。
 
 | 退出码 | 含义 |
-|--------|------|
+| --- | --- |
 | 0 | 成功 |
-| 2 | 配置错误 |
-| 3 | 文件/解析错误 |
-| 4 | 导出错误 |
-| 130 | 用户中断（Ctrl+C） |
+| 1 | 处理完成，但有非致命错误 |
+| 2 | 致命错误或校验失败 |
+| 130 | 用户中断 |
 
----
+## 修改与验证
 
-### 依赖关系
+新增输出后端从 `exporter/` 开始；修改执行策略从 `engine/sequential.rs` 开始；增加参数语法从 `pipeline/normalizer.rs` 开始。新增命令应让 CLI 负责参数与展示，让对应领域模块负责处理流程。
 
-模块间的依赖遵循单向分层原则：
+所有测试实现统一放在根目录 `tests/`：`tests/unit/` 按 `src/` 模块层次组织 Rust 单元测试，根目录的 `.rs` 文件是 Cargo 集成测试，`tests/python/` 是检查脚本的测试。生产模块仅通过 `#[cfg(test)]` 与 `#[path]` 引用单元测试文件，保留对私有实现的测试能力。测试辅助函数也放在测试目录；性能基准仍在 `benches/`。本地检查：
 
+```bash
+cargo fmt --all -- --check
+cargo test --locked
+python3 -B -m unittest discover -s tests/python -p 'test_*.py' -v
+cargo clippy --locked --all-targets -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc --locked --no-deps
 ```
-src/error.rs ←──────────────── 所有模块（横切关注点）
-src/config/ ←─ src/cli/ ←─ src/pipeline/ ←─ src/exporter/
-```
 
-配置层（config）被 CLI 层引用，CLI 层协调 Pipeline 和 Exporter 的具体实例。
+文档站直接通过 `docs/book.toml` 构建本目录内容：`mdbook build docs`，输出到 `target/book/`。无需单独维护站点包装目录。
 
----
-
-*架构文档最后更新于 v1.13，反映 stats 子命令引入后的模块结构。模块级概述，不深入特定 struct 字段或 trait 方法签名。*
+非 Windows CLI 使用 jemalloc 管理短生命周期分配；Windows 保持系统分配器。分配统计仅由测试启用。

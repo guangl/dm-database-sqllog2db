@@ -2,7 +2,7 @@
 ///
 /// Measures the raw parsing speed of dm-database-parser-sqllog:
 /// mmap file read + log line parsing → Sqllog records.
-/// Excludes any exporter overhead (CSV / `SQLite`).
+/// Excludes any exporter overhead (CSV / Parquet).
 /// Run with: `cargo bench --bench bench_parser`
 #[path = "bench_common.rs"]
 mod bench_common;

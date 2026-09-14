@@ -1,0 +1,23 @@
+[book]
+src = "."
+title = "sqllog2db"
+authors = ["guangl"]
+description = "达梦数据库 SQL 日志高性能解析工具 — 流式处理，常量内存，支持 Parquet/CSV 导出"
+language = "zh"
+
+[output.html]
+default-theme = "ayu"
+preferred-dark-theme = "ayu"
+git-repository-url = "https://github.com/guangl/sqllog2db"
+
+[output.html.fold]
+enable = true
+level = 1
+
+[output.html.playground]
+editor = false
+runnable = false
+
+[build]
+build-dir = "../target/book"
+create-missing = false

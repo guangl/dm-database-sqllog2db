@@ -7,7 +7,7 @@
 [![Release](https://img.shields.io/github/v/release/guangl/sqllog2db?style=flat-square&logo=github&logoColor=white&label=release)](https://github.com/guangl/sqllog2db/releases)
 [![Rust 1.95+](https://img.shields.io/badge/rust-1.95%2B-orange?style=flat-square&logo=rust&logoColor=white)](https://www.rust-lang.org/)
 
-解析达梦数据库 SQL 日志并导出为 Parquet、CSV 或 SQLite。Parquet 是默认格式。
+解析达梦数据库 SQL 日志并导出为 Parquet 或 CSV。Parquet 是默认格式。
 
 > **维护说明**：本仓库不保证积极运维，后续更新将跟随上游 [dm-database-parser-sqllog](https://crates.io/crates/dm-database-parser-sqllog) 的版本迭代进行同步。
 
@@ -22,9 +22,8 @@
 - **流式解析器**：单线程顺序处理单个文件、目录中的 `.log` 文件或 glob 模式匹配的文件。无论文件大小，内存保持恒定——工具流式处理记录而非加载到内存中。
 - **灵活的输入模式**：支持单文件路径、目录自动扫描（递归查找 `.log` 文件）或 glob 模式（如 `./logs/2025-*.log`）。结果按路径排序以在多次运行间保持确定性顺序。
 - **Parquet 导出器（默认）**：按 row group 流式写入，默认使用 ZSTD level 1 压缩；也支持 Snappy 和不压缩。可直接供 DuckDB、Spark、Polars 和 Pandas 分析。
-- **CSV 导出器**：1 MiB `BufWriter` 配合 `itoa` 零分配整数格式化，实现高吞吐、低延迟输出。`memchr` 的 SIMD 加速字节搜索处理 CSV 转义。多文件场景支持 rayon 并行解析路径（`parallel.rs`）。
-- **SQLite 导出器**：批量事务配合性能 `PRAGMA` 调优（synchronous off、mmap size、cache size）和预编译语句实现批量插入吞吐量。多文件场景支持 rayon 并行解析路径（`sqlite_parallel.rs`）。
-- **优先级路由的 ExporterManager**：每次运行只有一个导出器处于活动状态；多个同时配置时按 Parquet > CSV > SQLite 选择。
+- **CSV 导出器**：1 MiB `BufWriter` 配合 `itoa` 零分配整数格式化，实现高吞吐、低延迟输出。`memchr` 的 SIMD 加速字节搜索处理 CSV 转义。CSV 和 Parquet 共用有界解析队列、单写入器及进度条，按顺序输出单个文件。
+- **优先级路由的 ExporterManager**：每次运行只有一个导出器处于活动状态；多个同时配置时按 Parquet > CSV 选择。
 
 ### 过滤与字段控制
 
@@ -40,9 +39,8 @@
 - **零开销快速路径**：当管道为空（无过滤器、无 replace_parameters）时，热循环通过单个 `pipeline.is_empty()` 检查跳过所有功能门控。快速路径中无虚函数调用、无逐记录的条件分支。
 - **统一过滤管道**：元数据使用精确匹配，SQL 使用字面量子串匹配。SQL 与指标共用 `TransactionFilters`，预扫描分别收集保留和排除的事务 ID，正式扫描按集合过滤。
 - **单线程流式处理**：无论数据量大小，性能可预测。Parquet 批次同时受行数和约 64 MiB 字节预算限制。Release 配置：`opt-level=3`、LTO fat、codegen-units=1、panic=abort、strip=symbols。
-- **基准测试结果**：~520 万条记录/秒 CSV（criterion，合成 50k 记录数据集，Apple M 系列芯片），~110 万条记录/秒 SQLite（batch + PRAGMA），~155 万条记录/秒（真实 1.1 GB 文件，约 300 万条记录，NVMe SSD）。
+- **基准测试结果**：~520 万条记录/秒 CSV（criterion，合成 50k 记录数据集，Apple M 系列芯片），~155 万条记录/秒（真实 1.1 GB 文件，约 300 万条记录，NVMe SSD）。
 - **简洁的 CLI**：`init`（生成配置）、`validate`（校验）、`run`（执行导出）、`stats`（统计分析）四个命令。
-  （`watch` 持续监听子命令暂时下线——当前只支持追加写出到文件，功能价值有限；领域实现与测试仍保留在 `src/watch/`。）
 
 ## 架构
 
@@ -51,7 +49,7 @@
 1. **发现**：`SqllogParser` 解析配置的路径（文件、目录或 glob）并生成有序的 `.log` 文件列表。
 2. **解析**：每个文件通过 `dm-database-parser-sqllog` 逐行流式读取，解码 GB18030/GBK 记录并提取结构化字段（用户、SQL 文本、执行时长、行数、会话 ID 等）。
 3. **处理管道**：解析后的记录通过可选的处理管道。当管道为空（无过滤器）时，记录通过零开销快速路径绕过所有功能逻辑。当管道活跃时，运行编译好的正则过滤器。
-4. **导出**：活跃的导出器（Parquet、CSV 或 SQLite，按优先级选择）写入每条记录。ExporterManager 将记录路由到单一配置的导出器。
+4. **导出**：活跃的导出器（Parquet 或 CSV，按优先级选择）写入每条记录。ExporterManager 将记录路由到单一配置的导出器。
 
 这种流式设计保持内存使用恒定——100 MB 日志文件和 100 GB 日志文件消耗相同的峰值内存。
 
@@ -62,21 +60,21 @@ graph LR
     C -->|empty| D[ExporterManager]
     C -->|filters| E[FilterProcessor]
     E --> D
-    D --> F[Parquet / CSV / SQLite]
+    D --> F[Parquet / CSV]
 ```
 
 同样的流程以文本形式表达：
 
 ```
-输入 .log 文件 --> SqllogParser --> 处理管道 --> ExporterManager --> Parquet / CSV / SQLite
+输入 .log 文件 --> SqllogParser --> 处理管道 --> ExporterManager --> Parquet / CSV
 ```
 
 ### 关键模块
 
-- **`cli/run/mod.rs`**：主编排——加载配置、构建管道、预扫描事务过滤器、逐个文件流式处理记录。
-- **`cli/run/parallel.rs`**：CSV 导出的多文件并行解析路径（基于 rayon），解析错误通过 `log::warn!` 上报。
-- **`cli/run/sqlite_parallel.rs`**：SQLite 导出的多文件并行解析路径（基于 rayon），解析错误通过 `log::warn!` 上报。
-- **`cli/stats/mod.rs`**：`stats` 子命令入口，委托给 `src/stats/` 完成聚合与终端展示。
+项目目录与阅读顺序见[架构说明](docs/architecture.md)。所有测试位于 `tests/`，文档站与说明统一位于 `docs/`。
+
+- **`engine/mod.rs`**：主编排——加载配置、构建管道、预扫描事务过滤器、逐个文件流式处理记录。
+- **`cli/stats.rs`**：`stats` 子命令入口，委托给 `src/stats/` 完成聚合与终端展示。
 - **`stats/mod.rs`**：`run_stats` 流式扫描 → `StatsAccumulator` → 在终端打印慢 SQL 与高频 SQL。
 - **`exporter/mod.rs`**：`Exporter` trait 和 `ExporterManager` 工厂。每次运行只有一个导出器处于活动状态。
 - **`pipeline/mod.rs`**：`LogProcessor` trait 和 `Pipeline`。`pipeline.is_empty()` 启用零开销快速路径。
@@ -152,7 +150,7 @@ sqllog2db run -c config.toml --verbose
 
 ## 配置
 
-所有配置段均按是否存在生效。省略 replace_parameters 不替换参数，省略 logging 时日志输出到 stdout，不写日志文件，省略 exporter 不默认选择导出器。`sqllog2db init` 显式生成输入和一个导出器，可选功能以注释展示：
+所有配置段均按是否存在生效。省略 replace_parameters 不替换参数；启用时默认仅对 `SEL` 回填，可用 `tags` 指定其他日志标签。省略 logging 时日志输出到 stdout，不写日志文件，省略 exporter 不默认选择导出器。`sqllog2db init` 显式生成输入和一个导出器，可选功能以注释展示：
 
 ```toml
 [sqllog]
@@ -182,7 +180,6 @@ row_group_rows = 65536
 | 模式 | 吞吐量 | 备注 |
 |------|--------|------|
 | CSV（合成数据） | ~520 万条/秒 | criterion，Apple M 系列芯片 |
-| SQLite（合成数据） | ~110 万条/秒 | batch + PRAGMA |
 | 真实文件（1.1 GB，NVMe） | ~155 万条/秒 | ~300 万条记录，生产日志 |
 
 基准测试使用 `cargo bench` 在搭载 Apple Silicon 和 NVMe SSD 的 Mac 上测量。
@@ -205,7 +202,7 @@ row_group_rows = 65536
 
 ### v1.21.0 — CSV 分片与发布质量门禁（2026-09-11）
 
-- **CSV 自动分片**：通过 `max_rows_per_file` 限制单个输出文件行数，顺序与并行路径行为一致
+- **CSV 自动分片（已移除）**：该版本曾支持 `max_rows_per_file`，当前版本已统一为单文件输出。
 - **stats 终端输出**：无需配置导出器即可查看慢 SQL 和高频 SQL
 - **过滤修复**：`statements` 按日志标签正确匹配
 - **质量门禁**：发布前校验覆盖率、MSRV、发布包、内存峰值和导出完整性
@@ -213,15 +210,13 @@ row_group_rows = 65536
 
 ### v1.20.0 — 性能全面提升（2026-06-11）
 
-- **SQLite batch INSERT**：multi-row `INSERT INTO t VALUES (...),(...),...`，缓冲 64 条一次 flush，benchmark 量化提升
 - **tokio 异步解析**：全解析路径迁移 `dm-database-parser-sqllog` async API，`block_in_place` 保持并行性能
 - **热路径零分配**：normalizer ParamBuffer 二级化，DML 查询从 `String::clone` 改为 `&str` 零分配查询
 - **冷启动优化**：`--version` 2.1ms（较 v1.9 ~3ms 降 0.7ms），criterion baseline 存档支持版本间回归对比
 - **重复代码消除**：`record_iter::iterate_records` 共享模块净消除 ~80 行并行路径重复代码
 
-### v1.16.0 — watch 持续监听、SQL 统计分析与全面体验升级（2026-06-07）
+### v1.16.0 — SQL 统计分析与全面体验升级（2026-06-07）
 
-- **`watch` 子命令**：持续监听目录，新增/追加 `.log` 文件时自动增量处理，支持 CSV/SQLite 双格式，Ctrl+C 退出码 130
 - **`stats` 子命令**：慢 SQL TOP-N + 高频 SQL TOP-N，支持 `--from`/`--to` 时间段过滤，SQL 字面量标准化归一
 - **`init --interactive` 向导**：对话式配置生成，每步提示默认值，Enter 直接接受
 - **进度条升级**：`[N/M]` 文件计数器 + ETA + records/sec；错误诊断按类型分组 + hint
