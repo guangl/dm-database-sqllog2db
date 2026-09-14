@@ -81,7 +81,7 @@ debug = true
 strip = "none"
 
 [dev-dependencies]
-criterion = { version = "0.7", features = ["html_reports"] }
+criterion = { version = "0.8", features = ["html_reports"] }
 assert_cmd = "2"
 predicates = "3"
 
