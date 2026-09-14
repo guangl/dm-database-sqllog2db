@@ -1,0 +1,263 @@
+<!DOCTYPE HTML>
+<html lang="zh" class="ayu sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>发版标准 - sqllog2db</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="达梦数据库 SQL 日志高性能解析工具 — 流式处理，常量内存，支持 Parquet/CSV 导出">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "ayu" : "ayu";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc.js"></script>
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('ayu')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">sqllog2db</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/guangl/sqllog2db" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="发版门禁标准"><a class="header" href="#发版门禁标准">发版门禁标准</a></h1>
+<p>本标准适用于从 <code>v*</code> 标签创建的正式 Release。任何门禁失败、取消或未完成，都不得创建 GitHub Release。标准由仓库工作流执行，不能以人工观察内存或 informational benchmark 代替。</p>
+<h2 id="必须通过的检查"><a class="header" href="#必须通过的检查">必须通过的检查</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>门禁</th><th>验收条件</th></tr></thead><tbody>
+<tr><td>功能测试</td><td>Linux、Windows、macOS 的 <code>cargo test --locked</code> 全部通过；已有明确标注 ignored 的测试仍按现状处理</td></tr>
+<tr><td>代码质量</td><td>rustfmt、Clippy 零警告、文档零警告、benchmark 编译全部通过</td></tr>
+<tr><td>覆盖率</td><td>行覆盖率 ≥ 70%，沿用现有 CI 标准</td></tr>
+<tr><td>导出内存</td><td>CSV 测 1、4、16 份日志，每份约 256 MiB；每个场景独立启动进程</td></tr>
+<tr><td>峰值上限</td><td>每个导出进程峰值 RSS ≤ 128 MiB；不是虚拟内存，也不是退出后的内存差值</td></tr>
+<tr><td>增长上限</td><td>同格式 4、16 文件场景分别相对 1 文件场景，峰值 RSS 增量 ≤ 32 MiB</td></tr>
+<tr><td>数据完整性</td><td>记录数精确一致；CSV 全文件 SHA-256 与独立构造的预期文件一致</td></tr>
+<tr><td>执行可靠性</td><td>每次导出最多 600 秒；非零退出、超时、缺失/无效 RSS、检查异常均失败，不得跳过后放行</td></tr>
+<tr><td>可追溯性</td><td>JSON 报告包含二进制 SHA-256、CI 提交 SHA、平台、阈值、每场景数据和最终结论</td></tr>
+</tbody></table>
+</div>
+<p>内存数据固定为合成 SELECT 日志，参数替换关闭、无事务级过滤，最大输入约 4 GiB、19,701,680 条记录。内存阈值仅约束该标准场景，不代表所有异常超长 SQL、参数缓存或事务过滤场景都有相同内存上限。功能语义、异构数据、追加和字段投影另由 Rust 测试覆盖。</p>
+<p>Windows 必须通过功能测试与发布构建；当前 RSS 门禁仅支持 Linux/macOS，不宣称验证了 Windows 的内存。发布仍需三个受测平台全部通过。</p>
+<h2 id="自动执行与发布阻断"><a class="header" href="#自动执行与发布阻断">自动执行与发布阻断</a></h2>
+<ul>
+<li>PR 和 main 推送：CI 调用 <code>export-memory.yaml</code>，在 Linux x86_64、Linux aarch64、macOS aarch64 构建 release 程序并执行相同门禁。</li>
+<li><code>v*</code> 标签：<code>release.yaml</code> 的 <code>verification</code> 调用完整 CI；<code>export-memory</code> 等待发布产物构建完成，在对应原生平台下载并检测<strong>将要发布的实际二进制</strong>。标签 CI 不重复执行源代码构建版内存门禁。</li>
+<li><code>publish-crate.needs</code> 同时依赖 <code>verification</code>、<code>export-memory</code> 和全部构建任务。标签必须与 <code>Cargo.toml</code> 版本一致，且仓库需配置具有该 crate 发布权限的 <code>CARGO_REGISTRY_TOKEN</code> secret。门禁通过后执行 <code>cargo publish --locked</code>；发布失败会阻止 <code>create-release</code> 创建 GitHub Release。</li>
+<li><code>create-release</code> 等待 <code>publish-crate</code> 成功。没有 <code>continue-on-error</code>，发布步骤没有 <code>always()</code> 绕过失败。</li>
+<li>检测报告以 Actions artifact 保留 90 天；成功发版时三个平台的 JSON 报告同时作为 Release 附件，文件名为 <code>export-memory-&lt;platform&gt;.json</code>。</li>
+<li>普通 Criterion benchmark 仍是参考数据，不作为内存门禁的替代。600 秒是卡死保护，不是吞吐性能目标。</li>
+</ul>
+<p>仓库里的工作流修改提交并推送后生效；本文不意味着远端分支保护设置已经修改。即使没有配置 PR 必需状态检查，标签发布流程自身仍会等待这些门禁。</p>
+<h2 id="本地复现"><a class="header" href="#本地复现">本地复现</a></h2>
+<p>需要 Rust、Python 3.9+，以及 macOS 的 <code>/usr/bin/time</code> 或 Linux 的 GNU time。建议预留至少 10 GiB 临时磁盘空间。</p>
+<pre><code class="language-sh">cargo fmt --all -- --check
+cargo test --locked
+cargo clippy --locked --all-targets -- -D warnings
+RUSTDOCFLAGS='-D warnings' cargo doc --locked --no-deps
+cargo bench --locked --no-run
+cargo llvm-cov --locked --fail-under-lines 70
+cargo build --release --locked
+python3 -B -m unittest discover -s tests/python -p 'test_*.py' -v
+python3 scripts/check_export_memory.py target/release/sqllog2db \
+  --file-mib 256 --files 16 --max-rss-mib 128 --max-growth-mib 32 \
+  --timeout-seconds 600 --report export-memory-report.json
+</code></pre>
+<p>退出码 0 才是通过。自定义较小输入适合调试，不能代替标准命令；调整阈值或样本规模必须通过正常代码评审并提供各受测平台的新证据，不能为了让失败版本发版而临时跳过。</p>
+<h2 id="历史本地验收2026-09-10"><a class="header" href="#历史本地验收2026-09-10">历史本地验收（2026-09-10）</a></h2>
+<p>以下为移除 SQLite 前的历史证据，不代表当前版本的验收结果；当前脚本仅检查 CSV。</p>
+<p>本机 Rust 功能测试 542 项通过（另有 3 项既有 ignored）；rustfmt、Clippy、文档检查及 benchmark 编译全部通过。行覆盖率为 89.71%，高于 70% 门槛。</p>
+<p>macOS 修复版执行上述完整内存矩阵，6/6 场景通过：</p>
+<div class="table-wrapper"><table><thead><tr><th>格式</th><th style="text-align: right">1 文件峰值 MiB</th><th style="text-align: right">4 文件峰值 MiB</th><th style="text-align: right">16 文件峰值 MiB</th></tr></thead><tbody>
+<tr><td>CSV</td><td style="text-align: right">18.8</td><td style="text-align: right">9.7</td><td style="text-align: right">9.6</td></tr>
+<tr><td>SQLite</td><td style="text-align: right">29.1</td><td style="text-align: right">29.4</td><td style="text-align: right">29.3</td></tr>
+</tbody></table>
+</div>
+<p>SQLite 多文件增长不足 1 MiB；所有场景数据完整性通过。门禁自身的 9 项失败路径测试通过，覆盖峰值/增长超限、记录数/内容错误、无效/缺失 RSS、非零退出、超时和异常报告。</p>
+<p>修复前程序使用 1、4 份同规模日志做负向验证：SQLite 4 文件峰值约 876 MiB，同时超过峰值和增长上限；脚本退出码为 1，确认门禁能拦截此次回归。该负向测试只需复现失败，不作为修复版 16 文件验收的替代。</p>
+<p>原始证据：<a href="test-results/export-memory-macos.json">修复版通过报告</a>、<a href="test-results/export-memory-before-rejected.json">旧版被拒报告</a>。本地尚未执行远端 Linux/Windows runner；跨平台结果以推送后对应 GitHub Actions 为准。</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="contributing.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="export-memory-check.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="contributing.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="export-memory-check.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

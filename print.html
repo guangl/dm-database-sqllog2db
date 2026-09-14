@@ -1,0 +1,1003 @@
+<!DOCTYPE HTML>
+<html lang="zh" class="ayu sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>sqllog2db</title>
+        <meta name="robots" content="noindex">
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="达梦数据库 SQL 日志高性能解析工具 — 流式处理，常量内存，支持 Parquet/CSV 导出">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "ayu" : "ayu";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc.js"></script>
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('ayu')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">sqllog2db</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/guangl/sqllog2db" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="sqllog2db"><a class="header" href="#sqllog2db">sqllog2db</a></h1>
+<p><a href="https://crates.io/crates/dm-database-sqllog2db"><img src="https://img.shields.io/crates/v/dm-database-sqllog2db?style=flat-square&amp;logo=rust&amp;logoColor=white&amp;label=crates.io&amp;color=d96109" alt="Crates.io" /></a>
+<a href="https://github.com/guangl/sqllog2db/actions/workflows/ci.yaml"><img src="https://img.shields.io/github/actions/workflow/status/guangl/sqllog2db/ci.yaml?style=flat-square&amp;logo=github-actions&amp;logoColor=white&amp;label=ci" alt="CI" /></a>
+<a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square" alt="License" /></a>
+<a href="https://github.com/guangl/sqllog2db/releases"><img src="https://img.shields.io/github/v/release/guangl/sqllog2db?style=flat-square&amp;logo=github&amp;logoColor=white&amp;label=release" alt="Release" /></a>
+<a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-1.95%2B-orange?style=flat-square&amp;logo=rust&amp;logoColor=white" alt="Rust 1.95+" /></a></p>
+<p><strong>达梦数据库 SQL 日志高性能解析工具</strong> — 流式处理百万级记录，常量内存占用，支持 Parquet/CSV 导出。</p>
+<hr />
+<h2 id="快速安装"><a class="header" href="#快速安装">快速安装</a></h2>
+<pre><code class="language-bash"># 从 crates.io 安装
+cargo install dm-database-sqllog2db
+
+# 生成配置并运行
+sqllog2db init -o config.toml
+sqllog2db run -c config.toml
+
+# 统计分析慢 SQL 和高频 SQL
+sqllog2db stats -c config.toml
+</code></pre>
+<p>需要 Rust 1.95+。二进制文件约 5 MB。</p>
+<hr />
+<h2 id="文档"><a class="header" href="#文档">文档</a></h2>
+<ul>
+<li><a href="quickstart.html">快速入门</a> — 从安装到导出，逐步引导完成常见使用场景</li>
+<li><a href="config-reference.html">配置参考</a> — 所有配置项的完整说明</li>
+<li><a href="architecture.html">架构说明</a> — 数据流、模块划分和关键设计</li>
+<li><a href="contributing.html">贡献指南</a> — 环境搭建、编码规约和 PR 提交流程</li>
+</ul>
+<hr />
+<h2 id="链接"><a class="header" href="#链接">链接</a></h2>
+<ul>
+<li><a href="https://github.com/guangl/sqllog2db">GitHub 仓库</a></li>
+<li><a href="https://crates.io/crates/dm-database-sqllog2db">crates.io</a></li>
+<li><a href="https://github.com/guangl/sqllog2db/blob/main/CHANGELOG.md">变更日志</a></li>
+<li><a href="https://github.com/guangl/sqllog2db/blob/main/LICENSE">许可证</a> — Apache-2.0</li>
+</ul>
+<hr />
+<p><em>Built with <a href="https://rust-lang.github.io/mdBook/">mdBook</a>. Deployed via GitHub Actions.</em></p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="快速入门指南"><a class="header" href="#快速入门指南">快速入门指南</a></h1>
+<p>本指南带你了解 sqllog2db 的常见使用场景。每个场景展示从配置生成到输出验证的完整工作流程。如需最简三命令概览，请参见 <a href="../README.html">README</a>。</p>
+<h2 id="环境准备"><a class="header" href="#环境准备">环境准备</a></h2>
+<p>通过 rustup 安装 Rust：</p>
+<pre><code class="language-bash">curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+</code></pre>
+<p>安装 sqllog2db：</p>
+<pre><code class="language-bash">cargo install dm-database-sqllog2db
+</code></pre>
+<p>验证安装：</p>
+<pre><code class="language-bash">sqllog2db --version
+</code></pre>
+<p>备选方案：从源码构建：</p>
+<pre><code class="language-bash">git clone https://github.com/guangl/sqllog2db
+cd sqllog2db
+cargo build --release
+</code></pre>
+<p>二进制文件位于 <code>target/release/sqllog2db</code>，无需额外运行时。</p>
+<p>从源码克隆时，<code>sqllogs/</code> 目录下包含示例日志文件。生产环境请使用你自己的达梦 SQL 日志。</p>
+<hr />
+<h2 id="场景一导出-sql-日志到-csv"><a class="header" href="#场景一导出-sql-日志到-csv">场景一：导出 SQL 日志到 CSV</a></h2>
+<p>将达梦 SQL 日志导出为 CSV 以供分析或归档。</p>
+<p><strong>步骤 1：生成默认配置</strong></p>
+<pre><code class="language-bash">sqllog2db init -o config.toml --force
+</code></pre>
+<p>预期输出：</p>
+<pre><code>Config written to config.toml
+</code></pre>
+<p><strong>步骤 2：配置 Parquet 导出（默认）</strong></p>
+<p>编辑 <code>config.toml</code>：</p>
+<pre><code class="language-toml">[sqllog]
+inputs = ["sqllogs"]
+
+[exporter.parquet]
+file = "output/sqllog.parquet"
+overwrite = true
+compression = "zstd"
+row_group_rows = 65536
+</code></pre>
+<p><strong>步骤 3：验证配置</strong></p>
+<pre><code class="language-bash">sqllog2db validate -c config.toml
+</code></pre>
+<p>通过时静默退出（无输出，exit 0）；失败时输出 <code>[FAIL] &lt;字段&gt;: &lt;原因&gt;</code> 并以非零码退出。</p>
+<p><strong>步骤 4：运行导出</strong></p>
+<pre><code class="language-bash">sqllog2db run -c config.toml
+</code></pre>
+<p>预期输出：</p>
+<pre><code>[INFO] Starting export...
+[INFO] Processing: sqllogs/DM_DMSQL_202504_01.log
+[INFO] Processed 100000 records...
+[INFO] Processed 200000 records...
+[INFO] Export complete: 2,372,459 records in 8.87s (267,525 records/sec)
+</code></pre>
+<p><strong>步骤 5：验证输出</strong></p>
+<pre><code class="language-bash">wc -l output/sqllog.csv
+head -5 output/sqllog.csv
+</code></pre>
+<p><strong>故障排查：</strong> 如果看到 "Config validation failed: sqllog.path"，请确保 <code>path</code> 指向存在的目录或文件。自动化脚本中建议使用绝对路径。</p>
+<hr />
+<h2 id="场景二导出到-sqlite-数据库"><a class="header" href="#场景二导出到-sqlite-数据库">场景二：导出到 SQLite 数据库</a></h2>
+<p>导出到 SQLite 以便使用 SQL 进行分析。</p>
+<p><strong>步骤 1：配置 SQLite 导出</strong></p>
+<p>编辑 <code>config.toml</code>：</p>
+<pre><code class="language-toml">[sqllog]
+inputs = ["sqllogs"]
+
+[exporter.sqlite]
+file = "output/sqllog.db"
+table = "sqllog_records"
+overwrite = true
+</code></pre>
+<p><strong>步骤 2：验证并运行</strong></p>
+<pre><code class="language-bash">sqllog2db validate -c config.toml
+sqllog2db run -c config.toml
+</code></pre>
+<p><strong>步骤 3：验证并查询</strong></p>
+<pre><code class="language-bash"># 统计总记录数
+sqlite3 output/sqllog.db "SELECT COUNT(*) FROM sqllog_records;"
+
+# 按查询数量查看 Top 5 用户
+sqlite3 output/sqllog.db "SELECT USERNAME, COUNT(*) AS cnt FROM sqllog_records GROUP BY USERNAME ORDER BY cnt DESC LIMIT 5;"
+
+# 查看 Top 10 最慢查询
+sqlite3 output/sqllog.db "SELECT SQL_TEXT, ELAPSED FROM sqllog_records ORDER BY ELAPSED DESC LIMIT 10;"
+</code></pre>
+<p>预期用户排名输出：</p>
+<pre><code>HIHIS|1748411
+BBP|513287
+HINIS|83921
+BLC|18342
+SYSDBA|5234
+</code></pre>
+<p><strong>故障排查：</strong> 如果找不到 <code>sqlite3</code>，请通过 <code>brew install sqlite</code>（macOS）或系统包管理器安装。</p>
+<hr />
+<h2 id="场景三使用过滤器精确导出"><a class="header" href="#场景三使用过滤器精确导出">场景三：使用过滤器精确导出</a></h2>
+<p>应用记录级和事务级过滤器，仅导出符合条件的 SQL 记录。</p>
+<p><strong>步骤 1：配置过滤器</strong></p>
+<p>编辑 <code>config.toml</code>：</p>
+<pre><code class="language-toml">[sqllog]
+inputs = ["sqllogs"]
+
+[filter.include]
+# 语句类型，匹配日志方括号标签（取不带方括号的值，如 [SEL] -&gt; "SEL"）
+tags = ["INS", "UPD", "DEL"]
+# 保留包含慢 SQL 的事务，再应用记录条件
+min_runtime_ms = 100
+
+[filter.exclude]
+users = ["SYSDBA", "MONITOR"]
+
+[exporter.csv]
+file = "output/filtered.csv"
+overwrite = true
+</code></pre>
+<p><strong>步骤 2：验证并运行</strong></p>
+<pre><code class="language-bash">sqllog2db validate -c config.toml
+sqllog2db run -c config.toml
+</code></pre>
+<p><strong>步骤 3：使用 SQL 内容过滤器</strong></p>
+<p>事务级 SQL 内容过滤需要两遍预扫描：</p>
+<pre><code class="language-toml">[filter.include]
+sql = ["FROM ORDERS", "JOIN PAYMENTS"]
+min_runtime_ms = 500
+
+[filter.exclude]
+sql = ["pg_catalog", "information_schema"]
+</code></pre>
+<p>工具先扫描所有文件收集匹配的事务 ID，再于第二遍中应用全部过滤器。</p>
+<p><strong>通过外部工具分析输出：</strong></p>
+<pre><code class="language-bash"># 使用 sqlite3 查询 Top 5 最慢的写操作
+sqlite3 output/filtered.db "SELECT SQL_TEXT, ELAPSED FROM sqllog_records WHERE STMT_TYPE IN ('INS','UPD','DEL') ORDER BY ELAPSED DESC LIMIT 5;"
+
+# 使用 csvkit 工具
+csvstat output/filtered.csv
+</code></pre>
+<hr />
+<h2 id="场景四sql-统计分析"><a class="header" href="#场景四sql-统计分析">场景四：SQL 统计分析</a></h2>
+<p>使用 <code>stats</code> 子命令对 SQL 日志进行统计分析，在终端查看慢 SQL 和高频 SQL。</p>
+<p><strong>步骤 1：配置输入</strong></p>
+<p>编辑 <code>config.toml</code>（复用 <code>run</code> 命令的配置格式）：</p>
+<pre><code class="language-toml">[sqllog]
+inputs = ["sqllogs"]
+</code></pre>
+<p><code>stats</code> 不使用 <code>[exporter]</code> 配置；配置文件中即使保留了导出器设置，也不会生成聚合结果文件或数据库表。</p>
+<p><strong>步骤 2：运行统计分析</strong></p>
+<pre><code class="language-bash">sqllog2db stats -c config.toml
+</code></pre>
+<p>默认输出 Top 20 条，可用 <code>--top</code> 调整：</p>
+<pre><code class="language-bash">sqllog2db stats -c config.toml --top 10
+</code></pre>
+<p><strong>步骤 3：查看终端结果</strong></p>
+<pre><code class="language-text">===== Slow SQL (top 10) =====
+elapsed_ms  timestamp                SQL
+...
+
+===== Frequent SQL (top 10) =====
+ count      avg_ms      max_ms  SQL
+...
+</code></pre>
+<hr />
+<h2 id="故障排查"><a class="header" href="#故障排查">故障排查</a></h2>
+<h3 id="配置验证失败"><a class="header" href="#配置验证失败">配置验证失败</a></h3>
+<ul>
+<li>运行 <code>sqllog2db validate -c config.toml</code> 查看具体错误</li>
+<li>检查 <code>sqllog.path</code> 是否存在且可读</li>
+<li>确保输出目录存在（sqllog2db 不会自动创建中间目录）</li>
+<li>验证 TOML 语法：节标题使用 <code>[方括号]</code>，值使用 <code>=</code></li>
+</ul>
+<h3 id="未找到-log-文件"><a class="header" href="#未找到-log-文件">"未找到 .log 文件"</a></h3>
+<ul>
+<li>验证 <code>[sqllog].path</code> 中的路径是否正确</li>
+<li>使用绝对路径：<code>/home/user/logs/</code> 而非 <code>../logs/</code></li>
+<li>检查文件是否具有 <code>.log</code> 扩展名</li>
+</ul>
+<h3 id="导出性能较慢"><a class="header" href="#导出性能较慢">导出性能较慢</a></h3>
+<ul>
+<li>确保处理管道为空（无 <code>[filter]</code> 节）以获得最大速度</li>
+<li>CSV 导出比 SQLite 更快（约 520 万条/秒 vs 约 110 万条/秒）</li>
+<li>使用 NVMe SSD 获得最佳吞吐量</li>
+<li>对于大数据集，文件 I/O 是主要瓶颈</li>
+</ul>
+<h3 id="输出中出现解析错误"><a class="header" href="#输出中出现解析错误">输出中出现解析错误</a></h3>
+<ul>
+<li>解析错误是非致命的：工具继续处理后续记录</li>
+<li>错误记录到应用日志中（检查 <code>[logging]</code> 配置）</li>
+<li>GB18030/GBK 编码的文件会自动检测和解码</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="配置参考"><a class="header" href="#配置参考">配置参考</a></h1>
+<p>本文档描述 sqllog2db 中所有可用的配置选项。配置文件使用 TOML 格式编写。默认配置由 <code>sqllog2db init -o config.toml --force</code> 生成。以下每节记录一个配置块，包含字段、默认值和使用说明。</p>
+<p>所有配置段默认均不启用，写入配置才生效。配置段内部仍可有参数默认值，例如显式写 <code>[logging]</code> 后，未填的 level 使用 info。</p>
+<ul>
+<li>省略 <code>[replace_parameters]</code>：不替换参数，不输出 <code>normalized_sql</code> 列。</li>
+<li>省略 <code>[logging]</code> / <code>[error]</code>：不创建对应日志文件，运行日志默认输出到 stdout。</li>
+<li>省略所有 <code>[exporter.*]</code>：不默认选择导出器；<code>run</code> / <code>validate</code> 会提示需要配置导出器，<code>stats</code> 无需导出器。</li>
+<li>省略 <code>[sqllog]</code>：不默认读取 sqllogs 目录；通过配置 inputs 或命令行 <code>--input</code> 提供输入。</li>
+<li>省略 filter / output / stats：不附加过滤、字段投影或统计选项。统计命令自身的 top-N 等默认参数不变。</li>
+</ul>
+<p><code>init</code> 生成的模板会显式配置输入和一个导出器，可选功能以注释形式展示。启用功能只需添加对应配置段，关闭则删除或注释该段；不再使用 enable 开关。</p>
+<hr />
+<h2 id="sqllog"><a class="header" href="#sqllog">[sqllog]</a></h2>
+<p>指定要处理的输入日志文件。</p>
+<pre><code class="language-toml">[sqllog]
+# 输入列表：目录、单文件或 glob 模式均可，支持多条目
+inputs = ["sqllogs"]
+# 多条目示例：
+# inputs = ["sqllogs/2025-01/*.log", "sqllogs/2025-02/*.log"]
+</code></pre>
+<div class="table-wrapper"><table><thead><tr><th>字段</th><th>类型</th><th>默认值</th><th>描述</th></tr></thead><tbody>
+<tr><td><code>inputs</code></td><td>[String]</td><td><em>（必填）</em></td><td>输入路径数组，支持目录、单文件或 glob 模式（如 <code>./logs/2025-*.log</code>）</td></tr>
+</tbody></table>
+</div>
+<p><strong>说明：</strong> 自动化脚本中建议使用绝对路径。相对路径从当前工作目录解析。目录条目递归查找 <code>.log</code> 文件，结果按路径排序保证确定性顺序。旧版 <code>path = "..."</code> 字段已在 v1.12 移除，请迁移为 <code>inputs = ["..."]</code>。</p>
+<hr />
+<h2 id="logging"><a class="header" href="#logging">[logging]</a></h2>
+<p>控制应用日志（程序自身运行日志）的输出路径、级别和滚动保留。省略该段或未填写 file 时，运行日志输出到 stdout，不写日志文件；只有显式填写 file 才写文件。stdout 日志默认为 info，--verbose 使用 debug，--quiet 仅输出 error。</p>
+<pre><code class="language-toml">[logging]
+# 应用日志文件路径
+file = "logs/sqllog2db.log"
+# 日志级别：trace、debug、info、warn、error
+level = "info"
+# 日志保留天数（1-365）
+retention_days = 7
+</code></pre>
+<div class="table-wrapper"><table><thead><tr><th>字段</th><th>类型</th><th>默认值</th><th>描述</th></tr></thead><tbody>
+<tr><td><code>file</code></td><td>String</td><td>未配置（输出到 stdout）</td><td>显式指定后写入该文件，不可为空</td></tr>
+<tr><td><code>level</code></td><td>String</td><td><code>"info"</code></td><td>最低日志级别（trace/debug/info/warn/error）</td></tr>
+<tr><td><code>retention_days</code></td><td>usize</td><td><code>7</code></td><td>滚动日志保留天数，取值 1-365</td></tr>
+</tbody></table>
+</div>
+<p><strong>说明：</strong> 生产环境建议设置 <code>level = "warn"</code> 以减少输出噪音。此处的 <code>file</code> 是<strong>应用运行日志</strong>，与<strong>解析错误日志</strong>不同——后者由独立的 <code>[error]</code> 段配置（见下）。解析错误是非致命的：单条记录解析失败不会停止整个导出。</p>
+<hr />
+<h2 id="error可选"><a class="header" href="#error可选">[error]（可选）</a></h2>
+<p>解析错误日志。单独一个文件路径字段，收集解析失败的记录（纯文本行：<code>file | error | raw | line</code>）。省略该段则不写错误日志。</p>
+<pre><code class="language-toml">[error]
+# 解析错误输出文件路径
+file = "export/errors.log"
+</code></pre>
+<div class="table-wrapper"><table><thead><tr><th>字段</th><th>类型</th><th>默认值</th><th>描述</th></tr></thead><tbody>
+<tr><td><code>file</code></td><td>String</td><td><em>（该段省略时不写错误日志）</em></td><td>解析错误输出文件路径</td></tr>
+</tbody></table>
+</div>
+<hr />
+<h2 id="replace_parameters可选"><a class="header" href="#replace_parameters可选">[replace_parameters]（可选）</a></h2>
+<p>该段存在即启用参数替换，将日志中的 PARAMS 回填到 SQL 占位符，并在导出中增加 <code>normalized_sql</code> 列。省略该段时关闭替换，也不会输出该列。原始 <code>sql</code> 列保持不变。</p>
+<pre><code class="language-toml">[replace_parameters]
+# 默认仅回填 SEL；可增加 "INS"、"UPD"、"DEL" 等日志标签
+# tags = ["SEL"]
+# 可省略，默认自动检测；也可指定 ["?"] 或 [":1"]
+# placeholders = []
+</code></pre>
+<div class="table-wrapper"><table><thead><tr><th>字段</th><th>类型</th><th>默认值</th><th>描述</th></tr></thead><tbody>
+<tr><td><code>tags</code></td><td>[String]</td><td><code>["SEL"]</code></td><td>仅对这些日志标签对应的 SQL 回填参数</td></tr>
+<tr><td><code>placeholders</code></td><td>[String]</td><td><code>[]</code></td><td>空列表自动检测，仅 <code>?</code> 使用顺序占位符，仅 <code>:N</code> 使用序号占位符</td></tr>
+</tbody></table>
+</div>
+<p><strong>迁移：</strong> 旧 <code>enable = true</code> 改为仅保留配置段；旧 <code>enable = false</code> 改为删除或注释整个配置段。enable 和未知字段会直接报错。若 output.fields 不包含 normalized_sql，则不会计算或导出替换结果。</p>
+<hr />
+<h2 id="filterinclude--filterexclude"><a class="header" href="#filterinclude--filterexclude">[filter.include] / [filter.exclude]</a></h2>
+<p>过滤只需两组：<code>include</code> 保留，<code>exclude</code> 排除。<strong>写了条件就生效</strong>；不写过滤器、空子表或空列表表示不过滤。已移除 enable 开关；关闭过滤时删除或注释对应条件。</p>
+<pre><code class="language-toml">[filter.include]
+users = ["SYSDBA"]
+min_runtime_ms = 1000
+# sql = ["UPDATE", "DELETE FROM"]
+
+[filter.exclude]
+tags = ["ORA"]
+sql = ["SELECT 1", "FROM DUAL"]
+</code></pre>
+<p>上例保留含执行时间 ≥ 1000 ms 语句的事务，再仅输出其中 SYSDBA 的非 ORA 记录；如果事务中任一 SQL 包含 <code>SELECT 1</code> 或 <code>FROM DUAL</code>，整笔事务都会被排除。</p>
+<h3 id="记录条件"><a class="header" href="#记录条件">记录条件</a></h3>
+<p>元数据为精确字符串匹配，不支持正则。同一字段内多个值为 OR；include 的不同记录字段为 AND；exclude 的任意记录条件命中就丢弃该条记录。</p>
+<div class="table-wrapper"><table><thead><tr><th>字段</th><th>类型</th><th>可用组</th><th>含义</th></tr></thead><tbody>
+<tr><td><code>users</code></td><td>[String]</td><td>两组</td><td>用户名</td></tr>
+<tr><td><code>ips</code></td><td>[String]</td><td>两组</td><td>客户端 IP</td></tr>
+<tr><td><code>sessions</code></td><td>[String]</td><td>两组</td><td>会话 ID（十六进制字符串）</td></tr>
+<tr><td><code>threads</code></td><td>[String]</td><td>两组</td><td>线程 ID</td></tr>
+<tr><td><code>apps</code></td><td>[String]</td><td>两组</td><td>应用名</td></tr>
+<tr><td><code>tags</code></td><td>[String]</td><td>两组</td><td>日志标签，如 <code>SEL</code>、<code>INS</code>、<code>UPD</code>、<code>DEL</code>、<code>SET</code>、<code>OTH</code>、<code>ORA</code>，不带方括号</td></tr>
+<tr><td><code>start_ts</code></td><td>String</td><td>include</td><td>时间闭区间下界，<code>YYYY-MM-DD HH:MM:SS</code></td></tr>
+<tr><td><code>end_ts</code></td><td>String</td><td>include</td><td>时间闭区间上界，格式同上</td></tr>
+<tr><td><code>trxids</code></td><td>[String]</td><td>include</td><td>事务 ID 列表</td></tr>
+</tbody></table>
+</div>
+<p>语句类型只使用 <code>tags</code>，旧字段 <code>statements</code> 已移除。日志里的 <code>stmt:</code> 句柄不是语句类型。</p>
+<h3 id="事务条件"><a class="header" href="#事务条件">事务条件</a></h3>
+<p>以下字段直接写在 include 或 exclude 中。<strong>同一组的事务条件按 OR 匹配</strong>，任一记录命中即可选中或排除整笔事务；exclude 优先，即使该事务也命中 include。跨文件的同一事务也适用。</p>
+<div class="table-wrapper"><table><thead><tr><th>字段</th><th>类型</th><th>含义</th></tr></thead><tbody>
+<tr><td><code>sql</code></td><td>[String]</td><td>SQL 文本包含任一字面量子串，区分大小写，不支持正则</td></tr>
+<tr><td><code>exec_ids</code></td><td>[i64]</td><td>执行 ID 命中任一值</td></tr>
+<tr><td><code>min_runtime_ms</code></td><td>number</td><td>执行时长（毫秒）≥ 阈值，支持小数，必须非负且有限</td></tr>
+<tr><td><code>min_row_count</code></td><td>u32</td><td>影响行数 ≥ 阈值（0 匹配所有记录）</td></tr>
+</tbody></table>
+</div>
+<p>事务条件需要额外一遍预扫描。没有 include 事务条件时，从全部事务中排除；有 include 事务条件时，从命中事务中排除。显式 <code>include.trxids</code> 与预扫描选中 ID 取并集，但仍受事务排除约束。选中的事务还要经过上述记录条件，因此配置记录条件后，导出结果可能只包含事务的部分记录。</p>
+<p>stdin 无法预扫描，会输出警告并将 SQL / 指标条件降级为逐条匹配，不能保证整笔事务的保留或排除。</p>
+<h3 id="旧配置迁移"><a class="header" href="#旧配置迁移">旧配置迁移</a></h3>
+<p>这是不兼容变更：旧字段和未知字段会在加载时直接报错，请先按下表迁移。</p>
+<div class="table-wrapper"><table><thead><tr><th>旧写法</th><th>新写法</th></tr></thead><tbody>
+<tr><td><code>[filter] enable = true</code></td><td>删除此开关，条件自动生效</td></tr>
+<tr><td><code>[filter] enable = false</code></td><td>删除过滤条件，或将其注释掉</td></tr>
+<tr><td><code>[filter.indicators]</code> 下的指标</td><td>移到 <code>[filter.include]</code>，字段名不变</td></tr>
+<tr><td><code>[filter.sql] includes</code> / <code>include_patterns</code></td><td><code>[filter.include] sql</code></td></tr>
+<tr><td><code>[filter.sql] excludes</code> / <code>exclude_patterns</code></td><td><code>[filter.exclude] sql</code></td></tr>
+<tr><td><code>statements</code></td><td><code>tags</code></td></tr>
+<tr><td><code>[filter] usernames</code>、<code>client_ips</code> 等旧扁平字段</td><td><code>[filter.include] users</code>、<code>ips</code> 等</td></tr>
+<tr><td><code>[filter] exclude_usernames</code> 等</td><td><code>[filter.exclude] users</code> 等</td></tr>
+</tbody></table>
+</div>
+<p>新旧格式不能混用。<code>filter</code> 只接受 <code>include</code> 和 <code>exclude</code>，两组内的拼写错误和已移除字段也会报错。</p>
+<p><strong>行为修正：</strong> SQL 排除现在真正排除整笔事务。旧实现可能因为同事务的另一条 SQL 未命中排除条件而将它重新保留；迁移前后此类数据的导出结果会不同。所有已配置条件都会自动生效。</p>
+<hr />
+<h2 id="exporterparquet"><a class="header" href="#exporterparquet">[exporter.parquet]</a></h2>
+<p>Parquet 是 init 模板显式选择的导出格式，适合大数据量归档和分析；省略 exporter 时不会自动启用。导出器按 row group 流式写入，并在缓冲数据约达 64 MiB 时提前刷新，避免长 SQL 导致内存无界增长。</p>
+<pre><code class="language-toml">[exporter.parquet]
+file = "outputs/sqllog.parquet"
+overwrite = true
+compression = "zstd"
+row_group_rows = 65536
+</code></pre>
+<div class="table-wrapper"><table><thead><tr><th>字段</th><th>类型</th><th>默认值</th><th>描述</th></tr></thead><tbody>
+<tr><td><code>file</code></td><td>String</td><td><code>"outputs/sqllog.parquet"</code></td><td>输出文件路径</td></tr>
+<tr><td><code>overwrite</code></td><td>bool</td><td><code>true</code></td><td>是否覆盖已有文件；为 <code>false</code> 时目标必须不存在</td></tr>
+<tr><td><code>compression</code></td><td>String</td><td><code>"zstd"</code></td><td><code>zstd</code>、<code>snappy</code> 或 <code>uncompressed</code></td></tr>
+<tr><td><code>row_group_rows</code></td><td>usize</td><td><code>65536</code></td><td>每个 row group 的最大记录数，必须大于 0</td></tr>
+</tbody></table>
+</div>
+<hr />
+<h2 id="exportercsv"><a class="header" href="#exportercsv">[exporter.csv]</a></h2>
+<p>CSV 导出配置。</p>
+<pre><code class="language-toml">[exporter.csv]
+# 输出 CSV 文件路径
+file = "outputs/sqllog.csv"
+# 写入前删除并重建文件
+overwrite = true
+# 追加到已有文件而非覆盖
+append = false
+</code></pre>
+<div class="table-wrapper"><table><thead><tr><th>字段</th><th>类型</th><th>默认值</th><th>描述</th></tr></thead><tbody>
+<tr><td><code>file</code></td><td>String</td><td><em>（必填）</em></td><td>输出 CSV 文件路径（不可为空）</td></tr>
+<tr><td><code>overwrite</code></td><td>bool</td><td><code>true</code></td><td>写入前删除并重建文件</td></tr>
+<tr><td><code>append</code></td><td>bool</td><td><code>false</code></td><td>追加到已有文件而非覆盖</td></tr>
+<tr><td><code>include_performance_metrics</code></td><td>bool</td><td><code>true</code></td><td>是否输出 <code>exec_time_ms</code>/<code>row_count</code>/<code>exec_id</code> 三列；为 <code>false</code> 时跳过性能指标解析并省略这三列</td></tr>
+</tbody></table>
+</div>
+<p><strong>说明：</strong> CSV 使用 1 MiB <code>BufWriter</code> + <code>itoa</code> 零分配整数格式化。<code>overwrite</code> 与 <code>append</code> 不能同时为 <code>false</code>（否则会静默截断已有文件），验证阶段会报错。列的投影与顺序由独立的 <code>[output]</code> 段控制（见下）。</p>
+<hr />
+<h2 id="output可选"><a class="header" href="#output可选">[output]（可选）</a></h2>
+<p>字段投影：选择导出哪些列以及列的顺序，对 Parquet 和 CSV 同时生效。省略该段则输出全部 15 个字段的默认顺序。</p>
+<pre><code class="language-toml">[output]
+# 仅导出这些字段，并按此处顺序排列
+fields = ["ts", "username", "sql", "exec_time_ms"]
+</code></pre>
+<div class="table-wrapper"><table><thead><tr><th>字段</th><th>类型</th><th>默认值</th><th>描述</th></tr></thead><tbody>
+<tr><td><code>fields</code></td><td>[String]</td><td><code>null</code>（全部字段）</td><td>要导出的字段名列表，按列表顺序输出；为空或省略则输出全部 15 列</td></tr>
+</tbody></table>
+</div>
+<p><strong>可用字段名：</strong> <code>ts</code>、<code>ep</code>、<code>sess_id</code>、<code>thrd_id</code>、<code>username</code>、<code>trx_id</code>、<code>statement</code>、<code>appname</code>、<code>client_ip</code>、<code>tag</code>、<code>sql</code>、<code>exec_time_ms</code>、<code>row_count</code>、<code>exec_id</code>、<code>normalized_sql</code>。字段名在 <code>validate</code> 阶段校验，无效名称会导致校验失败。</p>
+<hr />
+<h2 id="附录配置行为说明"><a class="header" href="#附录配置行为说明">附录：配置行为说明</a></h2>
+<h3 id="导出器优先级"><a class="header" href="#导出器优先级">导出器优先级</a></h3>
+<p>每次运行只有一个导出器处于活动状态。优先级：Parquet &gt; CSV。建议一次只保留一个启用的导出器配置节。</p>
+<h3 id="处理管道快速路径"><a class="header" href="#处理管道快速路径">处理管道快速路径</a></h3>
+<p>当没有启用任何过滤器时，整个处理管道通过单个 <code>pipeline.is_empty()</code> 检查绕过。这意味着可选功能在禁用时不会增加任何运行时开销。</p>
+<h3 id="配置验证"><a class="header" href="#配置验证">配置验证</a></h3>
+<p>运行前使用 <code>sqllog2db validate -c config.toml</code> 检查配置。验证会一次性报告所有错误（而非遇错即停）。常见问题：缺少必填字段、无效路径、TOML 语法错误。</p>
+<h3 id="命令行子命令"><a class="header" href="#命令行子命令">命令行子命令</a></h3>
+<p>sqllog2db 提供四个子命令：</p>
+<p><strong><code>sqllog2db init</code></strong> — 生成默认配置文件。支持 <code>-o</code> 指定输出路径、<code>--force</code> 强制覆盖。</p>
+<p><strong><code>sqllog2db validate</code></strong> — 校验配置文件。<code>-c</code> 指定配置文件路径，通过时静默退出（exit 0），失败时输出 <code>[FAIL] &lt;字段&gt;: &lt;原因&gt;</code> 并以非零码退出。</p>
+<p><strong><code>sqllog2db run</code></strong> — 执行日志导出。<code>-c</code> 指定配置文件路径，<code>-v</code> 详细模式，<code>-q</code> 静默模式。</p>
+<p><strong><code>sqllog2db stats</code></strong> — 统计分析。流式扫描日志文件，聚合慢 SQL 和高频 SQL，并直接在终端打印结果。</p>
+<ul>
+<li><code>-c</code> 指定配置文件路径（使用 <code>[sqllog]</code> 输入配置和 <code>[stats]</code> 统计配置）</li>
+<li><code>--top N</code>（默认 20）：每类结果显示 Top N 条记录</li>
+<li>不生成 Parquet/CSV 文件；<code>[exporter]</code> 配置对该命令不生效</li>
+</ul>
+<p>示例见<a href="quickstart.html">快速入门指南</a>。</p>
+<h3 id="字段顺序"><a class="header" href="#字段顺序">字段顺序</a></h3>
+<p>各 TOML 节中的字段可以按任意顺序排列。配置使用 <code>serde</code> 反序列化，与顺序无关。可选节可以完全省略——所有字段采用默认值。</p>
+<h3 id="环境变量"><a class="header" href="#环境变量">环境变量</a></h3>
+<ul>
+<li><code>SQLLOG2DB_CONFIG</code> — 设置默认配置文件路径（可被 <code>-c</code> 标志覆盖）</li>
+<li><code>NO_COLOR</code> — 禁用彩色终端输出</li>
+<li><code>RUST_LOG</code> — 使用 <code>env_logger</code> 时覆盖日志级别</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="架构说明"><a class="header" href="#架构说明">架构说明</a></h1>
+<p>sqllog2db 将达梦数据库 SQL 日志流式导出为 Parquet 或 CSV。代码按命令入口、运行编排、记录处理、输出后端划分；统计分析拥有独立的领域模块。</p>
+<h2 id="项目目录"><a class="header" href="#项目目录">项目目录</a></h2>
+<pre><code class="language-text">src/          生产代码：CLI、配置、引擎、处理管道、导出、统计
+tests/        所有测试：unit/、python/ 与根目录集成测试
+benches/      性能基准与历史基线
+docs/         使用说明、架构、验证记录和 mdBook 站点配置
+scripts/      内存检查、基准结果收集脚本
+.github/      CI、发布与文档站工作流
+target/       本地构建产物与文档站输出（忽略提交）
+</code></pre>
+<p>导出器公共接口和统计位于 <code>exporter/mod.rs</code>，后端选择与管理位于 <code>exporter/manager.rs</code>；CSV 生命周期与字段序列化分为两个文件，Parquet 使用单文件实现。引擎驱动直接放在 <code>engine/</code>；字段投影定义集中在 <code>pipeline/output.rs</code>。</p>
+<h2 id="从哪里开始阅读"><a class="header" href="#从哪里开始阅读">从哪里开始阅读</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>要了解的行为</th><th>入口</th><th>职责</th></tr></thead><tbody>
+<tr><td>命令如何执行</td><td><code>src/main.rs</code> → <code>src/cli/mod.rs</code></td><td>启动运行时、分派命令、决定退出码</td></tr>
+<tr><td>配置如何生效</td><td><code>src/cli/runtime.rs</code>、<code>src/config/</code></td><td>加载配置、应用 CLI 覆盖、校验、初始化日志</td></tr>
+<tr><td>配置如何生成</td><td><code>src/cli/init.rs</code></td><td>集中完成文件写入、交互问答、TOML 渲染</td></tr>
+<tr><td>一次导出如何运行</td><td><code>src/engine/mod.rs</code></td><td>输入解析 → 事务预扫描 → 执行 → 汇总</td></tr>
+<tr><td>驱动共享什么</td><td><code>src/engine/context.rs</code></td><td>配置、Pipeline、字段投影、参数替换选项和结果类型</td></tr>
+<tr><td>单条记录如何处理</td><td><code>src/engine/record.rs</code></td><td>过滤、参数缓存维护、参数回填、导出和错误计数</td></tr>
+<tr><td>参数如何替换</td><td><code>src/pipeline/normalizer.rs</code></td><td>PARAMS 解析、占位符替换、session/statement 关联</td></tr>
+<tr><td>输出如何写入</td><td><code>src/exporter/</code></td><td>导出器选择、字段投影、后端生命周期与写入</td></tr>
+<tr><td>如何统计 SQL</td><td><code>src/stats/runner.rs</code></td><td>流式扫描、慢 SQL/高频 SQL 聚合与展示</td></tr>
+<tr><td>错误如何表达</td><td><code>src/error.rs</code></td><td>结构化错误、严重程度、建议和有界错误统计</td></tr>
+</tbody></table>
+</div>
+<h2 id="数据流与职责边界"><a class="header" href="#数据流与职责边界">数据流与职责边界</a></h2>
+<pre><code class="language-text">main → cli::run
+         ├─ init     → cli/init.rs → 配置文件
+         ├─ validate → config → cli/validate
+         ├─ stats    → stats/runner → scanner → 聚合结果
+         └─ run      → engine::run
+                         ├─ prepare：发现文件、事务预扫描、并发预算
+                         ├─ context：构建共享运行配置
+                         ├─ driver → record → pipeline → exporter
+                         └─ report：汇总结果、写错误日志
+</code></pre>
+<ul>
+<li><code>main.rs</code> 只调用 CLI 并应用退出码。命令分派和终端错误格式放在 <code>cli/</code>，业务模块无需依赖 CLI。</li>
+<li><code>engine/mod.rs</code> 管理一次导出的生命周期；驱动依赖 <code>context.rs</code> 中的共享类型，不反向依赖编排实现。</li>
+<li><code>parser.rs</code> 负责输入文件发现与排序；<code>streaming.rs</code> 封装外部解析器的流式读取；<code>scanner.rs</code> 提供预扫描和统计使用的扫描接口。</li>
+<li><code>config/</code> 聚合配置并负责校验，过滤、归一化、字段投影与统计选项由对应功能模块定义。</li>
+<li><code>error.rs</code> 集中定义结构化错误、严重程度和有界错误统计。</li>
+</ul>
+<h2 id="执行路径"><a class="header" href="#执行路径">执行路径</a></h2>
+<p>CSV 和 Parquet 统一由 <code>engine/sequential.rs</code> 按输入顺序逐文件导出，直接写入配置的单个输出文件。普通文件由一个解析线程预读，单个写入器按顺序消费；队列最多两个批次，每批最多 512 条，按约 1 MiB 的记录容量提前发送。超长单条记录可能超过此目标；stdin 等特殊输入保持同步读取。两种格式共用文件进度、记录速率和错误统计；除 <code>--quiet</code> 外均启用进度展示，非终端输出由 indicatif 自动隐藏。</p>
+<p>输入切块、输出按行拆分和 CSV 专用并发路径已移除。旧 <code>max_rows_per_file</code> 配置会报错，需删除该字段。</p>
+<h2 id="记录处理与参数替换"><a class="header" href="#记录处理与参数替换">记录处理与参数替换</a></h2>
+<p><code>Pipeline</code> 通过 <code>LogProcessor</code> 链执行过滤；空管道使用快速路径。事务级过滤由 <code>engine/prepare.rs</code> 预扫描命中的事务 ID，再将结果交给主处理阶段。</p>
+<p>参数替换拆为三个职责：</p>
+<p><code>normalizer.rs</code> 集中解析 PARAMS、处理占位符并维护 session/statement 参数关联，按配置的标签决定是否回填。</p>
+<p>PARAMS 记录即使被过滤，仍可能需要更新参数缓存。回填结果写入调用方复用的 scratch 缓冲。公开的 <code>pipeline::normalizer::{ParamBuffer, ParamValue, parse_params, count_placeholders, compute_normalized}</code> 路径保持不变。</p>
+<h2 id="导出与内存"><a class="header" href="#导出与内存">导出与内存</a></h2>
+<p><code>ExporterConfig::active()</code> 统一选择活跃后端，供预检查、导出创建共用；<code>ExporterManager</code> 直接用枚举持有并调用后端；导出器通过 <code>initialize()</code>、记录写入方法和 <code>finalize()</code> 管理生命周期。后端实现位于 <code>exporter/parquet.rs</code>、<code>exporter/csv.rs</code>。</p>
+<p>解析过程逐条读取，不整文件加载。CSV 使用单个 1 MiB 写缓冲，Parquet 直接通过 Arrow StringBuilder 构建字符串列，并按行数与字节数限制 row group 缓冲。但事务 ID 集合、参数关联缓存和统计聚合仍随不同事务、statement 或 SQL 的数量增长，因此不能将所有配置下的总内存描述为绝对恒定。内存验证方法见 <a href="export-memory-check.html">导出内存检查</a>。</p>
+<h2 id="错误与退出码"><a class="header" href="#错误与退出码">错误与退出码</a></h2>
+<p>可恢复的解析错误被记录并跳过，运行继续；致命配置、I/O 或导出错误终止处理。<code>cli/runtime.rs</code> 统一输出严重程度和修复建议，<code>engine/report.rs</code> 输出运行统计及配置的错误日志。</p>
+<div class="table-wrapper"><table><thead><tr><th>退出码</th><th>含义</th></tr></thead><tbody>
+<tr><td>0</td><td>成功</td></tr>
+<tr><td>1</td><td>处理完成，但有非致命错误</td></tr>
+<tr><td>2</td><td>致命错误或校验失败</td></tr>
+<tr><td>130</td><td>用户中断</td></tr>
+</tbody></table>
+</div>
+<h2 id="修改与验证"><a class="header" href="#修改与验证">修改与验证</a></h2>
+<p>新增输出后端从 <code>exporter/</code> 开始；修改执行策略从 <code>engine/sequential.rs</code> 开始；增加参数语法从 <code>pipeline/normalizer.rs</code> 开始。新增命令应让 CLI 负责参数与展示，让对应领域模块负责处理流程。</p>
+<p>所有测试实现统一放在根目录 <code>tests/</code>：<code>tests/unit/</code> 按 <code>src/</code> 模块层次组织 Rust 单元测试，根目录的 <code>.rs</code> 文件是 Cargo 集成测试，<code>tests/python/</code> 是检查脚本的测试。生产模块仅通过 <code>#[cfg(test)]</code> 与 <code>#[path]</code> 引用单元测试文件，保留对私有实现的测试能力。测试辅助函数也放在测试目录；性能基准仍在 <code>benches/</code>。本地检查：</p>
+<pre><code class="language-bash">cargo fmt --all -- --check
+cargo test --locked
+python3 -B -m unittest discover -s tests/python -p 'test_*.py' -v
+cargo clippy --locked --all-targets -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc --locked --no-deps
+</code></pre>
+<p>文档站直接通过 <code>docs/book.toml</code> 构建本目录内容：<code>mdbook build docs</code>，输出到 <code>target/book/</code>。无需单独维护站点包装目录。</p>
+<p>非 Windows CLI 使用 jemalloc 管理短生命周期分配；Windows 保持系统分配器。分配统计仅由测试启用。</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="贡献指南"><a class="header" href="#贡献指南">贡献指南</a></h1>
+<p>欢迎为 sqllog2db 做出贡献！本指南将帮助你搭建开发环境、了解编码规约、掌握 Pull Request（拉取请求）流程和 commit（提交）规范。</p>
+<h2 id="开发环境搭建"><a class="header" href="#开发环境搭建">开发环境搭建</a></h2>
+<h3 id="前置要求"><a class="header" href="#前置要求">前置要求</a></h3>
+<ul>
+<li><strong>Rust 工具链</strong>：通过 <a href="https://rustup.rs/">rustup</a> 安装。项目最低支持 Rust 版本（MSRV）为 1.95+。</li>
+</ul>
+<pre><code class="language-bash">curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+</code></pre>
+<ul>
+<li><strong>Git</strong>：用于克隆仓库和版本控制。</li>
+</ul>
+<h3 id="克隆仓库"><a class="header" href="#克隆仓库">克隆仓库</a></h3>
+<pre><code class="language-bash">git clone https://github.com/guangl/sqllog2db
+cd sqllog2db
+</code></pre>
+<h3 id="构建与运行"><a class="header" href="#构建与运行">构建与运行</a></h3>
+<pre><code class="language-bash"># 构建（Release 模式）
+cargo build --release
+
+# 运行测试
+cargo test
+
+# 生成默认配置文件
+cargo run -- init -o config.toml --force
+
+# 验证配置
+cargo run -- validate -c config.toml
+
+# 运行导出
+cargo run -- run -c config.toml
+</code></pre>
+<h3 id="辅助工具"><a class="header" href="#辅助工具">辅助工具</a></h3>
+<ul>
+<li><strong>lychee</strong>：用于检查文档中的死链（CI 中使用）。安装：<code>cargo install lychee</code></li>
+<li><strong>rsvg-convert</strong>：用于 SVG 渲染验证（macOS: <code>brew install librsvg</code>，Linux: <code>apt install librsvg2-bin</code>）</li>
+</ul>
+<h2 id="编码规约"><a class="header" href="#编码规约">编码规约</a></h2>
+<h3 id="命名规范"><a class="header" href="#命名规范">命名规范</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>元素</th><th>命名风格</th><th>示例</th></tr></thead><tbody>
+<tr><td>文件名</td><td><code>snake_case</code></td><td><code>replace_parameters.rs</code>、<code>sql_fingerprint.rs</code></td></tr>
+<tr><td>结构体（Struct）</td><td><code>PascalCase</code></td><td><code>SqllogParser</code>、<code>FieldMask</code></td></tr>
+<tr><td>枚举（Enum）</td><td><code>PascalCase</code></td><td><code>ExporterKind</code>、<code>ConfigError</code></td></tr>
+<tr><td>Trait</td><td><code>PascalCase</code>（按能力命名）</td><td><code>Exporter</code>、<code>LogProcessor</code></td></tr>
+<tr><td>函数/方法</td><td><code>snake_case</code></td><td><code>handle_run</code>、<code>from_config</code></td></tr>
+<tr><td>常量</td><td><code>UPPER_SNAKE_CASE</code></td><td><code>FIELD_NAMES</code>、<code>LOG_LEVELS</code></td></tr>
+<tr><td>变量</td><td>描述性 <code>snake_case</code></td><td><code>overwrite</code>、<code>interrupted</code></td></tr>
+</tbody></table>
+</div>
+<h3 id="代码风格"><a class="header" href="#代码风格">代码风格</a></h3>
+<ul>
+<li><strong>格式化</strong>：使用 <code>cargo fmt</code>（rustfmt 默认配置），CI 中强制检查。</li>
+<li><strong>Lint</strong>：必须通过 <code>cargo clippy --all-targets -- -D warnings</code>，零警告。</li>
+<li><strong>Import 顺序</strong>：<code>std</code> → 外部 crate → 内部模块（<code>crate::</code>、<code>super::</code>）。</li>
+<li><strong>函数长度</strong>：每个函数不超过 40 行。超过时拆分为更小的函数。</li>
+<li><strong>尾逗号</strong>：多行 struct/enum 字面量使用尾逗号。</li>
+</ul>
+<h3 id="常用属性"><a class="header" href="#常用属性">常用属性</a></h3>
+<ul>
+<li><code>#[inline]</code> — 用于热路径方法：<code>write_record_preparsed</code>、<code>export_one_preparsed</code></li>
+<li><code>#[must_use]</code> — 用于返回有意义值的纯函数：<code>new()</code>、<code>from_config()</code></li>
+<li><code>#[derive(Debug)]</code> — 所有公共类型必须实现</li>
+<li><code>#[expect(clippy::lint_name, reason = "...")]</code> — 用于对特定 lint 做有理由的例外（优先于 <code>#[allow]</code>）</li>
+</ul>
+<h3 id="错误处理"><a class="header" href="#错误处理">错误处理</a></h3>
+<ul>
+<li>使用 <code>thiserror</code> 派生宏定义类型化错误，错误变体包含路径和原因的上下文信息。</li>
+<li>项目使用 <code>pub type Result&lt;T&gt; = std::result::Result&lt;T, Error&gt;</code> 统一错误类型。</li>
+<li>解析错误是<strong>非致命的</strong>：写入错误日志文件后继续处理下一条记录。</li>
+<li>使用 <code>?</code> 操作符在函数间传播错误。</li>
+</ul>
+<h3 id="注释"><a class="header" href="#注释">注释</a></h3>
+<ul>
+<li>中文注释：用于达梦数据库相关的领域概念和性能优化说明。</li>
+<li>英文文档注释（<code>///</code>）：用于公共 API（struct、trait、方法）。</li>
+<li>性能相关的设计决策使用行内注释说明。</li>
+</ul>
+<h2 id="pr-流程"><a class="header" href="#pr-流程">PR 流程</a></h2>
+<ol>
+<li><strong>Fork</strong> 本仓库，从 <code>main</code> 分支创建功能分支。</li>
+<li>在你的分支上进行修改。</li>
+<li>提交前确保通过以下所有检查：</li>
+</ol>
+<pre><code class="language-bash">cargo clippy --all-targets -- -D warnings
+cargo fmt --check
+cargo test
+cargo build --release
+cargo package --locked
+</code></pre>
+<ol start="4">
+<li>如果是新功能或 bug 修复，建议在 <code>tests/</code> 目录或模块内联测试块中增加对应的测试用例。</li>
+<li>推送分支并发起 Pull Request。</li>
+<li>在 PR 描述中说明修改内容、动机和测试情况。</li>
+<li>CI 将自动运行 clippy、fmt、跨平台测试、覆盖率、MSRV、发布包可构建性、依赖风险和文档死链检查，全部通过后方可合并。</li>
+<li>维护者审核后合并。</li>
+</ol>
+<h2 id="commit-规范"><a class="header" href="#commit-规范">Commit 规范</a></h2>
+<p>本项目使用 Conventional Commits（约定式提交）格式。CHANGELOG.md 遵循 Keep a Changelog 格式自动生成。</p>
+<h3 id="提交消息格式"><a class="header" href="#提交消息格式">提交消息格式</a></h3>
+<pre><code>&lt;type&gt;(&lt;scope&gt;): &lt;简短描述&gt;
+
+&lt;详细说明（可选）&gt;
+</code></pre>
+<h3 id="type类型"><a class="header" href="#type类型">Type（类型）</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>类型</th><th>用途</th></tr></thead><tbody>
+<tr><td><code>feat</code></td><td>新功能</td></tr>
+<tr><td><code>fix</code></td><td>Bug 修复</td></tr>
+<tr><td><code>docs</code></td><td>文档变更</td></tr>
+<tr><td><code>refactor</code></td><td>重构（无功能变更）</td></tr>
+<tr><td><code>test</code></td><td>测试增补</td></tr>
+<tr><td><code>chore</code></td><td>构建/工具/CI 维护</td></tr>
+<tr><td><code>perf</code></td><td>性能优化</td></tr>
+</tbody></table>
+</div>
+<h3 id="scope范围"><a class="header" href="#scope范围">Scope（范围）</a></h3>
+<p>使用受影响的模块或文件作为范围：<code>filters</code>、<code>exporter</code>、<code>config</code>、<code>cli</code>、<code>charts</code>、<code>pipeline</code>、<code>README</code> 等。</p>
+<h3 id="示例"><a class="header" href="#示例">示例</a></h3>
+<pre><code>feat(filters): add regex include for user field
+fix(exporter): handle empty CSV output directory
+docs(README): update installation instructions
+refactor(config): extract validate_and_compile from from_config
+test(charts): add edge case tests for empty histogram
+chore(ci): add lychee link checker to CI pipeline
+</code></pre>
+<h3 id="其他约定"><a class="header" href="#其他约定">其他约定</a></h3>
+<ul>
+<li>提交消息使用英文撰写。</li>
+<li>第一行（标题）不超过 72 个字符。</li>
+<li>标题以动词原形开头（"add" 而非 "added"）。</li>
+<li>关联 issue 时在正文中使用 <code>Closes #123</code> 或 <code>Refs #456</code>。</li>
+</ul>
+<hr />
+<p><em>本指南在 Phase 25 中编写，如有改进建议请通过 PR 提交。</em></p>
+<h2 id="发版门禁"><a class="header" href="#发版门禁">发版门禁</a></h2>
+<p>发版必须满足<a href="release-standard.html">发版门禁标准</a>：除现有测试、代码质量与覆盖率要求外，CSV 在 1、4、16×256 MiB 输入下峰值 RSS 不得超过 128 MiB，多文件相对单文件增长不得超过 32 MiB，并验证完整导出内容。PR 与 main 自动检查；标签发布检测实际发布二进制，失败会阻止创建 Release。阈值和样本规模的变更必须通过评审。</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="发版门禁标准"><a class="header" href="#发版门禁标准">发版门禁标准</a></h1>
+<p>本标准适用于从 <code>v*</code> 标签创建的正式 Release。任何门禁失败、取消或未完成，都不得创建 GitHub Release。标准由仓库工作流执行，不能以人工观察内存或 informational benchmark 代替。</p>
+<h2 id="必须通过的检查"><a class="header" href="#必须通过的检查">必须通过的检查</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>门禁</th><th>验收条件</th></tr></thead><tbody>
+<tr><td>功能测试</td><td>Linux、Windows、macOS 的 <code>cargo test --locked</code> 全部通过；已有明确标注 ignored 的测试仍按现状处理</td></tr>
+<tr><td>代码质量</td><td>rustfmt、Clippy 零警告、文档零警告、benchmark 编译全部通过</td></tr>
+<tr><td>覆盖率</td><td>行覆盖率 ≥ 70%，沿用现有 CI 标准</td></tr>
+<tr><td>导出内存</td><td>CSV 测 1、4、16 份日志，每份约 256 MiB；每个场景独立启动进程</td></tr>
+<tr><td>峰值上限</td><td>每个导出进程峰值 RSS ≤ 128 MiB；不是虚拟内存，也不是退出后的内存差值</td></tr>
+<tr><td>增长上限</td><td>同格式 4、16 文件场景分别相对 1 文件场景，峰值 RSS 增量 ≤ 32 MiB</td></tr>
+<tr><td>数据完整性</td><td>记录数精确一致；CSV 全文件 SHA-256 与独立构造的预期文件一致</td></tr>
+<tr><td>执行可靠性</td><td>每次导出最多 600 秒；非零退出、超时、缺失/无效 RSS、检查异常均失败，不得跳过后放行</td></tr>
+<tr><td>可追溯性</td><td>JSON 报告包含二进制 SHA-256、CI 提交 SHA、平台、阈值、每场景数据和最终结论</td></tr>
+</tbody></table>
+</div>
+<p>内存数据固定为合成 SELECT 日志，参数替换关闭、无事务级过滤，最大输入约 4 GiB、19,701,680 条记录。内存阈值仅约束该标准场景，不代表所有异常超长 SQL、参数缓存或事务过滤场景都有相同内存上限。功能语义、异构数据、追加和字段投影另由 Rust 测试覆盖。</p>
+<p>Windows 必须通过功能测试与发布构建；当前 RSS 门禁仅支持 Linux/macOS，不宣称验证了 Windows 的内存。发布仍需三个受测平台全部通过。</p>
+<h2 id="自动执行与发布阻断"><a class="header" href="#自动执行与发布阻断">自动执行与发布阻断</a></h2>
+<ul>
+<li>PR 和 main 推送：CI 调用 <code>export-memory.yaml</code>，在 Linux x86_64、Linux aarch64、macOS aarch64 构建 release 程序并执行相同门禁。</li>
+<li><code>v*</code> 标签：<code>release.yaml</code> 的 <code>verification</code> 调用完整 CI；<code>export-memory</code> 等待发布产物构建完成，在对应原生平台下载并检测<strong>将要发布的实际二进制</strong>。标签 CI 不重复执行源代码构建版内存门禁。</li>
+<li><code>publish-crate.needs</code> 同时依赖 <code>verification</code>、<code>export-memory</code> 和全部构建任务。标签必须与 <code>Cargo.toml</code> 版本一致，且仓库需配置具有该 crate 发布权限的 <code>CARGO_REGISTRY_TOKEN</code> secret。门禁通过后执行 <code>cargo publish --locked</code>；发布失败会阻止 <code>create-release</code> 创建 GitHub Release。</li>
+<li><code>create-release</code> 等待 <code>publish-crate</code> 成功。没有 <code>continue-on-error</code>，发布步骤没有 <code>always()</code> 绕过失败。</li>
+<li>检测报告以 Actions artifact 保留 90 天；成功发版时三个平台的 JSON 报告同时作为 Release 附件，文件名为 <code>export-memory-&lt;platform&gt;.json</code>。</li>
+<li>普通 Criterion benchmark 仍是参考数据，不作为内存门禁的替代。600 秒是卡死保护，不是吞吐性能目标。</li>
+</ul>
+<p>仓库里的工作流修改提交并推送后生效；本文不意味着远端分支保护设置已经修改。即使没有配置 PR 必需状态检查，标签发布流程自身仍会等待这些门禁。</p>
+<h2 id="本地复现"><a class="header" href="#本地复现">本地复现</a></h2>
+<p>需要 Rust、Python 3.9+，以及 macOS 的 <code>/usr/bin/time</code> 或 Linux 的 GNU time。建议预留至少 10 GiB 临时磁盘空间。</p>
+<pre><code class="language-sh">cargo fmt --all -- --check
+cargo test --locked
+cargo clippy --locked --all-targets -- -D warnings
+RUSTDOCFLAGS='-D warnings' cargo doc --locked --no-deps
+cargo bench --locked --no-run
+cargo llvm-cov --locked --fail-under-lines 70
+cargo build --release --locked
+python3 -B -m unittest discover -s tests/python -p 'test_*.py' -v
+python3 scripts/check_export_memory.py target/release/sqllog2db \
+  --file-mib 256 --files 16 --max-rss-mib 128 --max-growth-mib 32 \
+  --timeout-seconds 600 --report export-memory-report.json
+</code></pre>
+<p>退出码 0 才是通过。自定义较小输入适合调试，不能代替标准命令；调整阈值或样本规模必须通过正常代码评审并提供各受测平台的新证据，不能为了让失败版本发版而临时跳过。</p>
+<h2 id="历史本地验收2026-09-10"><a class="header" href="#历史本地验收2026-09-10">历史本地验收（2026-09-10）</a></h2>
+<p>以下为移除 SQLite 前的历史证据，不代表当前版本的验收结果；当前脚本仅检查 CSV。</p>
+<p>本机 Rust 功能测试 542 项通过（另有 3 项既有 ignored）；rustfmt、Clippy、文档检查及 benchmark 编译全部通过。行覆盖率为 89.71%，高于 70% 门槛。</p>
+<p>macOS 修复版执行上述完整内存矩阵，6/6 场景通过：</p>
+<div class="table-wrapper"><table><thead><tr><th>格式</th><th style="text-align: right">1 文件峰值 MiB</th><th style="text-align: right">4 文件峰值 MiB</th><th style="text-align: right">16 文件峰值 MiB</th></tr></thead><tbody>
+<tr><td>CSV</td><td style="text-align: right">18.8</td><td style="text-align: right">9.7</td><td style="text-align: right">9.6</td></tr>
+<tr><td>SQLite</td><td style="text-align: right">29.1</td><td style="text-align: right">29.4</td><td style="text-align: right">29.3</td></tr>
+</tbody></table>
+</div>
+<p>SQLite 多文件增长不足 1 MiB；所有场景数据完整性通过。门禁自身的 9 项失败路径测试通过，覆盖峰值/增长超限、记录数/内容错误、无效/缺失 RSS、非零退出、超时和异常报告。</p>
+<p>修复前程序使用 1、4 份同规模日志做负向验证：SQLite 4 文件峰值约 876 MiB，同时超过峰值和增长上限；脚本退出码为 1，确认门禁能拦截此次回归。该负向测试只需复现失败，不作为修复版 16 文件验收的替代。</p>
+<p>原始证据：<a href="test-results/export-memory-macos.json">修复版通过报告</a>、<a href="test-results/export-memory-before-rejected.json">旧版被拒报告</a>。本地尚未执行远端 Linux/Windows runner；跨平台结果以推送后对应 GitHub Actions 为准。</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="导出内存检查"><a class="header" href="#导出内存检查">导出内存检查</a></h1>
+<p>当前脚本仅检查 CSV。下方 2026-09-10 的修复数据保留为历史记录，包含现已移除的 SQLite 后端。</p>
+<h2 id="问题与修复"><a class="header" href="#问题与修复">问题与修复</a></h2>
+<ul>
+<li>SQLite 原配置 <code>cache_size=1000000</code> 使用页数，配合 65536 字节页，缓存预算约 61 GiB；另外允许 30 GB 文件映射，临时数据全部驻留内存。改为 16 MiB 页缓存预算、关闭 mmap、临时数据允许落盘。必须先设置页大小，再设置缓存预算。</li>
+<li>CSV 每个任务原有 16 MiB 写缓冲，单文件自动切块时也会按任务数放大。改为每任务 1 MiB，切块路径补上与多文件路径相同的并发预算检查。</li>
+<li>SQLite INSERT 语句按实际批次大小生成；字段投影只复制选中字段一次，减少无用字符串分配。</li>
+</ul>
+<h2 id="测量方法"><a class="header" href="#测量方法">测量方法</a></h2>
+<p>macOS，本地 release 构建，每个文件 268,435,390 字节（约 256 MiB），1,231,355 条合成 SELECT 记录。参数替换关闭，无事务级过滤。使用系统 <code>/usr/bin/time -l</code> 的 maximum resident set size，包含进程实际驻留内存。每种场景启动独立进程。</p>
+<div class="table-wrapper"><table><thead><tr><th>导出格式</th><th style="text-align: right">文件数</th><th style="text-align: right">修复前峰值 MiB</th><th style="text-align: right">修复后峰值 MiB</th><th style="text-align: right">导出记录数</th></tr></thead><tbody>
+<tr><td>csv</td><td style="text-align: right">1</td><td style="text-align: right">171.3</td><td style="text-align: right">18.8</td><td style="text-align: right">1,231,355</td></tr>
+<tr><td>csv</td><td style="text-align: right">4</td><td style="text-align: right">41.8</td><td style="text-align: right">9.6</td><td style="text-align: right">4,925,420</td></tr>
+<tr><td>sqlite</td><td style="text-align: right">1</td><td style="text-align: right">225.2</td><td style="text-align: right">29.0</td><td style="text-align: right">1,231,355</td></tr>
+<tr><td>sqlite</td><td style="text-align: right">4</td><td style="text-align: right">875.8</td><td style="text-align: right">29.3</td><td style="text-align: right">4,925,420</td></tr>
+</tbody></table>
+</div>
+<p>CSV 修复前后 SHA-256 完全一致；SQLite 行数一致，现有测试覆盖字段值、投影、追加、尾批次与 WAL 路径。合成 CSV 测试未复现 64 GB 持续增长，不能据此断言用户真实 CSV 场景的根因已经定位。</p>
+<h2 id="回归检查"><a class="header" href="#回归检查">回归检查</a></h2>
+<pre><code class="language-sh">cargo build --release
+python3 scripts/check_export_memory.py target/release/sqllog2db
+</code></pre>
+<p>脚本支持 macOS 和 Linux，需要 <code>/usr/bin/time</code>（Linux 为 GNU time），默认生成 16×256 MiB 临时日志，依次检查 1、4、16 文件的 CSV 导出。每次导出峰值不超过 128 MiB、多文件增长不超过 32 MiB，并核对记录数与完整字段内容。临时输入和输出在完成后自动删除。128 MiB 是本合成场景的回归阈值，可通过 <code>--max-rss-mib</code> 调整，不是所有真实日志的进程内存保证。</p>
+<p><code>cargo test</code> 与 <code>cargo clippy --all-targets -- -D warnings</code> 已通过。缓存设置调整顺序后另外重跑 SQLite 测试和实际内存测量。</p>
+<h2 id="适用范围"><a class="header" href="#适用范围">适用范围</a></h2>
+<ul>
+<li>16 MiB 仅为 SQLite 页缓存预算，进程还包含解析、SQL 记录、线程等开销。</li>
+<li>超长/异常日志记录、参数替换缓存、事务级过滤 ID 集合仍可能增加内存；本次测试不覆盖这些场景。</li>
+<li>合成数据规模为约 1 GiB，没有实际分配 64 GB；结论依据旧缓存配置及小规模内存增长趋势。</li>
+<li>本次构建中 Cargo 自动纠正了锁文件中 thiserror-impl 2.0.19 的 syn 依赖边（该已锁定版本要求 syn 3），没有更新依赖版本。</li>
+</ul>
+<h2 id="发版标准"><a class="header" href="#发版标准">发版标准</a></h2>
+<p>本报告中的初次 4 文件对比已扩展为 1、4、16 文件的强制门禁，并接入 PR、main 和标签发布。当前标准、命令与验收证据以<a href="release-standard.html">发版门禁标准</a>为准。</p>
+<p>当前导出路径：CSV 和 Parquet 均顺序流式写出；CSV 使用单个 1 MiB 缓冲，不再按输入文件数启动并发写出任务。输入切块和输出分片已删除。下述历史测量不代表本次修改后的重新测量。</p>
+<h3 id="顺序导出复测2026-09-13"><a class="header" href="#顺序导出复测2026-09-13">顺序导出复测（2026-09-13）</a></h3>
+<p>本地 debug 构建，关闭参数替换和事务过滤，每个输入文件约 8 MiB。CSV 的 1、4、8 文件场景峰值 RSS 分别为 12,369,920、12,419,072、12,468,224 字节，较单文件最大增长 98,304 字节；记录数及 SHA-256 校验均通过。这是小规模验证，未重跑 release 4 GiB 门禁；不代表超长记录或关联缓存具有进程级硬内存限制。</p>
+<h3 id="真实日志优化复测2026-09-14"><a class="header" href="#真实日志优化复测2026-09-14">真实日志优化复测（2026-09-14）</a></h3>
+<p>输入为 sqllogs/ 全部 101 个日志，共 25.32 GiB；两个版本均为 release 构建，无过滤、无参数回填，默认压缩及 row group 设置不变。每个导出器均写入单个输出文件。</p>
+<div class="table-wrapper"><table><thead><tr><th>格式</th><th style="text-align: right">优化前</th><th style="text-align: right">优化后</th><th style="text-align: right">耗时下降</th><th style="text-align: right">原峰值 RSS</th><th style="text-align: right">新峰值 RSS</th></tr></thead><tbody>
+<tr><td>CSV</td><td style="text-align: right">57.25 秒</td><td style="text-align: right">50.71 秒</td><td style="text-align: right">11.4%</td><td style="text-align: right">10.2 MiB</td><td style="text-align: right">18.2 MiB</td></tr>
+<tr><td>PARQUET</td><td style="text-align: right">103.53 秒</td><td style="text-align: right">73.64 秒</td><td style="text-align: right">28.9%</td><td style="text-align: right">563.6 MiB</td><td style="text-align: right">93.9 MiB</td></tr>
+</tbody></table>
+</div>
+<p>两者均正常退出，成功导出 115,306,013 条记录，无解析或导出错误。CSV 和 Parquet 全部输出均与旧版逐字节相同。</p>
+<p>改动：Parquet StringBuilder 直接构建列；CSV 借用路径；非 Windows CLI 使用 jemalloc；普通文件解析与写出通过最多两个批次的队列重叠，每批最多 512 条、约 1 MiB 容量目标，保持记录顺序。stdin 保持同步读取。</p>
+<p>内存数据是本机真实输入的峰值测量，并非所有输入的进程内存硬上限；超长单记录、参数缓存与事务过滤仍可增加内存。Windows 使用系统分配器，本次 macOS 的性能结果不应直接外推。</p>
+<p>测量使用 macOS /usr/bin/time -l；测试按顺序执行，没有同时进行输出回读。419 个自动测试通过，2 个按设计忽略；新增测试覆盖预读的顺序、错误透传与提前退出；Clippy 严格检查及文档构建通过。</p>
+<p>复测原始数据：full/comparison.json（旧版基线），pipelined/measurements.json（最终版本），full-validation.json（逐字节校验）。</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="安全策略"><a class="header" href="#安全策略">安全策略</a></h1>
+<p>sqllog2db 是一个达梦数据库 SQL 日志解析命令行工具。我们重视用户和社区的安全，对安全漏洞采取严肃态度。本页面说明如何报告漏洞以及我们的处理流程。</p>
+<h2 id="支持版本"><a class="header" href="#支持版本">支持版本</a></h2>
+<p>我们仅支持<strong>最新稳定版本</strong>。旧版本可能存在已知漏洞，建议尽快升级到最新版。</p>
+<p>你可以在 <a href="https://crates.io/crates/dm-database-sqllog2db">crates.io</a> 或 <a href="https://github.com/guangl/sqllog2db/releases">GitHub Releases</a> 查看当前最新版本。</p>
+<h2 id="报告漏洞"><a class="header" href="#报告漏洞">报告漏洞</a></h2>
+<p>如果你发现了安全漏洞，请通过以下任一方式<strong>私密</strong>报告，切勿在公开 issue 中披露。</p>
+<h3 id="首选方式github-security-advisory"><a class="header" href="#首选方式github-security-advisory">首选方式：GitHub Security Advisory</a></h3>
+<p>通过 GitHub Security Advisory 提交漏洞报告是最推荐的方式：</p>
+<ol>
+<li>访问 <a href="https://github.com/guangl/sqllog2db/security/advisories">安全公告页</a></li>
+<li>点击 "Report a vulnerability"</li>
+<li>填写漏洞详情并提交</li>
+</ol>
+<p>使用 Advisory 的好处：</p>
+<ul>
+<li><strong>私密提交</strong>：仅维护者可见，修复公开前不会泄露</li>
+<li><strong>CVE 分配</strong>：GitHub 可自动为符合条件的漏洞分配 CVE 编号</li>
+<li><strong>自动通知</strong>：维护者会立即收到通知</li>
+</ul>
+<p><strong>建议提供的信息：</strong></p>
+<ul>
+<li>漏洞简要描述</li>
+<li>影响版本</li>
+<li>复现步骤（包含具体的命令和环境）</li>
+<li>预期行为与实际行为的差异</li>
+<li>建议的修复方案（如有）</li>
+</ul>
+<h3 id="备选方式邮箱报告"><a class="header" href="#备选方式邮箱报告">备选方式：邮箱报告</a></h3>
+<p>如无法使用 GitHub Advisory，可通过以下邮箱报告：</p>
+<p><strong>安全邮箱：</strong> <code>guangluo@outlook.com</code></p>
+<p>建议使用 GPG 加密通信。如果你有 GPG 公钥需求，请先在 issue 中请求。</p>
+<h2 id="响应承诺"><a class="header" href="#响应承诺">响应承诺</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>阶段</th><th>时间承诺</th></tr></thead><tbody>
+<tr><td>确认收到</td><td>48 小时内</td></tr>
+<tr><td>初步评估</td><td>5 个工作日内</td></tr>
+<tr><td>修复发布</td><td>根据严重程度确定</td></tr>
+</tbody></table>
+</div>
+<h2 id="严重程度分级"><a class="header" href="#严重程度分级">严重程度分级</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>级别</th><th>说明</th><th>修复目标</th></tr></thead><tbody>
+<tr><td><strong>严重（Critical）</strong></td><td>远程代码执行、任意文件读取/写入</td><td>72 小时内发布补丁</td></tr>
+<tr><td><strong>高（High）</strong></td><td>信息泄露、权限提升</td><td>7 天内发布补丁</td></tr>
+<tr><td><strong>中（Medium）</strong></td><td>特定条件下的功能绕过</td><td>下一版本修复</td></tr>
+<tr><td><strong>低（Low）</strong></td><td>非敏感信息暴露、配置问题</td><td>适时修复</td></tr>
+</tbody></table>
+</div>
+<h2 id="安全更新流程"><a class="header" href="#安全更新流程">安全更新流程</a></h2>
+<ol>
+<li>漏洞被私密报告并验证</li>
+<li>维护者开发修复补丁</li>
+<li>发布包含安全修复的新版本（补丁版本号递增）</li>
+<li>在 CHANGELOG.md 中标注安全修复（<code>### Security</code> 小节）</li>
+<li>在 GitHub Advisory 上公开披露</li>
+<li>修复前的漏洞细节在 CVE 分配和补丁发布之前不会公开</li>
+</ol>
+<h2 id="工具依赖安全"><a class="header" href="#工具依赖安全">工具依赖安全</a></h2>
+<p>sqllog2db 依赖 Rust 生态中的外部 crate。我们通过以下方式管理依赖安全：</p>
+<ul>
+<li>CI 流水线会检测 Rust 安全公告（<a href="https://rustsec.org/">RustSec</a>）</li>
+<li>建议用户保持工具更新到最新版本</li>
+<li>如发现依赖 crate 中的漏洞，在工具层面会尽快修复或缓解</li>
+</ul>
+<hr />
+<p><em>如有其他安全问题或疑虑，请通过上述方式联系维护者。</em></p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+        <script>
+        window.addEventListener('load', function() {
+            window.setTimeout(window.print, 100);
+        });
+        </script>
+
+    </div>
+    </body>
+</html>

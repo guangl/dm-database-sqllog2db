@@ -1,0 +1,257 @@
+<!DOCTYPE HTML>
+<html lang="zh" class="ayu sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>内存检查 - sqllog2db</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="达梦数据库 SQL 日志高性能解析工具 — 流式处理，常量内存，支持 Parquet/CSV 导出">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "ayu" : "ayu";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc.js"></script>
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('ayu')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">sqllog2db</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/guangl/sqllog2db" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="导出内存检查"><a class="header" href="#导出内存检查">导出内存检查</a></h1>
+<p>当前脚本仅检查 CSV。下方 2026-09-10 的修复数据保留为历史记录，包含现已移除的 SQLite 后端。</p>
+<h2 id="问题与修复"><a class="header" href="#问题与修复">问题与修复</a></h2>
+<ul>
+<li>SQLite 原配置 <code>cache_size=1000000</code> 使用页数，配合 65536 字节页，缓存预算约 61 GiB；另外允许 30 GB 文件映射，临时数据全部驻留内存。改为 16 MiB 页缓存预算、关闭 mmap、临时数据允许落盘。必须先设置页大小，再设置缓存预算。</li>
+<li>CSV 每个任务原有 16 MiB 写缓冲，单文件自动切块时也会按任务数放大。改为每任务 1 MiB，切块路径补上与多文件路径相同的并发预算检查。</li>
+<li>SQLite INSERT 语句按实际批次大小生成；字段投影只复制选中字段一次，减少无用字符串分配。</li>
+</ul>
+<h2 id="测量方法"><a class="header" href="#测量方法">测量方法</a></h2>
+<p>macOS，本地 release 构建，每个文件 268,435,390 字节（约 256 MiB），1,231,355 条合成 SELECT 记录。参数替换关闭，无事务级过滤。使用系统 <code>/usr/bin/time -l</code> 的 maximum resident set size，包含进程实际驻留内存。每种场景启动独立进程。</p>
+<div class="table-wrapper"><table><thead><tr><th>导出格式</th><th style="text-align: right">文件数</th><th style="text-align: right">修复前峰值 MiB</th><th style="text-align: right">修复后峰值 MiB</th><th style="text-align: right">导出记录数</th></tr></thead><tbody>
+<tr><td>csv</td><td style="text-align: right">1</td><td style="text-align: right">171.3</td><td style="text-align: right">18.8</td><td style="text-align: right">1,231,355</td></tr>
+<tr><td>csv</td><td style="text-align: right">4</td><td style="text-align: right">41.8</td><td style="text-align: right">9.6</td><td style="text-align: right">4,925,420</td></tr>
+<tr><td>sqlite</td><td style="text-align: right">1</td><td style="text-align: right">225.2</td><td style="text-align: right">29.0</td><td style="text-align: right">1,231,355</td></tr>
+<tr><td>sqlite</td><td style="text-align: right">4</td><td style="text-align: right">875.8</td><td style="text-align: right">29.3</td><td style="text-align: right">4,925,420</td></tr>
+</tbody></table>
+</div>
+<p>CSV 修复前后 SHA-256 完全一致；SQLite 行数一致，现有测试覆盖字段值、投影、追加、尾批次与 WAL 路径。合成 CSV 测试未复现 64 GB 持续增长，不能据此断言用户真实 CSV 场景的根因已经定位。</p>
+<h2 id="回归检查"><a class="header" href="#回归检查">回归检查</a></h2>
+<pre><code class="language-sh">cargo build --release
+python3 scripts/check_export_memory.py target/release/sqllog2db
+</code></pre>
+<p>脚本支持 macOS 和 Linux，需要 <code>/usr/bin/time</code>（Linux 为 GNU time），默认生成 16×256 MiB 临时日志，依次检查 1、4、16 文件的 CSV 导出。每次导出峰值不超过 128 MiB、多文件增长不超过 32 MiB，并核对记录数与完整字段内容。临时输入和输出在完成后自动删除。128 MiB 是本合成场景的回归阈值，可通过 <code>--max-rss-mib</code> 调整，不是所有真实日志的进程内存保证。</p>
+<p><code>cargo test</code> 与 <code>cargo clippy --all-targets -- -D warnings</code> 已通过。缓存设置调整顺序后另外重跑 SQLite 测试和实际内存测量。</p>
+<h2 id="适用范围"><a class="header" href="#适用范围">适用范围</a></h2>
+<ul>
+<li>16 MiB 仅为 SQLite 页缓存预算，进程还包含解析、SQL 记录、线程等开销。</li>
+<li>超长/异常日志记录、参数替换缓存、事务级过滤 ID 集合仍可能增加内存；本次测试不覆盖这些场景。</li>
+<li>合成数据规模为约 1 GiB，没有实际分配 64 GB；结论依据旧缓存配置及小规模内存增长趋势。</li>
+<li>本次构建中 Cargo 自动纠正了锁文件中 thiserror-impl 2.0.19 的 syn 依赖边（该已锁定版本要求 syn 3），没有更新依赖版本。</li>
+</ul>
+<h2 id="发版标准"><a class="header" href="#发版标准">发版标准</a></h2>
+<p>本报告中的初次 4 文件对比已扩展为 1、4、16 文件的强制门禁，并接入 PR、main 和标签发布。当前标准、命令与验收证据以<a href="release-standard.html">发版门禁标准</a>为准。</p>
+<p>当前导出路径：CSV 和 Parquet 均顺序流式写出；CSV 使用单个 1 MiB 缓冲，不再按输入文件数启动并发写出任务。输入切块和输出分片已删除。下述历史测量不代表本次修改后的重新测量。</p>
+<h3 id="顺序导出复测2026-09-13"><a class="header" href="#顺序导出复测2026-09-13">顺序导出复测（2026-09-13）</a></h3>
+<p>本地 debug 构建，关闭参数替换和事务过滤，每个输入文件约 8 MiB。CSV 的 1、4、8 文件场景峰值 RSS 分别为 12,369,920、12,419,072、12,468,224 字节，较单文件最大增长 98,304 字节；记录数及 SHA-256 校验均通过。这是小规模验证，未重跑 release 4 GiB 门禁；不代表超长记录或关联缓存具有进程级硬内存限制。</p>
+<h3 id="真实日志优化复测2026-09-14"><a class="header" href="#真实日志优化复测2026-09-14">真实日志优化复测（2026-09-14）</a></h3>
+<p>输入为 sqllogs/ 全部 101 个日志，共 25.32 GiB；两个版本均为 release 构建，无过滤、无参数回填，默认压缩及 row group 设置不变。每个导出器均写入单个输出文件。</p>
+<div class="table-wrapper"><table><thead><tr><th>格式</th><th style="text-align: right">优化前</th><th style="text-align: right">优化后</th><th style="text-align: right">耗时下降</th><th style="text-align: right">原峰值 RSS</th><th style="text-align: right">新峰值 RSS</th></tr></thead><tbody>
+<tr><td>CSV</td><td style="text-align: right">57.25 秒</td><td style="text-align: right">50.71 秒</td><td style="text-align: right">11.4%</td><td style="text-align: right">10.2 MiB</td><td style="text-align: right">18.2 MiB</td></tr>
+<tr><td>PARQUET</td><td style="text-align: right">103.53 秒</td><td style="text-align: right">73.64 秒</td><td style="text-align: right">28.9%</td><td style="text-align: right">563.6 MiB</td><td style="text-align: right">93.9 MiB</td></tr>
+</tbody></table>
+</div>
+<p>两者均正常退出，成功导出 115,306,013 条记录，无解析或导出错误。CSV 和 Parquet 全部输出均与旧版逐字节相同。</p>
+<p>改动：Parquet StringBuilder 直接构建列；CSV 借用路径；非 Windows CLI 使用 jemalloc；普通文件解析与写出通过最多两个批次的队列重叠，每批最多 512 条、约 1 MiB 容量目标，保持记录顺序。stdin 保持同步读取。</p>
+<p>内存数据是本机真实输入的峰值测量，并非所有输入的进程内存硬上限；超长单记录、参数缓存与事务过滤仍可增加内存。Windows 使用系统分配器，本次 macOS 的性能结果不应直接外推。</p>
+<p>测量使用 macOS /usr/bin/time -l；测试按顺序执行，没有同时进行输出回读。419 个自动测试通过，2 个按设计忽略；新增测试覆盖预读的顺序、错误透传与提前退出；Clippy 严格检查及文档构建通过。</p>
+<p>复测原始数据：full/comparison.json（旧版基线），pipelined/measurements.json（最终版本），full-validation.json（逐字节校验）。</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="release-standard.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="security.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="release-standard.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="security.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>
