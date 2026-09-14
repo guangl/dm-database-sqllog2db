@@ -90,9 +90,6 @@ tempfile = "3.27.0"
 [target.'cfg(not(target_os = "windows"))'.dependencies]
 tikv-jemallocator = "0.6.1"
 
-[target.'cfg(not(target_os = "windows"))'.dependencies]
-tikv-jemallocator = "0.6.1"
-
 [target.'cfg(not(target_os = "windows"))'.dev-dependencies]
 tikv-jemallocator = { version = "0.6.1", features = ["stats"] }
 tikv-jemalloc-ctl = { version = "0.6.1", features = ["stats"] }
