@@ -100,4 +100,4 @@ RUSTDOCFLAGS="-D warnings" cargo doc --locked --no-deps
 
 文档站直接通过 `docs/book.toml` 构建本目录内容：`mdbook build docs`，输出到 `target/book/`。无需单独维护站点包装目录。
 
-非 Windows CLI 使用 jemalloc 管理短生命周期分配；Windows 保持系统分配器。分配统计仅由测试启用。
+CLI 使用平台默认分配器。

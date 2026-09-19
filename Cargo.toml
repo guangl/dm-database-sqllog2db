@@ -1,6 +1,6 @@
 [package]
 name = "dm-database-sqllog2db"
-version = "3.0.0"
+version = "3.0.1"
 edition = "2024"
 rust-version = "1.95"
 authors = ["guangl <guangl@example.com>"]
@@ -86,13 +86,6 @@ criterion = { version = "0.8", default-features = false, features = [
 assert_cmd = "2"
 predicates = "3"
 tempfile = "3.27.0"
-
-[target.'cfg(not(target_os = "windows"))'.dependencies]
-tikv-jemallocator = "0.6.1"
-
-[target.'cfg(not(target_os = "windows"))'.dev-dependencies]
-tikv-jemallocator = { version = "0.6.1", features = ["stats"] }
-tikv-jemalloc-ctl = { version = "0.6.1", features = ["stats"] }
 
 [[bench]]
 name = "bench_csv"

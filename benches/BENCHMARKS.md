@@ -471,17 +471,6 @@ parser_throughput/50000 time:   [25.630 ms 25.667 ms 25.704 ms]
 注：三个规模 criterion 均报告 "Change within noise threshold"（p < 0.05，time 置信区间下界为负），
 time median 全部下降，满足 PERF-01 不回退验收条件（after < before × 1.05）。
 
-### jemalloc 堆分配对比（PERF-02）
-
-| 阶段 | resident_delta (10000 records) | 相对变化 |
-|-----:|-------------------------------:|---------:|
-| Wave 0（优化前） | 2,785,280 bytes | baseline |
-| Wave 3（优化后） | 245,760 bytes | −91.2% |
-
-测量方法：tests/jemalloc_peak.rs 通过 tikv_jemalloc_ctl::stats::resident 在 handle_run 前后两次 epoch.advance() + read 计算 delta。
-注意：stats.allocated 是当前活跃分配字节数（非累计值）；handle_run 完成后临时内存已释放，allocated_delta = 0。
-改用 resident_delta 作为主要堆压力指标（jemalloc 延迟归还物理页给 OS）。
-
 <details>
 <summary>cargo bench --bench bench_csv --baseline phase44-before（Phase 44 对比输出）</summary>
 
@@ -512,25 +501,9 @@ csv_export/50000        time:   [28.144 ms 28.185 ms 28.226 ms]
 
 </details>
 
-<details>
-<summary>cargo test test_jemalloc_peak_baseline -- --nocapture（Phase 44 after 测量）</summary>
-
-```
-[phase44-before] jemalloc allocated delta (10000 records) = 245760 bytes
-[phase44-before] allocated_delta = 0 bytes (active allocs freed after run)
-[phase44-before] resident_delta  = 245760 bytes (retained physical pages)
-[phase44-before] absolute: allocated 1150944 -> 1246768 bytes, resident 4898816 -> 8962048 bytes
-test test_jemalloc_peak_baseline ... ok
-
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
-```
-
-</details>
-
 ### 结论
 
 - [x] **PERF-01**: csv_export 三个规模 time median 全部下降（vs phase44-before），criterion 报告 "Change within noise threshold"（time 置信区间下界均为负值，方向一致）
-- [x] **PERF-02**: jemalloc 堆分配 resident_delta 从 2,785,280 bytes 降至 245,760 bytes（降幅 91.2%）
 - [x] 全套测试通过（cargo test 无回归）
 - [x] 未引入新 unsafe 代码（D-06）
 - [x] CLAUDE.md BufWriter 16MB 描述与代码一致
