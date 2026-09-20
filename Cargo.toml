@@ -26,12 +26,25 @@ exclude = [
   "config.toml",
 ]
 
+[features]
+# Keep the existing CLI behavior while allowing deployments to compile only the
+# parser adapters they need. `all-parsers` is useful for development and CI.
+default = ["sqllog", "driver-jdbc"]
+sqllog = ["dep:dm-database-parser-sqllog"]
+driver-jdbc = ["dep:dm-database-driver-log", "dm-database-driver-log/jdbc"]
+driver-dm-provider = [
+    "dep:dm-database-driver-log",
+    "dm-database-driver-log/dm-provider",
+]
+all-parsers = ["sqllog", "driver-jdbc", "driver-dm-provider"]
+
 [[bin]]
 name = "sqllog2db"
 path = "src/main.rs"
 
 [dependencies]
-dm-database-parser-sqllog = "2.0.4"
+dm-database-driver-log = { version = "0.1.1", default-features = false, optional = true }
+dm-database-parser-sqllog = { version = "2.0.4", optional = true }
 env_logger = "0.11.10"
 log = "0.4.32"
 thiserror = "2.0.18"
@@ -87,14 +100,25 @@ assert_cmd = "2"
 predicates = "3"
 tempfile = "3.27.0"
 
+[[test]]
+name = "integration"
+required-features = ["sqllog"]
+
+[[test]]
+name = "real_export_metadata"
+required-features = ["sqllog"]
+
 [[bench]]
 name = "bench_csv"
 harness = false
+required-features = ["sqllog"]
 
 [[bench]]
 name = "bench_filters"
 harness = false
+required-features = ["sqllog"]
 
 [[bench]]
 name = "bench_parser"
 harness = false
+required-features = ["sqllog"]

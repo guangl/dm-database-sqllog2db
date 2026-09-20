@@ -45,6 +45,15 @@ fn write_test_log_offset(path: &std::path::Path, count: usize, start_offset: usi
     std::fs::write(path, buf).unwrap();
 }
 
+#[cfg(feature = "driver-jdbc")]
+fn write_driver_log(path: &std::path::Path) {
+    std::fs::write(
+        path,
+        "[INFO - 2026-09-16 17:45:19.763] tid:119 - [worker] { conn-3, pstmt-854 } executeQuery(): rs-2216; [USED TIME]: 8.5ms; [EXEC_ID]: 19010657;\n",
+    )
+    .unwrap();
+}
+
 fn write_heterogeneous_log(
     path: &std::path::Path,
     count: usize,
@@ -145,6 +154,28 @@ fn test_handle_run_real_csv_export() {
         11,
         "expected header + 10 data rows"
     );
+}
+
+#[test]
+#[cfg(feature = "driver-jdbc")]
+fn test_handle_run_jdbc_driver_log() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let log_dir = dir.path().join("logs");
+    std::fs::create_dir_all(&log_dir).unwrap();
+    write_driver_log(&log_dir.join("driver.log"));
+
+    let csv_file = dir.path().join("out.csv");
+    let cfg = make_run_config(&log_dir, &csv_file);
+    handle_run(&cfg, true, false, &Arc::new(AtomicBool::new(false))).unwrap();
+
+    let content = std::fs::read_to_string(csv_file).unwrap();
+    assert_eq!(
+        content.lines().count(),
+        2,
+        "expected header + one driver row"
+    );
+    assert!(content.contains("executeQuery"));
+    assert!(content.contains("8.5"));
 }
 
 #[test]

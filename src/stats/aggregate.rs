@@ -3,6 +3,8 @@
 use std::cmp::{Ordering, Reverse};
 use std::collections::{BinaryHeap, HashMap};
 
+use crate::model::LogRecord;
+
 /// 慢 SQL 输出行（终端展示）
 #[derive(Debug, Clone)]
 pub struct SlowSqlRow {
@@ -87,7 +89,7 @@ impl StatsAccumulator {
     /// 处理单条日志记录，同时更新慢 SQL 堆与高频 SQL 映射。
     ///
     /// 只处理 `[ORA]` 标签的记录（Oracle 兼容模式 SQL）；其他标签跳过。
-    pub fn update(&mut self, record: &dm_database_parser_sqllog::Sqllog) {
+    pub fn update(&mut self, record: &LogRecord) {
         if record.tag.as_deref() != Some("ORA") {
             return;
         }

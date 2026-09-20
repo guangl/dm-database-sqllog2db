@@ -3,15 +3,19 @@
 //! [`cli`] handles commands; [`engine`] orchestrates exports; [`pipeline`] processes records;
 //! [`exporter`] owns output formats. [`stats`] provides SQL analysis.
 
+pub mod application;
 pub mod cli;
 pub mod config;
-pub mod engine;
-pub mod error;
-pub mod exporter;
-pub mod logging;
-pub(crate) mod parser;
-pub mod pipeline;
-pub mod preflight;
-pub(crate) mod scanner;
+pub mod domain;
+pub mod infrastructure;
 pub mod stats;
-pub(crate) mod streaming;
+
+// Keep the established public paths stable while the implementation follows the
+// application/domain/infrastructure layout.
+pub(crate) use application::scanner;
+pub use application::{engine, preflight};
+pub use domain::{model, pipeline};
+pub use infrastructure::error;
+pub(crate) use infrastructure::input;
+pub use infrastructure::logging;
+pub use infrastructure::output as exporter;

@@ -5,7 +5,7 @@ pub mod config;
 pub mod normalize;
 mod runner;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "sqllog"))]
 #[path = "../../tests/unit/stats/mod.rs"]
 mod tests;
 

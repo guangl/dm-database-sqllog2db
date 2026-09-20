@@ -94,6 +94,7 @@ fn bench_csv_format_only(c: &mut Criterion) {
     use dm_database_parser_sqllog::LogParserBuilder;
     use dm_database_sqllog2db::exporter::Exporter;
     use dm_database_sqllog2db::exporter::csv::CsvExporter;
+    use dm_database_sqllog2db::model::LogRecord;
 
     // D-03：硬编码典型记录（中等长度 SQL）
     const LOG_LINE: &str = "2024-01-01 00:00:00.000 (EP[1234] sess:0x0001 user:BENCHUSER trxid:TID001 stmt:0x1 appname:App ip:10.0.0.1) [SEL] SELECT * FROM t WHERE id = 1. EXECTIME: 10(ms) ROWCOUNT: 1(rows) EXEC_ID: 1.\n";
@@ -109,10 +110,26 @@ fn bench_csv_format_only(c: &mut Criterion) {
     let parser = LogParserBuilder::new(log_path.to_str().unwrap())
         .build()
         .unwrap();
-    let records: Vec<_> = parser
+    let records: Vec<LogRecord> = parser
         .iter()
         .unwrap()
         .filter_map(std::result::Result::ok)
+        .map(|record| LogRecord {
+            ts: record.ts,
+            tag: record.tag,
+            ep: record.ep,
+            sess_id: record.sess_id,
+            thrd_id: record.thrd_id,
+            username: record.username,
+            trxid: record.trxid,
+            statement: record.statement,
+            appname: record.appname,
+            client_ip: record.client_ip,
+            sql: record.sql,
+            exectime: record.exectime,
+            rowcount: record.rowcount,
+            exec_id: record.exec_id,
+        })
         .collect();
     assert_eq!(
         records.len(),
@@ -121,7 +138,7 @@ fn bench_csv_format_only(c: &mut Criterion) {
         records.len()
     );
 
-    // v1.1.0: 所有字段已在 Sqllog 上物化，无需预解析 meta/pm
+    // 所有字段已在 LogRecord 上物化，无需预解析 meta/pm。
     let parsed: Vec<_> = records.iter().collect();
 
     let out_path = bench_dir.join("out.csv");

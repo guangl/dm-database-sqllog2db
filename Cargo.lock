@@ -478,6 +478,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "dm-database-driver-log"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1241175d2f81e22d16ffbf1245b684c87ddd10af7d182af3c4a41d60e14d8dfc"
+dependencies = [
+ "encoding",
+ "thiserror",
+]
+
+[[package]]
 name = "dm-database-parser-sqllog"
 version = "2.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -499,6 +509,7 @@ dependencies = [
  "clap",
  "criterion",
  "ctrlc",
+ "dm-database-driver-log",
  "dm-database-parser-sqllog",
  "env_logger",
  "glob",
