@@ -60,7 +60,7 @@ python3 scripts/check_export_memory.py target/release/sqllog2db
 
 两者均正常退出，成功导出 115,306,013 条记录，无解析或导出错误。CSV 和 Parquet 全部输出均与旧版逐字节相同。
 
-改动：Parquet StringBuilder 直接构建列；CSV 借用路径；非 Windows CLI 使用 jemalloc；普通文件解析与写出通过最多两个批次的队列重叠，每批最多 512 条、约 1 MiB 容量目标，保持记录顺序。stdin 保持同步读取。
+改动：Parquet StringBuilder 直接构建列；CSV 借用路径；普通文件解析与写出通过最多两个批次的队列重叠，每批最多 512 条、约 1 MiB 容量目标，保持记录顺序。stdin 保持同步读取。
 
 内存数据是本机真实输入的峰值测量，并非所有输入的进程内存硬上限；超长单记录、参数缓存与事务过滤仍可增加内存。Windows 使用系统分配器，本次 macOS 的性能结果不应直接外推。
 

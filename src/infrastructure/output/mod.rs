@@ -1,0 +1,155 @@
+//! Exporter 模块：导出器 trait、统计、后端管理器、共享工具。
+
+pub mod csv;
+pub mod parquet;
+
+mod manager;
+
+#[cfg(test)]
+#[path = "../../../tests/unit/infrastructure/output/mod.rs"]
+mod tests;
+
+pub(crate) use csv::CsvExporter;
+pub(crate) use manager::ExporterManager;
+pub(crate) use parquet::ParquetExporter;
+
+use crate::error::Result;
+use crate::model::LogRecord;
+
+/// 所有导出器必须实现的接口
+pub trait Exporter {
+    /// 初始化导出目标（创建文件）。
+    ///
+    /// # Errors
+    ///
+    /// 输出目标创建或打开失败时返回错误（由具体实现决定，如文件 IO）。
+    fn initialize(&mut self) -> Result<()>;
+
+    /// 导出单条记录。
+    ///
+    /// # Errors
+    ///
+    /// 写出失败时返回错误（如磁盘写入失败）。
+    fn export(&mut self, sqllog: &LogRecord) -> Result<()>;
+
+    /// 流式导出单条记录，同时附带 `normalized_sql`（流式路径，无需 batch）。
+    /// 默认实现忽略 normalized，调用 `export`。
+    ///
+    /// # Errors
+    ///
+    /// 同 [`Exporter::export`]：写出失败时返回错误。
+    fn export_one_normalized(
+        &mut self,
+        sqllog: &LogRecord,
+        normalized: Option<&str>,
+    ) -> Result<()> {
+        let _ = normalized;
+        self.export(sqllog)
+    }
+
+    /// 热路径：使用已解析的统一记录直接导出。
+    /// `include_pm` 控制是否写入性能指标列（仅 CSV 路径有意义）。
+    /// 所有字段都已在适配边界物化，`meta`/`pm` 参数取消。
+    ///
+    /// # Errors
+    ///
+    /// 同 [`Exporter::export`]：写出失败时返回错误。
+    fn export_one_preparsed(
+        &mut self,
+        sqllog: &LogRecord,
+        include_pm: bool,
+        normalized: Option<&str>,
+    ) -> Result<()> {
+        let _ = include_pm;
+        self.export_one_normalized(sqllog, normalized)
+    }
+
+    /// 结束导出：flush 缓冲并关闭输出目标。
+    ///
+    /// # Errors
+    ///
+    /// 缓冲落盘或事务提交失败时返回错误。
+    fn finalize(&mut self) -> Result<()>;
+
+    fn stats_snapshot(&self) -> Option<ExportStats> {
+        None
+    }
+}
+
+/// 导出统计
+#[derive(Debug, Default, Clone, Copy)]
+pub struct ExportStats {
+    pub exported: usize,
+    pub skipped: usize,
+    pub failed: usize,
+    pub flush_operations: usize,
+    pub last_flush_size: usize,
+}
+
+impl ExportStats {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn record_success(&mut self) {
+        self.exported += 1;
+    }
+
+    #[must_use]
+    pub fn total(&self) -> usize {
+        self.exported + self.skipped + self.failed
+    }
+}
+
+/// 去除 IPv4-mapped IPv6 地址前缀（如 `::ffff:192.168.1.1` → `192.168.1.1`）
+#[inline]
+#[must_use]
+pub(crate) fn strip_ip_prefix(ip: &str) -> &str {
+    const PREFIX: &str = "::ffff:";
+    // 快速路径：IPv4 地址以数字开头，不以 ':' 开头，直接返回
+    if ip.as_bytes().first() != Some(&b':') {
+        return ip;
+    }
+    if ip.len() > PREFIX.len() && ip[..PREFIX.len()].eq_ignore_ascii_case(PREFIX) {
+        &ip[PREFIX.len()..]
+    } else {
+        ip
+    }
+}
+
+/// Saturating cast from f32 milliseconds to i64 milliseconds without precision-loss warnings
+#[inline]
+#[must_use]
+pub(crate) fn f32_ms_to_i64(ms: f32) -> i64 {
+    const MAX_I64_F64: f64 = 9_223_372_036_854_775_807.0; // i64::MAX as f64
+    const MIN_I64_F64: f64 = -9_223_372_036_854_775_808.0; // i64::MIN as f64
+
+    if !ms.is_finite() {
+        return 0;
+    }
+
+    let ms_f64 = f64::from(ms);
+    if ms_f64 > MAX_I64_F64 {
+        i64::MAX
+    } else if ms_f64 < MIN_I64_F64 {
+        i64::MIN
+    } else {
+        let clamped = ms_f64.round();
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "value is clamped to i64 range above; saturating cast (Rust 1.45+) handles boundary values correctly"
+        )]
+        {
+            clamped as i64
+        }
+    }
+}
+
+/// 确保输出文件的父目录存在
+pub(crate) fn ensure_parent_dir(path: &std::path::Path) -> std::io::Result<()> {
+    if let Some(parent) = path.parent().filter(|p| !p.exists()) {
+        std::fs::create_dir_all(parent)?;
+    }
+    Ok(())
+}

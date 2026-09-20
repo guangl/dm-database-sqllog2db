@@ -13,7 +13,7 @@ use crate::error::{Error, ErrorStats, ParserError, Result};
 pub fn run_stats(cfg: &Config, top_n: u32) -> Result<()> {
     debug_assert!(top_n >= 1, "top_n must be >= 1 (Phase 51 CLI validation)");
     stats_config::validate_stats_time_range(&cfg.stats)?;
-    let log_files = crate::parser::SqllogParser::new(cfg.sqllog.inputs.clone()).log_files()?;
+    let log_files = crate::input::InputResolver::new(cfg.sqllog.inputs.clone()).log_files()?;
     if log_files.is_empty() {
         return Err(Error::Parser(ParserError::NoFilesFound {
             inputs: cfg.sqllog.inputs.clone(),

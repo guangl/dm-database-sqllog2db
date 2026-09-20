@@ -7,14 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.1] - 2026-09-19
+
 ### Removed
 
 - **SQLite、watch 和文件拆分（BREAKING）**：移除 SQLite 后端与依赖、watch 命令与偏移跟踪、输入切块和 CSV 按行轮转。旧 `[exporter.sqlite]`、`max_rows_per_file` 配置会报错；导出仅保留 CSV/Parquet 单文件输出。
+- **jemalloc**：移除 CLI 的 jemalloc 全局分配器、分配统计回归测试及相关依赖，恢复使用平台默认分配器。
 
 ### Changed
 
 - **统一导出流程**：CSV 和 Parquet 共用按顺序处理的单写入器、进度条和错误统计。普通文件通过最多两个批次的有界队列重叠解析与写出，stdin 保持同步读取；不再维护 CSV 专用多文件并发和临时结果合并。
-- **导出性能**：Parquet 直接构建 Arrow 字符串列；CSV 热路径借用输出路径；非 Windows CLI 使用 jemalloc。真实 101 文件、25.32 GiB 输入复测，CSV 耗时降低约 11%，Parquet 降低约 29%，两种输出与旧版逐字节一致。Parquet 峰值 RSS 从约 564 MiB 降至 94 MiB；结果不代表所有输入的进程硬内存上限。
+- **导出性能**：Parquet 直接构建 Arrow 字符串列；CSV 热路径借用输出路径。真实 101 文件、25.32 GiB 输入复测，CSV 耗时降低约 11%，Parquet 降低约 29%，两种输出与旧版逐字节一致。Parquet 峰值 RSS 从约 564 MiB 降至 94 MiB；结果不代表所有输入的进程硬内存上限。
 - **项目结构**：压平 CLI、引擎、导出器和归一化模块，合并重复转发与小模块；所有单元、集成及 Python 测试统一到 `tests/`；文档站源文件并入 `docs/`，产物放入 `target/book/`，同步 CI。
 - **后端选择**：预检查和后端创建共用 Parquet 优先规则，移除重复路由判断。
 - **参数回填范围**：`[replace_parameters]` 支持 `tags`，默认仅对 `SEL` 回填；可显式增加 `INS`、`UPD`、`DEL`。
@@ -393,6 +396,7 @@ The 0.x series (0.1.0 through 0.10.7) covered the initial development of sqllog2
 See git history for full details.
 
 [Unreleased]: https://github.com/guangl/dm-database-sqllog2db/compare/6c6d890667b0e6e2e36b9b5cfb58d561f4f94b57...HEAD
+[3.0.1]: https://github.com/guangl/dm-database-sqllog2db/compare/v3.0.0...v3.0.1
 [3.0.0]: https://github.com/guangl/dm-database-sqllog2db/compare/v2.0.0...6c6d890667b0e6e2e36b9b5cfb58d561f4f94b57
 [1.15.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.15.0
 [1.14.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.14.0

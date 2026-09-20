@@ -9,7 +9,7 @@
 
 解析达梦数据库 SQL 日志并导出为 Parquet 或 CSV。Parquet 是默认格式。
 
-> **维护说明**：本仓库不保证积极运维，后续更新将跟随上游 [dm-database-parser-sqllog](https://crates.io/crates/dm-database-parser-sqllog) 的版本迭代进行同步。
+> **维护说明**：本仓库不保证积极运维，后续更新将跟随上游解析器版本迭代进行同步。
 
 一款流式命令行工具，以有界内存占用处理达梦 SQL 日志文件，CSV 路径可提供约 520 万条记录/秒的吞吐量。无需外部运行时、数据库客户端或 JVM。
 
@@ -42,12 +42,34 @@
 - **基准测试结果**：~520 万条记录/秒 CSV（criterion，合成 50k 记录数据集，Apple M 系列芯片），~155 万条记录/秒（真实 1.1 GB 文件，约 300 万条记录，NVMe SSD）。
 - **简洁的 CLI**：`init`（生成配置）、`validate`（校验）、`run`（执行导出）、`stats`（统计分析）四个命令。
 
+### 可选解析器 features
+
+解析器依赖按 Cargo feature 隔离，解析结果先统一为内部 `LogRecord`，过滤、统计和导出层不依赖任何具体解析器。默认构建启用传统 SQL 日志和 JDBC 驱动日志：
+
+| Feature | 输入格式 |
+| --- | --- |
+| `sqllog` | 达梦传统 SQL 日志，依赖 `dm-database-parser-sqllog` |
+| `driver-jdbc` | JDBC 驱动日志，依赖 `dm-database-driver-log = "0.1.1"` 的 `jdbc` feature |
+| `driver-dm-provider` | DM Provider 驱动日志，依赖 `dm-database-driver-log = "0.1.1"` 的 `dm-provider` feature |
+| `all-parsers` | 启用上面全部解析器 |
+
+按部署场景裁剪构建：
+
+```bash
+cargo build --release --no-default-features --features sqllog
+cargo build --release --no-default-features --features driver-jdbc
+cargo build --release --no-default-features --features driver-dm-provider
+cargo build --release --no-default-features --features all-parsers
+```
+
+输入文件会根据首条非空记录自动选择适配器。后续增加新的日志格式时，只需增加对应 feature、在 `src/infrastructure/input/adapters/` 下实现适配器，并把源字段映射到 `LogRecord`，核心处理链无需改动。
+
 ## 架构
 
 数据通过四个阶段流经工具：
 
-1. **发现**：`SqllogParser` 解析配置的路径（文件、目录或 glob）并生成有序的 `.log` 文件列表。
-2. **解析**：每个文件通过 `dm-database-parser-sqllog` 逐行流式读取，解码 GB18030/GBK 记录并提取结构化字段（用户、SQL 文本、执行时长、行数、会话 ID 等）。
+1. **发现**：`InputResolver` 展开配置的路径（文件、目录或 glob）并生成有序的 `.log` 文件列表。
+2. **解析**：每个文件自动识别格式后流式读取：传统 SQL 日志使用 `dm-database-parser-sqllog`，JDBC 驱动日志使用 `dm-database-driver-log`。两种输入都会适配到统一记录模型，再提取用户、SQL 文本、执行时长、行数、会话 ID 等字段。
 3. **处理管道**：解析后的记录通过可选的处理管道。当管道为空（无过滤器）时，记录通过零开销快速路径绕过所有功能逻辑。当管道活跃时，运行编译好的正则过滤器。
 4. **导出**：活跃的导出器（Parquet 或 CSV，按优先级选择）写入每条记录。ExporterManager 将记录路由到单一配置的导出器。
 
@@ -55,30 +77,36 @@
 
 ```mermaid
 graph LR
-    A[SQL Log Files] --> B[SqllogParser]
-    B --> C{Pipeline}
-    C -->|empty| D[ExporterManager]
-    C -->|filters| E[FilterProcessor]
-    E --> D
-    D --> F[Parquet / CSV]
+    A[Log Files] --> B[Format Detection]
+    B --> C[Feature-gated Adapters]
+    C --> D[LogRecord]
+    D --> E{Pipeline}
+    E -->|empty| F[ExporterManager]
+    E -->|filters| G[FilterProcessor]
+    G --> F
+    F --> H[Parquet / CSV]
 ```
 
 同样的流程以文本形式表达：
 
 ```
-输入 .log 文件 --> SqllogParser --> 处理管道 --> ExporterManager --> Parquet / CSV
+输入 .log 文件 --> 格式识别 --> 解析器适配器 --> LogRecord --> 处理管道 --> ExporterManager --> Parquet / CSV
 ```
 
 ### 关键模块
 
 项目目录与阅读顺序见[架构说明](docs/architecture.md)。所有测试位于 `tests/`，文档站与说明统一位于 `docs/`。
 
-- **`engine/mod.rs`**：主编排——加载配置、构建管道、预扫描事务过滤器、逐个文件流式处理记录。
+- **`application/engine/mod.rs`**：主编排——加载配置、构建管道、预扫描事务过滤器、逐个文件流式处理记录。
 - **`cli/stats.rs`**：`stats` 子命令入口，委托给 `src/stats/` 完成聚合与终端展示。
 - **`stats/mod.rs`**：`run_stats` 流式扫描 → `StatsAccumulator` → 在终端打印慢 SQL 与高频 SQL。
-- **`exporter/mod.rs`**：`Exporter` trait 和 `ExporterManager` 工厂。每次运行只有一个导出器处于活动状态。
-- **`pipeline/mod.rs`**：`LogProcessor` trait 和 `Pipeline`。`pipeline.is_empty()` 启用零开销快速路径。
-- **`pipeline/filters/mod.rs`**：两遍过滤器设计。`TransactionFilters` 统一匹配 include/exclude 的 SQL 与指标条件，预扫描汇总事务 ID 后应用排除。
+- **`infrastructure/output/mod.rs`**：`Exporter` trait 和 `ExporterManager` 工厂。每次运行只有一个导出器处于活动状态。
+- **`domain/model.rs`**：与解析器无关的 `LogRecord` 领域模型，作为处理链唯一的记录类型。
+- **`infrastructure/input/mod.rs`**：识别输入格式、编排有界预取，并把记录交给 feature-gated 适配器。
+- **`infrastructure/input/resolver.rs`**：展开文件、目录和 glob 输入，保持路径发现与具体日志格式无关。
+- **`infrastructure/input/adapters/sql_log.rs`、`infrastructure/input/adapters/driver_log.rs`**：分别封装 SQL 日志和驱动日志依赖；新增解析器在这里扩展。
+- **`domain/pipeline/mod.rs`**：`LogProcessor` trait 和 `Pipeline`。`pipeline.is_empty()` 启用零开销快速路径。
+- **`domain/pipeline/filters/mod.rs`**：两遍过滤器设计。`TransactionFilters` 统一匹配 include/exclude 的 SQL 与指标条件，预扫描汇总事务 ID 后应用排除。
 - **`config/mod.rs`**：所有配置结构体，支持 serde 反序列化、嵌套子表支持和 `validate()` 校验。
 
 ## 安装

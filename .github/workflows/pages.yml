@@ -1,9 +1,7 @@
 name: Pages
 
 on:
-  push:
-    branches: [main]
-    paths: ["docs/**", "CONTRIBUTING.md", "SECURITY.md", ".github/workflows/pages.yml"]
+  workflow_dispatch:
 
 concurrency:
   group: pages

@@ -1,13 +1,13 @@
 use super::*;
-use dm_database_parser_sqllog::Sqllog;
+use crate::model::LogRecord;
 
-fn make_record(sql: &str, exectime: f32, ts: &str) -> Sqllog {
-    Sqllog {
+fn make_record(sql: &str, exectime: f32, ts: &str) -> LogRecord {
+    LogRecord {
         sql: sql.to_string(),
         exectime,
         ts: ts.to_string(),
         tag: Some("ORA".to_string()),
-        ..Sqllog::default()
+        ..LogRecord::default()
     }
 }
 
@@ -179,20 +179,20 @@ fn test_filter_none_behavior_unchanged() {
 fn test_non_ora_records_are_skipped() {
     let mut acc = StatsAccumulator::new(10, None, None);
     // 无 tag 的记录应被跳过
-    acc.update(&Sqllog {
+    acc.update(&LogRecord {
         sql: "SELECT 1".to_string(),
         exectime: 10.0,
         ts: "2025-01-01".to_string(),
         tag: None,
-        ..Sqllog::default()
+        ..LogRecord::default()
     });
     // SEL tag 的记录也应被跳过
-    acc.update(&Sqllog {
+    acc.update(&LogRecord {
         sql: "SELECT 2".to_string(),
         exectime: 20.0,
         ts: "2025-01-02".to_string(),
         tag: Some("SEL".to_string()),
-        ..Sqllog::default()
+        ..LogRecord::default()
     });
     let (slow, freq) = acc.into_results();
     assert_eq!(slow.len(), 0, "non-ORA records should be skipped");
