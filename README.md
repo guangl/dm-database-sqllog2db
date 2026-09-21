@@ -123,6 +123,23 @@ cargo install dm-database-sqllog2db
 
 需要 Rust 1.95+。Release 使用 LTO fat、stripped、panic=abort 和 codegen-units=1。
 
+### 作为 dameng-cli 插件安装
+
+需要 `dameng-cli` 0.2.0+ 和 Rust 1.95+。从源码目录安装时，插件会声明文件系统权限，用于读取 SQL 日志、配置以及写入导出文件：
+
+```bash
+dm install . --accept-permissions
+dm sqllog2db --help
+```
+
+也可以固定 Git 标签或完整提交安装：
+
+```bash
+dm install https://github.com/guangl/sqllog2db.git --rev <tag-or-commit> --accept-permissions
+```
+
+插件入口与独立命令共享全部参数、标准输入输出和退出码，因此 `sqllog2db run ...` 可直接改写为 `dm sqllog2db run ...`。宿主会保留 `SQLLOG2DB_CONFIG` 与 `RUST_LOG` 环境变量；其他配置和输入输出路径仍按调用 `dm` 时的当前目录解析。
+
 ### 本地构建
 
 ```bash
