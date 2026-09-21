@@ -12,6 +12,14 @@ updates:
     labels:
       - "dependencies"
       - "rust"
+    groups:
+      # arrow-* and parquet must be upgraded together: parquet 60 depends on
+      # arrow 60, and a lone arrow-array/arrow-schema bump produces two
+      # incompatible Arrow versions in the same dependency tree.
+      arrow-parquet:
+        patterns:
+          - "arrow-*"
+          - "parquet"
     commit-message:
       prefix: "chore"
       include: "scope"

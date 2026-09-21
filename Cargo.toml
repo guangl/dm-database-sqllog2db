@@ -63,9 +63,9 @@ glob = "0.3"
 
 indicatif = "0.18"
 memchr = "2"
-arrow-array = "59.3.0"
-arrow-schema = "59.3.0"
-parquet = { version = "59.3.0", default-features = false, features = ["arrow", "zstd", "snap"] }
+arrow-array = "60.0.0"
+arrow-schema = "60.0.0"
+parquet = { version = "60.0.0", default-features = false, features = ["arrow", "zstd", "snap"] }
 
 
 [lints.rust]
