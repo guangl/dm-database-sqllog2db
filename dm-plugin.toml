@@ -1,0 +1,9 @@
+name = "sqllog2db"
+version = "3.0.1"
+description = "Parse Dameng SQL logs and export them to Parquet or CSV"
+api_version = 1
+min_host_version = "0.2.0"
+license = "Apache-2.0"
+homepage = "https://github.com/guangl/sqllog2db"
+environment = ["RUST_LOG", "SQLLOG2DB_CONFIG"]
+permissions = ["filesystem"]

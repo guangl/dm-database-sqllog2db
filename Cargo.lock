@@ -511,6 +511,7 @@ dependencies = [
  "ctrlc",
  "dm-database-driver-log",
  "dm-database-parser-sqllog",
+ "dm-plugin-sdk",
  "env_logger",
  "glob",
  "indicatif",
@@ -524,6 +525,12 @@ dependencies = [
  "thiserror",
  "toml",
 ]
+
+[[package]]
+name = "dm-plugin-sdk"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d7ff39539d7afd4f0a791f2e7e3776a91bf073927f112fb96bc771e0078d5526"
 
 [[package]]
 name = "either"

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **dameng-cli 插件兼容**：新增 `dm-plugin.toml`、`dm-sqllog2db` 插件入口与协议测试；保留原 `sqllog2db` 独立命令，可通过 `dm sqllog2db ...` 使用相同参数、标准流和退出码。
+
 ## [3.0.1] - 2026-09-19
 
 ### Removed

@@ -32,7 +32,17 @@ enum CommandOutcome {
 /// Execute the CLI and return its process exit code.
 #[must_use]
 pub fn run() -> i32 {
-    match dispatch() {
+    run_with_bin_name(None)
+}
+
+/// Execute the CLI through `dameng-cli` and show the host command in help output.
+#[must_use]
+pub fn run_as_plugin() -> i32 {
+    run_with_bin_name(Some("dm sqllog2db"))
+}
+
+fn run_with_bin_name(bin_name: Option<&'static str>) -> i32 {
+    match dispatch(bin_name) {
         Ok(CommandOutcome::Exported(stats, quiet)) => {
             if stats.has_fatal() {
                 return EXIT_FATAL;
@@ -60,10 +70,13 @@ pub fn run() -> i32 {
     0
 }
 
-fn dispatch() -> Result<CommandOutcome> {
+fn dispatch(bin_name: Option<&'static str>) -> Result<CommandOutcome> {
     use clap::{CommandFactory, FromArgMatches};
 
-    let cmd = cli::opts::Cli::command();
+    let mut cmd = cli::opts::Cli::command();
+    if let Some(bin_name) = bin_name {
+        cmd = cmd.bin_name(bin_name);
+    }
     let matches = cmd.get_matches();
     let cli = cli::opts::Cli::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
 
