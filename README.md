@@ -125,20 +125,25 @@ cargo install dm-database-sqllog2db
 
 ### 作为 dameng-cli 插件安装
 
-需要 `dameng-cli` 0.2.0+ 和 Rust 1.95+。从源码目录安装时，插件会声明文件系统权限，用于读取 SQL 日志、配置以及写入导出文件：
+需要 `dameng-cli` 0.3.0+ 和 Rust 1.95+。宿主只安装预编译插件，本地安装前先构建并准备包目录（以下为 Linux/macOS 示例）：
 
 ```bash
-dm install . --accept-permissions
+cargo build --release --locked --bin dm-sqllog2db
+package=$(mktemp -d)
+cp dm-plugin.toml target/release/dm-sqllog2db "$package/"
+dm install "$package"
 dm sqllog2db --help
 ```
 
-也可以固定 Git 标签或完整提交安装：
+Windows 包目录需包含 `dm-plugin.toml` 与 `dm-sqllog2db.exe`。
+
+发布包含插件产物的新版本后，也可以从 Git 仓库安装。Release 必须提供对应平台的 `dm-sqllog2db-<target>` 二进制及 `.sha256` 校验文件（Windows 二进制带 `.exe` 后缀）。旧 Release 仅有独立命令产物，不能用于插件安装：
 
 ```bash
-dm install https://github.com/guangl/sqllog2db.git --rev <tag-or-commit> --accept-permissions
+dm install https://github.com/guangl/dm-database-sqllog2db.git --rev <release-tag>
 ```
 
-插件入口与独立命令共享全部参数、标准输入输出和退出码，因此 `sqllog2db run ...` 可直接改写为 `dm sqllog2db run ...`。宿主会保留 `SQLLOG2DB_CONFIG` 与 `RUST_LOG` 环境变量；其他配置和输入输出路径仍按调用 `dm` 时的当前目录解析。
+插件入口与独立命令共享全部参数、标准输入输出和退出码，因此 `sqllog2db run ...` 可直接改写为 `dm sqllog2db run ...`。宿主会保留 `SQLLOG2DB_CONFIG` 与 `RUST_LOG` 环境变量；其他配置和输入输出路径仍按调用 `dm` 时的当前目录解析。插件存储根目录通过 `DM_PLUGIN_HOME` 设置。
 
 ### 本地构建
 

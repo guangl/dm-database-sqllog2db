@@ -54,12 +54,14 @@ jobs:
         run: |
           mkdir dist
           cp target/x86_64-unknown-linux-gnu/release/sqllog2db dist/sqllog2db-x86_64-linux
+          cp target/x86_64-unknown-linux-gnu/release/dm-sqllog2db dist/dm-sqllog2db-x86_64-linux
+          (cd dist && sha256sum dm-sqllog2db-x86_64-linux > dm-sqllog2db-x86_64-linux.sha256)
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
           name: sqllog2db-x86_64-linux
-          path: dist/sqllog2db-x86_64-linux
+          path: dist/*
           retention-days: 1
 
   release-linux-arm:
@@ -93,12 +95,14 @@ jobs:
         run: |
           mkdir dist
           cp target/aarch64-unknown-linux-gnu/release/sqllog2db dist/sqllog2db-aarch64-linux
+          cp target/aarch64-unknown-linux-gnu/release/dm-sqllog2db dist/dm-sqllog2db-aarch64-linux
+          (cd dist && sha256sum dm-sqllog2db-aarch64-linux > dm-sqllog2db-aarch64-linux.sha256)
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
           name: sqllog2db-aarch64-linux
-          path: dist/sqllog2db-aarch64-linux
+          path: dist/*
           retention-days: 1
 
   release:
@@ -136,8 +140,15 @@ jobs:
           mkdir dist
           if [ "${{ matrix.target }}" = "x86_64-pc-windows-msvc" ]; then
             cp target/${{ matrix.target }}/release/sqllog2db.exe dist/${{ matrix.artifact }}
+            cp target/${{ matrix.target }}/release/dm-sqllog2db.exe dist/dm-${{ matrix.artifact }}
           else
             cp target/${{ matrix.target }}/release/sqllog2db dist/${{ matrix.artifact }}
+            cp target/${{ matrix.target }}/release/dm-sqllog2db dist/dm-${{ matrix.artifact }}
+          fi
+          if command -v sha256sum >/dev/null 2>&1; then
+            (cd dist && sha256sum dm-${{ matrix.artifact }} > dm-${{ matrix.artifact }}.sha256)
+          else
+            (cd dist && shasum -a 256 dm-${{ matrix.artifact }} > dm-${{ matrix.artifact }}.sha256)
           fi
         shell: bash
 
@@ -145,7 +156,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
-          path: dist/${{ matrix.artifact }}
+          path: dist/*
           retention-days: 1
 
   publish-crate:

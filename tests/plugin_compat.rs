@@ -3,7 +3,20 @@
 use std::process::Command;
 
 fn plugin_command() -> Command {
-    Command::new(env!("CARGO_BIN_EXE_dm-sqllog2db"))
+    let mut command = Command::new(env!("CARGO_BIN_EXE_dm-sqllog2db"));
+    for variable in [
+        "DM_PLUGIN_API_VERSION",
+        "DM_PLUGIN_CAPABILITIES",
+        "DM_PLUGIN_DIR",
+        "DM_HOME",
+        "DM_PLUGIN_HOME",
+        "DM_PLUGIN_CONFIG_DIR",
+        "DM_PLUGIN_DATA_DIR",
+        "DM_PLUGIN_CACHE_DIR",
+    ] {
+        command.env_remove(variable);
+    }
+    command
 }
 
 #[test]
@@ -23,21 +36,13 @@ fn plugin_manifest_matches_the_cargo_package() {
         manifest["api_version"].as_integer(),
         Some(i64::from(dm_plugin_sdk::API_VERSION))
     );
+    assert_eq!(manifest["min_host_version"].as_str(), Some("0.3.0"));
+    assert!(manifest.get("permissions").is_none());
 }
 
 #[test]
 fn plugin_rejects_direct_execution_without_the_host_protocol() {
-    let output = plugin_command()
-        .env_remove("DM_PLUGIN_API_VERSION")
-        .env_remove("DM_PLUGIN_CAPABILITIES")
-        .env_remove("DM_PLUGIN_DIR")
-        .env_remove("DM_HOME")
-        .env_remove("DM_PLUGIN_CONFIG_DIR")
-        .env_remove("DM_PLUGIN_DATA_DIR")
-        .env_remove("DM_PLUGIN_CACHE_DIR")
-        .arg("--help")
-        .output()
-        .unwrap();
+    let output = plugin_command().arg("--help").output().unwrap();
 
     assert_eq!(output.status.code(), Some(1));
     assert!(
@@ -60,7 +65,7 @@ fn plugin_preserves_cli_arguments_and_success_exit_code() {
         .env("DM_PLUGIN_API_VERSION", "1")
         .env("DM_PLUGIN_CAPABILITIES", "config-dirs-v1")
         .env("DM_PLUGIN_DIR", plugin_dir)
-        .env("DM_HOME", root.path())
+        .env("DM_PLUGIN_HOME", root.path())
         .env("DM_PLUGIN_CONFIG_DIR", config_dir)
         .env("DM_PLUGIN_DATA_DIR", data_dir)
         .env("DM_PLUGIN_CACHE_DIR", cache_dir)
@@ -72,4 +77,23 @@ fn plugin_preserves_cli_arguments_and_success_exit_code() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Usage: dm sqllog2db"));
     assert!(stdout.contains("parsing DM database SQL logs"));
+}
+
+#[test]
+fn plugin_rejects_legacy_home_environment() {
+    let root = tempfile::TempDir::new().unwrap();
+    let output = plugin_command()
+        .env("DM_PLUGIN_API_VERSION", "1")
+        .env("DM_PLUGIN_CAPABILITIES", "config-dirs-v1")
+        .env("DM_PLUGIN_DIR", root.path())
+        .env("DM_HOME", root.path())
+        .env("DM_PLUGIN_CONFIG_DIR", root.path())
+        .env("DM_PLUGIN_DATA_DIR", root.path())
+        .env("DM_PLUGIN_CACHE_DIR", root.path())
+        .arg("--help")
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("Missing DM_PLUGIN_HOME"));
 }

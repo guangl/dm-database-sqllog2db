@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **dameng-cli 0.3.0 适配**：使用 `DM_PLUGIN_HOME` 宿主环境，移除清单中的旧权限字段，更新预编译安装说明，并在 Release 中提供插件二进制及 SHA-256 校验文件。
+
 ### Added
 
 - **dameng-cli 插件兼容**：新增 `dm-plugin.toml`、`dm-sqllog2db` 插件入口与协议测试；保留原 `sqllog2db` 独立命令，可通过 `dm sqllog2db ...` 使用相同参数、标准流和退出码。
