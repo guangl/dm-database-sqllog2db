@@ -223,3 +223,62 @@ fn plugin_rejects_legacy_home_environment() {
     assert_eq!(output.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&output.stderr).contains("Missing DM_PLUGIN_HOME"));
 }
+
+#[test]
+fn explicit_host_config_path_is_never_seeded() {
+    for command in ["run", "validate", "stats"] {
+        for from_env in [false, true] {
+            let home = PluginHome::new();
+            let path = home.default_config_file();
+            let mut invocation = home.command();
+            invocation.arg(command);
+            if from_env {
+                invocation.env("SQLLOG2DB_CONFIG", &path);
+            } else {
+                invocation.arg("-c").arg(&path);
+            }
+            let _ = invocation.output().unwrap();
+            assert!(!path.exists(), "{command}, from_env={from_env}");
+        }
+    }
+}
+
+#[test]
+fn init_honors_environment_and_explicit_output_precedence() {
+    let home = PluginHome::new();
+    let default = home.default_config_file();
+    std::fs::write(&default, "host file must survive").unwrap();
+    let custom = home.external_config();
+    let output = home
+        .command()
+        .env("SQLLOG2DB_CONFIG", &custom)
+        .args(["init", "--force"])
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", stderr_of(&output));
+    assert!(
+        std::fs::read_to_string(&custom)
+            .unwrap()
+            .contains("[exporter.parquet]")
+    );
+    assert_eq!(
+        std::fs::read_to_string(&default).unwrap(),
+        "host file must survive"
+    );
+
+    let explicit = home.root.path().join("explicit.toml");
+    std::fs::write(&custom, "environment file must survive").unwrap();
+    let output = home
+        .command()
+        .env("SQLLOG2DB_CONFIG", &custom)
+        .args(["init", "-o"])
+        .arg(&explicit)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", stderr_of(&output));
+    assert!(explicit.is_file());
+    assert_eq!(
+        std::fs::read_to_string(&custom).unwrap(),
+        "environment file must survive"
+    );
+}

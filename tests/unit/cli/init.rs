@@ -168,3 +168,29 @@ fn wizard_rejects_removed_exporter() {
     assert!(!build_parquet_template().contains("sqlite"));
     assert!(!CONFIG_TEMPLATE_CSV.contains("sqlite"));
 }
+
+#[test]
+fn concurrent_seeders_create_only_once() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let path = dir.path().join("nested/config.toml");
+    let barrier = std::sync::Arc::new(std::sync::Barrier::new(8));
+    let threads: Vec<_> = (0..8)
+        .map(|_| {
+            let barrier = barrier.clone();
+            let path = path.clone();
+            std::thread::spawn(move || {
+                barrier.wait();
+                ensure_config_file(&path).unwrap()
+            })
+        })
+        .collect();
+    let created = threads
+        .into_iter()
+        .filter_map(|thread| thread.join().unwrap().then_some(()))
+        .count();
+    assert_eq!(created, 1);
+    assert_eq!(
+        std::fs::read_to_string(path).unwrap(),
+        build_parquet_template()
+    );
+}

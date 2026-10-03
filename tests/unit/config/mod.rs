@@ -120,7 +120,7 @@ fn absent_sections_do_not_enable_features() {
         assert!(cfg.filter.is_none());
         assert!(cfg.output.is_none());
         assert!(cfg.error.is_none());
-        assert!(cfg.sqllog.inputs.is_empty());
+        assert_eq!(cfg.sqllog.inputs, Vec::<String>::new());
         assert!(cfg.exporter.parquet.is_none());
         assert!(cfg.exporter.csv.is_none());
         assert!(cfg.stats.top.is_none());

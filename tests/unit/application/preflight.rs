@@ -62,7 +62,7 @@ fn test_check_log_dir_empty_produces_warning() {
     let cfg = config_with_log_dir(dir.path().to_str().unwrap());
     let result = check(&cfg);
     assert!(!result.has_errors());
-    assert!(!result.warnings.is_empty());
+    assert_ne!(result.warnings, Vec::<String>::new());
 }
 
 #[test]
@@ -72,7 +72,7 @@ fn test_check_log_dir_with_log_files_no_warning() {
     let cfg = config_with_log_dir(dir.path().to_str().unwrap());
     let result = check(&cfg);
     assert!(!result.has_errors());
-    assert!(result.warnings.is_empty());
+    assert_eq!(result.warnings, Vec::<String>::new());
 }
 
 #[test]
@@ -83,7 +83,7 @@ fn test_check_glob_pattern_with_matches() {
     let cfg = config_with_log_dir(&pattern);
     let result = check(&cfg);
     assert!(!result.has_errors());
-    assert!(result.warnings.is_empty());
+    assert_eq!(result.warnings, Vec::<String>::new());
 }
 
 #[test]
@@ -93,7 +93,7 @@ fn test_check_glob_pattern_no_matches_produces_warning() {
     let cfg = config_with_log_dir(&pattern);
     let result = check(&cfg);
     assert!(!result.has_errors());
-    assert!(!result.warnings.is_empty());
+    assert_ne!(result.warnings, Vec::<String>::new());
 }
 
 // ── check: output writable ────────────────────────────────────

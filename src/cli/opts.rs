@@ -90,6 +90,7 @@ EXAMPLES:
         #[arg(
             short = 'o',
             long = "output",
+            env = "SQLLOG2DB_CONFIG",
             default_value = "config.toml",
             help = "Path for the generated default configuration file. Defaults to $DM_PLUGIN_CONFIG_DIR/config.toml for the plugin entry, otherwise ./config.toml."
         )]

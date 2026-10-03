@@ -33,7 +33,7 @@ fn test_csv_basic_export() {
     write_test_log(&logfile, 5);
 
     let records = parse_records(&logfile);
-    assert!(!records.is_empty());
+    assert_ne!(records, vec![]);
 
     let mut exporter = CsvExporter::new(&outfile);
     exporter.initialize().unwrap();

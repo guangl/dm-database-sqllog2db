@@ -29,10 +29,35 @@ pub fn handle_init(output_path: &str, force: bool) -> Result<()> {
 ///
 /// 父目录创建失败或文件写入失败时返回错误。
 pub(crate) fn ensure_config_file(path: &Path) -> Result<bool> {
-    if path.exists() {
-        return Ok(false);
+    if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+        fs::create_dir_all(parent).map_err(|e| {
+            Error::File(FileError::CreateDirectoryFailed {
+                path: parent.to_path_buf(),
+                reason: e.to_string(),
+            })
+        })?;
     }
-    write_config_file(path, &build_parquet_template(), true)?;
+    let mut file = match fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+    {
+        Ok(file) => file,
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => return Ok(false),
+        Err(e) => {
+            return Err(Error::File(FileError::WriteFailed {
+                path: path.to_path_buf(),
+                reason: e.to_string(),
+            }));
+        }
+    };
+    file.write_all(build_parquet_template().as_bytes())
+        .map_err(|e| {
+            Error::File(FileError::WriteFailed {
+                path: path.to_path_buf(),
+                reason: e.to_string(),
+            })
+        })?;
     Ok(true)
 }
 
