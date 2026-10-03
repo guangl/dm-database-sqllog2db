@@ -20,6 +20,22 @@ pub fn handle_init(output_path: &str, force: bool) -> Result<()> {
     Ok(())
 }
 
+/// 若目标路径不存在则以默认模板创建配置文件。
+///
+/// 插件入口（`DM_PLUGIN_CONFIG_DIR/config.toml`）首次运行时用它落盘默认配置；
+/// 文件已存在时不修改内容。返回是否新建了文件。
+///
+/// # Errors
+///
+/// 父目录创建失败或文件写入失败时返回错误。
+pub(crate) fn ensure_config_file(path: &Path) -> Result<bool> {
+    if path.exists() {
+        return Ok(false);
+    }
+    write_config_file(path, &build_parquet_template(), true)?;
+    Ok(true)
+}
+
 fn write_config_file(path: &Path, content: &str, force: bool) -> Result<()> {
     let output_path = path.to_string_lossy();
     info!("Preparing to generate configuration file: {output_path}");

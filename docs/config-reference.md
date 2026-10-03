@@ -1,6 +1,6 @@
 # 配置参考
 
-本文档描述 sqllog2db 中所有可用的配置选项。配置文件使用 TOML 格式编写。默认配置由 `sqllog2db init -o config.toml --force` 生成。以下每节记录一个配置块，包含字段、默认值和使用说明。
+本文档描述 sqllog2db 中所有可用的配置选项。配置文件使用 TOML 格式编写。默认配置由 `sqllog2db init -o config.toml --force` 生成（作为 dameng-cli 插件运行时默认生成到 `$DM_PLUGIN_CONFIG_DIR/config.toml`，见下文「默认配置文件路径」）。以下每节记录一个配置块，包含字段、默认值和使用说明。
 
 所有配置段默认均不启用，写入配置才生效。配置段内部仍可有参数默认值，例如显式写 `[logging]` 后，未填的 level 使用 info。
 
@@ -266,8 +266,19 @@ sqllog2db 提供四个子命令：
 
 各 TOML 节中的字段可以按任意顺序排列。配置使用 `serde` 反序列化，与顺序无关。可选节可以完全省略——所有字段采用默认值。
 
+### 默认配置文件路径
+
+`run`、`validate`、`stats` 的 `-c`/`--config` 与 `init` 的 `-o`/`--output` 按以下优先级取值：
+
+1. 命令行 `-c`/`--config`（`init` 为 `-o`/`--output`）
+2. 环境变量 `SQLLOG2DB_CONFIG`
+3. 插件模式（`dm sqllog2db ...`）下为宿主分配的 `$DM_PLUGIN_CONFIG_DIR/config.toml`；该文件不存在时按默认模板自动创建，已存在则原样复用
+4. 其余情况为当前工作目录下的 `./config.toml`（不会自动创建）
+
+只有第 3 项会写入文件：显式传入的路径（第 1、2 项）不会被自动创建，独立命令的 `./config.toml` 也不会。用 `dm sqllog2db run --help` 可以看到本次运行实际使用的默认路径。
+
 ### 环境变量
 
-- `SQLLOG2DB_CONFIG` — 设置默认配置文件路径（可被 `-c` 标志覆盖）
+- `SQLLOG2DB_CONFIG` — 设置配置文件路径（可被 `-c` 标志覆盖）
 - `NO_COLOR` — 禁用彩色终端输出
 - `RUST_LOG` — 使用 `env_logger` 时覆盖日志级别

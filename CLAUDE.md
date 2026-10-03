@@ -41,7 +41,7 @@ Input .log files (sqllogs/)
 
 ### Key Modules
 
-**Layering:** `cli/` is the thin command layer (arg parsing in `opts.rs`, per-command handlers). `cli/mod.rs` dispatches commands, `cli/runtime.rs` applies config overrides, initializes logging and formats errors. Command-level orchestration lives in top-level domain modules — mirror this split when adding a command (see `stats/` + `cli/stats.rs`).
+**Layering:** `cli/` is the thin command layer (arg parsing in `opts.rs`, per-command handlers). `cli/mod.rs` dispatches commands, `cli/runtime.rs` applies config overrides, initializes logging and formats errors. The default `--config`/`--output` path is injected per launch: `run_as_plugin` points it at `$DM_PLUGIN_CONFIG_DIR/config.toml` and seeds that file via `cli/init.rs::ensure_config_file`, while the standalone `run` keeps `./config.toml` and never creates files. Command-level orchestration lives in top-level domain modules — mirror this split when adding a command (see `stats/` + `cli/stats.rs`).
 
 - **`engine/mod.rs`** — run-command orchestration: resolves inputs, pre-scans transaction filters, builds context, executes the selected plan, and reports results (`engine::run`, called from `cli/mod.rs`)
 - **`engine/context.rs`** — shared run configuration and driver result types

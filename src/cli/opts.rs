@@ -65,7 +65,7 @@ Configuration file sections: [exporter.parquet] / [exporter.csv] for output, [fi
             long = "config",
             default_value = "config.toml",
             env = "SQLLOG2DB_CONFIG",
-            help = "TOML configuration file path. See [exporter], [filter], and [sqllog] sections."
+            help = "TOML configuration file path. See [exporter], [filter], and [sqllog] sections. Defaults to $DM_PLUGIN_CONFIG_DIR/config.toml for the plugin entry, otherwise ./config.toml."
         )]
         config: String,
         /// Input log paths. Repeat for multiple entries. Overrides config \[sqllog\].inputs.
@@ -91,7 +91,7 @@ EXAMPLES:
             short = 'o',
             long = "output",
             default_value = "config.toml",
-            help = "Path for the generated default configuration file."
+            help = "Path for the generated default configuration file. Defaults to $DM_PLUGIN_CONFIG_DIR/config.toml for the plugin entry, otherwise ./config.toml."
         )]
         output: String,
         /// Force overwrite if file exists
@@ -119,7 +119,7 @@ EXAMPLES:
             long = "config",
             default_value = "config.toml",
             env = "SQLLOG2DB_CONFIG",
-            help = "TOML configuration file path to validate."
+            help = "TOML configuration file path to validate. Defaults to $DM_PLUGIN_CONFIG_DIR/config.toml for the plugin entry, otherwise ./config.toml."
         )]
         config: String,
     },
@@ -144,7 +144,7 @@ EXAMPLES:
             long = "config",
             default_value = "config.toml",
             env = "SQLLOG2DB_CONFIG",
-            help = "TOML configuration file path. Stats uses the [sqllog] and [stats] sections."
+            help = "TOML configuration file path. Stats uses the [sqllog] and [stats] sections. Defaults to $DM_PLUGIN_CONFIG_DIR/config.toml for the plugin entry, otherwise ./config.toml."
         )]
         config: String,
         /// Number of top records to display per table (default: 20)

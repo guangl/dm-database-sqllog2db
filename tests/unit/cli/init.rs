@@ -136,6 +136,30 @@ fn test_apply_output_parses_as_config_csv() {
 }
 
 #[test]
+fn ensure_config_file_seeds_the_default_template_once() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let path = dir.path().join("plugin/config.toml");
+
+    assert!(
+        ensure_config_file(&path).unwrap(),
+        "missing file is created"
+    );
+    let seeded = std::fs::read_to_string(&path).unwrap();
+    assert!(seeded.contains("[exporter.parquet]"));
+    assert!(seeded.contains(r#"inputs = ["sqllogs"]"#));
+
+    std::fs::write(&path, "inputs = [\"edited\"]").unwrap();
+    assert!(
+        !ensure_config_file(&path).unwrap(),
+        "an existing file is left untouched"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        "inputs = [\"edited\"]"
+    );
+}
+
+#[test]
 fn wizard_rejects_removed_exporter() {
     let mut reader = std::io::Cursor::new(b"\nsqlite\nsqlite\nsqlite\n");
     let mut writer = Vec::new();

@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **dameng-cli 插件兼容**：新增 `dm-plugin.toml`、`dm-sqllog2db` 插件入口与协议测试；保留原 `sqllog2db` 独立命令，可通过 `dm sqllog2db ...` 使用相同参数、标准流和退出码。
+- **插件默认配置文件**：`dm sqllog2db run|validate|stats` 默认使用 `$DM_PLUGIN_CONFIG_DIR/config.toml`，文件不存在时按默认模板自动创建、已存在则复用；`dm sqllog2db init` 同样默认写入该文件，`-c`/--config 与 `SQLLOG2DB_CONFIG` 仍然优先。独立命令保持默认读取 `./config.toml` 且不自动创建。为此 `--help` 中的 `[default: ...]` 在插件模式下显示真实路径。
 
 ## [3.0.1] - 2026-09-19
 
