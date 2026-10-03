@@ -44,14 +44,14 @@ fn writes_readable_parquet_with_projection() {
     assert_eq!(batch.schema().field(1).name(), "ep");
     assert_eq!(batch.schema().field(2).name(), "exec_time_ms");
     assert_eq!(batch.schema().field(3).name(), "normalized_sql");
-    assert!(
-        !batch
+    assert_ne!(
+        batch
             .column(0)
             .as_any()
             .downcast_ref::<StringArray>()
             .unwrap()
-            .value(0)
-            .is_empty()
+            .value(0),
+        ""
     );
     assert!(
         batch

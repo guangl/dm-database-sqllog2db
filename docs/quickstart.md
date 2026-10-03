@@ -255,6 +255,21 @@ elapsed_ms  timestamp                SQL
 
 ---
 
+## 作为 dameng-cli 插件运行
+
+通过 `dm` 调用时不需要自己准备配置文件：插件默认使用宿主分配的配置目录中的 `config.toml`，首次运行会按默认模板自动创建，后续运行直接复用（你在文件里的修改不会被覆盖）。
+
+```bash
+dm sqllog2db run                    # 首次运行创建并使用 $DM_PLUGIN_CONFIG_DIR/config.toml
+dm sqllog2db run --help             # 查看本次实际使用的默认路径
+dm sqllog2db init --force           # 按默认模板重新生成插件配置
+dm sqllog2db run -c myconfig.toml   # 显式指定其他配置文件（不会创建默认文件）
+```
+
+插件会继承 `SQLLOG2DB_CONFIG` 与 `RUST_LOG`；输入和输出路径仍按调用 `dm` 时的当前目录解析。宿主的插件存储根目录由 `DM_PLUGIN_HOME` 决定。
+
+---
+
 ## 故障排查
 
 ### 配置验证失败

@@ -70,7 +70,7 @@ fn test_error_suggestion_for_export_write_failed() {
         reason: "disk full".into(),
     });
     assert!(!e.is_fatal());
-    assert!(!e.suggestion().is_empty());
+    assert_ne!(e.suggestion(), "");
 }
 
 #[test]
@@ -109,6 +109,55 @@ fn test_apply_verbosity_verbose_sets_debug() {
     };
     apply_verbosity_to_config(&mut cfg, true, false);
     assert_eq!(cfg.logging.as_ref().unwrap().level, "debug");
+}
+
+#[test]
+fn test_default_config_is_seeded_only_for_the_plugin_default_path() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let plugin_path = dir.path().join("config.toml");
+    let plugin_defaults = LaunchDefaults {
+        config: plugin_path.clone(),
+        create_missing_config: true,
+    };
+
+    assert!(
+        !create_default_config_if_needed(
+            "/somewhere/else.toml",
+            &plugin_defaults,
+            Some(ValueSource::DefaultValue)
+        )
+        .unwrap(),
+        "an explicit -c or SQLLOG2DB_CONFIG path must not seed the plugin file"
+    );
+    assert!(
+        !create_default_config_if_needed(
+            DEFAULT_CONFIG_FILE,
+            &LaunchDefaults::default(),
+            Some(ValueSource::DefaultValue)
+        )
+        .unwrap(),
+        "a standalone launch must not drop a config.toml into the working directory"
+    );
+
+    let plugin_path = plugin_path.to_str().unwrap().to_owned();
+    assert!(
+        create_default_config_if_needed(
+            &plugin_path,
+            &plugin_defaults,
+            Some(ValueSource::DefaultValue)
+        )
+        .unwrap()
+    );
+    assert!(std::path::Path::new(&plugin_path).is_file());
+    assert!(
+        !create_default_config_if_needed(
+            &plugin_path,
+            &plugin_defaults,
+            Some(ValueSource::DefaultValue)
+        )
+        .unwrap(),
+        "an existing plugin config is reused, not regenerated"
+    );
 }
 
 #[test]

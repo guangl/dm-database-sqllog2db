@@ -61,7 +61,7 @@ fn test_placeholder_override_both_is_auto() {
 fn test_normalize_config_default() {
     let cfg = NormalizeConfig::default();
     assert_eq!(cfg.tags, vec!["SEL"]);
-    assert!(cfg.placeholders.is_empty());
+    assert_eq!(cfg.placeholders, Vec::<String>::new());
 }
 
 #[test]
@@ -112,7 +112,7 @@ fn test_output_config_ordered_indices_empty_equals_all() {
 fn test_empty_replace_parameters_section() {
     let cfg: NormalizeConfig = toml::from_str("").unwrap();
     assert_eq!(cfg.tags, vec!["SEL"]);
-    assert!(cfg.placeholders.is_empty());
+    assert_eq!(cfg.placeholders, Vec::<String>::new());
 }
 
 #[test]

@@ -143,7 +143,14 @@ Windows 包目录需包含 `dm-plugin.toml` 与 `dm-sqllog2db.exe`。
 dm install https://github.com/guangl/dm-database-sqllog2db.git --rev <release-tag>
 ```
 
-插件入口与独立命令共享全部参数、标准输入输出和退出码，因此 `sqllog2db run ...` 可直接改写为 `dm sqllog2db run ...`。宿主会保留 `SQLLOG2DB_CONFIG` 与 `RUST_LOG` 环境变量；其他配置和输入输出路径仍按调用 `dm` 时的当前目录解析。插件存储根目录通过 `DM_PLUGIN_HOME` 设置。
+插件入口与独立命令共享全部参数、标准输入输出和退出码，因此 `sqllog2db run ...` 可直接改写为 `dm sqllog2db run ...`。宿主会保留 `SQLLOG2DB_CONFIG` 与 `RUST_LOG` 环境变量；输入和输出路径仍按调用 `dm` 时的当前目录解析。插件存储根目录通过 `DM_PLUGIN_HOME` 设置。
+
+插件默认使用宿主分配的配置目录中的 `config.toml`（即 `$DM_PLUGIN_CONFIG_DIR/config.toml`）：首次运行 `dm sqllog2db run|validate|stats` 时若该文件不存在，会按默认模板自动创建，之后一直复用，不会覆盖你的修改。`dm sqllog2db init` 同样默认写入该文件，可用于重新生成。`-c`/`--config` 或 `SQLLOG2DB_CONFIG` 指定的路径优先，且此时不会创建默认文件；独立命令 `sqllog2db` 仍默认读取当前目录的 `./config.toml`，也不会自动创建文件。
+```bash
+dm sqllog2db run                    # 使用 $DM_PLUGIN_CONFIG_DIR/config.toml
+dm sqllog2db run -c myconfig.toml   # 显式指定路径
+dm sqllog2db init --force           # 按默认模板重新生成插件配置
+```
 
 ### 本地构建
 

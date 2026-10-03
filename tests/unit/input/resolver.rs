@@ -11,7 +11,7 @@ fn test_log_files_empty_directory() {
     let dir = tempfile::TempDir::new().unwrap();
     let p = InputResolver::new(vec![dir.path().to_string_lossy().into_owned()]);
     let files = p.log_files().unwrap();
-    assert!(files.is_empty());
+    assert_eq!(files, Vec::<std::path::PathBuf>::new());
 }
 
 #[test]
@@ -79,7 +79,7 @@ fn test_log_files_glob_no_match() {
     let pattern = format!("{}/nomatch*.log", dir.path().display());
     let p = InputResolver::new(vec![pattern]);
     let files = p.log_files().unwrap();
-    assert!(files.is_empty());
+    assert_eq!(files, Vec::<std::path::PathBuf>::new());
 }
 
 #[test]

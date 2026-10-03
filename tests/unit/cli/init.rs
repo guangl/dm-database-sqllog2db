@@ -136,6 +136,30 @@ fn test_apply_output_parses_as_config_csv() {
 }
 
 #[test]
+fn ensure_config_file_seeds_the_default_template_once() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let path = dir.path().join("plugin/config.toml");
+
+    assert!(
+        ensure_config_file(&path).unwrap(),
+        "missing file is created"
+    );
+    let seeded = std::fs::read_to_string(&path).unwrap();
+    assert!(seeded.contains("[exporter.parquet]"));
+    assert!(seeded.contains(r#"inputs = ["sqllogs"]"#));
+
+    std::fs::write(&path, "inputs = [\"edited\"]").unwrap();
+    assert!(
+        !ensure_config_file(&path).unwrap(),
+        "an existing file is left untouched"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        "inputs = [\"edited\"]"
+    );
+}
+
+#[test]
 fn wizard_rejects_removed_exporter() {
     let mut reader = std::io::Cursor::new(b"\nsqlite\nsqlite\nsqlite\n");
     let mut writer = Vec::new();
@@ -143,4 +167,30 @@ fn wizard_rejects_removed_exporter() {
     assert!(error.to_string().contains("must be 'parquet' or 'csv'"));
     assert!(!build_parquet_template().contains("sqlite"));
     assert!(!CONFIG_TEMPLATE_CSV.contains("sqlite"));
+}
+
+#[test]
+fn concurrent_seeders_create_only_once() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let path = dir.path().join("nested/config.toml");
+    let barrier = std::sync::Arc::new(std::sync::Barrier::new(8));
+    let threads: Vec<_> = (0..8)
+        .map(|_| {
+            let barrier = barrier.clone();
+            let path = path.clone();
+            std::thread::spawn(move || {
+                barrier.wait();
+                ensure_config_file(&path).unwrap()
+            })
+        })
+        .collect();
+    let created = threads
+        .into_iter()
+        .filter_map(|thread| thread.join().unwrap().then_some(()))
+        .count();
+    assert_eq!(created, 1);
+    assert_eq!(
+        std::fs::read_to_string(path).unwrap(),
+        build_parquet_template()
+    );
 }

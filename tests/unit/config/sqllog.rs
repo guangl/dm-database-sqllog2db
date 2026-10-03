@@ -3,7 +3,7 @@ use super::*;
 #[test]
 fn test_default_inputs_are_empty() {
     let cfg = SqllogConfig::default();
-    assert!(cfg.inputs.is_empty());
+    assert_eq!(cfg.inputs, Vec::<String>::new());
 }
 
 #[test]
