@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.2] - 2026-10-03
+
 ### Changed
 
 - **dameng-cli 0.3.0 适配**：使用 `DM_PLUGIN_HOME` 宿主环境，移除清单中的旧权限字段，更新预编译安装说明，并在 Release 中提供插件二进制及 SHA-256 校验文件。
@@ -15,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **dameng-cli 插件兼容**：新增 `dm-plugin.toml`、`dm-sqllog2db` 插件入口与协议测试；保留原 `sqllog2db` 独立命令，可通过 `dm sqllog2db ...` 使用相同参数、标准流和退出码。
 - **插件默认配置文件**：`dm sqllog2db run|validate|stats` 默认使用 `$DM_PLUGIN_CONFIG_DIR/config.toml`，文件不存在时按默认模板自动创建、已存在则复用；`dm sqllog2db init` 同样默认写入该文件，`-c`/--config 与 `SQLLOG2DB_CONFIG` 仍然优先。独立命令保持默认读取 `./config.toml` 且不自动创建。为此 `--help` 中的 `[default: ...]` 在插件模式下显示真实路径。
+
+### Fixed
+
+- **配置优先级**：显式 `-c`/`--config` 或 `SQLLOG2DB_CONFIG` 即使与插件默认路径相同也不自动创建文件；`init` 的输出路径遵守 `-o`/`--output` > `SQLLOG2DB_CONFIG` > 默认路径。
+- **配置创建并发安全**：首次运行使用原子 create-new 创建配置，避免覆盖其他进程已创建或编辑的文件。
+- **稳定版工具链检查**：调整空值测试断言，通过当前 stable Rust 的严格 Clippy 检查。
 
 ## [3.0.1] - 2026-09-19
 
@@ -404,7 +412,8 @@ The 0.x series (0.1.0 through 0.10.7) covered the initial development of sqllog2
 
 See git history for full details.
 
-[Unreleased]: https://github.com/guangl/dm-database-sqllog2db/compare/6c6d890667b0e6e2e36b9b5cfb58d561f4f94b57...HEAD
+[Unreleased]: https://github.com/guangl/dm-database-sqllog2db/compare/v3.0.2...HEAD
+[3.0.2]: https://github.com/guangl/dm-database-sqllog2db/compare/v3.0.1...v3.0.2
 [3.0.1]: https://github.com/guangl/dm-database-sqllog2db/compare/v3.0.0...v3.0.1
 [3.0.0]: https://github.com/guangl/dm-database-sqllog2db/compare/v2.0.0...6c6d890667b0e6e2e36b9b5cfb58d561f4f94b57
 [1.15.0]: https://github.com/guangl/sqllog2db/releases/tag/v1.15.0

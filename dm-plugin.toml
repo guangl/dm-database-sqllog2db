@@ -1,5 +1,5 @@
 name = "sqllog2db"
-version = "3.0.1"
+version = "3.0.2"
 description = "Parse Dameng SQL logs and export them to Parquet or CSV"
 api_version = 1
 min_host_version = "0.3.0"
