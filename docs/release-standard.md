@@ -26,7 +26,7 @@ Windows 必须通过功能测试与发布构建；当前 RSS 门禁仅支持 Lin
 - `v*` 标签：`release.yaml` 的 `verification` 调用完整 CI；`export-memory` 等待发布产物构建完成，在对应原生平台下载并检测**将要发布的实际二进制**。标签 CI 不重复执行源代码构建版内存门禁。
 - `publish-crate.needs` 同时依赖 `verification`、`export-memory` 和全部构建任务。标签必须与 `Cargo.toml` 版本一致，且仓库需配置具有该 crate 发布权限的 `CARGO_REGISTRY_TOKEN` secret。门禁通过后执行 `cargo publish --locked`；发布失败会阻止 `create-release` 创建 GitHub Release。
 - `create-release` 等待 `publish-crate` 成功。没有 `continue-on-error`，发布步骤没有 `always()` 绕过失败。
-- 检测报告以 Actions artifact 保留 90 天；成功发版时三个平台的 JSON 报告同时作为 Release 附件，文件名为 `export-memory-<platform>.json`。
+- 检测报告以 Actions artifact 保留 90 天；Release 不附带 JSON 报告或 SHA-256 文件。
 - 普通 Criterion benchmark 仍是参考数据，不作为内存门禁的替代。600 秒是卡死保护，不是吞吐性能目标。
 
 仓库里的工作流修改提交并推送后生效；本文不意味着远端分支保护设置已经修改。即使没有配置 PR 必需状态检查，标签发布流程自身仍会等待这些门禁。

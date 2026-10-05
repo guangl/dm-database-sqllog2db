@@ -137,13 +137,15 @@ dm sqllog2db --help
 
 Windows 包目录需包含 `dm-plugin.toml` 与 `dm-sqllog2db.exe`。
 
-发布包含插件产物的新版本后，也可以从 Git 仓库安装。Release 必须提供对应平台的 `dm-sqllog2db-<target>` 二进制及 `.sha256` 校验文件（Windows 二进制带 `.exe` 后缀）。旧 Release 仅有独立命令产物，不能用于插件安装：
+发布包含插件产物的新版本后，也可以从 Git 仓库安装。Release 必须提供对应平台的 `dm-sqllog2db-<target>` 二进制（Windows 二进制带 `.exe` 后缀）。旧 Release 仅有独立命令产物，不能用于插件安装：
 
 ```bash
 dm install https://github.com/guangl/dm-database-sqllog2db.git --rev <release-tag>
 ```
 
 插件入口与独立命令共享全部参数、标准输入输出和退出码，因此 `sqllog2db run ...` 可直接改写为 `dm sqllog2db run ...`。宿主会保留 `SQLLOG2DB_CONFIG` 与 `RUST_LOG` 环境变量；输入和输出路径仍按调用 `dm` 时的当前目录解析。插件存储根目录通过 `DM_PLUGIN_HOME` 设置。
+
+Release 同时提供 `dm-sqllog2db-v<版本>-<Rust target>.tar.gz`（Windows 为 `.zip`）。包内目录同名，包含 `dm-plugin.toml` 和 `dm-sqllog2db`（Windows 为 `.exe`），下载解压后可通过 `dm install <包目录>` 安装。现有四个平台的独立命令和裸插件二进制继续提供。
 
 插件已启用 `completion-v1` 协议。加载 dameng-cli 的 Bash/Zsh 补全脚本后，`dm sqllog2db <Tab>` 可补全子命令、选项和配置/输入/输出路径；补全只读，不会创建配置或存储目录。
 
