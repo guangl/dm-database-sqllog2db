@@ -35,7 +35,7 @@ jobs:
           echo 'deb http://archive.debian.org/debian buster main' > /etc/apt/sources.list
           echo 'deb http://archive.debian.org/debian-security buster/updates main' >> /etc/apt/sources.list
           apt-get -o Acquire::Check-Valid-Until=false update
-          apt-get install -y curl build-essential ca-certificates python3
+          apt-get install -y curl build-essential ca-certificates
 
       - uses: actions/checkout@v7
 
@@ -56,9 +56,6 @@ jobs:
           cp target/x86_64-unknown-linux-gnu/release/sqllog2db dist/sqllog2db-x86_64-linux
           cp target/x86_64-unknown-linux-gnu/release/dm-sqllog2db dist/dm-sqllog2db-x86_64-linux
 
-      - name: Package dameng-cli plugin
-        run: python3 scripts/package_plugin.py x86_64-unknown-linux-gnu "${{ github.ref_name }}"
-
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
@@ -78,7 +75,7 @@ jobs:
           echo 'deb http://archive.debian.org/debian buster main' > /etc/apt/sources.list
           echo 'deb http://archive.debian.org/debian-security buster/updates main' >> /etc/apt/sources.list
           apt-get -o Acquire::Check-Valid-Until=false update
-          apt-get install -y curl build-essential ca-certificates python3
+          apt-get install -y curl build-essential ca-certificates
 
       - uses: actions/checkout@v7
 
@@ -98,9 +95,6 @@ jobs:
           mkdir dist
           cp target/aarch64-unknown-linux-gnu/release/sqllog2db dist/sqllog2db-aarch64-linux
           cp target/aarch64-unknown-linux-gnu/release/dm-sqllog2db dist/dm-sqllog2db-aarch64-linux
-
-      - name: Package dameng-cli plugin
-        run: python3 scripts/package_plugin.py aarch64-unknown-linux-gnu "${{ github.ref_name }}"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
@@ -150,10 +144,6 @@ jobs:
             cp target/${{ matrix.target }}/release/dm-sqllog2db dist/dm-${{ matrix.artifact }}
           fi
         shell: bash
-
-      - name: Package dameng-cli plugin
-        shell: bash
-        run: python scripts/package_plugin.py "${{ matrix.target }}" "${{ github.ref_name }}"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
