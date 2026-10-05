@@ -55,7 +55,6 @@ jobs:
           mkdir dist
           cp target/x86_64-unknown-linux-gnu/release/sqllog2db dist/sqllog2db-x86_64-linux
           cp target/x86_64-unknown-linux-gnu/release/dm-sqllog2db dist/dm-sqllog2db-x86_64-linux
-          (cd dist && sha256sum dm-sqllog2db-x86_64-linux > dm-sqllog2db-x86_64-linux.sha256)
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
@@ -96,7 +95,6 @@ jobs:
           mkdir dist
           cp target/aarch64-unknown-linux-gnu/release/sqllog2db dist/sqllog2db-aarch64-linux
           cp target/aarch64-unknown-linux-gnu/release/dm-sqllog2db dist/dm-sqllog2db-aarch64-linux
-          (cd dist && sha256sum dm-sqllog2db-aarch64-linux > dm-sqllog2db-aarch64-linux.sha256)
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
@@ -144,11 +142,6 @@ jobs:
           else
             cp target/${{ matrix.target }}/release/sqllog2db dist/${{ matrix.artifact }}
             cp target/${{ matrix.target }}/release/dm-sqllog2db dist/dm-${{ matrix.artifact }}
-          fi
-          if command -v sha256sum >/dev/null 2>&1; then
-            (cd dist && sha256sum dm-${{ matrix.artifact }} > dm-${{ matrix.artifact }}.sha256)
-          else
-            (cd dist && shasum -a 256 dm-${{ matrix.artifact }} > dm-${{ matrix.artifact }}.sha256)
           fi
         shell: bash
 
@@ -211,21 +204,6 @@ jobs:
           path: dist
           pattern: sqllog2db-*
           merge-multiple: true
-
-      - name: Download memory gate reports
-        uses: actions/download-artifact@v8
-        with:
-          path: gate-reports
-          pattern: export-memory-*-candidate
-
-      - name: Include memory gate evidence in release
-        shell: bash
-        run: |
-          for platform in linux-x86_64 linux-aarch64 macos-aarch64; do
-            report="gate-reports/export-memory-${platform}-candidate/export-memory-report.json"
-            test -s "$report"
-            cp "$report" "dist/export-memory-${platform}.json"
-          done
 
       - name: Extract changelog
         shell: bash
