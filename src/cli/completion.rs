@@ -19,7 +19,14 @@ fn candidates(mut command: Command, words: &[String]) -> Vec<String> {
             flags = false;
             continue;
         }
+        if !flags {
+            continue;
+        }
         if flags && word.starts_with('-') {
+            if let Some((arg, _, _)) = inline_value(&command, word) {
+                used.insert(arg.get_id().to_string());
+                continue;
+            }
             let flag = word.split('=').next().unwrap_or(word);
             if let Some(arg) = find_flag(&command, flag) {
                 used.insert(arg.get_id().to_string());
@@ -45,16 +52,10 @@ fn candidates(mut command: Command, words: &[String]) -> Vec<String> {
     if let Some(arg) = pending {
         return values(&arg, current);
     }
-    if flags
-        && let Some((flag, prefix)) = current.split_once('=')
-        && let Some(arg) = command.get_arguments().find(|arg| {
-            arg.get_long()
-                .is_some_and(|long| flag == format!("--{long}"))
-        })
-    {
-        return values(arg, prefix)
+    if flags && let Some((arg, attached, value)) = inline_value(&command, current) {
+        return values(arg, value)
             .into_iter()
-            .map(|value| format!("{flag}={value}"))
+            .map(|value| format!("{attached}{value}"))
             .collect();
     }
     let blocked: BTreeSet<_> = command
@@ -83,7 +84,7 @@ fn candidates(mut command: Command, words: &[String]) -> Vec<String> {
             }
         }
     }
-    if !current.starts_with('-') {
+    if flags && !current.starts_with('-') {
         for sub in command.get_subcommands().filter(|sub| !sub.is_hide_set()) {
             result.push(sub.get_name().to_owned());
             result.extend(sub.get_visible_aliases().map(str::to_owned));
@@ -119,10 +120,16 @@ fn values(arg: &Arg, prefix: &str) -> Vec<String> {
 fn paths(prefix: &str) -> Vec<String> {
     let split = prefix.rfind(['/', '\\']).map_or(0, |index| index + 1);
     let parent = &prefix[..split];
-    let directory = if parent.is_empty() {
-        Path::new(".")
+    let directory = if parent.starts_with("~/") || parent.starts_with("~\\") {
+        let Some(home) = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"))
+        else {
+            return Vec::new();
+        };
+        Path::new(&home).join(&parent[2..])
+    } else if parent.is_empty() {
+        Path::new(".").to_path_buf()
     } else {
-        Path::new(parent)
+        Path::new(parent).to_path_buf()
     };
     let Ok(entries) = std::fs::read_dir(directory) else {
         return Vec::new();
@@ -136,11 +143,7 @@ fn paths(prefix: &str) -> Vec<String> {
             }
             Some(format!(
                 "{parent}{name}{}",
-                if entry.file_type().ok()?.is_dir() {
-                    "/"
-                } else {
-                    ""
-                }
+                if entry.path().is_dir() { "/" } else { "" }
             ))
         })
         .collect()
@@ -180,4 +183,21 @@ fn find_flag<'a>(command: &'a Command, flag: &str) -> Option<&'a Arg> {
                 .get_short()
                 .is_some_and(|short| flag == format!("-{short}"))
     })
+}
+
+fn inline_value<'a, 'b>(
+    command: &'a Command,
+    word: &'b str,
+) -> Option<(&'a Arg, &'b str, &'b str)> {
+    let (flag, value, attached) = if let Some((flag, value)) = word.split_once('=') {
+        (flag, value, &word[..=flag.len()])
+    } else if word.starts_with('-') && !word.starts_with("--") && word.len() > 2 {
+        (word.get(..2)?, word.get(2..)?, word.get(..2)?)
+    } else {
+        return None;
+    };
+    let arg = find_flag(command, flag)?;
+    arg.get_action()
+        .takes_values()
+        .then_some((arg, attached, value))
 }

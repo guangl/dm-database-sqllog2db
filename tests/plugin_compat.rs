@@ -296,6 +296,8 @@ fn plugin_completion_is_read_only_and_context_aware() {
             .env("DM_PLUGIN_CAPABILITIES", "config-dirs-v1,completion-v1")
             .env("SQLLOG2DB_CONFIG", "missing.toml")
             .env("RUST_LOG", "trace")
+            .env("HOME", home.root.path())
+            .env("USERPROFILE", home.root.path())
             .current_dir(home.root.path())
             .arg("__complete")
             .args(words)
@@ -317,6 +319,8 @@ fn plugin_completion_is_read_only_and_context_aware() {
     assert_eq!(query(&["stats", "--top", ""]), Vec::<String>::new());
     assert_eq!(query(&["stats", "--from=20"]), Vec::<String>::new());
     assert_eq!(query(&["run", "--", ""]), Vec::<String>::new());
+    assert_eq!(query(&["--", ""]), Vec::<String>::new());
+    assert_eq!(query(&["--", "run", ""]), Vec::<String>::new());
     std::fs::write(home.root.path().join("sample config.toml"), "invalid").unwrap();
     std::fs::create_dir(home.root.path().join("samples")).unwrap();
     assert_eq!(
@@ -327,6 +331,38 @@ fn plugin_completion_is_read_only_and_context_aware() {
         query(&["init", "--output=sam"]),
         ["--output=sample config.toml", "--output=samples/"]
     );
+    assert_eq!(
+        query(&["run", "-c=sam"]),
+        ["-c=sample config.toml", "-c=samples/"]
+    );
+    assert_eq!(
+        query(&["run", "-isam"]),
+        ["-isample config.toml", "-isamples/"]
+    );
+    assert_eq!(
+        query(&["init", "-o=sam"]),
+        ["-o=sample config.toml", "-o=samples/"]
+    );
+    assert_eq!(
+        query(&["run", "-csample config.toml", "st"]),
+        Vec::<String>::new()
+    );
+    assert!(query(&["run", "-csample config.toml", "--"]).contains(&"--input".to_owned()));
+    assert_eq!(
+        query(&["run", "-c", "~/sam"]),
+        ["~/sample config.toml", "~/samples/"]
+    );
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(
+            home.root.path().join("samples"),
+            home.root.path().join("linked"),
+        )
+        .unwrap();
+        std::fs::write(home.root.path().join("samples/nested.toml"), "invalid").unwrap();
+        assert_eq!(query(&["run", "-c", "link"]), ["linked/"]);
+        assert_eq!(query(&["run", "-c", "linked/ne"]), ["linked/nested.toml"]);
+    }
     assert!(!home.config_dir.exists());
     assert!(!home.data_dir.exists());
     assert!(!home.cache_dir.exists());
