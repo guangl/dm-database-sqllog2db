@@ -125,7 +125,7 @@ cargo install dm-database-sqllog2db
 
 ### 作为 dameng-cli 插件安装
 
-需要 `dameng-cli` 0.3.0+ 和 Rust 1.95+。宿主只安装预编译插件，本地安装前先构建并准备包目录（以下为 Linux/macOS 示例）：
+需要 `dameng-cli` 0.4.0+ 和 Rust 1.95+。宿主只安装预编译插件，本地安装前先构建并准备包目录（以下为 Linux/macOS 示例）：
 
 ```bash
 cargo build --release --locked --bin dm-sqllog2db
@@ -144,6 +144,8 @@ dm install https://github.com/guangl/dm-database-sqllog2db.git --rev <release-ta
 ```
 
 插件入口与独立命令共享全部参数、标准输入输出和退出码，因此 `sqllog2db run ...` 可直接改写为 `dm sqllog2db run ...`。宿主会保留 `SQLLOG2DB_CONFIG` 与 `RUST_LOG` 环境变量；输入和输出路径仍按调用 `dm` 时的当前目录解析。插件存储根目录通过 `DM_PLUGIN_HOME` 设置。
+
+插件已启用 `completion-v1` 协议。加载 dameng-cli 的 Bash/Zsh 补全脚本后，`dm sqllog2db <Tab>` 可补全子命令、选项和配置/输入/输出路径；补全只读，不会创建配置或存储目录。
 
 插件默认使用宿主分配的配置目录中的 `config.toml`（即 `$DM_PLUGIN_CONFIG_DIR/config.toml`）：首次运行 `dm sqllog2db run|validate|stats` 时若该文件不存在，会按默认模板自动创建，之后一直复用，不会覆盖你的修改。`dm sqllog2db init` 同样默认写入该文件，可用于重新生成。`-c`/`--config` 或 `SQLLOG2DB_CONFIG` 指定的路径优先，且此时不会创建默认文件；独立命令 `sqllog2db` 仍默认读取当前目录的 `./config.toml`，也不会自动创建文件。
 ```bash

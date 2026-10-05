@@ -102,8 +102,9 @@ fn plugin_manifest_matches_the_cargo_package() {
         manifest["api_version"].as_integer(),
         Some(i64::from(dm_plugin_sdk::API_VERSION))
     );
-    assert_eq!(manifest["min_host_version"].as_str(), Some("0.3.0"));
+    assert_eq!(manifest["min_host_version"].as_str(), Some("0.4.0"));
 
+    assert_eq!(manifest["completion"].as_bool(), Some(true));
     assert!(manifest.get("permissions").is_none());
 }
 
@@ -281,4 +282,53 @@ fn init_honors_environment_and_explicit_output_precedence() {
         std::fs::read_to_string(&custom).unwrap(),
         "environment file must survive"
     );
+}
+
+#[test]
+fn plugin_completion_is_read_only_and_context_aware() {
+    let home = PluginHome::new();
+    std::fs::remove_dir_all(&home.config_dir).unwrap();
+    std::fs::remove_dir_all(&home.data_dir).unwrap();
+    std::fs::remove_dir_all(&home.cache_dir).unwrap();
+    let query = |words: &[&str]| {
+        let output = home
+            .command()
+            .env("DM_PLUGIN_CAPABILITIES", "config-dirs-v1,completion-v1")
+            .env("SQLLOG2DB_CONFIG", "missing.toml")
+            .env("RUST_LOG", "trace")
+            .current_dir(home.root.path())
+            .arg("__complete")
+            .args(words)
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{}", stderr_of(&output));
+        assert_eq!(output.stderr, Vec::<u8>::new());
+        String::from_utf8(output.stdout)
+            .unwrap()
+            .lines()
+            .map(str::to_owned)
+            .collect::<Vec<_>>()
+    };
+    assert!(query(&[""]).contains(&"run".to_owned()));
+    assert_eq!(query(&["st"]), ["stats"]);
+    assert!(query(&["run", "--"]).contains(&"--input".to_owned()));
+    assert!(!query(&["--quiet", "run", "--"]).contains(&"--verbose".to_owned()));
+    assert!(query(&["run", "-i", "one.log", "--"]).contains(&"--input".to_owned()));
+    assert_eq!(query(&["stats", "--top", ""]), Vec::<String>::new());
+    assert_eq!(query(&["stats", "--from=20"]), Vec::<String>::new());
+    assert_eq!(query(&["run", "--", ""]), Vec::<String>::new());
+    std::fs::write(home.root.path().join("sample config.toml"), "invalid").unwrap();
+    std::fs::create_dir(home.root.path().join("samples")).unwrap();
+    assert_eq!(
+        query(&["run", "-c", "sam"]),
+        ["sample config.toml", "samples/"]
+    );
+    assert_eq!(
+        query(&["init", "--output=sam"]),
+        ["--output=sample config.toml", "--output=samples/"]
+    );
+    assert!(!home.config_dir.exists());
+    assert!(!home.data_dir.exists());
+    assert!(!home.cache_dir.exists());
+    assert!(!home.root.path().join("config.toml").exists());
 }

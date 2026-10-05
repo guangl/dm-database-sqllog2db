@@ -1,6 +1,7 @@
 //! CLI arguments, command dispatch, configuration setup and presentation.
 mod runtime;
 
+pub mod completion;
 pub mod init;
 pub mod opts;
 pub mod stats;
