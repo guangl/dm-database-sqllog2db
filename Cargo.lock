@@ -540,9 +540,9 @@ dependencies = [
 
 [[package]]
 name = "dm-plugin-sdk"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99c7b431022e45f71d3edfcebcf490c48b9e5637099421d71f1c20114579ed2e"
+checksum = "0388bc4012c646a4f45a255b280390303751407802e896519c7df43faef99b27"
 
 [[package]]
 name = "either"
